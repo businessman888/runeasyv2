@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -10,6 +10,7 @@ import {
     Platform,
 } from 'react-native';
 import { colors, typography, spacing } from '../theme';
+import { useFeedbackStore } from '../stores/feedbackStore';
 
 // SVG Icons
 function BackIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
@@ -125,17 +126,16 @@ interface WorkoutGroup {
     workouts: Workout[];
 }
 
-const getWorkoutDotColor = (type: WorkoutType): string => {
-    switch (type) {
-        case 'corrida_longa':
-            return '#00D4FF'; // Blue
-        case 'tiro_velocidade':
-            return '#FFC400'; // Yellow/Orange
-        case 'regenerativo':
-            return '#00D4FF'; // Blue
-        default:
-            return '#00D4FF';
+const getWorkoutDotColor = (type: string): string => {
+    // Map Strava activity types and workout types to colors
+    if (type.includes('Long') || type.toLowerCase().includes('longa')) {
+        return '#00D4FF'; // Blue for long runs
     }
+    if (type.includes('Interval') || type.toLowerCase().includes('velocidade')) {
+        return '#FFC400'; // Yellow/Orange for intervals
+    }
+    // Default blue for other runs
+    return '#00D4FF';
 };
 
 // Mock data
@@ -194,6 +194,46 @@ const mockWorkouts: WorkoutGroup[] = [
 
 export function TrainingHistoryScreen({ navigation }: any) {
     const [searchQuery, setSearchQuery] = useState('');
+    const {
+        workoutHistory,
+        workoutSummary,
+        workoutHistoryLoading,
+        workoutHistoryError,
+        hasMoreWorkouts,
+        fetchWorkoutHistory,
+        loadMoreWorkouts,
+    } = useFeedbackStore();
+
+    useEffect(() => {
+        fetchWorkoutHistory();
+    }, []);
+
+    const navigateToFeedback = (workout: any) => {
+        if (workout.feedback) {
+            // Navigate to CoachAnalysis with feedback ID
+            navigation.navigate('CoachAnalysis', {
+                feedbackId: workout.feedback.id,
+                activityId: workout.id,
+            });
+        } else {
+            // TODO: Show "Feedback not available" message or generate button
+            console.log('No feedback available for this workout');
+        }
+    };
+
+    const formatDistance = (meters: number) => {
+        return (meters / 1000).toFixed(1) + ' km';
+    };
+
+    const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}.${secs.toString().padStart(2, '0')} min`;
+    };
+
+    const formatPace = (pace: string | null) => {
+        return pace ? `${pace} /km` : 'N/A';
+    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -215,35 +255,41 @@ export function TrainingHistoryScreen({ navigation }: any) {
                 showsVerticalScrollIndicator={false}
             >
                 {/* Monthly Summary Card */}
-                <View style={styles.summaryCard}>
-                    <View style={styles.summaryHeader}>
-                        <Text style={styles.summaryTitle}>Resumo do Mês</Text>
-                        <View style={styles.progressBadge}>
-                            <CheckIcon size={12} color="#FFFFFF" />
-                            <Text style={styles.progressBadgeText}>Em progresso</Text>
+                {workoutSummary && (
+                    <View style={styles.summaryCard}>
+                        <View style={styles.summaryHeader}>
+                            <Text style={styles.summaryTitle}>Resumo do Mês</Text>
+                            <View style={styles.progressBadge}>
+                                <CheckIcon size={12} color="#FFFFFF" />
+                                <Text style={styles.progressBadgeText}>Em progresso</Text>
+                            </View>
+                        </View>
+                        <View style={styles.summaryMetrics}>
+                            <View style={styles.summaryMetric}>
+                                <Text style={styles.summaryMetricValue}>
+                                    {workoutSummary.total_distance}
+                                    <Text style={styles.summaryMetricUnit}>km</Text>
+                                </Text>
+                                <Text style={styles.summaryMetricLabel}>Distância</Text>
+                            </View>
+                            <View style={styles.summaryDivider} />
+                            <View style={styles.summaryMetric}>
+                                <Text style={styles.summaryMetricValue}>
+                                    {workoutSummary.total_activities}
+                                </Text>
+                                <Text style={styles.summaryMetricLabel}>Atividades</Text>
+                            </View>
+                            <View style={styles.summaryDivider} />
+                            <View style={styles.summaryMetric}>
+                                <Text style={styles.summaryMetricValue}>
+                                    {workoutSummary.total_elevation}
+                                    <Text style={styles.summaryMetricUnit}>m</Text>
+                                </Text>
+                                <Text style={styles.summaryMetricLabel}>Elevação</Text>
+                            </View>
                         </View>
                     </View>
-                    <View style={styles.summaryMetrics}>
-                        <View style={styles.summaryMetric}>
-                            <Text style={styles.summaryMetricValue}>
-                                124<Text style={styles.summaryMetricUnit}>km</Text>
-                            </Text>
-                            <Text style={styles.summaryMetricLabel}>Distância</Text>
-                        </View>
-                        <View style={styles.summaryDivider} />
-                        <View style={styles.summaryMetric}>
-                            <Text style={styles.summaryMetricValue}>12</Text>
-                            <Text style={styles.summaryMetricLabel}>Atividades</Text>
-                        </View>
-                        <View style={styles.summaryDivider} />
-                        <View style={styles.summaryMetric}>
-                            <Text style={styles.summaryMetricValue}>
-                                1.2<Text style={styles.summaryMetricUnit}>k</Text>
-                            </Text>
-                            <Text style={styles.summaryMetricLabel}>Elevação</Text>
-                        </View>
-                    </View>
-                </View>
+                )}
 
                 {/* Search Bar */}
                 <View style={styles.searchContainer}>
@@ -262,8 +308,31 @@ export function TrainingHistoryScreen({ navigation }: any) {
                     </TouchableOpacity>
                 </View>
 
+                {/* Loading State */}
+                {workoutHistoryLoading && workoutHistory.length === 0 && (
+                    <View style={{ padding: spacing.xl, alignItems: 'center' }}>
+                        <Text style={{ color: colors.white }}>Carregando treinos...</Text>
+                    </View>
+                )}
+
+                {/* Error State */}
+                {workoutHistoryError && (
+                    <View style={{ padding: spacing.xl, alignItems: 'center' }}>
+                        <Text style={{ color: 'red' }}>{workoutHistoryError}</Text>
+                    </View>
+                )}
+
+                {/* Empty State */}
+                {!workoutHistoryLoading && workoutHistory.length === 0 && !workoutHistoryError && (
+                    <View style={{ padding: spacing.xl, alignItems: 'center', paddingTop: 60 }}>
+                        <Text style={{ color: colors.white, fontSize: 18, fontWeight: '600', textAlign: 'center' }}>
+                            Comece a treinar para ver o seu histórico de treinos
+                        </Text>
+                    </View>
+                )}
+
                 {/* Workout List */}
-                {mockWorkouts.map((group, groupIndex) => (
+                {workoutHistory.map((group, groupIndex) => (
                     <View key={groupIndex} style={styles.workoutGroup}>
                         <Text style={styles.monthHeader}>{group.month}</Text>
                         {group.workouts.map((workout) => (
@@ -271,24 +340,33 @@ export function TrainingHistoryScreen({ navigation }: any) {
                                 key={workout.id}
                                 style={styles.workoutCard}
                                 activeOpacity={0.7}
+                                onPress={() => navigateToFeedback(workout)}
                             >
                                 <View style={styles.workoutDateContainer}>
-                                    <Text style={styles.workoutDay}>{workout.day.toString().padStart(2, '0')}</Text>
-                                    <Text style={styles.workoutDayName}>{workout.dayName}</Text>
+                                    <Text style={styles.workoutDay}>
+                                        {workout.day.toString().padStart(2, '0')}
+                                    </Text>
+                                    <Text style={styles.workoutDayName}>{workout.day_of_week}</Text>
                                 </View>
                                 <View style={styles.workoutDivider} />
                                 <View style={styles.workoutContent}>
                                     <View style={styles.workoutTitleRow}>
-                                        <Text style={styles.workoutTitle}>{workout.title}</Text>
+                                        <Text style={styles.workoutTitle}>{workout.name}</Text>
                                         <BolinhaIcon color={getWorkoutDotColor(workout.type)} />
                                     </View>
                                     <View style={styles.workoutMetricsRow}>
                                         <View style={styles.workoutMetrics}>
-                                            <Text style={styles.workoutMetric}>{workout.distance}</Text>
+                                            <Text style={styles.workoutMetric}>
+                                                {formatDistance(workout.distance)}
+                                            </Text>
                                             <View style={styles.metricDivider} />
-                                            <Text style={styles.workoutMetric}>{workout.time}</Text>
+                                            <Text style={styles.workoutMetric}>
+                                                {formatTime(workout.moving_time)}
+                                            </Text>
                                             <View style={styles.metricDivider} />
-                                            <Text style={styles.workoutMetric}>{workout.pace}</Text>
+                                            <Text style={styles.workoutMetric}>
+                                                {formatPace(workout.pace)}
+                                            </Text>
                                         </View>
                                     </View>
                                 </View>
@@ -302,12 +380,17 @@ export function TrainingHistoryScreen({ navigation }: any) {
                 ))}
 
                 {/* Load More Button */}
-                <TouchableOpacity style={styles.loadMoreButton}>
-                    <Text style={styles.loadMoreText}>Carregar mais treinos</Text>
-                    <View style={styles.loadMoreIcon}>
-                        <ChevronRightIcon size={16} color="#00D4FF" />
-                    </View>
-                </TouchableOpacity>
+                {hasMoreWorkouts && !workoutHistoryLoading && (
+                    <TouchableOpacity
+                        style={styles.loadMoreButton}
+                        onPress={loadMoreWorkouts}
+                    >
+                        <Text style={styles.loadMoreText}>Carregar mais treinos</Text>
+                        <View style={styles.loadMoreIcon}>
+                            <ChevronRightIcon size={16} color="#00D4FF" />
+                        </View>
+                    </TouchableOpacity>
+                )}
 
                 <View style={styles.spacer} />
             </ScrollView>

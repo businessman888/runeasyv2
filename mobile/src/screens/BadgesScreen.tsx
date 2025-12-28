@@ -280,35 +280,118 @@ function SecretIcon({ size = 32, color = 'rgba(235,235,245,0.3)' }: { size?: num
 }
 
 export function BadgesScreen({ navigation }: any) {
-    const { badges, fetchBadges, isLoading } = useGamificationStore();
+    const { badges, stats, fetchBadges, fetchStats, isLoading } = useGamificationStore();
 
     React.useEffect(() => {
         fetchBadges();
+        fetchStats();
     }, []);
 
-    // Mock data based on Figma design
-    const userLevel = {
-        name: 'Corredor Nato',
-        level: 5,
-        combo: 12,
-        currentXP: 12450,
-        levelProgress: 6,
-        nextLevel: 'Próximo',
-        xpToNext: 850,
+    // Map badge names to display info (using REAL names from database)
+    const getBadgeDisplayInfo = (badge: any) => {
+        const nameMap: Record<string, { name: string, stat: string, statColor: string, icon: string }> = {
+            // Milestone badges
+            'Primeiro Passo': {
+                name: 'PRIMEIRO PASSO',
+                stat: '1° TREINO',
+                statColor: '#FFD700',
+                icon: 'medal'
+            },
+            'Maratonista': {
+                name: 'MARATONISTA',
+                stat: '> 21KM',
+                statColor: '#FFD700',
+                icon: 'medal'
+            },
+
+            // Performance badges
+            'Velocista I': {
+                name: 'VELOCISTA I',
+                stat: 'PACE < 5:30"',
+                statColor: '#00D4FF',
+                icon: 'speedometer'
+            },
+            'Velocista II': {
+                name: 'VELOCISTA II',
+                stat: 'PACE < 5:00"',
+                statColor: '#00D4FF',
+                icon: 'speedometer'
+            },
+            'Superação': {
+                name: 'SUPERAÇÃO',
+                stat: '+5% MELHORA',
+                statColor: '#9747FF',
+                icon: 'flame'
+            },
+
+            // Consistency badges
+            'Consistente': {
+                name: 'CONSISTENTE',
+                stat: '12 TREINOS/30D',
+                statColor: '#32CD32',
+                icon: 'sun'
+            },
+            'Semana Completa': {
+                name: 'SEMANA COMPLETA',
+                stat: 'TODOS TREINOS',
+                statColor: '#32CD32',
+                icon: 'sun'
+            },
+
+            // Streak badges
+            'Chama Eterna': {
+                name: 'CHAMA ETERNA',
+                stat: '30 DIAS SEGUIDOS',
+                statColor: '#9747FF',
+                icon: 'flame'
+            },
+
+            // Exploration badges
+            'Na Chuva e no Sol': {
+                name: 'NA CHUVA E NO SOL',
+                stat: '5 CONDIÇÕES',
+                statColor: '#32CD32',
+                icon: 'sun'
+            },
+
+            // Adherence badges
+            'Fiel ao Plano': {
+                name: 'FIEL AO PLANO',
+                stat: '80% ADERÊNCIA',
+                statColor: '#00D4FF',
+                icon: 'medal'
+            },
+        };
+
+        return nameMap[badge.name] || {
+            name: badge.name?.toUpperCase() || 'BADGE',
+            stat: badge.description || 'Conquista',
+            statColor: '#00D4FF',
+            icon: 'medal'
+        };
     };
 
-    const earnedBadges = [
-        { id: 1, name: 'LENDA URBANA', icon: 'medal', stat: '100km total', earned: true, statColor: '#FFD700' },
-        { id: 2, name: 'VELOCISTA', icon: 'speedometer', stat: 'PACE < 4\'30"', earned: true, statColor: '#00D4FF' },
-        { id: 3, name: 'MADRUGADOR', icon: 'sun', stat: '5 TREINOS 5AM', earned: true, statColor: '#32CD32' },
-        { id: 4, name: 'IMPARÁVEL', icon: 'flame', stat: '30 DIAS SEGUIDOS', earned: true, statColor: '#9747FF' },
-    ];
+    // Real user progression data
+    const currentLevel = stats?.current_level || 1;
+    const totalXP = stats?.total_points || 0;
+    const currentStreak = stats?.current_streak || 0;
+    const xpToNext = stats?.points_to_next_level || 250;
+    const progressPercentage = totalXP > 0 ? ((totalXP / (totalXP + xpToNext)) * 100) : 0;
 
-    const lockedChallenges = [
-        { id: 1, name: 'Maratona', subtitle: 'completa', icon: 'mountain' },
-        { id: 2, name: 'Rei das', subtitle: 'Montanhas', icon: 'crown' },
-        { id: 3, name: 'Nível Z', subtitle: 'Secreto', icon: 'secret' },
-    ];
+    // Level name based on level
+    const getLevelName = (level: number) => {
+        if (level === 1) return 'Iniciante';
+        if (level <= 3) return 'Corredor Amador';
+        if (level <= 5) return 'Corredor Nato';
+        if (level <= 10) return 'Atleta';
+        return 'Campeão';
+    };
+
+    // Get earned and locked badges
+    const earnedBadges = badges.filter(b => b.earned);
+    const lockedBadges = badges.filter(b => !b.earned).slice(0, 3); // Show first 3 locked
+
+
 
     const renderBadgeIcon = (iconName: string, earned: boolean) => {
         const size = 65;
@@ -321,15 +404,7 @@ export function BadgesScreen({ navigation }: any) {
         }
     };
 
-    const renderLockedIcon = (iconName: string) => {
-        const color = 'rgba(235,235,245,0.3)';
-        switch (iconName) {
-            case 'mountain': return <MountainIcon size={32} color={color} />;
-            case 'crown': return <CrownIcon size={32} color={color} />;
-            case 'secret': return <SecretIcon size={32} color={color} />;
-            default: return <LockIcon size={32} color={color} />;
-        }
-    };
+
 
     return (
         <SafeAreaView style={styles.container}>
@@ -359,30 +434,30 @@ export function BadgesScreen({ navigation }: any) {
                         <View style={styles.xpCard}>
                             <BoltIcon size={20} color="#FFD700" />
                             <View style={styles.xpTextContainer}>
-                                <Text style={styles.xpValue}>{userLevel.currentXP.toLocaleString()}</Text>
+                                <Text style={styles.xpValue}>{totalXP.toLocaleString()}</Text>
                                 <Text style={styles.xpLabel}>xp acumulado</Text>
                             </View>
                         </View>
                     </View>
 
                     {/* Level Info */}
-                    <Text style={styles.levelName}>{userLevel.name}</Text>
-                    <Text style={styles.levelNumber}>{userLevel.level}</Text>
+                    <Text style={styles.levelName}>{getLevelName(currentLevel)}</Text>
+                    <Text style={styles.levelNumber}>{currentLevel}</Text>
 
                     <View style={styles.comboRow}>
                         <FireIcon size={18} color="#32CD32" />
-                        <Text style={styles.comboText}>Combo: {userLevel.combo} dias</Text>
+                        <Text style={styles.comboText}>Combo: {currentStreak} dias</Text>
                     </View>
 
                     {/* Progress Section */}
                     <View style={styles.progressSection}>
                         <View style={styles.progressLabelsRow}>
-                            <Text style={styles.progressLabelWhite}>Nível {userLevel.levelProgress}</Text>
-                            <Text style={styles.progressLabelWhite}>{userLevel.nextLevel}</Text>
-                            <Text style={styles.xpRemaining}>{userLevel.xpToNext} XP Restantes</Text>
+                            <Text style={styles.progressLabelWhite}>Nível {currentLevel}</Text>
+                            <Text style={styles.progressLabelWhite}>Próximo</Text>
+                            <Text style={styles.xpRemaining}>{xpToNext} XP Restantes</Text>
                         </View>
                         <View style={styles.progressBar}>
-                            <View style={styles.progressFill} />
+                            <View style={[styles.progressFill, { width: `${progressPercentage}%` }]} />
                         </View>
                     </View>
                 </View>
@@ -394,7 +469,7 @@ export function BadgesScreen({ navigation }: any) {
                         <Text style={styles.conquistasTitle}>Conquistas</Text>
                     </View>
                     <View style={styles.conquistasCount}>
-                        <Text style={styles.conquistasCountNumber}>12</Text>
+                        <Text style={styles.conquistasCountNumber}>{earnedBadges.length}</Text>
                         <Text style={styles.conquistasCountText}>/50 DESBLOQUEADOS</Text>
                     </View>
                 </View>
@@ -421,18 +496,23 @@ export function BadgesScreen({ navigation }: any) {
                         <Text style={styles.lockedTitle}>Próximos Desafios</Text>
                     </View>
                     <View style={styles.lockedGrid}>
-                        {lockedChallenges.map((challenge) => (
-                            <View key={challenge.id} style={styles.lockedCard}>
-                                <View style={styles.lockedIconContainer}>
-                                    {renderLockedIcon(challenge.icon)}
-                                    <View style={styles.lockOverlay}>
-                                        <LockIcon size={16} color="rgba(235,235,245,0.6)" />
+                        {lockedBadges.map((badge) => {
+                            const displayInfo = getBadgeDisplayInfo(badge);
+                            return (
+                                <View key={badge.id} style={styles.lockedCard}>
+                                    <View style={styles.lockedIconContainer}>
+                                        <View style={{ opacity: 0.3 }}>
+                                            {renderBadgeIcon(displayInfo.icon, false)}
+                                        </View>
+                                        <View style={styles.lockOverlay}>
+                                            <LockIcon size={16} color="rgba(235,235,245,0.6)" />
+                                        </View>
                                     </View>
+                                    <Text style={styles.lockedName}>{displayInfo.name}</Text>
+                                    <Text style={styles.lockedSubtitle}>{displayInfo.stat}</Text>
                                 </View>
-                                <Text style={styles.lockedName}>{challenge.name}</Text>
-                                <Text style={styles.lockedSubtitle}>{challenge.subtitle}</Text>
-                            </View>
-                        ))}
+                            );
+                        })}
                     </View>
                 </View>
             </ScrollView>

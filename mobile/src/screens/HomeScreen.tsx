@@ -8,6 +8,8 @@ import {
     TouchableOpacity,
     Image,
     Platform,
+    Linking,
+    Alert,
 } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
 import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore, useStatsStore } from '../stores';
@@ -180,6 +182,38 @@ export function HomeScreen({ navigation }: any) {
 
     // Check if user has completed any workouts (for AI card lock state)
     const hasCompletedWorkouts = (summary?.total_runs ?? 0) > 0;
+
+    // Handle Strava deep link
+    const handleStartWorkout = async () => {
+        try {
+            const stravaURL = 'strava://record';
+            const canOpen = await Linking.canOpenURL(stravaURL);
+
+            if (canOpen) {
+                await Linking.openURL(stravaURL);
+            } else {
+                // Strava not installed - redirect to store
+                const storeURL = Platform.OS === 'ios'
+                    ? 'https://apps.apple.com/app/strava/id426826309'
+                    : 'https://play.google.com/store/apps/details?id=com.strava';
+
+                Alert.alert(
+                    'Strava não instalado',
+                    'Você precisa ter o Strava instalado para gravar treinos.',
+                    [
+                        { text: 'Cancelar', style: 'cancel' },
+                        {
+                            text: 'Instalar',
+                            onPress: () => Linking.openURL(storeURL)
+                        }
+                    ]
+                );
+            }
+        } catch (error) {
+            console.error('Error opening Strava:', error);
+            Alert.alert('Erro', 'Não foi possível abrir o Strava');
+        }
+    };
 
     // Real user data from authStore
     const userName = user?.profile?.firstname
@@ -365,7 +399,10 @@ export function HomeScreen({ navigation }: any) {
                             </View>
                         </View>
 
-                        <TouchableOpacity style={styles.startButton}>
+                        <TouchableOpacity
+                            style={styles.startButton}
+                            onPress={handleStartWorkout}
+                        >
                             <ShoeIcon size={24} color="#0E0E1F" />
                             <Text style={styles.startButtonText}>Iniciar Treino</Text>
                         </TouchableOpacity>

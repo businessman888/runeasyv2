@@ -227,6 +227,24 @@ export class NotificationService {
         );
     }
 
+    /**
+     * Send daily readiness check-in available notification
+     */
+    async sendDailyReadinessNotification(
+        userId: string,
+    ): Promise<boolean> {
+        return this.sendPushNotification(
+            userId,
+            '☀️ Bom dia!',
+            'Seu check-in diário está disponível. Como você está se sentindo hoje?',
+            {
+                type: 'daily_readiness',
+                action: 'open_readiness_quiz',
+            },
+            { channelId: 'readiness' },
+        );
+    }
+
     private getWorkoutTypeName(type: string): string {
         const types: Record<string, string> = {
             'easy_run': 'Corrida Leve',

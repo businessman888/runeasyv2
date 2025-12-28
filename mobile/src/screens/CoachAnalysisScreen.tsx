@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
     View,
     Text,
@@ -9,6 +9,7 @@ import {
     Platform,
 } from 'react-native';
 import { colors, typography, spacing } from '../theme';
+import { useFeedbackStore } from '../stores/feedbackStore';
 
 // SVG Icons
 function BackIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
@@ -255,7 +256,19 @@ function CircularScore({ percentage, size = 120 }: { percentage: number; size?: 
     );
 }
 
-export function CoachAnalysisScreen({ navigation }: any) {
+export function CoachAnalysisScreen({ navigation, route }: any) {
+    const { feedbackId, activityId } = route?.params || {};
+    const { currentFeedback, fetchFeedback } = useFeedbackStore();
+
+    useEffect(() => {
+        if (feedbackId) {
+            // Load specific feedback from history/workout
+            fetchFeedback(feedbackId);
+        }
+        // TODO: If coming from latest (home screen), use latest summary
+    }, [feedbackId]);
+
+    // TODO: Use currentFeedback data instead of mock metrics
     const metrics = [
         { icon: SpeedIcon, label: 'Pace', target: '5\'00"', actual: '4\'58"', iconBg: '#1A3A4A', iconColor: '#00D4FF', barColor: '#32CD32', progress: 100 },
         { icon: RouteIcon, label: 'Distância', target: '5.0 km', actual: '5.2', iconBg: '#2A1F3D', iconColor: '#9747FF', barColor: '#00D4FF', progress: 85 },

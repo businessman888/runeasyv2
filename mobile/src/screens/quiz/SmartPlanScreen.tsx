@@ -151,29 +151,56 @@ export function SmartPlanScreen({ navigation, route }: any) {
     const workoutPace = nextWorkout?.paceEstimate || 'Pace 5:30';
 
     const handleUnlockAll = async () => {
-        // Mark user as authenticated
-        if (userId) {
-            setAuthenticated(true);
-        }
+        try {
+            // Save onboarding completion to backend
+            if (userId) {
+                const API_URL = 'http://localhost:3000/api'; // TODO: Use env var
 
-        // Navigate to Main with Calendar tab selected
-        navigation.dispatch(
-            CommonActions.reset({
-                index: 0,
-                routes: [{
-                    name: 'Main',
-                    state: {
-                        index: 1, // Calendar is the second tab
-                        routes: [
-                            { name: 'Home' },
-                            { name: 'Calendar' },
-                            { name: 'Evolution' },
-                            { name: 'Settings' },
-                        ],
+                // Save quiz data to user_onboarding table
+                await fetch(`${API_URL}/onboarding/complete`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-user-id': userId,
                     },
-                }],
-            })
-        );
+                    body: JSON.stringify({
+                        quiz_data: data, // Save all quiz answers
+                    }),
+                });
+
+                // Authenticate user properly using authStore login
+                const { login } = useAuthStore.getState();
+                await login(userId);
+            }
+
+            // Navigate to Main with Calendar tab selected
+            navigation.dispatch(
+                CommonActions.reset({
+                    index: 0,
+                    routes: [{
+                        name: 'Main',
+                        state: {
+                            index: 1, // Calendar is the second tab
+                            routes: [
+                                { name: 'Home' },
+                                { name: 'Calendar' },
+                                { name: 'Evolution' },
+                                { name: 'Settings' },
+                            ],
+                        },
+                    }],
+                })
+            );
+        } catch (error) {
+            console.error('Error completing onboarding:', error);
+            // Still navigate even if save fails
+            navigation.dispatch(
+                CommonActions.reset({
+                    index: 0,
+                    routes: [{ name: 'Main' }],
+                })
+            );
+        }
     };
 
     return (

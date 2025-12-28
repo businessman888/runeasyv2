@@ -12,6 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import { StravaService } from './strava.service';
 import { SupabaseService } from '../../database';
 import { FeedbackAIService } from '../feedback/feedback-ai.service';
+import { GamificationService } from '../gamification/gamification.service';
 
 interface WebhookEvent {
     object_type: 'activity' | 'athlete';
@@ -32,10 +33,14 @@ export class StravaWebhookController {
         private readonly supabaseService: SupabaseService,
         private readonly configService: ConfigService,
         private readonly feedbackAIService: FeedbackAIService,
+        private readonly gamificationService: GamificationService,
     ) { }
 
     /**
-     * Webhook subscription verification (GET request from Strava)
+     * GET /webhooks/strava - Strava webhook subscription verification
+     * Called by Strava when setting up the webhook subscription
+     * 
+     * This endpoint is PUBLIC and should not require authentication
      */
     @Get()
     verifySubscription(
@@ -43,13 +48,18 @@ export class StravaWebhookController {
         @Query('hub.verify_token') token: string,
         @Query('hub.challenge') challenge: string,
     ) {
-        const expectedToken = this.configService.get<string>('STRAVA_VERIFY_TOKEN');
+        this.logger.log(`Webhook verification request - mode: ${mode}, token: ${token}`);
+
+        // Verify that mode is 'subscribe' AND token matches
+        const expectedToken = 'RUNEASY_2025_TOKEN';
 
         if (mode === 'subscribe' && token === expectedToken) {
-            this.logger.log('Strava webhook verified successfully');
+            this.logger.log('✅ Webhook verification successful');
+            // Return exactly as Strava expects
             return { 'hub.challenge': challenge };
         }
 
+        this.logger.warn(`❌ Webhook verification failed - Invalid mode or token`);
         throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
     }
 
@@ -203,11 +213,17 @@ export class StravaWebhookController {
                     .eq('user_id', user.id);
             }
 
+            // Calculate XP based on distance: 100 XP per km
+            const distanceKm = activity.distance / 1000;
+            const xpEarned = Math.round(distanceKm * 100);
+
             // Add points for completing a workout
             await this.supabaseService.from('points_history').insert({
                 user_id: user.id,
-                points: workout ? 75 : 50, // 75 if planned, 50 if unplanned
-                reason: workout ? 'Treino planejado completado' : 'Corrida completada',
+                points: xpEarned,
+                reason: workout
+                    ? `Treino completado - ${distanceKm.toFixed(2)}km`
+                    : `Corrida completada - ${distanceKm.toFixed(2)}km`,
                 reference_type: 'activity',
                 reference_id: savedActivity.id,
             });
@@ -220,12 +236,18 @@ export class StravaWebhookController {
 
             const totalPoints = (pointsData || []).reduce((sum, p) => sum + (p.points || 0), 0);
 
+            // Calculate new level using gamification service
+            const currentLevel = this.gamificationService.calculateLevel(totalPoints);
+
             await this.supabaseService
                 .from('user_levels')
                 .update({
                     total_points: totalPoints,
+                    current_level: currentLevel,
                 })
                 .eq('user_id', user.id);
+
+            this.logger.log(`User ${user.id} earned ${xpEarned} XP (${distanceKm.toFixed(2)}km). Total: ${totalPoints} XP, Level: ${currentLevel}`);
 
             this.logger.log(`Successfully processed activity ${activity.id}`);
             return { status: 'processed', activity_id: activity.id };

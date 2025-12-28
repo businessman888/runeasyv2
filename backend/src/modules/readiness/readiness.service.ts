@@ -150,6 +150,57 @@ export class ReadinessService {
         return intensities[type] || 'Moderada';
     }
 
+    async getReadinessStatus(userId: string): Promise<{
+        isUnlocked: boolean;
+        hasCompletedFirstWorkout: boolean;
+        canCheckInToday: boolean;
+        lastCheckInDate: string | null;
+    }> {
+        const supabase = this.supabaseService.getClient();
+
+        // 1. Check if user has completed at least one workout
+        const { count: workoutCount } = await supabase
+            .from('strava_activities')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('type', 'Run');
+
+        const hasCompletedFirstWorkout = (workoutCount ?? 0) > 0;
+
+        // 2. Get today's check-in status
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+        const { data: todayCheckIn } = await supabase
+            .from('readiness_checkins')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('checkin_date', today)
+            .single();
+
+        // User can check in if:
+        // - They have completed first workout
+        // - AND (no check-in today OR check-in is available and not completed)
+        const canCheckInToday = hasCompletedFirstWorkout &&
+            (!todayCheckIn || (todayCheckIn.is_available && !todayCheckIn.completed_at));
+
+        // Get last completed check-in date
+        const { data: lastCheckIn } = await supabase
+            .from('readiness_checkins')
+            .select('checkin_date')
+            .eq('user_id', userId)
+            .not('completed_at', 'is', null)
+            .order('checkin_date', { ascending: false })
+            .limit(1)
+            .single();
+
+        return {
+            isUnlocked: hasCompletedFirstWorkout,
+            hasCompletedFirstWorkout,
+            canCheckInToday,
+            lastCheckInDate: lastCheckIn?.checkin_date || null,
+        };
+    }
+
     private async saveReadinessResult(
         userId: string,
         answers: ReadinessCheckInDto['answers'],

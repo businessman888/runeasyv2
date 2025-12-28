@@ -310,7 +310,22 @@ export function EvolutionScreen({ navigation }: any) {
     const [currentStep, setCurrentStep] = useState(0);
     const [answers, setAnswers] = useState<Record<string, number>>({});
     const [quizCompleted, setQuizCompleted] = useState(false);
-    const { setAnswer, verdict, isLoading, error, fetchVerdict, resetQuiz } = useReadinessStore();
+    const {
+        setAnswer,
+        verdict,
+        isLoading,
+        error,
+        fetchVerdict,
+        resetQuiz,
+        readinessStatus,
+        statusLoading,
+        fetchReadinessStatus,
+    } = useReadinessStore();
+
+    // Fetch readiness status on mount
+    useEffect(() => {
+        fetchReadinessStatus();
+    }, []);
 
     const currentQuestion = READINESS_QUESTIONS[currentStep];
     const totalSteps = READINESS_QUESTIONS.length;
@@ -345,6 +360,23 @@ export function EvolutionScreen({ navigation }: any) {
         setAnswers({});
         resetQuiz();
     };
+
+    // Show loading state while checking status
+    if (statusLoading) {
+        return (
+            <View style={styles.container}>
+                <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={{ color: colors.white, marginTop: spacing.lg }}>Carregando...</Text>
+                </View>
+            </View>
+        );
+    }
+
+    // Show locked state if user cannot check in
+    const canCheckIn = readinessStatus?.canCheckInToday ?? false;
+    const hasCompletedFirstWorkout = readinessStatus?.hasCompletedFirstWorkout ?? false;
 
     // Show result screen inline when quiz is completed
     if (quizCompleted) {
@@ -453,6 +485,33 @@ export function EvolutionScreen({ navigation }: any) {
                     </View>
                 </TouchableOpacity>
             </View>
+
+            {/* Locked Overlay */}
+            {!canCheckIn && (
+                <View style={styles.lockedOverlay}>
+                    <View style={styles.lockedContent}>
+                        <View style={styles.lockIconContainer}>
+                            <Svg width="48" height="56" viewBox="0 0 48 56" fill="none">
+                                <Path
+                                    d="M42 24H39V16C39 7.164 31.836 0 23 0C14.164 0 7 7.164 7 16V24H4C1.794 24 0 25.794 0 28V52C0 54.206 1.794 56 4 56H42C44.206 56 46 54.206 46 52V28C46 25.794 44.206 24 42 24ZM23 42C20.794 42 19 40.206 19 38C19 35.794 20.794 34 23 34C25.206 34 27 35.794 27 38C27 40.206 25.206 42 23 42ZM31.8 24H14.2V16C14.2 11.03 18.03 7.2 23 7.2C27.97 7.2 31.8 11.03 31.8 16V24Z"
+                                    fill="#00D4FF"
+                                    fillOpacity="0.5"
+                                />
+                            </Svg>
+                        </View>
+                        <Text style={styles.lockedTitle}>
+                            {!hasCompletedFirstWorkout
+                                ? 'Complete seu primeiro treino'
+                                : 'Check-in já realizado'}
+                        </Text>
+                        <Text style={styles.lockedMessage}>
+                            {!hasCompletedFirstWorkout
+                                ? 'O check-in diário será desbloqueado após você completar seu primeiro treino'
+                                : 'Você já completou o check-in de hoje. Ele ficará disponível novamente amanhã às 3h da manhã'}
+                        </Text>
+                    </View>
+                </View>
+            )}
         </View>
     );
 }
@@ -619,5 +678,38 @@ const styles = StyleSheet.create({
         fontSize: 18,
         color: '#0A0A14',
         fontWeight: '600',
+    },
+    lockedOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(10, 10, 20, 0.95)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
+    },
+    lockedContent: {
+        alignItems: 'center',
+        paddingHorizontal: spacing['2xl'],
+        maxWidth: 400,
+    },
+    lockIconContainer: {
+        marginBottom: spacing.xl,
+        opacity: 0.7,
+    },
+    lockedTitle: {
+        fontSize: typography.fontSizes.xl,
+        fontWeight: '700',
+        color: colors.white,
+        textAlign: 'center',
+        marginBottom: spacing.md,
+    },
+    lockedMessage: {
+        fontSize: typography.fontSizes.md,
+        color: 'rgba(255, 255, 255, 0.7)',
+        textAlign: 'center',
+        lineHeight: 24,
     },
 });

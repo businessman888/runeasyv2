@@ -147,4 +147,29 @@ export class FeedbackController {
             },
         };
     }
+
+    /**
+     * Get workout history with feedback status for Training History screen
+     */
+    @Get('workouts/history')
+    async getWorkoutHistory(
+        @Headers('x-user-id') userId: string,
+        @Query('limit') limit?: string,
+        @Query('offset') offset?: string,
+    ) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        const parsedLimit = limit ? parseInt(limit, 10) : 20;
+        const parsedOffset = offset ? parseInt(offset, 10) : 0;
+
+        const history = await this.feedbackAIService.getWorkoutHistory(
+            userId,
+            parsedLimit,
+            parsedOffset,
+        );
+
+        return history;
+    }
 }

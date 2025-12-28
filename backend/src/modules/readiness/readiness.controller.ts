@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Body, Headers, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ReadinessService, ReadinessCheckInDto } from './readiness.service';
 
 @Controller('readiness')
@@ -38,6 +38,25 @@ export class ReadinessController {
             this.logger.error('Failed to analyze readiness', error);
             throw new HttpException(
                 'Failed to analyze readiness. Please try again.',
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    @Get('status')
+    async getReadinessStatus(@Headers('x-user-id') userId: string) {
+        this.logger.log(`GET /api/readiness/status - userId: ${userId}`);
+
+        if (!userId) {
+            throw new HttpException('x-user-id header is required', HttpStatus.BAD_REQUEST);
+        }
+
+        try {
+            return await this.readinessService.getReadinessStatus(userId);
+        } catch (error) {
+            this.logger.error('Failed to get readiness status', error);
+            throw new HttpException(
+                'Failed to get readiness status',
                 HttpStatus.INTERNAL_SERVER_ERROR,
             );
         }

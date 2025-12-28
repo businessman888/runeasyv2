@@ -149,24 +149,47 @@ export class GamificationService {
 
     /**
      * Calculate level based on total points
+     * Level 1->2: 1000 XP
+     * Level 2->3: 1100 XP
+     * Level 3->4: 1200 XP
+     * Pattern: 1000 + (level - 1) * 100
      */
     calculateLevel(totalPoints: number): number {
-        for (let i = this.levelThresholds.length - 1; i >= 0; i--) {
-            if (totalPoints >= this.levelThresholds[i]) {
-                return i + 1;
+        let level = 1;
+        let pointsNeeded = 0;
+
+        while (pointsNeeded <= totalPoints) {
+            const nextLevelPoints = 1000 + (level - 1) * 100;
+            pointsNeeded += nextLevelPoints;
+
+            if (pointsNeeded > totalPoints) {
+                return level;
             }
+            level++;
         }
-        return 1;
+
+        return level;
     }
 
     /**
      * Get points needed for next level
+     * Returns points still needed to reach next level
      */
-    getPointsForNextLevel(currentLevel: number): number {
-        if (currentLevel >= this.levelThresholds.length) {
-            return 0; // Max level reached
+    getPointsForNextLevel(currentLevel: number, totalPoints: number): number {
+        // Calculate total points needed to reach current level
+        let pointsToCurrentLevel = 0;
+        for (let i = 1; i < currentLevel; i++) {
+            pointsToCurrentLevel += 1000 + (i - 1) * 100;
         }
-        return this.levelThresholds[currentLevel];
+
+        // Points needed for next level
+        const pointsForNextLevel = 1000 + (currentLevel - 1) * 100;
+
+        // Points already earned towards next level
+        const pointsInCurrentLevel = totalPoints - pointsToCurrentLevel;
+
+        // Points still needed
+        return pointsForNextLevel - pointsInCurrentLevel;
     }
 
     /**
@@ -193,60 +216,154 @@ export class GamificationService {
         // Get user stats for checking criteria
         const userStats = await this.getUserStats(userId);
 
-        // Get user's activity count
+        // Get user's activity count and data
         const { count: activityCount } = await this.supabaseService
             .from('strava_activities')
             .select('*', { count: 'exact', head: true })
             .eq('user_id', userId);
 
-        // Get completed workouts count
-        const { count: completedWorkouts } = await this.supabaseService
-            .from('workouts')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', userId)
-            .eq('status', 'completed');
-
         for (const badge of allBadges) {
             if (earnedBadgeIds.has(badge.id)) continue;
 
-            const criteria = badge.criteria as Record<string, unknown>;
             let earned = false;
 
-            switch (criteria.type) {
-                case 'first_workout':
-                    earned = (activityCount || 0) >= 1;
-                    break;
-
-                case 'workouts_30_days': {
-                    // Check workouts in last 30 days
-                    const thirtyDaysAgo = new Date();
-                    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-                    const { count: recentWorkouts } = await this.supabaseService
-                        .from('strava_activities')
-                        .select('*', { count: 'exact', head: true })
-                        .eq('user_id', userId)
-                        .gte('start_date', thirtyDaysAgo.toISOString());
-
-                    earned = (recentWorkouts || 0) >= (criteria.count as number);
+            // Check by badge type and name
+            switch (badge.type) {
+                case 'milestone': {
+                    if (badge.name === 'Primeiro Passo') {
+                        // First workout completed
+                        earned = (activityCount || 0) >= 1;
+                    } else if (badge.name === 'Maratonista') {
+                        // Completed run >= 21km
+                        if (activityData?.distance) {
+                            earned = activityData.distance / 1000 >= 21;
+                        }
+                    }
                     break;
                 }
 
-                case 'streak':
-                    earned = (userStats?.current_streak || 0) >= (criteria.days as number);
-                    break;
+                case 'performance': {
+                    if (badge.name === 'Velocista I') {
+                        // Pace < 5:30/km on 5k+ run
+                        if (activityData?.average_speed && activityData?.distance >= 5000) {
+                            const paceMinPerKm = (1000 / activityData.average_speed) / 60; // Convert to min/km
+                            earned = paceMinPerKm <= 5.5; // 5:30 = 5.5 minutes
+                        }
+                    } else if (badge.name === 'Velocista II') {
+                        // Pace < 5:00/km on 5k+ run
+                        if (activityData?.average_speed && activityData?.distance >= 5000) {
+                            const paceMinPerKm = (1000 / activityData.average_speed) / 60;
+                            earned = paceMinPerKm <= 5.0; // 5:00 = 5 minutes
+                        }
+                    } else if (badge.name === 'Superação') {
+                        // Improved pace by 5% in 30 days
+                        // Get best pace from 30 days ago
+                        const thirtyDaysAgo = new Date();
+                        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-                case 'distance':
-                    if (activityData?.distance) {
-                        earned = activityData.distance / 1000 >= (criteria.km as number);
+                        const { data: oldActivities } = await this.supabaseService
+                            .from('strava_activities')
+                            .select('average_speed, distance')
+                            .eq('user_id', userId)
+                            .gte('distance', 5000)
+                            .lte('start_date', thirtyDaysAgo.toISOString())
+                            .order('average_speed', { ascending: false })
+                            .limit(1);
+
+                        if (oldActivities?.[0] && activityData?.average_speed) {
+                            const oldPace = (1000 / oldActivities[0].average_speed) / 60;
+                            const newPace = (1000 / activityData.average_speed) / 60;
+                            const improvement = ((oldPace - newPace) / oldPace) * 100;
+                            earned = improvement >= 5;
+                        }
                     }
                     break;
+                }
 
-                case 'pace_5k':
-                    if (activityData?.average_pace && activityData?.distance >= 5000) {
-                        earned = activityData.average_pace <= (criteria.pace as number);
+                case 'consistency': {
+                    if (badge.name === 'Consistente') {
+                        // 12 workouts in last 30 days
+                        const thirtyDaysAgo = new Date();
+                        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+                        const { count: recentWorkouts } = await this.supabaseService
+                            .from('strava_activities')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('user_id', userId)
+                            .gte('start_date', thirtyDaysAgo.toISOString());
+
+                        earned = (recentWorkouts || 0) >= 12;
+                    } else if (badge.name === 'Semana Completa') {
+                        // Completed all workouts from current week's plan
+                        const { data: weekWorkouts } = await this.supabaseService
+                            .from('workouts')
+                            .select('status')
+                            .eq('user_id', userId)
+                            .gte('scheduled_date', new Date(new Date().setDate(new Date().getDate() - 7)).toISOString());
+
+                        if (weekWorkouts && weekWorkouts.length > 0) {
+                            const allCompleted = weekWorkouts.every(w => w.status === 'completed');
+                            earned = allCompleted && weekWorkouts.length >= 3; // At least 3 workouts
+                        }
                     }
                     break;
+                }
+
+                case 'streak': {
+                    if (badge.name === 'Chama Eterna') {
+                        // 30-day streak
+                        earned = (userStats?.current_streak || 0) >= 30;
+                    }
+                    break;
+                }
+
+                case 'exploration': {
+                    if (badge.name === 'Na Chuva e no Sol') {
+                        // Trained in 5 different weather conditions
+                        // This would require weather data from activities
+                        // For now, we'll check if user has activities in different times of day
+                        const { data: activities } = await this.supabaseService
+                            .from('strava_activities')
+                            .select('start_date')
+                            .eq('user_id', userId);
+
+                        if (activities) {
+                            const hours = new Set(activities.map(a => new Date(a.start_date).getHours()));
+                            // Consider different time ranges as "different conditions"
+                            const conditions = new Set<string>();
+                            hours.forEach(h => {
+                                if (h >= 5 && h < 9) conditions.add('morning');
+                                if (h >= 12 && h < 15) conditions.add('noon');
+                                if (h >= 17 && h < 20) conditions.add('evening');
+                                if (h >= 20 || h < 5) conditions.add('night');
+                                if (h >= 9 && h < 12) conditions.add('late_morning');
+                            });
+                            earned = conditions.size >= 5;
+                        }
+                    }
+                    break;
+                }
+
+                case 'adherence': {
+                    if (badge.name === 'Fiel ao Plano') {
+                        // 80% adherence to plan for 4 weeks (28 days)
+                        const fourWeeksAgo = new Date();
+                        fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+
+                        const { data: plannedWorkouts } = await this.supabaseService
+                            .from('workouts')
+                            .select('status')
+                            .eq('user_id', userId)
+                            .gte('scheduled_date', fourWeeksAgo.toISOString());
+
+                        if (plannedWorkouts && plannedWorkouts.length > 0) {
+                            const completedCount = plannedWorkouts.filter(w => w.status === 'completed').length;
+                            const adherenceRate = (completedCount / plannedWorkouts.length) * 100;
+                            earned = adherenceRate >= 80;
+                        }
+                    }
+                    break;
+                }
             }
 
             if (earned) {

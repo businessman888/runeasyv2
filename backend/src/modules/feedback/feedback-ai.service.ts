@@ -306,6 +306,113 @@ Regras:
         return data;
     }
 
+    /**
+     * Get workout history with feedback status for Training History screen
+     */
+    async getWorkoutHistory(userId: string, limit = 20, offset = 0) {
+        try {
+            // 1. Fetch Strava activities for the user
+            const { data: activities, error: activitiesError } = await this.supabaseService
+                .from('strava_activities')
+                .select('*')
+                .eq('user_id', userId)
+                .eq('type', 'Run')
+                .order('start_date', { ascending: false })
+                .range(offset, offset + limit - 1);
+
+            if (activitiesError) {
+                this.logger.error('Failed to fetch workout history', activitiesError);
+                throw activitiesError;
+            }
+
+            if (!activities || activities.length === 0) {
+                return {
+                    summary: {
+                        total_distance: 0,
+                        total_activities: 0,
+                        total_elevation: 0,
+                    },
+                    months: [],
+                    hasMore: false,
+                };
+            }
+
+            // 2. Fetch feedback for these activities
+            const activityIds = activities.map(a => a.id);
+            const { data: feedbacks } = await this.supabaseService
+                .from('ai_feedbacks')
+                .select('id, strava_activity_id, hero_message, hero_tone, created_at')
+                .in('strava_activity_id', activityIds);
+
+            // Create a map of activity_id -> feedback
+            const feedbackMap = new Map();
+            if (feedbacks) {
+                feedbacks.forEach(f => {
+                    feedbackMap.set(f.strava_activity_id, {
+                        id: f.id,
+                        hero_message: f.hero_message,
+                        hero_tone: f.hero_tone,
+                    });
+                });
+            }
+
+            // 3. Calculate summary stats
+            const totalDistance = activities.reduce((sum, a) => sum + (a.distance || 0), 0) / 1000;
+            const totalElevation = activities.reduce((sum, a) => sum + (a.total_elevation_gain || 0), 0);
+
+            // 4. Group by month
+            const monthGroups = new Map<string, any[]>();
+
+            activities.forEach((activity) => {
+                const date = new Date(activity.start_date);
+                const monthKey = `${date.toLocaleString('pt-BR', { month: 'long' })} ${date.getFullYear()}`;
+
+                if (!monthGroups.has(monthKey)) {
+                    monthGroups.set(monthKey, []);
+                }
+
+                // Format workout data
+                const workout = {
+                    id: activity.id,
+                    date: activity.start_date,
+                    day: date.getDate(),
+                    day_of_week: date.toLocaleDateString('pt-BR', { weekday: 'short' }).toUpperCase(),
+                    type: activity.type,
+                    name: activity.name,
+                    distance: activity.distance,
+                    moving_time: activity.moving_time,
+                    average_speed: activity.average_speed,
+                    pace: activity.average_speed > 0
+                        ? (1000 / activity.average_speed / 60).toFixed(2)
+                        : null,
+                    elevation_gain: activity.total_elevation_gain || 0,
+                    feedback: feedbackMap.get(activity.id) || null,
+                };
+
+                monthGroups.get(monthKey)!.push(workout);
+            });
+
+            // 5. Convert to array format
+            const months = Array.from(monthGroups.entries()).map(([month, workouts]) => ({
+                month,
+                workouts,
+            }));
+
+            return {
+                summary: {
+                    total_distance: parseFloat(totalDistance.toFixed(1)),
+                    total_activities: activities.length,
+                    total_elevation: parseFloat(totalElevation.toFixed(0)),
+                },
+                months,
+                hasMore: activities.length === limit,
+            };
+        } catch (error) {
+            this.logger.error('Error in getWorkoutHistory', error);
+            throw error;
+        }
+    }
+
     private getWorkoutTypeName(type: string): string {
         const types: Record<string, string> = {
             'easy_run': 'Corrida Leve',

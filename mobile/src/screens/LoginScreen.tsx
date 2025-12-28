@@ -74,13 +74,26 @@ export function LoginScreen({ navigation }: any) {
                 // Clean URL first
                 window.history.replaceState({}, '', '/');
 
-                // Save userId to storage for later use in onboarding
+                // Save userId to storage
                 await Storage.setItemAsync('user_id', userId);
 
-                // Always navigate to Quiz flow for all logins
-                // User will complete quiz and then enter the app
-                console.log('Login callback - navigating to Quiz with userId:', userId);
-                navigation.replace('Quiz_Objective', { userId });
+                // Check the path to determine if user is new or existing
+                const pathname = url.pathname;
+
+                if (pathname.includes('/onboarding')) {
+                    // New user - navigate to quiz
+                    console.log('New user detected - navigating to Quiz');
+                    navigation.replace('Quiz_Objective', { userId });
+                } else if (pathname.includes('/home')) {
+                    // Existing user - log in directly
+                    console.log('Existing user detected - logging in and going to home');
+                    await login(userId);
+                    // Login sets isAuthenticated = true, AppNavigator will show Main tabs
+                } else {
+                    // Fallback - check if quiz was completed by fetching user data
+                    console.log('Unknown path, checking user status...');
+                    await login(userId);
+                }
             }
         } catch (err) {
             console.error('Web callback error:', err);
@@ -127,12 +140,24 @@ export function LoginScreen({ navigation }: any) {
                     }
 
                     if (userId) {
-                        // Save userId to storage for later use in onboarding
+                        // Save userId to storage
                         await Storage.setItemAsync('user_id', userId);
 
-                        // Always navigate to Quiz flow for all logins
-                        console.log('Native login callback - navigating to Quiz with userId:', userId);
-                        navigation.replace('Quiz_Objective', { userId });
+                        // Check the path to determine if user is new or existing
+                        const pathname = url.pathname;
+
+                        if (pathname.includes('/onboarding')) {
+                            // New user - navigate to quiz
+                            console.log('New user detected - navigating to Quiz');
+                            navigation.replace('Quiz_Objective', { userId });
+                        } else if (pathname.includes('/home')) {
+                            // Existing user - log in directly
+                            console.log('Existing user detected - logging in');
+                            await login(userId);
+                        } else {
+                            // Fallback
+                            await login(userId);
+                        }
                     }
                 }
             } catch (err) {

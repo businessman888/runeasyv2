@@ -29,6 +29,13 @@ export interface ReadinessAnswers {
     motivation: number; // 1-5
 }
 
+export interface ReadinessStatus {
+    isUnlocked: boolean;
+    hasCompletedFirstWorkout: boolean;
+    canCheckInToday: boolean;
+    lastCheckInDate: string | null;
+}
+
 interface ReadinessState {
     // Quiz state
     answers: Partial<ReadinessAnswers>;
@@ -39,6 +46,10 @@ interface ReadinessState {
     isLoading: boolean;
     error: string | null;
 
+    // Status state
+    readinessStatus: ReadinessStatus | null;
+    statusLoading: boolean;
+
     // Actions
     setAnswer: (key: keyof ReadinessAnswers, value: number) => void;
     nextStep: () => void;
@@ -46,6 +57,7 @@ interface ReadinessState {
     resetQuiz: () => void;
     fetchVerdict: () => Promise<void>;
     clearVerdict: () => void;
+    fetchReadinessStatus: () => Promise<void>;
 }
 
 // Use 10.0.2.2 for Android emulator, localhost for iOS simulator, or your actual IP for physical devices
@@ -76,6 +88,8 @@ export const useReadinessStore = create<ReadinessState>((set, get) => ({
     verdict: null,
     isLoading: false,
     error: null,
+    readinessStatus: null,
+    statusLoading: false,
 
     setAnswer: (key, value) => {
         set((state) => ({
@@ -173,5 +187,57 @@ export const useReadinessStore = create<ReadinessState>((set, get) => ({
 
     clearVerdict: () => {
         set({ verdict: null, error: null });
+    },
+
+    fetchReadinessStatus: async () => {
+        try {
+            set({ statusLoading: true });
+
+            let userId = await getUserId();
+            if (!userId) {
+                console.warn('No userId found for status check');
+                set({
+                    readinessStatus: {
+                        isUnlocked: false,
+                        hasCompletedFirstWorkout: false,
+                        canCheckInToday: false,
+                        lastCheckInDate: null,
+                    },
+                    statusLoading: false
+                });
+                return;
+            }
+
+            console.log('Fetching readiness status for user:', userId);
+
+            const response = await fetch(`${API_URL}/readiness/status`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-user-id': userId,
+                },
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Status API Error:', errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+
+            const status: ReadinessStatus = await response.json();
+            console.log('Readiness status received:', status);
+            set({ readinessStatus: status, statusLoading: false });
+        } catch (error) {
+            console.error('Fetch readiness status error:', error);
+            set({
+                readinessStatus: {
+                    isUnlocked: false,
+                    hasCompletedFirstWorkout: false,
+                    canCheckInToday: false,
+                    lastCheckInDate: null,
+                },
+                statusLoading: false
+            });
+        }
     },
 }));

@@ -15,6 +15,7 @@ import { NotificationModule } from './modules/notifications';
 import { StatsModule } from './modules/stats';
 import { UsersModule } from './modules/users';
 import { ReadinessModule } from './modules/readiness';
+import { OnboardingModule } from './modules/onboarding';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { ReadinessModule } from './modules/readiness';
     StatsModule,
     UsersModule,
     ReadinessModule,
+    OnboardingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -41,6 +41,36 @@ export interface Feedback {
     };
 }
 
+export interface WorkoutHistoryItem {
+    id: string;
+    date: string;
+    day: number;
+    day_of_week: string;
+    type: string;
+    name: string;
+    distance: number; // meters
+    moving_time: number; // seconds
+    average_speed: number; // m/s
+    pace: string | null; // min/km
+    elevation_gain: number;
+    feedback: {
+        id: string;
+        hero_message: string;
+        hero_tone: string;
+    } | null;
+}
+
+export interface WorkoutMonth {
+    month: string;
+    workouts: WorkoutHistoryItem[];
+}
+
+export interface WorkoutHistorySummary {
+    total_distance: number;
+    total_activities: number;
+    total_elevation: number;
+}
+
 interface FeedbackState {
     feedbacks: Feedback[];
     currentFeedback: Feedback | null;
@@ -51,6 +81,14 @@ interface FeedbackState {
         workout_type: string;
         workout_date: string;
     } | null;
+
+    // Workout History
+    workoutHistory: WorkoutMonth[];
+    workoutSummary: WorkoutHistorySummary | null;
+    workoutHistoryLoading: boolean;
+    workoutHistoryError: string | null;
+    hasMoreWorkouts: boolean;
+
     isLoading: boolean;
     error: string | null;
 
@@ -59,6 +97,8 @@ interface FeedbackState {
     fetchFeedback: (feedbackId: string) => Promise<void>;
     fetchLatestSummary: () => Promise<void>;
     rateFeedback: (feedbackId: string, rating: number) => Promise<void>;
+    fetchWorkoutHistory: (limit?: number, offset?: number) => Promise<void>;
+    loadMoreWorkouts: () => Promise<void>;
 }
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
@@ -71,6 +111,11 @@ export const useFeedbackStore = create<FeedbackState>((set, get) => ({
     feedbacks: [],
     currentFeedback: null,
     latestSummary: null,
+    workoutHistory: [],
+    workoutSummary: null,
+    workoutHistoryLoading: false,
+    workoutHistoryError: null,
+    hasMoreWorkouts: false,
     isLoading: false,
     error: null,
 
@@ -161,5 +206,62 @@ export const useFeedbackStore = create<FeedbackState>((set, get) => ({
         } catch (error) {
             console.error('Rate feedback error:', error);
         }
+    },
+
+    fetchWorkoutHistory: async (limit = 20, offset = 0) => {
+        try {
+            set({ workoutHistoryLoading: true, workoutHistoryError: null });
+            const userId = await getUserId();
+
+            if (!userId) {
+                set({ workoutHistoryLoading: false });
+                return;
+            }
+
+            const response = await fetch(
+                `${API_URL}/feedback/workouts/history?limit=${limit}&offset=${offset}`,
+                { headers: { 'x-user-id': userId } }
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+
+                if (offset === 0) {
+                    // Initial load
+                    set({
+                        workoutHistory: data.months || [],
+                        workoutSummary: data.summary,
+                        hasMoreWorkouts: data.hasMore,
+                    });
+                } else {
+                    // Load more - append
+                    const existing = get().workoutHistory;
+                    set({
+                        workoutHistory: [...existing, ...(data.months || [])],
+                        hasMoreWorkouts: data.hasMore,
+                    });
+                }
+            } else {
+                set({ workoutHistoryError: 'Falha ao carregar histórico de treinos' });
+            }
+        } catch (error) {
+            console.error('Fetch workout history error:', error);
+            set({ workoutHistoryError: 'Erro ao carregar treinos' });
+        } finally {
+            set({ workoutHistoryLoading: false });
+        }
+    },
+
+    loadMoreWorkouts: async () => {
+        const { workoutHistory, hasMoreWorkouts, workoutHistoryLoading } = get();
+
+        if (!hasMoreWorkouts || workoutHistoryLoading) return;
+
+        const currentOffset = workoutHistory.reduce(
+            (total, month) => total + month.workouts.length,
+            0
+        );
+
+        await get().fetchWorkoutHistory(20, currentOffset);
     },
 }));
