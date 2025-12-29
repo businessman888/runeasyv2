@@ -29,11 +29,11 @@ export class GamificationController {
                 total_points: 0,
                 current_streak: 0,
                 best_streak: 0,
-                points_to_next_level: this.gamificationService.getPointsForNextLevel(1),
+                points_to_next_level: this.gamificationService.getPointsForNextLevel(1, 0),
             };
         }
 
-        const pointsToNextLevel = this.gamificationService.getPointsForNextLevel(stats.current_level);
+        const pointsToNextLevel = this.gamificationService.getPointsForNextLevel(stats.current_level, stats.total_points);
 
         return {
             ...stats,

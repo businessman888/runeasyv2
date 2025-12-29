@@ -51,7 +51,7 @@ export class StravaWebhookController {
         this.logger.log(`Webhook verification request - mode: ${mode}, token: ${token}`);
 
         // Verify that mode is 'subscribe' AND token matches
-        const expectedToken = 'RUNEASY_2025_TOKEN';
+        const expectedToken = 'runeasy_webhook_verify_token_2025';
 
         if (mode === 'subscribe' && token === expectedToken) {
             this.logger.log('✅ Webhook verification successful');
@@ -158,11 +158,15 @@ export class StravaWebhookController {
             const activityDate = new Date(activity.start_date).toISOString().split('T')[0];
             const { data: workout } = await this.supabaseService
                 .from('workouts')
-                .select('id')
+                .select('id, distance_km')
                 .eq('user_id', user.id)
                 .eq('scheduled_date', activityDate)
                 .eq('status', 'pending')
                 .single();
+
+            let goalMet = false;
+            let xpEarned = 0;
+            const distanceKm = activity.distance / 1000;
 
             if (workout) {
                 await this.supabaseService
@@ -174,6 +178,18 @@ export class StravaWebhookController {
                     .eq('id', workout.id);
 
                 this.logger.log(`Linked activity ${activity.id} to workout ${workout.id}`);
+
+                // Check if goal was met (at least 90% of planned distance)
+                const plannedDistanceKm = workout.distance_km || 0;
+                goalMet = distanceKm >= plannedDistanceKm * 0.9;
+
+                if (goalMet) {
+                    // Calculate XP based on distance: 100 XP per km
+                    xpEarned = Math.round(distanceKm * 100);
+                    this.logger.log(`Goal met! ${distanceKm.toFixed(2)} km >= ${(plannedDistanceKm * 0.9).toFixed(2)} km (90% of ${plannedDistanceKm} km)`);
+                } else {
+                    this.logger.log(`Goal NOT met! ${distanceKm.toFixed(2)} km < ${(plannedDistanceKm * 0.9).toFixed(2)} km (90% of ${plannedDistanceKm} km)`);
+                }
 
                 // Generate AI feedback asynchronously (fire and forget)
                 this.generateFeedbackAsync(user.id, workout.id, savedActivity.id);
@@ -213,41 +229,39 @@ export class StravaWebhookController {
                     .eq('user_id', user.id);
             }
 
-            // Calculate XP based on distance: 100 XP per km
-            const distanceKm = activity.distance / 1000;
-            const xpEarned = Math.round(distanceKm * 100);
+            // Only add XP if goal was met
+            if (xpEarned > 0) {
+                await this.supabaseService.from('points_history').insert({
+                    user_id: user.id,
+                    points: xpEarned,
+                    reason: `Treino completado - ${distanceKm.toFixed(2)}km`,
+                    reference_type: 'activity',
+                    reference_id: savedActivity.id,
+                });
 
-            // Add points for completing a workout
-            await this.supabaseService.from('points_history').insert({
-                user_id: user.id,
-                points: xpEarned,
-                reason: workout
-                    ? `Treino completado - ${distanceKm.toFixed(2)}km`
-                    : `Corrida completada - ${distanceKm.toFixed(2)}km`,
-                reference_type: 'activity',
-                reference_id: savedActivity.id,
-            });
+                // Update total points - get sum from points_history
+                const { data: pointsData } = await this.supabaseService
+                    .from('points_history')
+                    .select('points')
+                    .eq('user_id', user.id);
 
-            // Update total points - get sum from points_history
-            const { data: pointsData } = await this.supabaseService
-                .from('points_history')
-                .select('points')
-                .eq('user_id', user.id);
+                const totalPoints = (pointsData || []).reduce((sum, p) => sum + (p.points || 0), 0);
 
-            const totalPoints = (pointsData || []).reduce((sum, p) => sum + (p.points || 0), 0);
+                // Calculate new level using gamification service
+                const currentLevel = this.gamificationService.calculateLevel(totalPoints);
 
-            // Calculate new level using gamification service
-            const currentLevel = this.gamificationService.calculateLevel(totalPoints);
+                await this.supabaseService
+                    .from('user_levels')
+                    .update({
+                        total_points: totalPoints,
+                        current_level: currentLevel,
+                    })
+                    .eq('user_id', user.id);
 
-            await this.supabaseService
-                .from('user_levels')
-                .update({
-                    total_points: totalPoints,
-                    current_level: currentLevel,
-                })
-                .eq('user_id', user.id);
-
-            this.logger.log(`User ${user.id} earned ${xpEarned} XP (${distanceKm.toFixed(2)}km). Total: ${totalPoints} XP, Level: ${currentLevel}`);
+                this.logger.log(`User ${user.id} earned ${xpEarned} XP (${distanceKm.toFixed(2)}km). Total: ${totalPoints} XP, Level: ${currentLevel}`);
+            } else {
+                this.logger.log(`User ${user.id} did not earn XP - goal not met or no linked workout`);
+            }
 
             this.logger.log(`Successfully processed activity ${activity.id}`);
             return { status: 'processed', activity_id: activity.id };

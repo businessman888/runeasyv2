@@ -149,6 +149,19 @@ export class FeedbackController {
     }
 
     /**
+     * Get latest activity with feedback for home screen AI card
+     */
+    @Get('latest/activity')
+    async getLatestActivityWithFeedback(@Headers('x-user-id') userId: string) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        const result = await this.feedbackAIService.getLatestActivityWithFeedback(userId);
+        return result;
+    }
+
+    /**
      * Get workout history with feedback status for Training History screen
      */
     @Get('workouts/history')

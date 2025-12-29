@@ -39,6 +39,15 @@ export interface Feedback {
         scheduled_date: string;
         distance_km: number;
     };
+    strava_activities?: {
+        id: string;
+        name: string;
+        distance: number;
+        moving_time: number;
+        average_pace: number;
+        elevation_gain: number;
+        start_date: string;
+    };
 }
 
 export interface WorkoutHistoryItem {
@@ -71,6 +80,46 @@ export interface WorkoutHistorySummary {
     total_elevation: number;
 }
 
+export interface LatestActivityData {
+    activity: {
+        id: string;
+        name: string;
+        distance: number;
+        distance_km: string;
+        moving_time: number;
+        average_pace: number;
+        formatted_pace: string;
+        elevation_gain: number;
+        average_heartrate: number | null;
+        start_date: string;
+        date_label: string;
+    } | null;
+    feedback: {
+        id: string;
+        hero_message: string;
+        hero_tone: string;
+        strengths: Array<{ title: string; description: string; icon?: string }>;
+        improvements: Array<{ title: string; description: string; tip?: string; icon?: string }>;
+    } | null;
+    efficiency_percent: number;
+    conquest: {
+        goal_met: boolean;
+        planned_distance_km: number;
+        executed_distance_km: number;
+        xp_earned: number;
+        has_linked_workout: boolean;
+    } | null;
+    vo2_max: {
+        current_value: number;
+        trend_percent: number;
+        previous_value: number | null;
+        is_valid: boolean;
+        is_interrupted: boolean;
+        has_heartrate: boolean;
+        message: string | null;
+    } | null;
+}
+
 interface FeedbackState {
     feedbacks: Feedback[];
     currentFeedback: Feedback | null;
@@ -81,6 +130,10 @@ interface FeedbackState {
         workout_type: string;
         workout_date: string;
     } | null;
+
+    // Latest Activity for Home Screen
+    latestActivity: LatestActivityData | null;
+    latestActivityLoading: boolean;
 
     // Workout History
     workoutHistory: WorkoutMonth[];
@@ -96,6 +149,7 @@ interface FeedbackState {
     fetchHistory: (limit?: number) => Promise<void>;
     fetchFeedback: (feedbackId: string) => Promise<void>;
     fetchLatestSummary: () => Promise<void>;
+    fetchLatestActivity: () => Promise<void>;
     rateFeedback: (feedbackId: string, rating: number) => Promise<void>;
     fetchWorkoutHistory: (limit?: number, offset?: number) => Promise<void>;
     loadMoreWorkouts: () => Promise<void>;
@@ -111,6 +165,8 @@ export const useFeedbackStore = create<FeedbackState>((set, get) => ({
     feedbacks: [],
     currentFeedback: null,
     latestSummary: null,
+    latestActivity: null,
+    latestActivityLoading: false,
     workoutHistory: [],
     workoutSummary: null,
     workoutHistoryLoading: false,
@@ -179,6 +235,31 @@ export const useFeedbackStore = create<FeedbackState>((set, get) => ({
             }
         } catch (error) {
             console.error('Fetch latest summary error:', error);
+        }
+    },
+
+    fetchLatestActivity: async () => {
+        try {
+            set({ latestActivityLoading: true });
+            const userId = await getUserId();
+
+            if (!userId) {
+                set({ latestActivityLoading: false });
+                return;
+            }
+
+            const response = await fetch(`${API_URL}/feedback/latest/activity`, {
+                headers: { 'x-user-id': userId },
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                set({ latestActivity: data });
+            }
+        } catch (error) {
+            console.error('Fetch latest activity error:', error);
+        } finally {
+            set({ latestActivityLoading: false });
         }
     },
 

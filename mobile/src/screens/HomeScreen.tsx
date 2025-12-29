@@ -155,7 +155,7 @@ export function HomeScreen({ navigation }: any) {
     const { user } = useAuthStore();
     const { stats, fetchStats, isLoading: gamificationLoading } = useGamificationStore();
     const { upcomingWorkouts, fetchUpcomingWorkouts, isLoading: trainingLoading } = useTrainingStore();
-    const { latestSummary, fetchLatestSummary } = useFeedbackStore();
+    const { latestSummary, fetchLatestSummary, latestActivity, latestActivityLoading, fetchLatestActivity } = useFeedbackStore();
     const { summary, fetchSummary, isLoading: statsLoading } = useStatsStore();
     const [isInitialLoading, setIsInitialLoading] = useState(true);
 
@@ -165,6 +165,7 @@ export function HomeScreen({ navigation }: any) {
                 fetchStats(),
                 fetchUpcomingWorkouts(),
                 fetchLatestSummary(),
+                fetchLatestActivity(),
                 fetchSummary(),
             ]);
             setIsInitialLoading(false);
@@ -418,12 +419,21 @@ export function HomeScreen({ navigation }: any) {
 
                 {/* AI Analysis Card */}
                 <View style={styles.aiCard}>
-                    {hasCompletedWorkouts ? (
+                    {latestActivityLoading ? (
+                        <View style={styles.aiLoadingContainer}>
+                            <Skeleton width="50%" height={20} style={{ marginBottom: 8 }} />
+                            <Skeleton width="30%" height={14} style={{ marginBottom: 16 }} />
+                            <Skeleton width="40%" height={36} style={{ marginBottom: 8 }} />
+                            <Skeleton width="60%" height={24} />
+                        </View>
+                    ) : latestActivity?.activity ? (
                         <>
                             <View style={styles.aiHeader}>
                                 <View>
                                     <Text style={styles.aiTitle}>Análise do Treinador</Text>
-                                    <Text style={styles.aiSubtitle}>Corrida matinal - hoje</Text>
+                                    <Text style={styles.aiSubtitle}>
+                                        {latestActivity.activity.name || 'Corrida'} - {latestActivity.activity.date_label}
+                                    </Text>
                                 </View>
                                 <BinocularsIcon size={35} color="#00D4FF" />
                             </View>
@@ -431,11 +441,16 @@ export function HomeScreen({ navigation }: any) {
                             <View style={styles.aiStats}>
                                 <View style={styles.aiPaceSection}>
                                     <Text style={styles.aiPace}>
-                                        5:12 <Text style={styles.aiPaceUnit}>km</Text>
+                                        {latestActivity.activity.formatted_pace} <Text style={styles.aiPaceUnit}>km</Text>
                                     </Text>
                                     <View style={styles.efficiencyBadge}>
-                                        <TrendUpIcon size={18} color="#32CD32" />
-                                        <Text style={styles.efficiencyText}>+2% EFICIENTE</Text>
+                                        <TrendUpIcon size={18} color={latestActivity.efficiency_percent >= 0 ? "#32CD32" : "#FF6B6B"} />
+                                        <Text style={[
+                                            styles.efficiencyText,
+                                            { color: latestActivity.efficiency_percent >= 0 ? "#32CD32" : "#FF6B6B" }
+                                        ]}>
+                                            {latestActivity.efficiency_percent >= 0 ? '+' : ''}{latestActivity.efficiency_percent}% EFICIENTE
+                                        </Text>
                                     </View>
                                 </View>
                                 <View style={styles.miniChart}>
@@ -450,11 +465,24 @@ export function HomeScreen({ navigation }: any) {
 
                             <TouchableOpacity
                                 style={styles.feedbackButton}
-                                onPress={() => navigation.navigate('CoachAnalysis')}
+                                onPress={() => navigation.navigate('CoachAnalysis', {
+                                    activityId: latestActivity.activity?.id,
+                                    feedbackId: latestActivity.feedback?.id,
+                                })}
                             >
                                 <Text style={styles.feedbackButtonText}>Ver feedback completo</Text>
                                 <ArrowRightIcon size={18} color="#00D4FF" />
                             </TouchableOpacity>
+                        </>
+                    ) : hasCompletedWorkouts ? (
+                        <>
+                            <View style={styles.aiHeader}>
+                                <View>
+                                    <Text style={styles.aiTitle}>Análise do Treinador</Text>
+                                    <Text style={styles.aiSubtitle}>Carregando dados...</Text>
+                                </View>
+                                <BinocularsIcon size={35} color="#00D4FF" />
+                            </View>
                         </>
                     ) : (
                         <View style={styles.lockedContainer}>
@@ -757,6 +785,9 @@ const styles = StyleSheet.create({
         borderRadius: borderRadius['2xl'],
         padding: spacing.lg,
         gap: spacing.lg,
+    },
+    aiLoadingContainer: {
+        padding: spacing.md,
     },
     aiHeader: {
         flexDirection: 'row',

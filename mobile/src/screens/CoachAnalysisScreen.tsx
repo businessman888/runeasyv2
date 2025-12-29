@@ -183,6 +183,18 @@ function HeartbeatIcon({ size = 20, color = '#00D4FF' }: { size?: number; color?
     return <Text style={{ fontSize: size, color }}>📈</Text>;
 }
 
+// Trend Up icon for VO2 Max trend indicator
+function TrendUpIcon({ size = 16, color = '#32CD32' }: { size?: number; color?: string }) {
+    if (Platform.OS === 'web') {
+        return (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+                <path d="M16 6L18.29 8.29L13.41 13.17L9.41 9.17L2 16.59L3.41 18L9.41 12L13.41 16L19.71 9.71L22 12V6H16Z" />
+            </svg>
+        );
+    }
+    return <Text style={{ fontSize: size, color }}>↗</Text>;
+}
+
 // Battery icon for VO2 card (right)
 function BatteryIcon({ size = 18, color = '#00D4FF' }: { size?: number; color?: string }) {
     if (Platform.OS === 'web') {
@@ -258,22 +270,104 @@ function CircularScore({ percentage, size = 120 }: { percentage: number; size?: 
 
 export function CoachAnalysisScreen({ navigation, route }: any) {
     const { feedbackId, activityId } = route?.params || {};
-    const { currentFeedback, fetchFeedback } = useFeedbackStore();
+    const { currentFeedback, fetchFeedback, latestActivity, latestActivityLoading, fetchLatestActivity, isLoading } = useFeedbackStore();
 
     useEffect(() => {
         if (feedbackId) {
             // Load specific feedback from history/workout
             fetchFeedback(feedbackId);
+        } else if (!latestActivity) {
+            // Fetch latest activity if not already loaded
+            fetchLatestActivity();
         }
-        // TODO: If coming from latest (home screen), use latest summary
     }, [feedbackId]);
 
-    // TODO: Use currentFeedback data instead of mock metrics
-    const metrics = [
-        { icon: SpeedIcon, label: 'Pace', target: '5\'00"', actual: '4\'58"', iconBg: '#1A3A4A', iconColor: '#00D4FF', barColor: '#32CD32', progress: 100 },
-        { icon: RouteIcon, label: 'Distância', target: '5.0 km', actual: '5.2', iconBg: '#2A1F3D', iconColor: '#9747FF', barColor: '#00D4FF', progress: 85 },
-        { icon: MountainIcon, label: 'Elevação', target: '50 m', actual: '48', iconBg: '#3D3520', iconColor: '#FFB800', barColor: '#FFB800', progress: 75 },
+    // Determine data source: from currentFeedback (if feedbackId provided) or latestActivity
+    const activity = currentFeedback?.strava_activities || latestActivity?.activity;
+    const feedback = currentFeedback || (latestActivity?.feedback ? {
+        strengths: latestActivity.feedback.strengths,
+        improvements: latestActivity.feedback.improvements,
+        hero_message: latestActivity.feedback.hero_message,
+        hero_tone: latestActivity.feedback.hero_tone,
+    } : null);
+
+    // Format pace from decimal minutes to mm:ss
+    const formatPace = (paceMinPerKm: number | null | undefined): string => {
+        if (!paceMinPerKm || paceMinPerKm === 0) return '--:--';
+        const minutes = Math.floor(paceMinPerKm);
+        const seconds = Math.round((paceMinPerKm - minutes) * 60);
+        return `${minutes}'${seconds.toString().padStart(2, '0')}"`;
+    };
+
+    // Build metrics from real data
+    const metrics = activity ? [
+        {
+            icon: SpeedIcon,
+            label: 'Pace',
+            target: currentFeedback?.metrics_comparison?.pace?.planned || '--',
+            actual: formatPace(activity.average_pace),
+            iconBg: '#1A3A4A',
+            iconColor: '#00D4FF',
+            barColor: '#32CD32',
+            progress: 100
+        },
+        {
+            icon: RouteIcon,
+            label: 'Distância',
+            target: currentFeedback?.metrics_comparison?.distance?.planned
+                ? `${currentFeedback.metrics_comparison.distance.planned} km`
+                : '--',
+            actual: activity.distance
+                ? (activity.distance / 1000).toFixed(1)
+                : '--',
+            iconBg: '#2A1F3D',
+            iconColor: '#9747FF',
+            barColor: '#00D4FF',
+            progress: 85
+        },
+        {
+            icon: MountainIcon,
+            label: 'Elevação',
+            target: '--',
+            actual: activity.elevation_gain?.toString() || '0',
+            iconBg: '#3D3520',
+            iconColor: '#FFB800',
+            barColor: '#FFB800',
+            progress: 75
+        },
+    ] : [
+        { icon: SpeedIcon, label: 'Pace', target: '--', actual: '--', iconBg: '#1A3A4A', iconColor: '#00D4FF', barColor: '#32CD32', progress: 0 },
+        { icon: RouteIcon, label: 'Distância', target: '--', actual: '--', iconBg: '#2A1F3D', iconColor: '#9747FF', barColor: '#00D4FF', progress: 0 },
+        { icon: MountainIcon, label: 'Elevação', target: '--', actual: '--', iconBg: '#3D3520', iconColor: '#FFB800', barColor: '#FFB800', progress: 0 },
     ];
+
+    // Get analysis content from feedback
+    const strength = feedback?.strengths?.[0];
+    const improvement = feedback?.improvements?.[0];
+
+    // Loading state
+    const showLoading = isLoading || latestActivityLoading;
+
+    // Get score title from feedback
+    const getScoreTitle = () => {
+        if (feedback?.hero_message) return feedback.hero_message;
+        if (feedback?.hero_tone === 'celebration') return 'Execução Perfeita!';
+        if (feedback?.hero_tone === 'encouragement') return 'Bom Trabalho!';
+        if (feedback?.hero_tone === 'improvement') return 'Continue Evoluindo!';
+        if (feedback?.hero_tone === 'caution') return 'Atenção Necessária';
+        return 'Análise do Treino';
+    };
+
+    // Format activity date for subtitle
+    const getActivitySubtitle = () => {
+        if (!activity) return 'Carregando...';
+        const activityName = activity.name || 'Treino';
+        const date = new Date(activity.start_date);
+        const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const today = new Date();
+        const isToday = date.toDateString() === today.toDateString();
+        return `${activityName} - ${isToday ? 'Hoje' : date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}, ${timeStr}`;
+    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -295,8 +389,8 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                 {/* Score Section */}
                 <View style={styles.scoreSection}>
                     <CircularScore percentage={100} size={120} />
-                    <Text style={styles.scoreTitle}>Execução Perfeita</Text>
-                    <Text style={styles.scoreSubtitle}>Treino de Base - Hoje, 06:30</Text>
+                    <Text style={styles.scoreTitle}>{showLoading ? 'Carregando...' : getScoreTitle()}</Text>
+                    <Text style={styles.scoreSubtitle}>{showLoading ? '...' : getActivitySubtitle()}</Text>
                 </View>
 
                 {/* Métricas Detalhadas - Header FORA do card */}
@@ -343,79 +437,205 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                         <TrophyIcon size={20} color="#00D4FF" />
                     </View>
 
-                    {/* Eficiência Mecânica */}
-                    <View style={[styles.analysisCard, styles.analysisCardGreen]}>
-                        <View style={styles.analysisCardIcon}>
-                            <ThumbUpIcon size={24} color="#32CD32" />
-                        </View>
-                        <View style={styles.analysisCardContent}>
-                            <Text style={styles.analysisCardTitle}>Eficiência Mecânica</Text>
-                            <Text style={styles.analysisCardText}>
-                                Cadência estável em <Text style={styles.analysisHighlight}>175spm</Text>.
-                            </Text>
-                            <Text style={styles.analysisCardText}>
-                                Você manteve a técnica mesmo nas subidas entre o km 3 e 4.
-                            </Text>
-                        </View>
-                    </View>
-
-                    {/* Deriva Cardíaca */}
-                    <View style={[styles.analysisCard, styles.analysisCardYellow]}>
-                        <View style={styles.analysisCardIcon}>
-                            <AlertIcon size={24} color="#FFD700" />
-                        </View>
-                        <View style={styles.analysisCardContent}>
-                            <Text style={styles.analysisCardTitle}>Deriva Cardíaca</Text>
-                            <Text style={styles.analysisCardText}>
-                                Leve aumento da FC no último km.
-                            </Text>
-                            <Text style={styles.analysisCardText}>
-                                Sugerimos <Text style={styles.analysisHighlightOrange}>estender o aquecimento</Text> em 5 min no próximo treino.
-                            </Text>
-                        </View>
-                    </View>
-
-                    {/* VO2 Stats */}
-                    <View style={styles.vo2Row}>
-                        <View style={styles.vo2Card}>
-                            <View style={styles.vo2HeaderNew}>
-                                <HeartbeatIcon size={20} color="#00D4FF" />
-                                <Text style={styles.vo2ChangeText}>+ 0.2%</Text>
+                    {/* Ponto Forte (Strengths) */}
+                    {strength ? (
+                        <View style={[styles.analysisCard, styles.analysisCardGreen]}>
+                            <View style={styles.analysisCardIcon}>
+                                <ThumbUpIcon size={24} color="#32CD32" />
                             </View>
-                            <Text style={styles.vo2Value}>54.2</Text>
-                            <Text style={styles.vo2Label}>VO² MAX EST.</Text>
-                        </View>
-                        <View style={styles.vo2Card}>
-                            <View style={styles.vo2HeaderNew}>
-                                <BatteryIcon size={18} color="#00D4FF" />
+                            <View style={styles.analysisCardContent}>
+                                <Text style={styles.analysisCardTitle}>{strength.title}</Text>
+                                <Text style={styles.analysisCardText}>
+                                    {strength.description}
+                                </Text>
                             </View>
-                            <Text style={styles.vo2Value}>54.2</Text>
-                            <Text style={styles.vo2Label}>VO² MAX EST.</Text>
                         </View>
+                    ) : (
+                        <View style={[styles.analysisCard, styles.analysisCardGreen]}>
+                            <View style={styles.analysisCardIcon}>
+                                <ThumbUpIcon size={24} color="#32CD32" />
+                            </View>
+                            <View style={styles.analysisCardContent}>
+                                <Text style={styles.analysisCardTitle}>Ponto Forte</Text>
+                                <Text style={styles.analysisCardText}>
+                                    Complete um treino para receber análise personalizada.
+                                </Text>
+                            </View>
+                        </View>
+                    )}
+
+                    {/* Área de Melhoria (Improvements) */}
+                    {improvement ? (
+                        <View style={[styles.analysisCard, styles.analysisCardYellow]}>
+                            <View style={styles.analysisCardIcon}>
+                                <AlertIcon size={24} color="#FFD700" />
+                            </View>
+                            <View style={styles.analysisCardContent}>
+                                <Text style={styles.analysisCardTitle}>{improvement.title}</Text>
+                                <Text style={styles.analysisCardText}>
+                                    {improvement.description}
+                                </Text>
+                                {improvement.tip && (
+                                    <Text style={styles.analysisCardText}>
+                                        <Text style={styles.analysisHighlightOrange}>Dica: </Text>
+                                        {improvement.tip}
+                                    </Text>
+                                )}
+                            </View>
+                        </View>
+                    ) : (
+                        <View style={[styles.analysisCard, styles.analysisCardYellow]}>
+                            <View style={styles.analysisCardIcon}>
+                                <AlertIcon size={24} color="#FFD700" />
+                            </View>
+                            <View style={styles.analysisCardContent}>
+                                <Text style={styles.analysisCardTitle}>Área de Melhoria</Text>
+                                <Text style={styles.analysisCardText}>
+                                    Aguardando dados do treino para análise.
+                                </Text>
+                            </View>
+                        </View>
+                    )}
+
+                    {/* VO2 Max Unified Card */}
+                    <View style={styles.vo2CardUnified}>
+                        <View style={styles.vo2UnifiedHeader}>
+                            <HeartbeatIcon size={24} color="#00D4FF" />
+                            <Text style={styles.vo2UnifiedTitle}>VO² Máximo Estimado</Text>
+                        </View>
+
+                        <View style={styles.vo2UnifiedBody}>
+                            <View style={styles.vo2ValueContainer}>
+                                <Text style={styles.vo2ValueLarge}>
+                                    {latestActivity?.vo2_max?.is_valid
+                                        ? latestActivity.vo2_max.current_value.toFixed(1)
+                                        : '--'}
+                                </Text>
+                                <Text style={styles.vo2Unit}>ml/kg/min</Text>
+                            </View>
+
+                            {latestActivity?.vo2_max?.is_valid && (
+                                <View style={[
+                                    styles.vo2TrendBadge,
+                                    latestActivity.vo2_max.is_interrupted && styles.vo2TrendBadgeNeutral,
+                                    !latestActivity.vo2_max.is_interrupted && latestActivity.vo2_max.trend_percent > 0 && styles.vo2TrendBadgePositive,
+                                    !latestActivity.vo2_max.is_interrupted && latestActivity.vo2_max.trend_percent < 0 && styles.vo2TrendBadgeNegative,
+                                ]}>
+                                    <TrendUpIcon
+                                        size={16}
+                                        color={
+                                            latestActivity.vo2_max.is_interrupted ? '#9CA3AF' :
+                                                latestActivity.vo2_max.trend_percent >= 0 ? '#32CD32' : '#FF6B6B'
+                                        }
+                                    />
+                                    <Text style={[
+                                        styles.vo2TrendText,
+                                        {
+                                            color: latestActivity.vo2_max.is_interrupted ? '#9CA3AF' :
+                                                latestActivity.vo2_max.trend_percent >= 0 ? '#32CD32' : '#FF6B6B'
+                                        }
+                                    ]}>
+                                        {latestActivity.vo2_max.is_interrupted
+                                            ? '0.0%'
+                                            : `${latestActivity.vo2_max.trend_percent >= 0 ? '+' : ''}${latestActivity.vo2_max.trend_percent.toFixed(1)}%`
+                                        }
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {latestActivity?.vo2_max?.message && (
+                            <Text style={styles.vo2Message}>{latestActivity.vo2_max.message}</Text>
+                        )}
+
+                        {!latestActivity?.vo2_max?.is_valid && (
+                            <Text style={styles.vo2Message}>Dados insuficientes para cálculo</Text>
+                        )}
                     </View>
                 </View>
 
                 {/* Conquista */}
-                <View style={[
-                    styles.conquestCard,
-                    Platform.OS === 'web' && {
-                        // @ts-ignore - web only gradient
-                        backgroundImage: 'linear-gradient(90deg, rgba(28,28,46,1) 0%, rgba(28,28,46,1) 50%, rgba(255,196,0,0.2) 100%)',
-                    }
-                ]}>
-                    <View style={styles.conquestHeader}>
-                        <ConquestaTrophyIcon size={35} />
-                        <Text style={styles.conquestLabel}>CONQUISTA</Text>
-                    </View>
-                    <View style={styles.conquestContent}>
-                        <View style={styles.conquestInfo}>
-                            <Text style={styles.conquestTitle}>Novo Badge!</Text>
-                            <Text style={styles.conquestName}>Mestre da Consistência</Text>
-                            <Text style={styles.conquestXp}>+150 XP</Text>
+                {latestActivity?.conquest ? (
+                    latestActivity.conquest.goal_met ? (
+                        // Goal Met - Show success
+                        <View style={[
+                            styles.conquestCard,
+                            Platform.OS === 'web' && {
+                                // @ts-ignore - web only gradient
+                                backgroundImage: 'linear-gradient(90deg, rgba(28,28,46,1) 0%, rgba(28,28,46,1) 50%, rgba(255,196,0,0.2) 100%)',
+                            }
+                        ]}>
+                            <View style={styles.conquestHeader}>
+                                <ConquestaTrophyIcon size={35} />
+                                <Text style={styles.conquestLabel}>CONQUISTA</Text>
+                            </View>
+                            <View style={styles.conquestContent}>
+                                <View style={styles.conquestInfo}>
+                                    <Text style={styles.conquestTitle}>Meta Alcançada!</Text>
+                                    <Text style={styles.conquestName}>
+                                        {latestActivity.conquest.executed_distance_km.toFixed(1)} km de {latestActivity.conquest.planned_distance_km} km
+                                    </Text>
+                                    <Text style={styles.conquestXp}>+{latestActivity.conquest.xp_earned} XP</Text>
+                                </View>
+                                <ConquestaMedalIcon size={64} />
+                            </View>
                         </View>
-                        <ConquestaMedalIcon size={64} />
+                    ) : latestActivity.conquest.has_linked_workout ? (
+                        // Goal Not Met - Show warning
+                        <View style={[
+                            styles.conquestCard,
+                            styles.conquestCardFailed,
+                            Platform.OS === 'web' && {
+                                // @ts-ignore - web only gradient
+                                backgroundImage: 'linear-gradient(90deg, rgba(28,28,46,1) 0%, rgba(28,28,46,1) 50%, rgba(139,69,69,0.2) 100%)',
+                            }
+                        ]}>
+                            <View style={styles.conquestHeader}>
+                                <AlertIcon size={35} color="#FF6B6B" />
+                                <Text style={[styles.conquestLabel, { color: '#FF6B6B' }]}>META NÃO BATIDA</Text>
+                            </View>
+                            <View style={styles.conquestContent}>
+                                <View style={styles.conquestInfo}>
+                                    <Text style={styles.conquestTitle}>Objetivo Não Atingido</Text>
+                                    <Text style={styles.conquestName}>
+                                        {latestActivity.conquest.executed_distance_km.toFixed(1)} km de {latestActivity.conquest.planned_distance_km} km planejados
+                                    </Text>
+                                    <Text style={[styles.conquestXp, { color: '#FF6B6B' }]}>Nenhum XP contabilizado</Text>
+                                </View>
+                            </View>
+                        </View>
+                    ) : (
+                        // No linked workout - Activity without plan
+                        <View style={[styles.conquestCard]}>
+                            <View style={styles.conquestHeader}>
+                                <ConquestaTrophyIcon size={35} />
+                                <Text style={styles.conquestLabel}>ATIVIDADE LIVRE</Text>
+                            </View>
+                            <View style={styles.conquestContent}>
+                                <View style={styles.conquestInfo}>
+                                    <Text style={styles.conquestTitle}>Corrida Avulsa</Text>
+                                    <Text style={styles.conquestName}>
+                                        {latestActivity.conquest.executed_distance_km.toFixed(1)} km percorridos
+                                    </Text>
+                                    <Text style={styles.conquestXp}>+{latestActivity.conquest.xp_earned} XP</Text>
+                                </View>
+                            </View>
+                        </View>
+                    )
+                ) : (
+                    // Default/Loading state
+                    <View style={[styles.conquestCard]}>
+                        <View style={styles.conquestHeader}>
+                            <ConquestaTrophyIcon size={35} />
+                            <Text style={styles.conquestLabel}>CONQUISTA</Text>
+                        </View>
+                        <View style={styles.conquestContent}>
+                            <View style={styles.conquestInfo}>
+                                <Text style={styles.conquestTitle}>Carregando...</Text>
+                            </View>
+                        </View>
                     </View>
-                </View>
+                )}
 
                 {/* Dica */}
                 <View style={styles.tipCard}>
@@ -705,6 +925,74 @@ const styles = StyleSheet.create({
         color: 'rgba(235,235,245,0.6)',
         marginTop: 4,
     },
+    // Unified VO2 Max Card Styles
+    vo2CardUnified: {
+        backgroundColor: '#1C1C2E',
+        borderRadius: 16,
+        padding: spacing.lg,
+        borderWidth: 1,
+        borderColor: 'rgba(0,212,255,0.3)',
+    },
+    vo2UnifiedHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        marginBottom: spacing.md,
+    },
+    vo2UnifiedTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#00D4FF',
+    },
+    vo2UnifiedBody: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    vo2ValueContainer: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        gap: spacing.xs,
+    },
+    vo2ValueLarge: {
+        fontSize: 42,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
+    vo2Unit: {
+        fontSize: 14,
+        color: 'rgba(235,235,245,0.6)',
+        marginLeft: 4,
+    },
+    vo2TrendBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        backgroundColor: 'rgba(50,205,50,0.15)',
+    },
+    vo2TrendBadgePositive: {
+        backgroundColor: 'rgba(50,205,50,0.15)',
+    },
+    vo2TrendBadgeNegative: {
+        backgroundColor: 'rgba(255,107,107,0.15)',
+    },
+    vo2TrendBadgeNeutral: {
+        backgroundColor: 'rgba(156,163,175,0.15)',
+    },
+    vo2TrendText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#32CD32',
+    },
+    vo2Message: {
+        fontSize: 12,
+        color: 'rgba(235,235,245,0.5)',
+        marginTop: spacing.sm,
+        fontStyle: 'italic',
+    },
     conquestCard: {
         marginHorizontal: spacing.lg,
         borderRadius: 16,
@@ -713,6 +1001,10 @@ const styles = StyleSheet.create({
         backgroundColor: '#1C1C2E',
         borderWidth: 0,
         overflow: 'hidden',
+    },
+    conquestCardFailed: {
+        borderWidth: 1,
+        borderColor: 'rgba(255,107,107,0.3)',
     },
     conquestHeader: {
         flexDirection: 'row',
