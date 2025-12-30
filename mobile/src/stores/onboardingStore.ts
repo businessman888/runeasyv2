@@ -17,6 +17,7 @@ interface OnboardingData {
 export interface GeneratedPlanResult {
     plan_id: string;
     workouts_count: number;
+    generation_status: 'partial' | 'generating' | 'complete' | 'failed';
     planHeader: {
         objectiveShort: string;
         durationWeeks: string;
@@ -30,18 +31,6 @@ export interface GeneratedPlanResult {
         paceEstimate: string;
         type: string;
     };
-    fullSchedulePreview: Array<{
-        week: number;
-        focus: string;
-        workouts: Array<{
-            day: number;
-            type: string;
-            title: string;
-            distance_km: number;
-            duration: string;
-            pace: string;
-        }>;
-    }>;
 }
 
 // Error codes for handling in UI

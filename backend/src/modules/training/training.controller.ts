@@ -12,7 +12,7 @@ import {
     Logger,
     UseGuards,
 } from '@nestjs/common';
-import { TrainingService } from './training.service';
+import { TrainingService, QuickPlanResponse, GenerationStatus } from './training.service';
 import { SupabaseService } from '../../database';
 import { SupabaseAuthGuard } from '../../common/guards/supabase-auth.guard';
 
@@ -40,8 +40,9 @@ export class TrainingController {
     ) { }
 
     /**
-     * Save onboarding data and create training plan
+     * Save onboarding data and create training plan (FAST - uses Prompt Chaining)
      * Note: Auth via x-user-id header (set during Strava OAuth callback)
+     * Response time: ~3-5 seconds (background process generates remaining weeks)
      */
     @Post('onboarding')
     async completeOnboarding(
@@ -68,8 +69,9 @@ export class TrainingController {
                 responses_json: dto,
             });
 
-            // Create training plan
-            const result = await this.trainingService.createTrainingPlan(userId, {
+            // Create QUICK training plan (Prompt 1 only - fast ~3-5s)
+            // Background process will generate remaining weeks (Prompt 2)
+            const result = await this.trainingService.createQuickPlan(userId, {
                 goal: dto.goal,
                 level: dto.level,
                 daysPerWeek: dto.days_per_week,
@@ -79,22 +81,51 @@ export class TrainingController {
                 preferredDays: dto.preferred_days,
             });
 
-            // Return plan preview data for frontend
+            // Return immediately with first workout data
             return {
                 success: true,
-                plan_id: result.plan.id,
-                workouts_count: result.workoutsCount,
-                // Include plan preview data for PlanPreview screen
-                planHeader: result.planPreview?.planHeader,
-                planHeadline: result.planPreview?.planHeadline,
-                welcomeBadge: result.planPreview?.welcomeBadge,
-                nextWorkout: result.planPreview?.nextWorkout,
-                fullSchedulePreview: result.planPreview?.fullSchedulePreview,
+                plan_id: result.plan_id,
+                generation_status: result.generation_status,
+                workouts_count: result.workouts_count,
+                // Plan preview data for SmartPlanScreen
+                planHeader: result.planHeader,
+                planHeadline: result.planHeadline,
+                welcomeBadge: result.welcomeBadge,
+                nextWorkout: result.nextWorkout,
             };
         } catch (error) {
             this.logger.error('Onboarding failed', error);
             throw new HttpException(
                 error.message || 'Failed to create plan',
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    /**
+     * Get plan generation status (for polling during background generation)
+     */
+    @Get('plan/:id/status')
+    async getPlanStatus(
+        @Headers('x-user-id') userId: string,
+        @Param('id') planId: string,
+    ) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        try {
+            const status = await this.trainingService.getPlanGenerationStatus(planId);
+            return {
+                plan_id: planId,
+                generation_status: status.status,
+                workouts_count: status.workouts_count,
+                is_complete: status.status === 'complete',
+            };
+        } catch (error) {
+            this.logger.error('Failed to get plan status', error);
+            throw new HttpException(
+                error.message || 'Failed to get plan status',
                 HttpStatus.INTERNAL_SERVER_ERROR,
             );
         }
