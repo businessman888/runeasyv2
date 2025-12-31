@@ -30,6 +30,7 @@ import {
     HelpScreen,
 } from '../screens';
 import { PlanPreviewScreen as QuizPlanPreviewScreen } from '../screens/quiz/PlanPreviewScreen';
+import { PlanLoadingScreen } from '../screens/quiz/PlanLoadingScreen';
 import { SmartPlanScreen } from '../screens/quiz/SmartPlanScreen';
 import { PlanPreviewScreen as OldPlanPreviewScreen } from '../screens/PlanPreviewScreen';
 import { colors, typography } from '../theme';
@@ -210,6 +211,11 @@ export function AppNavigator() {
                             options={{ headerShown: false }}
                         />
                         <Stack.Screen
+                            name="Quiz_PlanLoading"
+                            component={PlanLoadingScreen}
+                            options={{ headerShown: false, gestureEnabled: false }}
+                        />
+                        <Stack.Screen
                             name="SmartPlan"
                             component={SmartPlanScreen}
                             options={{ headerShown: false }}
@@ -263,6 +269,11 @@ export function AppNavigator() {
                             name="Quiz_PlanPreview"
                             component={QuizPlanPreviewScreen}
                             options={{ headerShown: false }}
+                        />
+                        <Stack.Screen
+                            name="Quiz_PlanLoading"
+                            component={PlanLoadingScreen}
+                            options={{ headerShown: false, gestureEnabled: false }}
                         />
                         <Stack.Screen
                             name="SmartPlan"

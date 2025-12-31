@@ -5,5 +5,6 @@ export { PaceScreen } from './PaceScreen';
 export { TimeframeScreen } from './TimeframeScreen';
 export { LimitationsScreen } from './LimitationsScreen';
 export { PlanPreviewScreen } from './PlanPreviewScreen';
+export { PlanLoadingScreen } from './PlanLoadingScreen';
 export { SmartPlanScreen } from './SmartPlanScreen';
 

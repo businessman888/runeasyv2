@@ -270,11 +270,27 @@ const mockWorkoutData: WorkoutData = {
     insight: 'Você descansou bem ontem. Sua prontidão está alta. Tente focar em aumentar a cadência nos últimos 2 tiros quando o cansaço bater.',
 };
 
+// Lock Icon SVG Component
+function LockIcon({ size = 60, color = '#00D4FF' }: { size?: number; color?: string }) {
+    if (Platform.OS === 'web') {
+        return (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+                <path
+                    d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"
+                    fill={color}
+                />
+            </svg>
+        );
+    }
+    return <Text style={{ fontSize: size, color }}>🔒</Text>;
+}
+
 export function CalendarScreen({ navigation }: any) {
-    const { workouts, fetchWorkouts, upcomingWorkouts, fetchUpcomingWorkouts } = useTrainingStore();
+    const { workouts, fetchWorkouts, upcomingWorkouts, fetchUpcomingWorkouts, plan, fetchPlan, generationStatus, checkPlanStatus } = useTrainingStore();
     const { summary, fetchSummary } = useStatsStore();
     const [selectedDate, setSelectedDate] = React.useState(new Date().getDate());
     const [currentMonth, setCurrentMonth] = React.useState(new Date());
+    const [isScheduleLocked, setIsScheduleLocked] = React.useState(false);
 
     // Modal states
     const [modalVisible, setModalVisible] = React.useState(false);
@@ -283,8 +299,42 @@ export function CalendarScreen({ navigation }: any) {
     const lastClickedDate = React.useRef<number | null>(null);
     const lastClickTime = React.useRef<number>(0);
     const modalSlideAnim = React.useRef(new Animated.Value(0)).current;
+    const pollingInterval = React.useRef<NodeJS.Timeout | null>(null);
 
     const DOUBLE_CLICK_DELAY = 400; // ms
+    const POLLING_INTERVAL = 3000; // 3 seconds
+
+    // Fetch plan on mount
+    React.useEffect(() => {
+        fetchPlan();
+    }, []);
+
+    // Check if schedule is locked based on generation status
+    React.useEffect(() => {
+        const isLocked = generationStatus === 'partial' || generationStatus === 'generating';
+        setIsScheduleLocked(isLocked);
+
+        // Start polling if locked
+        if (isLocked && plan?.id) {
+            pollingInterval.current = setInterval(async () => {
+                const isComplete = await checkPlanStatus(plan.id);
+                if (isComplete) {
+                    setIsScheduleLocked(false);
+                    if (pollingInterval.current) {
+                        clearInterval(pollingInterval.current);
+                        pollingInterval.current = null;
+                    }
+                }
+            }, POLLING_INTERVAL);
+        }
+
+        return () => {
+            if (pollingInterval.current) {
+                clearInterval(pollingInterval.current);
+                pollingInterval.current = null;
+            }
+        };
+    }, [generationStatus, plan?.id]);
 
     React.useEffect(() => {
         const start = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
@@ -456,6 +506,24 @@ export function CalendarScreen({ navigation }: any) {
 
     return (
         <SafeAreaView style={styles.container}>
+            {/* Locked State Overlay */}
+            {isScheduleLocked && (
+                <View style={styles.lockedOverlay}>
+                    <View style={styles.lockedContent}>
+                        <LockIcon size={80} color="#00D4FF" />
+                        <Text style={styles.lockedTitle}>Cronograma em Preparação</Text>
+                        <Text style={styles.lockedMessage}>
+                            Aguarde alguns instantes até que seu cronograma de treino fique completo.
+                        </Text>
+                        <View style={styles.lockedLoadingDots}>
+                            <View style={[styles.loadingDot, styles.loadingDot1]} />
+                            <View style={[styles.loadingDot, styles.loadingDot2]} />
+                            <View style={[styles.loadingDot, styles.loadingDot3]} />
+                        </View>
+                    </View>
+                </View>
+            )}
+
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 {/* Header */}
                 <View style={styles.header}>
@@ -1467,5 +1535,53 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.base,
         fontWeight: typography.fontWeights.bold as any,
         color: '#0E0E1F',
+    },
+
+    // Locked State Overlay Styles
+    lockedOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(14, 14, 31, 0.95)',
+        zIndex: 100,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    lockedContent: {
+        alignItems: 'center',
+        paddingHorizontal: 40,
+    },
+    lockedTitle: {
+        fontSize: 22,
+        fontWeight: '700' as any,
+        color: '#EBEBF5',
+        marginTop: 24,
+        marginBottom: 12,
+        textAlign: 'center',
+    },
+    lockedMessage: {
+        fontSize: 15,
+        fontWeight: '400' as any,
+        color: 'rgba(235, 235, 245, 0.6)',
+        textAlign: 'center',
+        lineHeight: 22,
+    },
+    lockedLoadingDots: {
+        flexDirection: 'row',
+        marginTop: 24,
+        gap: 8,
+    },
+    loadingDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: '#00D4FF',
+    },
+    loadingDot1: {
+        opacity: 0.4,
+    },
+    loadingDot2: {
+        opacity: 0.7,
+    },
+    loadingDot3: {
+        opacity: 1,
     },
 });

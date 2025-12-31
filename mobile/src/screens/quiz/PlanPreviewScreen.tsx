@@ -8,7 +8,6 @@ import {
     Dimensions,
     Platform,
     ScrollView,
-    ActivityIndicator,
 } from 'react-native';
 import { colors } from '../../theme';
 import { useOnboardingStore } from '../../stores/onboardingStore';
@@ -152,7 +151,7 @@ const TIMEFRAME_OPTIONS = [
 
 export function PlanPreviewScreen({ navigation, route }: any) {
     const userId = route?.params?.userId;
-    const { data, updateData, submitOnboarding, isGenerating, error, errorCode, clearError } = useOnboardingStore();
+    const { data, updateData } = useOnboardingStore();
     const [selectedTimeframe, setSelectedTimeframe] = useState<string | null>(null);
 
     const handleSelect = (id: string) => {
@@ -162,31 +161,14 @@ export function PlanPreviewScreen({ navigation, route }: any) {
         updateData({ targetWeeks: weeks });
     };
 
-    const handleUnlockPlan = async () => {
-        if (isGenerating) return;
+    const handleUnlockPlan = () => {
+        if (!selectedTimeframe) return;
 
-        clearError();
-
-        try {
-            const planData = await submitOnboarding();
-
-            if (planData) {
-                // Navigate to smart plan screen with generated plan data
-                navigation.navigate('SmartPlan', {
-                    userId,
-                    timeframe: selectedTimeframe,
-                    planData,
-                });
-            } else if (errorCode === 'AUTH_REQUIRED') {
-                // User needs to login - redirect to Login screen
-                navigation.navigate('Login', {
-                    returnTo: 'Quiz_PlanPreview',
-                    message: 'Faça login para gerar seu plano de treino personalizado.',
-                });
-            }
-        } catch (err) {
-            console.error('Failed to generate plan:', err);
-        }
+        // Navigate to loading screen which will handle plan generation
+        navigation.navigate('Quiz_PlanLoading', {
+            userId,
+            timeframe: selectedTimeframe,
+        });
     };
 
 
@@ -264,38 +246,22 @@ export function PlanPreviewScreen({ navigation, route }: any) {
                 </View>
             </ScrollView>
 
-            {/* Error Message */}
-            {error && (
-                <View style={styles.errorContainer}>
-                    <Text style={styles.errorText}>{error}</Text>
-                </View>
-            )}
-
             {/* Unlock Plan Button */}
             <View style={styles.bottomButtonContainer}>
                 <TouchableOpacity
                     style={[
                         styles.unlockButton,
-                        (!selectedTimeframe || isGenerating) && styles.unlockButtonDisabled
+                        !selectedTimeframe && styles.unlockButtonDisabled
                     ]}
                     onPress={handleUnlockPlan}
-                    disabled={!selectedTimeframe || isGenerating}
+                    disabled={!selectedTimeframe}
                     activeOpacity={0.8}
                 >
-                    {isGenerating ? (
-                        <>
-                            <ActivityIndicator size="small" color="#0E0E1F" />
-                            <Text style={styles.unlockButtonText}>Gerando plano...</Text>
-                        </>
-                    ) : (
-                        <>
-                            <Text style={[
-                                styles.unlockButtonText,
-                                !selectedTimeframe && styles.unlockButtonTextDisabled
-                            ]}>Desbloquear plano</Text>
-                            <UnlockIcon />
-                        </>
-                    )}
+                    <Text style={[
+                        styles.unlockButtonText,
+                        !selectedTimeframe && styles.unlockButtonTextDisabled
+                    ]}>Desbloquear plano</Text>
+                    <UnlockIcon />
                 </TouchableOpacity>
             </View>
         </View>

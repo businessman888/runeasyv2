@@ -27,7 +27,10 @@ interface TrainingPlan {
     duration_weeks: number;
     frequency_per_week: number;
     status: 'active' | 'completed' | 'cancelled';
+    generation_status?: 'partial' | 'generating' | 'complete' | 'failed';
 }
+
+export type GenerationStatus = 'partial' | 'generating' | 'complete' | 'failed' | null;
 
 interface TrainingState {
     plan: TrainingPlan | null;
@@ -35,12 +38,15 @@ interface TrainingState {
     upcomingWorkouts: Workout[];
     isLoading: boolean;
     error: string | null;
+    generationStatus: GenerationStatus;
 
     // Actions
     fetchPlan: () => Promise<void>;
     fetchWorkouts: (startDate: string, endDate: string) => Promise<void>;
     fetchUpcomingWorkouts: () => Promise<void>;
     skipWorkout: (workoutId: string, reason: string) => Promise<void>;
+    checkPlanStatus: (planId: string) => Promise<boolean>;
+    setGenerationStatus: (status: GenerationStatus) => void;
 }
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
@@ -55,6 +61,9 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
     upcomingWorkouts: [],
     isLoading: false,
     error: null,
+    generationStatus: null,
+
+    setGenerationStatus: (status) => set({ generationStatus: status }),
 
     fetchPlan: async () => {
         try {
@@ -69,7 +78,10 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
 
             if (response.ok) {
                 const data = await response.json();
-                set({ plan: data.plan });
+                set({
+                    plan: data.plan,
+                    generationStatus: data.plan?.generation_status || null,
+                });
             }
         } catch (error) {
             set({ error: 'Falha ao carregar plano' });
@@ -123,6 +135,40 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         }
     },
 
+    checkPlanStatus: async (planId: string): Promise<boolean> => {
+        try {
+            const userId = await getUserId();
+            if (!userId) return false;
+
+            const response = await fetch(`${API_URL}/training/plan/${planId}/status`, {
+                headers: { 'x-user-id': userId },
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                set({ generationStatus: data.generation_status });
+
+                // Return true if complete
+                if (data.is_complete) {
+                    // Refresh workouts when complete
+                    await get().fetchUpcomingWorkouts();
+                    const start = new Date();
+                    const end = new Date();
+                    end.setMonth(end.getMonth() + 1);
+                    await get().fetchWorkouts(
+                        start.toISOString().split('T')[0],
+                        end.toISOString().split('T')[0]
+                    );
+                    return true;
+                }
+            }
+            return false;
+        } catch (error) {
+            console.error('Check plan status error:', error);
+            return false;
+        }
+    },
+
     skipWorkout: async (workoutId: string, reason: string) => {
         try {
             const userId = await getUserId();
@@ -147,3 +193,4 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         }
     },
 }));
+
