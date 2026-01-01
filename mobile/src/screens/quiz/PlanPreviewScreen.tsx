@@ -12,6 +12,8 @@ import {
 import { colors } from '../../theme';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import Svg, { Path, Rect } from 'react-native-svg';
+import { QuizProgressBar } from '../../components/QuizProgressBar';
+
 
 const { width } = Dimensions.get('window');
 
@@ -179,31 +181,7 @@ export function PlanPreviewScreen({ navigation, route }: any) {
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 <View style={styles.content}>
                     {/* Progress Indicator */}
-                    <View style={styles.progressContainer}>
-                        <Text style={styles.progressText}>
-                            Passo <Text style={styles.progressNumber}>6</Text> DE <Text style={styles.progressTotal}>6</Text>
-                        </Text>
-
-                        <View style={styles.progressSteps}>
-                            {/* Steps 1-4 - Walking icons */}
-                            {[1, 2, 3, 4].map((step) => (
-                                <View key={step} style={styles.stepContainer}>
-                                    <WalkingIcon active={true} />
-                                    <View style={[styles.stepLine, styles.stepLineActive]} />
-                                </View>
-                            ))}
-                            {/* Step 5 - Running icon */}
-                            <View style={styles.stepContainer}>
-                                <RunningIcon active={true} />
-                                <View style={[styles.stepLine, styles.stepLineActive]} />
-                            </View>
-                            {/* Step 6 - Trophy icon (current) */}
-                            <View style={styles.stepContainer}>
-                                <TrophyIcon active={true} />
-                                <View style={[styles.stepLine, styles.stepLineActive]} />
-                            </View>
-                        </View>
-                    </View>
+                    <QuizProgressBar currentStep={6} />
 
                     {/* Title Section */}
                     <View style={styles.titleContainer}>

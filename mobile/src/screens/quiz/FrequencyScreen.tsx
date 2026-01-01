@@ -12,6 +12,7 @@ import {
 import { colors, typography, spacing } from '../../theme';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import Svg, { Path, Rect } from 'react-native-svg';
+import { QuizProgressBar } from '../../components/QuizProgressBar';
 
 const { width } = Dimensions.get('window');
 const SLIDER_PADDING = 30;
@@ -153,28 +154,7 @@ export function FrequencyScreen({ navigation, route }: any) {
 
             <View style={styles.content}>
                 {/* Progress Indicator */}
-                <View style={styles.progressContainer}>
-                    <Text style={styles.progressText}>
-                        Passo <Text style={styles.progressNumber}>3</Text> DE <Text style={styles.progressTotal}>6</Text>
-                    </Text>
-
-                    <View style={styles.progressSteps}>
-                        {/* Steps 1-3 - Completed/Active */}
-                        {[1, 2, 3].map((step) => (
-                            <View key={step} style={styles.stepContainer}>
-                                <WalkingIcon active={true} />
-                                <View style={[styles.stepLine, styles.stepLineActive]} />
-                            </View>
-                        ))}
-                        {/* Steps 4-6 - Locked */}
-                        {[4, 5, 6].map((step) => (
-                            <View key={step} style={styles.stepContainer}>
-                                <LockIcon active={false} />
-                                <View style={styles.stepLine} />
-                            </View>
-                        ))}
-                    </View>
-                </View>
+                <QuizProgressBar currentStep={3} />
 
                 {/* Title Section */}
                 <View style={styles.titleContainer}>
@@ -420,11 +400,7 @@ const styles = StyleSheet.create({
         right: 20,
     },
     nextButton: {
-        shadowColor: '#00D4FF',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 1,
-        shadowRadius: 4,
-        elevation: 8,
+        borderRadius: 27,
     },
 });
 

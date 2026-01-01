@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { colors, typography, spacing, borderRadius } from '../theme';
 
+
+
 interface QuizLayoutProps {
     currentStep: number;
     totalSteps: number;
@@ -38,6 +40,8 @@ export function QuizLayout({
 }: QuizLayoutProps) {
     const progress = currentStep / totalSteps;
 
+
+
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
@@ -45,10 +49,11 @@ export function QuizLayout({
             {/* Header with Progress */}
             <View style={styles.header}>
                 <View style={styles.progressContainer}>
-                    <View style={styles.progressBar}>
-                        <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-                    </View>
-                    <Text style={styles.stepText}>{currentStep} de {totalSteps}</Text>
+                    <Text style={styles.stepText}>
+                        Passo <Text style={styles.stepHighlight}>{currentStep}</Text> DE {totalSteps}
+                    </Text>
+
+
                 </View>
             </View>
 
@@ -177,28 +182,46 @@ const styles = StyleSheet.create({
     progressContainer: {
         gap: spacing.sm,
     },
-    progressBar: {
-        height: 6,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        borderRadius: 3,
-        overflow: 'hidden',
+    stepsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: spacing.sm,
+        gap: 4,
     },
-    progressFill: {
-        height: '100%',
-        borderRadius: 3,
-        ...Platform.select({
-            web: {
-                backgroundImage: 'linear-gradient(90deg, #00D4FF, #00FFFF)',
-            },
-            default: {
-                backgroundColor: colors.primary,
-            },
-        }),
+    stepItem: {
+        flex: 1,
+        alignItems: 'center',
+        gap: spacing.xs,
+    },
+    iconContainer: {
+        height: 32,
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    stepBar: {
+        width: '100%',
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    stepBarActive: {
+        backgroundColor: colors.primary,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 4,
+        elevation: 2,
     },
     stepText: {
         fontSize: typography.fontSizes.sm,
         color: 'rgba(255, 255, 255, 0.5)',
-        textAlign: 'right',
+        fontWeight: typography.fontWeights.medium,
+        textTransform: 'uppercase',
+    },
+    stepHighlight: {
+        color: colors.primary,
     },
     content: {
         flex: 1,

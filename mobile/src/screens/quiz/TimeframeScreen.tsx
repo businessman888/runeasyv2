@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { colors, typography, spacing } from '../../theme';
 import Svg, { Path, Rect } from 'react-native-svg';
+import { QuizProgressBar } from '../../components/QuizProgressBar';
 
 const { width } = Dimensions.get('window');
 
@@ -87,8 +88,8 @@ const Checkbox = ({ checked, onPress }: { checked: boolean; onPress: () => void 
 
 export function TimeframeScreen({ navigation, route }: any) {
     const userId = route?.params?.userId;
-    const [paceMinutes, setPaceMinutes] = useState('05');
-    const [paceSeconds, setPaceSeconds] = useState('30');
+    const [paceMinutes, setPaceMinutes] = useState('');
+    const [paceSeconds, setPaceSeconds] = useState('');
     const [isEditingMinutes, setIsEditingMinutes] = useState(true);
     const [dontKnowPace, setDontKnowPace] = useState(false);
 
@@ -97,18 +98,16 @@ export function TimeframeScreen({ navigation, route }: any) {
 
         if (isEditingMinutes) {
             if (paceMinutes.length < 2) {
-                setPaceMinutes(paceMinutes + num);
-            } else {
-                setPaceMinutes(num);
-            }
-            if (paceMinutes.length >= 1) {
-                setIsEditingMinutes(false);
+                const newValue = paceMinutes + num;
+                setPaceMinutes(newValue);
+                // Auto-advance if 2 digits entered
+                if (newValue.length === 2) {
+                    setIsEditingMinutes(false);
+                }
             }
         } else {
             if (paceSeconds.length < 2) {
                 setPaceSeconds(paceSeconds + num);
-            } else {
-                setPaceSeconds(num);
             }
         }
     };
@@ -116,28 +115,30 @@ export function TimeframeScreen({ navigation, route }: any) {
     const handleBackspace = () => {
         if (dontKnowPace) return;
 
-        if (!isEditingMinutes && paceSeconds.length > 0) {
-            setPaceSeconds(paceSeconds.slice(0, -1));
-            if (paceSeconds.length === 1) {
+        if (isEditingMinutes) {
+            if (paceMinutes.length > 0) {
+                setPaceMinutes(paceMinutes.slice(0, -1));
+            }
+        } else {
+            if (paceSeconds.length > 0) {
+                setPaceSeconds(paceSeconds.slice(0, -1));
+            } else {
+                // If seconds empty, go back to minutes
                 setIsEditingMinutes(true);
             }
-        } else if (paceMinutes.length > 0) {
-            setPaceMinutes(paceMinutes.slice(0, -1));
         }
-    };
-
-    const handleTimePress = (isMinutes: boolean) => {
-        setIsEditingMinutes(isMinutes);
     };
 
     const handleNext = () => {
         navigation.navigate('Quiz_PlanPreview', { userId });
     };
 
-    const formatTime = (value: string, placeholder: string) => {
-        return value.padStart(2, '0') || placeholder;
+    const formatTime = (value: string) => {
+        if (!value) return '00';
+        return value.padStart(2, '0');
     };
 
+    // Valid if both fields have content OR user selected "don't know"
     const canProceed = dontKnowPace || (paceMinutes.length > 0 && paceSeconds.length > 0);
 
     return (
@@ -146,37 +147,13 @@ export function TimeframeScreen({ navigation, route }: any) {
 
             <View style={styles.content}>
                 {/* Progress Indicator */}
-                <View style={styles.progressContainer}>
-                    <Text style={styles.progressText}>
-                        Passo <Text style={styles.progressNumber}>5</Text> DE <Text style={styles.progressTotal}>6</Text>
-                    </Text>
-
-                    <View style={styles.progressSteps}>
-                        {/* Steps 1-4 - Completed */}
-                        {[1, 2, 3, 4].map((step) => (
-                            <View key={step} style={styles.stepContainer}>
-                                <WalkingIcon active={true} />
-                                <View style={[styles.stepLine, styles.stepLineActive]} />
-                            </View>
-                        ))}
-                        {/* Step 5 - Active (Running) */}
-                        <View style={styles.stepContainer}>
-                            <RunningIcon active={true} />
-                            <View style={[styles.stepLine, styles.stepLineActive]} />
-                        </View>
-                        {/* Step 6 - Locked */}
-                        <View style={styles.stepContainer}>
-                            <LockIcon active={false} />
-                            <View style={styles.stepLine} />
-                        </View>
-                    </View>
-                </View>
+                <QuizProgressBar currentStep={5} />
 
                 {/* Title Section */}
                 <View style={styles.titleContainer}>
                     <Text style={styles.title}>Qual é o seu Pace atual?</Text>
                     <Text style={styles.subtitle}>
-                        Insira seu ritmo médio para sua meta.{'\n'}Isso no ajuda a calibrar seus primeiros{'\n'}treinos.
+                        Insira seu ritmo médio para sua meta.{'\n'}Isso nos ajuda a calibrar seus primeiros{'\n'}treinos.
                     </Text>
                 </View>
 
@@ -184,14 +161,36 @@ export function TimeframeScreen({ navigation, route }: any) {
                 <View style={styles.paceCard}>
                     <Text style={styles.paceCardTitle}>Ritmo Médio</Text>
                     <View style={styles.paceInputRow}>
+                        {/* Minutes Input */}
                         <TouchableOpacity
-                            style={[styles.paceInputBox, isEditingMinutes && styles.paceInputBoxActive]}
-                            onPress={() => handleTimePress(true)}
+                            style={[
+                                styles.timeInputContainer,
+                                isEditingMinutes && !dontKnowPace && styles.timeInputActive
+                            ]}
+                            onPress={() => !dontKnowPace && setIsEditingMinutes(true)}
+                            activeOpacity={dontKnowPace ? 1 : 0.7}
                         >
                             <Text style={[styles.paceInputText, dontKnowPace && styles.paceInputDisabled]}>
-                                {formatTime(paceMinutes, '00')}:{formatTime(paceSeconds, '00')}
+                                {formatTime(paceMinutes)}
                             </Text>
                         </TouchableOpacity>
+
+                        <Text style={[styles.paceColon, dontKnowPace && styles.paceInputDisabled]}>:</Text>
+
+                        {/* Seconds Input */}
+                        <TouchableOpacity
+                            style={[
+                                styles.timeInputContainer,
+                                !isEditingMinutes && !dontKnowPace && styles.timeInputActive
+                            ]}
+                            onPress={() => !dontKnowPace && setIsEditingMinutes(false)}
+                            activeOpacity={dontKnowPace ? 1 : 0.7}
+                        >
+                            <Text style={[styles.paceInputText, dontKnowPace && styles.paceInputDisabled]}>
+                                {formatTime(paceSeconds)}
+                            </Text>
+                        </TouchableOpacity>
+
                         <Text style={styles.paceUnit}>min/km</Text>
                     </View>
                 </View>
@@ -320,16 +319,26 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         gap: 12,
     },
-    paceInputBox: {
+    timeInputContainer: {
         backgroundColor: 'rgba(235, 235, 245, 0.05)',
         borderRadius: 12,
         paddingVertical: 12,
-        paddingHorizontal: 24,
+        paddingHorizontal: 16,
         borderWidth: 1,
         borderColor: 'rgba(235, 235, 245, 0.3)',
+        minWidth: 90,
+        alignItems: 'center',
     },
-    paceInputBoxActive: {
-        borderColor: 'rgba(235, 235, 245, 0.3)',
+    timeInputActive: {
+        borderColor: '#00D4FF',
+        backgroundColor: 'rgba(0, 212, 255, 0.05)',
+    },
+    paceColon: {
+        fontSize: 36,
+        fontWeight: '700',
+        color: colors.white,
+        textAlignVertical: 'center',
+        marginTop: -6, // Visual alignment
     },
     paceInputText: {
         fontSize: 36,
@@ -399,11 +408,7 @@ const styles = StyleSheet.create({
         right: 20,
     },
     nextButton: {
-        shadowColor: '#00D4FF',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 1,
-        shadowRadius: 4,
-        elevation: 8,
+        borderRadius: 27,
     },
     nextButtonDisabled: {
         shadowOpacity: 0.3,
