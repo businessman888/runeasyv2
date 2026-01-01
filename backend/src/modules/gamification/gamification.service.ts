@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../database';
+import { NotificationService } from '../notifications/notification.service';
 
 export interface UserLevel {
     id: string;
@@ -56,7 +57,10 @@ export class GamificationService {
         15000,   // Level 15: 15000 pts
     ];
 
-    constructor(private readonly supabaseService: SupabaseService) { }
+    constructor(
+        private readonly supabaseService: SupabaseService,
+        private readonly notificationService: NotificationService,
+    ) { }
 
     /**
      * Get user's gamification stats
@@ -375,6 +379,32 @@ export class GamificationService {
 
                 // Add points for badge
                 await this.addPoints(userId, 100, `Badge conquistado: ${badge.name}`, 'badge', badge.id);
+
+                // Create achievement notification
+                await this.notificationService.createNotification(
+                    userId,
+                    'achievement',
+                    '🏆 Nova Conquista!',
+                    `Parabéns! Você desbloqueou: ${badge.name}`,
+                    {
+                        badge_id: badge.id,
+                        badge_name: badge.name,
+                        screen: 'Badges', // Navigate to badges screen
+                    },
+                );
+
+                // Send push notification
+                await this.notificationService.sendPushNotification(
+                    userId,
+                    '🏆 Nova Conquista!',
+                    `Parabéns! Você desbloqueou: ${badge.name}`,
+                    {
+                        type: 'achievement',
+                        badge_id: badge.id,
+                        screen: 'Badges',
+                    },
+                    { channelId: 'achievements' },
+                );
 
                 earnedBadges.push(badge);
                 this.logger.log(`User ${userId} earned badge: ${badge.name}`);

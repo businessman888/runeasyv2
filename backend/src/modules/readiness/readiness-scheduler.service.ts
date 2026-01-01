@@ -26,14 +26,21 @@ export class ReadinessScheduler {
             const supabase = this.supabaseService.getClient();
             const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
-            // 1. Find all users who have completed at least one workout
+            // Get yesterday's date
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayStr = yesterday.toISOString().split('T')[0]; // YYYY-MM-DD
+
+            // 1. Find all users who completed a workout YESTERDAY
             const { data: usersWithWorkouts } = await supabase
                 .from('strava_activities')
                 .select('user_id')
-                .eq('type', 'Run');
+                .eq('type', 'Run')
+                .gte('start_date', `${yesterdayStr}T00:00:00Z`)
+                .lte('start_date', `${yesterdayStr}T23:59:59Z`);
 
             if (!usersWithWorkouts || usersWithWorkouts.length === 0) {
-                this.logger.log('No users with workouts found');
+                this.logger.log('No users trained yesterday - no check-ins to unlock');
                 return;
             }
 
@@ -67,7 +74,19 @@ export class ReadinessScheduler {
 
                     unlockedCount++;
 
-                    // 3. Send push notification
+                    // 3. Create persistent notification in database
+                    await this.notificationService.createNotification(
+                        userId,
+                        'system',
+                        '☀️ Bom dia!',
+                        'Seu check-in diário está disponível. Como você está se sentindo hoje?',
+                        {
+                            screen: 'Evolution', // Navigation target
+                            type: 'daily_readiness',
+                        },
+                    );
+
+                    // 4. Send push notification
                     const notificationSent = await this.notificationService.sendDailyReadinessNotification(userId);
                     if (notificationSent) {
                         notificationsSent++;

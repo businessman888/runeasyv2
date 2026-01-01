@@ -9,6 +9,9 @@ interface User {
         firstname: string;
         lastname: string;
         profile_pic: string;
+        birth_date?: string;
+        weight?: number;
+        height?: number;
     };
     subscription_status: 'trial' | 'active' | 'expired';
     created_at: string;

@@ -9,9 +9,12 @@ import {
     Image,
     TextInput,
     Platform,
+    Alert,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { colors, typography, spacing } from '../theme';
 import { useAuthStore } from '../stores';
+import { CustomCalendar } from '../components/CustomCalendar';
 
 // SVG Icons
 function BackIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
@@ -91,28 +94,234 @@ function ChevronDownIcon({ size = 20, color = 'rgba(235,235,245,0.6)' }: { size?
     return <Text style={{ fontSize: size, color }}>▼</Text>;
 }
 
-type ExperienceLevel = 'iniciante' | 'intermediario' | 'avancado';
-
 export function PersonalInfoScreen({ navigation }: any) {
     const { user } = useAuthStore();
+
+    // Parse birth date from user profile or use default
+    const parseBirthDate = (dateString?: string) => {
+        if (!dateString) return new Date(1995, 4, 15); // Default: May 15, 1995
+
+        // Try to parse MM/DD/YYYY or YYYY-MM-DD format
+        const parts = dateString.includes('/')
+            ? dateString.split('/').map(p => parseInt(p))
+            : dateString.split('-').map(p => parseInt(p));
+
+        if (dateString.includes('/')) {
+            // MM/DD/YYYY
+            return new Date(parts[2], parts[0] - 1, parts[1]);
+        } else {
+            // YYYY-MM-DD
+            return new Date(parts[0], parts[1] - 1, parts[2]);
+        }
+    };
+
+    const formatDate = (date: Date) => {
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+    };
 
     // Form state
     const [fullName, setFullName] = useState(
         user?.profile?.firstname
             ? `${user.profile.firstname} ${user.profile.lastname || ''}`
-            : 'Fernanda Oliveira'
+            : 'João Carlos Gomes Pereira'
     );
-    const [email, setEmail] = useState('fernanda.oliveira@email.com');
-    const [birthDate, setBirthDate] = useState('05/15/1995');
-    const [weight, setWeight] = useState('62');
-    const [height, setHeight] = useState('168');
-    const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel>('intermediario');
-    const [objective, setObjective] = useState('Meia Maratona (21k)');
+    const [email] = useState(user?.email || 'fernanda.oliveira@email.com'); // Not editable
+    const [birthDateObj, setBirthDateObj] = useState(parseBirthDate(user?.profile?.birth_date));
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [weight, setWeight] = useState(user?.profile?.weight?.toString() || '62');
+    const [height, setHeight] = useState(user?.profile?.height?.toString() || '168');
+    const [profilePhoto, setProfilePhoto] = useState(user?.profile?.profile_pic || null);
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Get user initials for avatar fallback
+    const getInitials = (name: string) => {
+        if (!name) return 'U';
+        const parts = name.trim().split(' ').filter(p => p.length > 0);
+        if (parts.length === 1) {
+            return parts[0][0].toUpperCase();
+        }
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    };
+
+    const handleSelectPhoto = async () => {
+        try {
+            // Request permission
+            const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+            if (permissionResult.granted === false) {
+                Alert.alert('Permissão necessária', 'É necessário permitir acesso à galeria de fotos.');
+                return;
+            }
+
+            // Launch image picker
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+                setProfilePhoto(result.assets[0].uri);
+            }
+        } catch (error) {
+            console.error('Error picking image:', error);
+            Alert.alert('Erro', 'Não foi possível selecionar a imagem.');
+        }
+    };
+
+    const handleDateChange = (event: any, selectedDate?: Date) => {
+        setShowDatePicker(Platform.OS === 'ios'); // Keep open on iOS
+        if (selectedDate) {
+            setBirthDateObj(selectedDate);
+        }
+    };
+
+    const saveChanges = async () => {
+        // Prevent multiple save attempts
+        if (isSaving) {
+            console.log('Save already in progress, ignoring duplicate request');
+            return;
+        }
+
+        try {
+            setIsSaving(true);
+            console.log('=== STARTING SAVE PROCESS ===');
+
+            // Validate required fields
+            if (!fullName || fullName.trim().length === 0) {
+                Alert.alert('Erro de validação', 'Por favor, preencha o nome completo.');
+                setIsSaving(false);
+                return;
+            }
+
+            if (!user?.id) {
+                console.error('User ID is missing:', user);
+                Alert.alert('Erro', 'Usuário não identificado. Por favor, faça login novamente.');
+                setIsSaving(false);
+                return;
+            }
+
+            // Get API URL from environment
+            const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
+            console.log('API_URL:', API_URL);
+            console.log('User ID:', user.id);
+            console.log('User email:', user.email);
+
+            // Split full name into firstname and lastname
+            const nameParts = fullName.trim().split(' ');
+            const firstname = nameParts[0] || '';
+            const lastname = nameParts.slice(1).join(' ') || '';
+
+            // Prepare update data
+            const updateData = {
+                firstname,
+                lastname,
+                birth_date: birthDateObj.toISOString().split('T')[0], // YYYY-MM-DD format
+                weight: weight ? parseFloat(weight) : null,
+                height: height ? parseFloat(height) : null,
+            };
+
+            console.log('Update data prepared:', updateData);
+
+            // Construct full endpoint URL
+            const endpoint = `${API_URL}/users/${user.id}/profile`;
+            console.log('Making request to:', endpoint);
+
+            // Update profile data
+            const response = await fetch(endpoint, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-user-id': user.id,
+                },
+                body: JSON.stringify({ profile: updateData }),
+            });
+
+            console.log('Response received - Status:', response.status);
+            console.log('Response OK:', response.ok);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Save failed - Status:', response.status);
+                console.error('Error response:', errorText);
+
+                let errorMessage = 'Não foi possível salvar as alterações.';
+
+                if (response.status === 401) {
+                    errorMessage = 'Não autorizado. Por favor, faça login novamente.';
+                } else if (response.status === 404) {
+                    errorMessage = 'Usuário não encontrado.';
+                } else if (response.status >= 500) {
+                    errorMessage = 'Erro no servidor. Por favor, tente novamente mais tarde.';
+                }
+
+                throw new Error(errorMessage);
+            }
+
+            const responseData = await response.json();
+            console.log('Save successful! Response data:', responseData);
+
+            // If there's a new profile photo, upload it
+            if (profilePhoto && !profilePhoto.startsWith('http')) {
+                console.log('New photo to upload:', profilePhoto);
+                // TODO: Implement photo upload to backend
+            }
+
+            // Update local user state
+            console.log('Updating local user state...');
+            useAuthStore.getState().setUser({
+                ...user,
+                profile: {
+                    ...user.profile,
+                    firstname,
+                    lastname,
+                    birth_date: birthDateObj.toISOString().split('T')[0],
+                    weight: weight ? parseFloat(weight) : undefined,
+                    height: height ? parseFloat(height) : undefined,
+                    profile_pic: profilePhoto || user?.profile?.profile_pic || '',
+                },
+            });
+
+            console.log('Local state updated successfully');
+            console.log('=== SAVE PROCESS COMPLETED ===');
+
+            setIsSaving(false);
+
+            // Show success message and navigate back
+            Alert.alert('Sucesso', 'Informações atualizadas com sucesso!', [
+                {
+                    text: 'OK',
+                    onPress: () => {
+                        console.log('Navigating back to settings...');
+                        navigation.goBack();
+                    }
+                }
+            ]);
+        } catch (error) {
+            setIsSaving(false);
+            console.error('=== SAVE PROCESS FAILED ===');
+            console.error('Error details:', error);
+
+            const errorMessage = error instanceof Error
+                ? error.message
+                : 'Não foi possível salvar as alterações.';
+
+            Alert.alert('Erro', errorMessage);
+        }
+    };
 
     const handleSave = () => {
-        // TODO: Implement save functionality
-        console.log('Saving personal info...');
-        navigation.goBack();
+        console.log('=== HANDLE SAVE CLICKED ===');
+        console.log('Current user:', user);
+        console.log('Current form data:', { fullName, birthDateObj, weight, height });
+
+        // Call saveChanges directly - removed Alert.alert as it's not working
+        console.log('Calling saveChanges directly...');
+        saveChanges();
     };
 
     return (
@@ -126,8 +335,14 @@ export function PersonalInfoScreen({ navigation }: any) {
                     <BackIcon size={24} color="#FFFFFF" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Informações pessoais</Text>
-                <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-                    <Text style={styles.saveButtonText}>Salvar</Text>
+                <TouchableOpacity
+                    style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+                    onPress={handleSave}
+                    disabled={isSaving}
+                >
+                    <Text style={styles.saveButtonText}>
+                        {isSaving ? 'Salvando...' : 'Salvar'}
+                    </Text>
                 </TouchableOpacity>
             </View>
 
@@ -139,14 +354,23 @@ export function PersonalInfoScreen({ navigation }: any) {
                 {/* Profile Photo */}
                 <View style={styles.profilePhotoSection}>
                     <View style={styles.avatarContainer}>
-                        <Image
-                            source={{
-                                uri: user?.profile?.profile_pic ||
-                                    'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=200&h=200&fit=crop&crop=face'
-                            }}
-                            style={styles.avatar}
-                        />
-                        <TouchableOpacity style={styles.editAvatarButton}>
+                        {(profilePhoto && profilePhoto.startsWith('http')) ||
+                            (user?.profile?.profile_pic && user.profile.profile_pic.startsWith('http')) ? (
+                            <Image
+                                source={{
+                                    uri: profilePhoto || user?.profile?.profile_pic
+                                }}
+                                style={styles.avatar}
+                            />
+                        ) : (
+                            <View style={styles.avatarInitials}>
+                                <Text style={styles.initialsText}>{getInitials(fullName)}</Text>
+                            </View>
+                        )}
+                        <TouchableOpacity
+                            style={styles.editAvatarButton}
+                            onPress={handleSelectPhoto}
+                        >
                             <EditIcon size={14} color="#0A0A18" />
                         </TouchableOpacity>
                     </View>
@@ -171,7 +395,7 @@ export function PersonalInfoScreen({ navigation }: any) {
                     {/* E-mail */}
                     <View style={styles.inputGroup}>
                         <Text style={styles.inputLabel}>E-mail</Text>
-                        <View style={[styles.inputContainer, styles.inputDisabled]}>
+                        <View style={[styles.inputContainer, styles.inputDisabled]} pointerEvents="none">
                             <TextInput
                                 style={[styles.textInput, styles.textInputDisabled]}
                                 value={email}
@@ -182,18 +406,29 @@ export function PersonalInfoScreen({ navigation }: any) {
                         </View>
                     </View>
 
+
                     {/* Data de nascimento */}
                     <View style={styles.inputGroup}>
                         <Text style={styles.inputLabel}>Data de nascimento</Text>
-                        <View style={styles.inputContainer}>
-                            <TextInput
-                                style={styles.textInput}
-                                value={birthDate}
-                                onChangeText={setBirthDate}
-                                placeholderTextColor="rgba(235,235,245,0.4)"
-                            />
+                        <TouchableOpacity
+                            style={styles.inputContainer}
+                            onPress={() => setShowDatePicker(true)}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={styles.dateText}>{formatDate(birthDateObj)}</Text>
                             <CalendarIcon size={20} color="rgba(235,235,245,0.6)" />
-                        </View>
+                        </TouchableOpacity>
+
+                        <CustomCalendar
+                            visible={showDatePicker}
+                            selectedDate={birthDateObj}
+                            onDateSelect={(date) => {
+                                setBirthDateObj(date);
+                            }}
+                            onClose={() => setShowDatePicker(false)}
+                            maxDate={new Date()}
+                            minDate={new Date(1900, 0, 1)}
+                        />
                     </View>
 
                     {/* Peso e Altura */}
@@ -224,57 +459,7 @@ export function PersonalInfoScreen({ navigation }: any) {
                         </View>
                     </View>
 
-                    {/* Nível de Experiência */}
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Nível de Experiência</Text>
-                        <View style={styles.segmentedControl}>
-                            <TouchableOpacity
-                                style={[
-                                    styles.segmentButton,
-                                    experienceLevel === 'iniciante' && styles.segmentButtonActive
-                                ]}
-                                onPress={() => setExperienceLevel('iniciante')}
-                            >
-                                <Text style={[
-                                    styles.segmentButtonText,
-                                    experienceLevel === 'iniciante' && styles.segmentButtonTextActive
-                                ]}>Iniciante</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[
-                                    styles.segmentButton,
-                                    experienceLevel === 'intermediario' && styles.segmentButtonActive
-                                ]}
-                                onPress={() => setExperienceLevel('intermediario')}
-                            >
-                                <Text style={[
-                                    styles.segmentButtonText,
-                                    experienceLevel === 'intermediario' && styles.segmentButtonTextActive
-                                ]}>Intermed.</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[
-                                    styles.segmentButton,
-                                    experienceLevel === 'avancado' && styles.segmentButtonActive
-                                ]}
-                                onPress={() => setExperienceLevel('avancado')}
-                            >
-                                <Text style={[
-                                    styles.segmentButtonText,
-                                    experienceLevel === 'avancado' && styles.segmentButtonTextActive
-                                ]}>Avançado</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
 
-                    {/* Objetivo Atual */}
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Objetivo Atual</Text>
-                        <TouchableOpacity style={styles.dropdownContainer}>
-                            <Text style={styles.dropdownText}>{objective}</Text>
-                            <ChevronDownIcon size={20} color="rgba(235,235,245,0.6)" />
-                        </TouchableOpacity>
-                    </View>
                 </View>
 
                 {/* Info Banner */}
@@ -323,6 +508,9 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#00D4FF',
     },
+    saveButtonDisabled: {
+        opacity: 0.5,
+    },
     scrollView: {
         flex: 1,
     },
@@ -344,6 +532,22 @@ const styles = StyleSheet.create({
         borderRadius: 50,
         borderWidth: 3,
         borderColor: '#00D4FF',
+    },
+    avatarInitials: {
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        borderWidth: 3,
+        borderColor: '#00D4FF',
+        backgroundColor: '#1C1C2E',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    initialsText: {
+        fontSize: 36,
+        fontWeight: '600',
+        color: '#00D4FF',
+        textTransform: 'uppercase',
     },
     editAvatarButton: {
         position: 'absolute',
@@ -392,6 +596,9 @@ const styles = StyleSheet.create({
     inputDisabled: {
         opacity: 0.7,
     },
+    dateInputWrapper: {
+        // Container for web date input
+    },
     textInput: {
         flex: 1,
         fontSize: 16,
@@ -408,6 +615,12 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         textAlign: 'center',
         width: '100%',
+    },
+    dateText: {
+        flex: 1,
+        fontSize: 16,
+        fontWeight: '400',
+        color: '#FFFFFF',
     },
     rowInputs: {
         flexDirection: 'row',

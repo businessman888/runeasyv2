@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { MockStravaService } from './mock-strava.service';
 import { ReadinessAIService, ReadinessVerdict, ReadinessInput } from './readiness-ai.service';
 import { SupabaseService } from '../../database/supabase.service';
+import { NotificationService } from '../notifications/notification.service';
 
 export interface ReadinessCheckInDto {
     userId: string;
@@ -22,6 +23,7 @@ export class ReadinessService {
         private readonly mockStravaService: MockStravaService,
         private readonly readinessAIService: ReadinessAIService,
         private readonly supabaseService: SupabaseService,
+        private readonly notificationService: NotificationService,
     ) { }
 
     async analyzeReadiness(dto: ReadinessCheckInDto): Promise<ReadinessVerdict> {
@@ -219,6 +221,14 @@ export class ReadinessService {
                 created_at: new Date().toISOString(),
             });
             this.logger.log('Readiness result saved to history');
+
+            // Schedule recovery analysis notification for 10 minutes later
+            this.notificationService.scheduleRecoveryAnalysisNotification(userId, {
+                headline: verdict.ai_analysis.headline,
+                reasoning: verdict.ai_analysis.reasoning,
+                readiness_score: verdict.readiness_score,
+                status_label: verdict.status_label,
+            });
         } catch (error) {
             // Don't fail the request if history save fails
             this.logger.warn('Could not save readiness history', error);

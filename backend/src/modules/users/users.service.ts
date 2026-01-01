@@ -28,15 +28,42 @@ export class UsersService {
     /**
      * Update user profile
      */
-    async updateProfile(userId: string, profile: Record<string, any>) {
+    async updateProfile(userId: string, profileUpdates: Record<string, any>) {
+        // First get the current user to merge profile data
+        const { data: currentUser, error: fetchError } = await this.supabaseService
+            .from('users')
+            .select('profile')
+            .eq('id', userId)
+            .single();
+
+        if (fetchError) {
+            this.logger.error(`Failed to fetch user ${userId}`, fetchError);
+            throw fetchError;
+        }
+
+        // Merge existing profile with updates
+        const mergedProfile = {
+            ...(currentUser.profile || {}),
+            ...profileUpdates,
+        };
+
+        // Update the user with merged profile
         const { data, error } = await this.supabaseService
             .from('users')
-            .update({ profile, updated_at: new Date().toISOString() })
+            .update({
+                profile: mergedProfile,
+                updated_at: new Date().toISOString()
+            })
             .eq('id', userId)
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            this.logger.error(`Failed to update profile for user ${userId}`, error);
+            throw error;
+        }
+
+        this.logger.log(`Profile updated for user ${userId}`);
         return data;
     }
 

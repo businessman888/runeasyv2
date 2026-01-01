@@ -93,6 +93,7 @@ function LogoutIcon({ size = 24, color = '#FF6B6B' }: { size?: number; color?: s
     return <Text style={{ fontSize: size, color }}>🚪</Text>;
 }
 
+
 function ChevronIcon({ size = 20, color = 'rgba(235,235,245,0.6)' }: { size?: number; color?: string }) {
     if (Platform.OS === 'web') {
         return (
@@ -102,6 +103,17 @@ function ChevronIcon({ size = 20, color = 'rgba(235,235,245,0.6)' }: { size?: nu
         );
     }
     return <Text style={{ fontSize: size, color }}>›</Text>;
+}
+
+function EditIcon({ size = 16, color = '#0A0A18' }: { size?: number; color?: string }) {
+    if (Platform.OS === 'web') {
+        return (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+                <path d="M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25ZM20.71 7.04C21.1 6.65 21.1 6.02 20.71 5.63L18.37 3.29C17.98 2.9 17.35 2.9 16.96 3.29L15.13 5.12L18.88 8.87L20.71 7.04Z" />
+            </svg>
+        );
+    }
+    return <Text style={{ fontSize: size, color }}>✏️</Text>;
 }
 
 export function SettingsScreen({ navigation }: any) {
@@ -131,11 +143,29 @@ export function SettingsScreen({ navigation }: any) {
 
                 {/* Profile Section */}
                 <View style={styles.profileSection}>
-                    <View style={styles.avatarContainer}>
-                        <Image
-                            source={{ uri: user?.profile?.profile_pic || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face' }}
-                            style={styles.avatar}
-                        />
+                    <View style={styles.avatarWrapper}>
+                        <View style={styles.avatarContainer}>
+                            {user?.profile?.profile_pic && user.profile.profile_pic.startsWith('http') ? (
+                                <Image
+                                    source={{ uri: user.profile.profile_pic }}
+                                    style={styles.avatar}
+                                />
+                            ) : (
+                                <View style={styles.avatarInitials}>
+                                    <Text style={styles.initialsText}>
+                                        {userName.split(' ').length > 1
+                                            ? (userName.split(' ')[0][0] + userName.split(' ')[userName.split(' ').length - 1][0]).toUpperCase()
+                                            : userName[0].toUpperCase()}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+                        <TouchableOpacity
+                            style={styles.editAvatarButton}
+                            onPress={() => navigation.navigate('PersonalInfo')}
+                        >
+                            <EditIcon size={14} color="#0A0A18" />
+                        </TouchableOpacity>
                     </View>
                     <Text style={styles.userName}>{userName}</Text>
                     <View style={styles.memberBadge}>
@@ -275,6 +305,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: spacing.lg,
     },
+    avatarWrapper: {
+        position: 'relative',
+        width: 100,
+        height: 100,
+        marginBottom: spacing.md,
+    },
     avatarContainer: {
         width: 100,
         height: 100,
@@ -287,6 +323,32 @@ const styles = StyleSheet.create({
     avatar: {
         width: '100%',
         height: '100%',
+    },
+    avatarInitials: {
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#1C1C2E',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    initialsText: {
+        fontSize: 36,
+        fontWeight: '600',
+        color: '#00D4FF',
+        textTransform: 'uppercase',
+    },
+    editAvatarButton: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#00D4FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 3,
+        borderColor: '#0E0E1F',
     },
     userName: {
         fontSize: 22,

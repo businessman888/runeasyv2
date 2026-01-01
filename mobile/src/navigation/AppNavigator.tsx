@@ -129,7 +129,7 @@ function MainTabs({ route, navigation }: any) {
 }
 
 // Root Navigator
-export function AppNavigator() {
+export function AppNavigator({ navigationRef }: { navigationRef?: React.RefObject<any> }) {
     const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
 
     React.useEffect(() => {
@@ -146,7 +146,7 @@ export function AppNavigator() {
     }
 
     return (
-        <NavigationContainer>
+        <NavigationContainer ref={navigationRef}>
             <Stack.Navigator
                 id="RootStack"
                 screenOptions={{

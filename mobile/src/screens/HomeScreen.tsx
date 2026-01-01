@@ -12,7 +12,7 @@ import {
     Alert,
 } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
-import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore, useStatsStore } from '../stores';
+import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore, useStatsStore, useNotificationStore } from '../stores';
 import { CircularProgress } from '../components/CircularProgress';
 import { Skeleton, SkeletonCircle, SkeletonText } from '../components/Skeleton';
 
@@ -157,6 +157,7 @@ export function HomeScreen({ navigation }: any) {
     const { upcomingWorkouts, fetchUpcomingWorkouts, isLoading: trainingLoading } = useTrainingStore();
     const { latestSummary, fetchLatestSummary, latestActivity, latestActivityLoading, fetchLatestActivity } = useFeedbackStore();
     const { summary, fetchSummary, isLoading: statsLoading } = useStatsStore();
+    const { unreadCount, fetchUnreadCount } = useNotificationStore();
     const [isInitialLoading, setIsInitialLoading] = useState(true);
 
     useEffect(() => {
@@ -167,6 +168,7 @@ export function HomeScreen({ navigation }: any) {
                 fetchLatestSummary(),
                 fetchLatestActivity(),
                 fetchSummary(),
+                fetchUnreadCount(),
             ]);
             setIsInitialLoading(false);
         };
@@ -293,10 +295,22 @@ export function HomeScreen({ navigation }: any) {
                         {isInitialLoading ? (
                             <SkeletonCircle size={48} />
                         ) : (
-                            <Image
-                                source={{ uri: profilePic }}
-                                style={styles.profileImage}
-                            />
+                            <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
+                                {profilePic && profilePic.startsWith('http') ? (
+                                    <Image
+                                        source={{ uri: profilePic }}
+                                        style={styles.profileImage}
+                                    />
+                                ) : (
+                                    <View style={styles.profileImageInitials}>
+                                        <Text style={styles.profileInitialsText}>
+                                            {userName.split(' ').length > 1
+                                                ? (userName.split(' ')[0][0] + userName.split(' ')[userName.split(' ').length - 1][0]).toUpperCase()
+                                                : userName[0].toUpperCase()}
+                                        </Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
                         )}
                         <View style={styles.headerText}>
                             <Text style={styles.greetingText}>{getGreeting()}</Text>
@@ -312,14 +326,23 @@ export function HomeScreen({ navigation }: any) {
                         onPress={() => navigation.navigate('Notifications')}
                     >
                         <BellIcon size={24} color="#EBEBF5" />
+                        {unreadCount > 0 && (
+                            <View style={styles.notificationBadge}>
+                                <Text style={styles.notificationBadgeText}>
+                                    {unreadCount > 9 ? '9+' : unreadCount}
+                                </Text>
+                            </View>
+                        )}
                     </TouchableOpacity>
                 </View>
 
-                {/* Streak Banner */}
-                <View style={styles.streakBanner}>
-                    <FireIcon size={22} color="#FFC400" />
-                    <Text style={styles.streakText}>{currentStreak} dias de sequência!</Text>
-                </View>
+                {/* Streak Banner - Only show when streak > 0 */}
+                {currentStreak > 0 && (
+                    <View style={styles.streakBanner}>
+                        <FireIcon size={22} color="#FFC400" />
+                        <Text style={styles.streakText}>{currentStreak} dias de sequência!</Text>
+                    </View>
+                )}
 
                 {/* Level Card */}
                 <View style={styles.levelCard}>
@@ -541,6 +564,22 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: colors.primary,
     },
+    profileImageInitials: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        borderWidth: 2,
+        borderColor: colors.primary,
+        backgroundColor: '#1C1C2E',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    profileInitialsText: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: colors.primary,
+        textTransform: 'uppercase',
+    },
     headerText: {
         gap: 2,
     },
@@ -563,6 +602,23 @@ const styles = StyleSheet.create({
     },
     bellIcon: {
         fontSize: 20,
+    },
+    notificationBadge: {
+        position: 'absolute',
+        top: -2,
+        right: -2,
+        backgroundColor: '#FF3B30',
+        borderRadius: 10,
+        minWidth: 18,
+        height: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+    },
+    notificationBadgeText: {
+        color: '#FFFFFF',
+        fontSize: 10,
+        fontWeight: 'bold' as any,
     },
 
     // Streak Banner

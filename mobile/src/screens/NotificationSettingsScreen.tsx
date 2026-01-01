@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -10,6 +10,7 @@ import {
     Animated,
 } from 'react-native';
 import { colors, typography, spacing } from '../theme';
+import { useAuthStore } from '../stores';
 
 // SVG Icons
 function BackIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
@@ -74,18 +75,21 @@ interface NotificationSection {
 }
 
 export function NotificationSettingsScreen({ navigation }: any) {
+    const { user } = useAuthStore();
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
     const [settings, setSettings] = useState<NotificationSection[]>([
         {
             title: 'IA & Saúde',
             settings: [
                 {
-                    id: 'readiness',
+                    id: 'readiness_enabled',
                     title: 'Veredito de Prontidão',
                     description: 'Receba sua pontuação diária ao acordar',
                     enabled: true,
                 },
                 {
-                    id: 'fatigue',
+                    id: 'fatigue_alerts_enabled',
                     title: 'Alertas de Fadiga',
                     description: 'Avisos sobre picos de carga aguda',
                     enabled: false,
@@ -96,13 +100,13 @@ export function NotificationSettingsScreen({ navigation }: any) {
             title: 'Treinos',
             settings: [
                 {
-                    id: 'session_reminder',
+                    id: 'session_reminder_enabled',
                     title: 'Lembrete de sessão',
                     description: '30 min antes do treino planejado',
                     enabled: true,
                 },
                 {
-                    id: 'sync',
+                    id: 'sync_enabled',
                     title: 'Sincronização',
                     description: 'Confirmar upload do Strava/Garmin',
                     enabled: true,
@@ -113,7 +117,7 @@ export function NotificationSettingsScreen({ navigation }: any) {
             title: 'Comunidade',
             settings: [
                 {
-                    id: 'squad',
+                    id: 'squad_activities_enabled',
                     title: 'Atividades do Squad',
                     description: 'Quando amigos batem recordes pessoais',
                     enabled: false,
@@ -122,12 +126,108 @@ export function NotificationSettingsScreen({ navigation }: any) {
         },
     ]);
 
+    const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
+
+    // Load preferences from backend
+    useEffect(() => {
+        loadPreferences();
+    }, []);
+
+    const loadPreferences = async () => {
+        if (!user?.id) return;
+
+        try {
+            setIsLoading(true);
+            const response = await fetch(`${API_URL}/notifications/preferences`, {
+                headers: {
+                    'x-user-id': user.id,
+                },
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const prefs = data.preferences;
+
+                // Update settings with backend data
+                const newSettings = settings.map(section => ({
+                    ...section,
+                    settings: section.settings.map(setting => ({
+                        ...setting,
+                        enabled: prefs[setting.id] ?? setting.enabled,
+                    })),
+                }));
+
+                setSettings(newSettings);
+            }
+        } catch (error) {
+            console.error('Failed to load notification preferences:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const savePreferences = async (updatedSettings: NotificationSection[]) => {
+        if (!user?.id) return;
+
+        try {
+            setIsSaving(true);
+
+            // Build preferences object from settings
+            const preferences: any = {};
+            updatedSettings.forEach(section => {
+                section.settings.forEach(setting => {
+                    preferences[setting.id] = setting.enabled;
+                });
+            });
+
+            const response = await fetch(`${API_URL}/notifications/preferences`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-user-id': user.id,
+                },
+                body: JSON.stringify(preferences),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to save preferences');
+            }
+        } catch (error) {
+            console.error('Failed to save notification preferences:', error);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const handleToggle = (sectionIndex: number, settingIndex: number) => {
         const newSettings = [...settings];
         newSettings[sectionIndex].settings[settingIndex].enabled =
             !newSettings[sectionIndex].settings[settingIndex].enabled;
         setSettings(newSettings);
+
+        // Save to backend
+        savePreferences(newSettings);
     };
+
+    if (isLoading) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.header}>
+                    <TouchableOpacity
+                        style={styles.backButton}
+                        onPress={() => navigation.goBack()}
+                    >
+                        <BackIcon size={24} color="#FFFFFF" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Notificações</Text>
+                    <View style={styles.headerSpacer} />
+                </View>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <Text style={{ color: '#FFFFFF' }}>Carregando...</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container}>

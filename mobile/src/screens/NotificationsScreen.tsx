@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
     View,
     Text,
@@ -7,8 +7,10 @@ import {
     ScrollView,
     TouchableOpacity,
     Platform,
+    ActivityIndicator,
 } from 'react-native';
 import { colors, typography, spacing, borderRadius } from '../theme';
+import { useNotificationStore, AppNotification, NotificationType } from '../stores/notificationStore';
 
 // Back arrow icon
 function BackIcon({ size = 24, color = '#EBEBF5' }: { size?: number; color?: string }) {
@@ -74,51 +76,49 @@ function RunnerIcon({ size = 24, color = 'rgba(235, 235, 245, 0.6)' }: { size?: 
 // Filter types
 type FilterType = 'all' | 'insights' | 'workouts' | 'system';
 
-// Notification type
-interface Notification {
-    id: string;
-    type: 'insight' | 'workout' | 'achievement' | 'reminder';
-    title: string;
-    description: string;
-    time: string;
-    isNew?: boolean;
+// Display notification type (maps from API types)
+type DisplayType = 'insight' | 'workout' | 'achievement' | 'reminder';
+
+// Map backend types to display types
+function mapNotificationType(type: NotificationType): DisplayType {
+    switch (type) {
+        case 'recovery_analysis':
+            return 'insight';
+        case 'workout_sync':
+            return 'workout';
+        case 'achievement':
+            return 'achievement';
+        case 'reminder':
+        case 'system':
+        default:
+            return 'reminder';
+    }
 }
 
-// Mock notifications data
-const mockNotifications: Notification[] = [
-    {
-        id: '1',
-        type: 'insight',
-        title: 'Análise de Recuperação',
-        description: 'Sua variabilidade cardíaca subiu. Hoje é um bom dia para aumentar a intensidade',
-        time: 'Agora',
-        isNew: true,
-    },
-    {
-        id: '2',
-        type: 'workout',
-        title: 'Treino Sincronizado',
-        description: 'Corrida leve de 5km importada no Strava com sucesso.',
-        time: '2h atrás',
-    },
-    {
-        id: '3',
-        type: 'achievement',
-        title: 'Meta Semanal Atingida',
-        description: 'Parabéns! Você completou 40km esta semana. Mantenha o ritmo!',
-        time: 'Ontem',
-    },
-    {
-        id: '4',
-        type: 'reminder',
-        title: 'Lembrete de Corrida',
-        description: 'Seu treino de Longão está agendado para amanhã às 06:00',
-        time: 'Ontem',
-    },
-];
+// Format relative time
+function formatRelativeTime(dateString: string): string {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Agora';
+    if (diffMins < 60) return `${diffMins}min atrás`;
+    if (diffHours < 24) return `${diffHours}h atrás`;
+    if (diffDays === 1) return 'Ontem';
+    return `${diffDays} dias atrás`;
+}
 
 export function NotificationsScreen({ navigation }: any) {
     const [activeFilter, setActiveFilter] = React.useState<FilterType>('all');
+    const { notifications, isLoading, fetchNotifications, markAsRead } = useNotificationStore();
+
+    // Fetch notifications on mount
+    useEffect(() => {
+        fetchNotifications();
+    }, []);
 
     const filters: { key: FilterType; label: string }[] = [
         { key: 'all', label: 'Todas' },
@@ -128,19 +128,24 @@ export function NotificationsScreen({ navigation }: any) {
     ];
 
     const getFilteredNotifications = () => {
+        const mapped = notifications.map(n => ({
+            ...n,
+            displayType: mapNotificationType(n.type),
+        }));
+
         switch (activeFilter) {
             case 'insights':
-                return mockNotifications.filter(n => n.type === 'insight');
+                return mapped.filter(n => n.displayType === 'insight');
             case 'workouts':
-                return mockNotifications.filter(n => n.type === 'workout');
+                return mapped.filter(n => n.displayType === 'workout');
             case 'system':
-                return mockNotifications.filter(n => n.type === 'achievement' || n.type === 'reminder');
+                return mapped.filter(n => n.displayType === 'achievement' || n.displayType === 'reminder');
             default:
-                return mockNotifications;
+                return mapped;
         }
     };
 
-    const getNotificationIcon = (type: Notification['type']) => {
+    const getNotificationIcon = (type: DisplayType) => {
         switch (type) {
             case 'insight':
                 return <BrainFlashIcon size={24} color="#00D4FF" />;
@@ -151,6 +156,29 @@ export function NotificationsScreen({ navigation }: any) {
             case 'reminder':
                 return <RunnerIcon size={24} color="rgba(235, 235, 245, 0.6)" />;
         }
+    };
+
+    const handleNotificationPress = (notification: AppNotification & { displayType: DisplayType }) => {
+        // Mark as read
+        if (!notification.is_read) {
+            markAsRead(notification.id);
+        }
+
+        // Navigate based on notification type and metadata
+        if (notification.metadata?.screen) {
+            // Simple navigation (no params needed)
+            if (notification.type === 'reminder' || notification.type === 'system' || notification.type === 'achievement') {
+                navigation.navigate(notification.metadata.screen as string);
+            }
+
+            // Feedback navigation (needs feedbackId param)
+            if (notification.type === 'workout_sync' && notification.metadata.feedbackId) {
+                navigation.navigate(notification.metadata.screen as string, {
+                    feedbackId: notification.metadata.feedbackId,
+                });
+            }
+        }
+        // recovery_analysis notifications are not clickable (do not navigate)
     };
 
     const filteredNotifications = getFilteredNotifications();
@@ -196,49 +224,69 @@ export function NotificationsScreen({ navigation }: any) {
                 </ScrollView>
             </View>
 
+            {/* Loading State */}
+            {isLoading && (
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+            )}
+
+            {/* Empty State */}
+            {!isLoading && filteredNotifications.length === 0 && (
+                <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>Nenhuma notificação</Text>
+                    <Text style={styles.emptySubtext}>
+                        Suas notificações aparecerão aqui
+                    </Text>
+                </View>
+            )}
+
             {/* Notifications List */}
-            <ScrollView
-                style={styles.notificationsList}
-                contentContainerStyle={styles.notificationsContent}
-                showsVerticalScrollIndicator={false}
-            >
-                {filteredNotifications.map((notification) => (
-                    <TouchableOpacity
-                        key={notification.id}
-                        style={[
-                            styles.notificationCard,
-                            notification.type === 'insight' && styles.notificationCardInsight
-                        ]}
-                        activeOpacity={0.7}
-                    >
-                        <View style={[
-                            styles.iconContainer,
-                            notification.type === 'insight' && styles.iconContainerInsight
-                        ]}>
-                            {getNotificationIcon(notification.type)}
-                        </View>
-                        <View style={styles.notificationContent}>
-                            <View style={styles.notificationHeader}>
-                                <Text style={styles.notificationTitle}>
-                                    {notification.title}
-                                </Text>
-                                {notification.isNew && (
-                                    <View style={styles.newIndicator} />
-                                )}
-                            </View>
-                            <Text style={styles.notificationDescription}>
-                                {notification.description}
-                            </Text>
-                            <Text style={[
-                                styles.notificationTime,
-                                notification.type === 'insight' && styles.notificationTimeInsight
+            {!isLoading && filteredNotifications.length > 0 && (
+                <ScrollView
+                    style={styles.notificationsList}
+                    contentContainerStyle={styles.notificationsContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {filteredNotifications.map((notification) => (
+                        <TouchableOpacity
+                            key={notification.id}
+                            style={[
+                                styles.notificationCard,
+                                notification.displayType === 'insight' && styles.notificationCardInsight
+                            ]}
+                            activeOpacity={notification.type === 'recovery_analysis' ? 1 : 0.7}
+                            onPress={() => handleNotificationPress(notification)}
+                        >
+                            <View style={[
+                                styles.iconContainer,
+                                notification.displayType === 'insight' && styles.iconContainerInsight
                             ]}>
-                                {notification.time}
-                            </Text>
-                        </View>
-                    </TouchableOpacity>
-                ))}
-            </ScrollView>
+                                {getNotificationIcon(notification.displayType)}
+                            </View>
+                            <View style={styles.notificationContent}>
+                                <View style={styles.notificationHeader}>
+                                    <Text style={styles.notificationTitle}>
+                                        {notification.title}
+                                    </Text>
+                                    {!notification.is_read && (
+                                        <View style={styles.newIndicator} />
+                                    )}
+                                </View>
+                                <Text style={styles.notificationDescription}>
+                                    {notification.description}
+                                </Text>
+                                <Text style={[
+                                    styles.notificationTime,
+                                    notification.displayType === 'insight' && styles.notificationTimeInsight
+                                ]}>
+                                    {formatRelativeTime(notification.created_at)}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+            )}
         </SafeAreaView>
     );
 }
@@ -371,5 +419,29 @@ const styles = StyleSheet.create({
     },
     notificationTimeInsight: {
         color: '#00D4FF',
+    },
+
+    // Loading and empty states
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: spacing.xl,
+    },
+    emptyText: {
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.semibold as any,
+        color: '#EBEBF5',
+        marginBottom: spacing.sm,
+    },
+    emptySubtext: {
+        fontSize: typography.fontSizes.sm,
+        color: 'rgba(235, 235, 245, 0.6)',
+        textAlign: 'center',
     },
 });

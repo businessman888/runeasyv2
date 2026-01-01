@@ -20,6 +20,20 @@ interface ExpoPushTicket {
     details?: { error: string };
 }
 
+// Notification types for in-app notifications
+export type NotificationType = 'recovery_analysis' | 'workout_sync' | 'achievement' | 'reminder' | 'system';
+
+export interface AppNotification {
+    id: string;
+    user_id: string;
+    type: NotificationType;
+    title: string;
+    description: string;
+    is_read: boolean;
+    metadata: Record<string, unknown>;
+    created_at: string;
+}
+
 @Injectable()
 export class NotificationService {
     private readonly logger = new Logger(NotificationService.name);
@@ -133,6 +147,21 @@ export class NotificationService {
     ): Promise<boolean> {
         const workoutTypeName = this.getWorkoutTypeName(workoutType);
 
+        // Create persistent notification in database
+        await this.createNotification(
+            userId,
+            'workout_sync',
+            '📊 Feedback Pronto!',
+            `Sua análise do ${workoutTypeName} está disponível. Veja como você se saiu!`,
+            {
+                feedback_id: feedbackId,
+                workout_type: workoutType,
+                screen: 'CoachAnalysis', // Navigate to feedback screen
+                feedbackId, // For navigation params
+            },
+        );
+
+        // Send push notification
         return this.sendPushNotification(
             userId,
             '📊 Feedback Pronto!',
@@ -141,6 +170,7 @@ export class NotificationService {
                 type: 'feedback_ready',
                 feedbackId,
                 workoutType,
+                screen: 'CoachAnalysis',
             },
             { channelId: 'feedback' },
         );
@@ -254,5 +284,262 @@ export class NotificationService {
             'recovery': 'Corrida de Recuperação',
         };
         return types[type] || type;
+    }
+
+    // ==================== IN-APP NOTIFICATIONS ====================
+
+    /**
+     * Create a new in-app notification
+     */
+    async createNotification(
+        userId: string,
+        type: NotificationType,
+        title: string,
+        description: string,
+        metadata?: Record<string, unknown>,
+    ): Promise<AppNotification | null> {
+        try {
+            const { data, error } = await this.supabaseService
+                .from('notifications')
+                .insert({
+                    user_id: userId,
+                    type,
+                    title,
+                    description,
+                    metadata: metadata || {},
+                    is_read: false,
+                })
+                .select()
+                .single();
+
+            if (error) {
+                this.logger.error('Failed to create notification', error);
+                return null;
+            }
+
+            this.logger.log(`Created ${type} notification for user ${userId}`);
+            return data as AppNotification;
+        } catch (error) {
+            this.logger.error('Error creating notification', error);
+            return null;
+        }
+    }
+
+    /**
+     * Get all notifications for a user
+     */
+    async getUserNotifications(
+        userId: string,
+        limit: number = 50,
+        offset: number = 0,
+    ): Promise<AppNotification[]> {
+        try {
+            const { data, error } = await this.supabaseService
+                .from('notifications')
+                .select('*')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .range(offset, offset + limit - 1);
+
+            if (error) {
+                this.logger.error('Failed to get notifications', error);
+                return [];
+            }
+
+            return (data as AppNotification[]) || [];
+        } catch (error) {
+            this.logger.error('Error getting notifications', error);
+            return [];
+        }
+    }
+
+    /**
+     * Mark a notification as read
+     */
+    async markAsRead(notificationId: string, userId: string): Promise<boolean> {
+        try {
+            const { error } = await this.supabaseService
+                .from('notifications')
+                .update({ is_read: true })
+                .eq('id', notificationId)
+                .eq('user_id', userId);
+
+            if (error) {
+                this.logger.error('Failed to mark notification as read', error);
+                return false;
+            }
+
+            return true;
+        } catch (error) {
+            this.logger.error('Error marking notification as read', error);
+            return false;
+        }
+    }
+
+    /**
+     * Get unread notification count for a user
+     */
+    async getUnreadCount(userId: string): Promise<number> {
+        try {
+            const { count, error } = await this.supabaseService
+                .from('notifications')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', userId)
+                .eq('is_read', false);
+
+            if (error) {
+                this.logger.error('Failed to get unread count', error);
+                return 0;
+            }
+
+            return count || 0;
+        } catch (error) {
+            this.logger.error('Error getting unread count', error);
+            return 0;
+        }
+    }
+
+    /**
+     * Schedule a recovery analysis notification to be created after 10 minutes
+     * This creates an in-app notification with a summary of the AI analysis
+     */
+    scheduleRecoveryAnalysisNotification(
+        userId: string,
+        aiAnalysis: {
+            headline: string;
+            reasoning: string;
+            readiness_score: number;
+            status_label: string;
+        },
+    ): void {
+        const DELAY_MS = 10 * 60 * 1000; // 10 minutes
+
+        this.logger.log(`Scheduling recovery analysis notification for user ${userId} in 10 minutes`);
+
+        setTimeout(async () => {
+            try {
+                // Create a brief summary from the AI analysis
+                const description = `${aiAnalysis.headline}. Score: ${aiAnalysis.readiness_score}% - ${aiAnalysis.status_label}`;
+
+                await this.createNotification(
+                    userId,
+                    'recovery_analysis',
+                    'Análise de Recuperação',
+                    description,
+                    {
+                        readiness_score: aiAnalysis.readiness_score,
+                        status_label: aiAnalysis.status_label,
+                        headline: aiAnalysis.headline,
+                    },
+                );
+
+                // Also send push notification
+                await this.sendPushNotification(
+                    userId,
+                    '🧠 Análise de Recuperação',
+                    description,
+                    { type: 'recovery_analysis' },
+                    { channelId: 'insights' },
+                );
+
+                this.logger.log(`Recovery analysis notification created for user ${userId}`);
+            } catch (error) {
+                this.logger.error('Failed to create scheduled recovery notification', error);
+            }
+        }, DELAY_MS);
+    }
+
+    // ==================== NOTIFICATION PREFERENCES ====================
+
+    /**
+     * Get user's notification preferences
+     */
+    async getPreferences(userId: string): Promise<any> {
+        try {
+            const { data, error } = await this.supabaseService
+                .from('notification_preferences')
+                .select('*')
+                .eq('user_id', userId)
+                .single();
+
+            if (error) {
+                // If preferences don't exist, create default ones
+                if (error.code === 'PGRST116') {
+                    return this.createDefaultPreferences(userId);
+                }
+                this.logger.error('Failed to get notification preferences', error);
+                return null;
+            }
+
+            return data;
+        } catch (error) {
+            this.logger.error('Error getting notification preferences', error);
+            return null;
+        }
+    }
+
+    /**
+     * Update user's notification preferences
+     */
+    async updatePreferences(
+        userId: string,
+        preferences: {
+            readiness_enabled?: boolean;
+            fatigue_alerts_enabled?: boolean;
+            session_reminder_enabled?: boolean;
+            sync_enabled?: boolean;
+            squad_activities_enabled?: boolean;
+        },
+    ): Promise<any> {
+        try {
+            const { data, error } = await this.supabaseService
+                .from('notification_preferences')
+                .update(preferences)
+                .eq('user_id', userId)
+                .select()
+                .single();
+
+            if (error) {
+                this.logger.error('Failed to update notification preferences', error);
+                return null;
+            }
+
+            this.logger.log(`Updated notification preferences for user ${userId}`);
+            return data;
+        } catch (error) {
+            this.logger.error('Error updating notification preferences', error);
+            return null;
+        }
+    }
+
+    /**
+     * Create default preferences for a new user
+     */
+    private async createDefaultPreferences(userId: string): Promise<any> {
+        try {
+            const { data, error } = await this.supabaseService
+                .from('notification_preferences')
+                .insert({
+                    user_id: userId,
+                    readiness_enabled: true,
+                    fatigue_alerts_enabled: false,
+                    session_reminder_enabled: true,
+                    sync_enabled: true,
+                    squad_activities_enabled: false,
+                })
+                .select()
+                .single();
+
+            if (error) {
+                this.logger.error('Failed to create default notification preferences', error);
+                return null;
+            }
+
+            this.logger.log(`Created default notification preferences for user ${userId}`);
+            return data;
+        } catch (error) {
+            this.logger.error('Error creating default notification preferences', error);
+            return null;
+        }
     }
 }

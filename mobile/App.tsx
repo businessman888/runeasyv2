@@ -1,8 +1,19 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet, View, Text } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { AppNavigator } from './src/navigation';
+import { NavigationContainerRef } from '@react-navigation/native';
+
+// Configure notification handler
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 // Error Boundary to catch rendering errors
 class ErrorBoundary extends React.Component<
@@ -41,11 +52,31 @@ class ErrorBoundary extends React.Component<
 }
 
 export default function App() {
+  const navigationRef = useRef<NavigationContainerRef<any>>(null);
+
+  useEffect(() => {
+    // Listen for notification taps when app is open or in background
+    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+
+      // Navigate based on notification data
+      if (data?.screen && navigationRef.current?.isReady()) {
+        try {
+          navigationRef.current.navigate(data.screen as never);
+        } catch (error) {
+          console.error('Navigation error:', error);
+        }
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
+
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={styles.container}>
         <StatusBar style="dark" />
-        <AppNavigator />
+        <AppNavigator navigationRef={navigationRef} />
       </GestureHandlerRootView>
     </ErrorBoundary>
   );
