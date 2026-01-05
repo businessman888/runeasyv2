@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "scheme": "runeasy",
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -25,9 +24,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FF6B35"
       },
-      "package": "com.runeasy.app",
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "package": "com.runeasy.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"

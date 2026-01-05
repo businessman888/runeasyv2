@@ -47,7 +47,7 @@ interface OnboardingState {
     isGenerating: boolean;
     generatedPlan: GeneratedPlanResult | null;
     error: string | null;
-    errorCode: string | null;
+    errorCode: typeof ONBOARDING_ERRORS[keyof typeof ONBOARDING_ERRORS] | null;
 
     // Actions
     setStep: (step: number) => void;
@@ -124,29 +124,44 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                 return null;
             }
 
-            const response = await fetch(`${API_URL}/training/onboarding`, {
+            const requestBody = {
+                goal: data.goal || '10k',
+                level: data.level || 'beginner',
+                days_per_week: data.daysPerWeek || 3,
+                current_pace_5k: data.currentPace5k,
+                target_weeks: data.targetWeeks || 8,
+                limitations: data.limitations,
+                preferred_days: data.preferredDays || [],
+            };
+
+            const requestUrl = `${API_URL}/training/onboarding`;
+
+            // DEBUG LOGS
+            console.log('=== ONBOARDING SUBMISSION ===');
+            console.log('API_URL:', API_URL);
+            console.log('Request URL:', requestUrl);
+            console.log('User ID:', userId);
+            console.log('Request Body:', JSON.stringify(requestBody, null, 2));
+
+            const response = await fetch(requestUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'x-user-id': userId,
                 },
-                body: JSON.stringify({
-                    goal: data.goal || '10k',
-                    level: data.level || 'beginner',
-                    days_per_week: data.daysPerWeek || 3,
-                    current_pace_5k: data.currentPace5k,
-                    target_weeks: data.targetWeeks || 8,
-                    limitations: data.limitations,
-                    preferred_days: data.preferredDays || [],
-                }),
+                body: JSON.stringify(requestBody),
             });
+
+            console.log('Response status:', response.status);
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
+                console.error('API Error:', errorData);
                 throw new Error(errorData.message || 'Failed to generate training plan');
             }
 
             const result: GeneratedPlanResult = await response.json();
+            console.log('Onboarding success! Plan ID:', result.plan_id);
 
             set({
                 generatedPlan: result,
@@ -155,9 +170,30 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
             });
 
             return result;
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-            set({ error: errorMessage, isGenerating: false });
+        } catch (error: any) {
+            console.error('=== ONBOARDING ERROR ===');
+            console.error('Error name:', error?.name);
+            console.error('Error message:', error?.message);
+
+            let errorMessage = 'Unknown error occurred';
+            let errorCode: typeof ONBOARDING_ERRORS[keyof typeof ONBOARDING_ERRORS] = ONBOARDING_ERRORS.API_ERROR;
+
+            if (error instanceof Error) {
+                errorMessage = error.message;
+                // Check for network error
+                if (error.message.includes('Network request failed') ||
+                    error.message.includes('fetch') ||
+                    error.name === 'TypeError') {
+                    errorCode = ONBOARDING_ERRORS.NETWORK_ERROR;
+                    errorMessage = `Erro de conexão. Verifique se o backend está acessível. URL: ${API_URL}`;
+                }
+            }
+
+            set({
+                error: errorMessage,
+                errorCode,
+                isGenerating: false
+            });
             console.error('Onboarding submission error:', error);
             return null;
         }

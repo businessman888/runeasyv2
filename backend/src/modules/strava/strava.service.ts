@@ -135,7 +135,15 @@ export class StravaService {
         const redirectUri = this.configService.get<string>('STRAVA_REDIRECT_URI') || '';
         const scopes = 'read,activity:read_all,profile:read_all';
 
-        return `${this.oauthUrl}/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scopes}`;
+        this.logger.log('=== STRAVA AUTH URL GENERATION ===');
+        this.logger.log(`STRAVA_CLIENT_ID: ${clientId ? clientId.substring(0, 5) + '...' : 'MISSING!'}`);
+        this.logger.log(`STRAVA_REDIRECT_URI: ${redirectUri || 'MISSING!'}`);
+
+        const authUrl = `${this.oauthUrl}/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scopes}`;
+
+        this.logger.log(`Generated auth URL: ${authUrl}`);
+
+        return authUrl;
     }
 
     /**

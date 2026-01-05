@@ -114,56 +114,96 @@ export function LoginScreen({ navigation }: any) {
     const handleStravaLogin = async () => {
         setError(null);
 
+        // DEBUG: Log the URL being used
+        const loginUrl = `${API_URL}/auth/strava/login`;
+        console.log('=== STRAVA LOGIN DEBUG ===');
+        console.log('API_URL:', API_URL);
+        console.log('Full login URL:', loginUrl);
+        console.log('Platform:', Platform.OS);
+
         if (Platform.OS === 'web') {
             // On web, redirect directly to Strava login
-            window.location.href = `${API_URL}/auth/strava/login`;
+            console.log('Redirecting to:', loginUrl);
+            window.location.href = loginUrl;
         } else {
-            // On native, use WebBrowser (original behavior)
+            // On native (Expo Go), use simple browser opening
+            // The deep link callback will be handled by Linking listener
             try {
                 setIsLoading(true);
                 const WebBrowser = require('expo-web-browser');
                 const Linking = require('expo-linking');
 
-                const result = await WebBrowser.openAuthSessionAsync(
-                    `${API_URL}/auth/strava/login`,
-                    Linking.createURL('callback')
-                );
+                // Get the callback URL that Expo Go can handle
+                const callbackUrl = Linking.createURL('callback');
+                console.log('=== EXPO GO OAUTH FLOW ===');
+                console.log('Callback URL (for backend FRONTEND_URL):', callbackUrl);
+                console.log('Login URL:', loginUrl);
 
-                if (result.type === 'success' && result.url) {
-                    const url = new URL(result.url);
-                    const userId = url.searchParams.get('user_id');
-                    const errorParam = url.searchParams.get('error');
+                // Set up a listener for deep link callback BEFORE opening browser
+                const handleDeepLink = async (event: { url: string }) => {
+                    console.log('=== DEEP LINK RECEIVED ===');
+                    console.log('URL:', event.url);
 
-                    if (errorParam) {
-                        setError(getErrorMessage(errorParam));
-                        return;
-                    }
+                    try {
+                        const url = new URL(event.url);
+                        const userId = url.searchParams.get('user_id');
+                        const errorParam = url.searchParams.get('error');
 
-                    if (userId) {
-                        // Save userId to storage
-                        await Storage.setItemAsync('user_id', userId);
+                        console.log('Parsed - userId:', userId, 'error:', errorParam);
 
-                        // Check the path to determine if user is new or existing
-                        const pathname = url.pathname;
-
-                        if (pathname.includes('/onboarding')) {
-                            // New user - navigate to quiz
-                            console.log('New user detected - navigating to Quiz');
-                            navigation.replace('Quiz_Objective', { userId });
-                        } else if (pathname.includes('/home')) {
-                            // Existing user - log in directly
-                            console.log('Existing user detected - logging in');
-                            await login(userId);
-                        } else {
-                            // Fallback
-                            await login(userId);
+                        if (errorParam) {
+                            setError(getErrorMessage(errorParam));
+                            setIsLoading(false);
+                            return;
                         }
+
+                        if (userId) {
+                            await Storage.setItemAsync('user_id', userId);
+
+                            const pathname = url.pathname || '';
+                            console.log('Pathname:', pathname);
+
+                            if (pathname.includes('onboarding')) {
+                                console.log('New user - navigating to Quiz');
+                                navigation.replace('Quiz_Objective', { userId });
+                            } else {
+                                console.log('Existing user - logging in');
+                                await login(userId);
+                            }
+                        }
+                    } catch (parseError) {
+                        console.error('Error parsing deep link:', parseError);
+                    } finally {
+                        setIsLoading(false);
                     }
-                }
-            } catch (err) {
-                console.error('Strava login error:', err);
-                setError('Erro ao conectar com Strava.');
-            } finally {
+                };
+
+                // Add listener
+                const subscription = Linking.addEventListener('url', handleDeepLink);
+
+                console.log('Opening browser with openBrowserAsync...');
+
+                // Open browser - user will be redirected back via deep link
+                await WebBrowser.openBrowserAsync(loginUrl, {
+                    showInRecents: true,
+                    dismissButtonStyle: 'close',
+                });
+
+                console.log('Browser closed');
+
+                // Note: The deep link handler above will process the callback
+                // If browser was closed without completing auth, remove listener after delay
+                setTimeout(() => {
+                    subscription.remove();
+                    setIsLoading(false);
+                }, 30000); // 30 second timeout
+
+            } catch (err: any) {
+                console.error('=== STRAVA LOGIN ERROR ===');
+                console.error('Error name:', err?.name);
+                console.error('Error message:', err?.message);
+                console.error('Full error:', JSON.stringify(err, null, 2));
+                setError('Erro ao conectar com Strava: ' + (err?.message || 'Erro desconhecido'));
                 setIsLoading(false);
             }
         }

@@ -53,14 +53,22 @@ export function PlanPreviewScreen({ navigation, route }: any) {
             // Store userId and authenticate the user
             if (userId) {
                 await Storage.setItemAsync('user_id', userId);
-                await login(userId);
-            }
 
-            // Navigate to the main app (Calendar tab)
-            navigation.reset({
-                index: 0,
-                routes: [{ name: 'Main', params: { initialTab: 'Calendar' } }],
-            });
+                // This will set isAuthenticated = true in the auth store
+                // The AppNavigator listens to isAuthenticated and will automatically
+                // remount with the 'Main' route available. We don't need navigation.reset.
+                console.log('Authenticating user...');
+                await login(userId);
+                console.log('User authenticated! Navigator will switch to Main automatically.');
+
+                // The navigator will automatically switch to Main because 
+                // isAuthenticated changed from false to true.
+                // No need for navigation.reset() - it would fail anyway since 
+                // 'Main' route doesn't exist until isAuthenticated is true.
+            } else {
+                console.log('No userId provided, cannot unlock plan');
+                setIsUnlocking(false);
+            }
         } catch (error) {
             console.error('Error unlocking plan:', error);
             setIsUnlocking(false);

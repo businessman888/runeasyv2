@@ -10,110 +10,45 @@ import {
     Switch,
     Platform,
 } from 'react-native';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
 import { useAuthStore } from '../stores';
 
-// SVG Icons for Web
+// Icon components using @expo/vector-icons
 function PersonIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
-    if (Platform.OS === 'web') {
-        return (
-            <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-                <path d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z" />
-            </svg>
-        );
-    }
-    return <Text style={{ fontSize: size, color }}>👤</Text>;
+    return <Ionicons name="person" size={size} color={color} />;
 }
 
 function PaymentIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
-    if (Platform.OS === 'web') {
-        return (
-            <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-                <path d="M20 4H4C2.89 4 2.01 4.89 2.01 6L2 18C2 19.11 2.89 20 4 20H20C21.11 20 22 19.11 22 18V6C22 4.89 21.11 4 20 4ZM20 18H4V12H20V18ZM20 8H4V6H20V8Z" />
-            </svg>
-        );
-    }
-    return <Text style={{ fontSize: size, color }}>💳</Text>;
+    return <Ionicons name="card" size={size} color={color} />;
 }
 
 function HistoryIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
-    if (Platform.OS === 'web') {
-        return (
-            <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-                <path d="M13 3C8.03 3 4 7.03 4 12H1L4.89 15.89L4.96 16.03L9 12H6C6 8.13 9.13 5 13 5C16.87 5 20 8.13 20 12C20 15.87 16.87 19 13 19C11.07 19 9.32 18.21 8.06 16.94L6.64 18.36C8.27 19.99 10.51 21 13 21C17.97 21 22 16.97 22 12C22 7.03 17.97 3 13 3ZM12 8V13L16.28 15.54L17 14.33L13.5 12.25V8H12Z" />
-            </svg>
-        );
-    }
-    return <Text style={{ fontSize: size, color }}>🕐</Text>;
+    return <MaterialCommunityIcons name="history" size={size} color={color} />;
 }
 
 function StravaIcon({ size = 24 }: { size?: number }) {
-    if (Platform.OS === 'web') {
-        return (
-            <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-                <rect width="24" height="24" rx="6" fill="#FC4C02" />
-                <path d="M15.5 18L13.5 14H11L15.5 6L20 14H17.5L15.5 18Z" fill="white" />
-                <path d="M13.5 14L15.5 18L17.5 14H13.5Z" fill="#FFEEE6" />
-            </svg>
-        );
-    }
-    return <Text style={{ fontSize: size }}>🏃</Text>;
+    return <MaterialCommunityIcons name="run" size={size} color="#FC4C02" />;
 }
 
 function NotificationIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
-    if (Platform.OS === 'web') {
-        return (
-            <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-                <path d="M12 22C13.1 22 14 21.1 14 20H10C10 21.1 10.9 22 12 22ZM18 16V11C18 7.93 16.36 5.36 13.5 4.68V4C13.5 3.17 12.83 2.5 12 2.5C11.17 2.5 10.5 3.17 10.5 4V4.68C7.63 5.36 6 7.92 6 11V16L4 18V19H20V18L18 16Z" />
-            </svg>
-        );
-    }
-    return <Text style={{ fontSize: size, color }}>🔔</Text>;
+    return <Ionicons name="notifications" size={size} color={color} />;
 }
 
 function HelpIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
-    if (Platform.OS === 'web') {
-        return (
-            <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-                <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM13 19H11V17H13V19ZM15.07 11.25L14.17 12.17C13.45 12.9 13 13.5 13 15H11V14.5C11 13.4 11.45 12.4 12.17 11.67L13.41 10.41C13.78 10.05 14 9.55 14 9C14 7.9 13.1 7 12 7C10.9 7 10 7.9 10 9H8C8 6.79 9.79 5 12 5C14.21 5 16 6.79 16 9C16 9.88 15.64 10.68 15.07 11.25Z" />
-            </svg>
-        );
-    }
-    return <Text style={{ fontSize: size, color }}>❓</Text>;
+    return <Ionicons name="help-circle" size={size} color={color} />;
 }
 
 function LogoutIcon({ size = 24, color = '#FF6B6B' }: { size?: number; color?: string }) {
-    if (Platform.OS === 'web') {
-        return (
-            <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-                <path d="M17 7L15.59 8.41L18.17 11H8V13H18.17L15.59 15.58L17 17L22 12L17 7ZM4 5H12V3H4C2.9 3 2 3.9 2 5V19C2 20.1 2.9 21 4 21H12V19H4V5Z" />
-            </svg>
-        );
-    }
-    return <Text style={{ fontSize: size, color }}>🚪</Text>;
+    return <Ionicons name="log-out" size={size} color={color} />;
 }
 
-
 function ChevronIcon({ size = 20, color = 'rgba(235,235,245,0.6)' }: { size?: number; color?: string }) {
-    if (Platform.OS === 'web') {
-        return (
-            <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-                <path d="M10 6L8.59 7.41L13.17 12L8.59 16.59L10 18L16 12L10 6Z" />
-            </svg>
-        );
-    }
-    return <Text style={{ fontSize: size, color }}>›</Text>;
+    return <Ionicons name="chevron-forward" size={size} color={color} />;
 }
 
 function EditIcon({ size = 16, color = '#0A0A18' }: { size?: number; color?: string }) {
-    if (Platform.OS === 'web') {
-        return (
-            <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-                <path d="M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25ZM20.71 7.04C21.1 6.65 21.1 6.02 20.71 5.63L18.37 3.29C17.98 2.9 17.35 2.9 16.96 3.29L15.13 5.12L18.88 8.87L20.71 7.04Z" />
-            </svg>
-        );
-    }
-    return <Text style={{ fontSize: size, color }}>✏️</Text>;
+    return <MaterialCommunityIcons name="pencil" size={size} color={color} />;
 }
 
 export function SettingsScreen({ navigation }: any) {

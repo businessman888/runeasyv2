@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { colors, shadows, borderRadius } from '../theme';
+import { colors } from '../theme';
 import { TabBarIcon } from './TabBarIcon';
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
@@ -11,7 +11,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                 {state.routes.map((route, index) => {
                     const { options } = descriptors[route.key];
                     const isFocused = state.index === index;
-                    const isCenterTab = route.name === 'Badges'; // Trophy is the center tab
+                    const isCenterTab = route.name === 'Badges';
 
                     const onPress = () => {
                         const event = navigation.emit({
@@ -32,8 +32,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                         });
                     };
 
-                    // Get icon name based on route
-                    const getIconName = () => {
+                    const getIconName = (): 'home' | 'calendar' | 'trophy' | 'brain' | 'profile' => {
                         switch (route.name) {
                             case 'Home': return 'home';
                             case 'Calendar': return 'calendar';
@@ -54,22 +53,19 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                             onLongPress={onLongPress}
                             style={styles.tabItem}
                         >
-                            {/* Active indicator glow line at top - only for non-center tabs */}
+                            {/* Single active indicator - glow line at top */}
                             {isFocused && !isCenterTab && (
-                                <View style={styles.activeIndicatorContainer}>
-                                    <View style={styles.activeIndicatorLine} />
-                                    <View style={styles.activeIndicatorGlow} />
-                                </View>
+                                <View style={styles.activeIndicator} />
                             )}
 
-                            {/* Icon container - center tab always has circle */}
+                            {/* Icon - changes color only, no background */}
                             <View style={[
                                 styles.iconContainer,
-                                isCenterTab && styles.centerIconContainer
+                                isCenterTab && styles.centerIconContainer,
                             ]}>
                                 <TabBarIcon
                                     name={getIconName()}
-                                    color={isCenterTab ? '#FFFFFF' : (isFocused ? '#FFFFFF' : colors.textMuted)}
+                                    color={isCenterTab ? '#FFFFFF' : (isFocused ? '#00D4FF' : '#6B6B8D')}
                                     size={isCenterTab ? 25 : 24}
                                 />
                             </View>
@@ -88,61 +84,67 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         alignItems: 'center',
-        paddingBottom: Platform.OS === 'ios' ? 20 : 10,
+        paddingBottom: Platform.OS === 'ios' ? 25 : 15,
         paddingHorizontal: 20,
+        zIndex: 999,
+        elevation: 999,
     },
     tabBar: {
         flexDirection: 'row',
         backgroundColor: '#15152A',
         borderRadius: 40,
-        paddingVertical: 14,
+        paddingVertical: 12,
         paddingHorizontal: 20,
-        justifyContent: 'space-between',
+        justifyContent: 'space-around',
         alignItems: 'center',
         width: '100%',
         maxWidth: 360,
-        ...shadows.lg,
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
     },
     tabItem: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
         position: 'relative',
+        height: 50,
     },
-    activeIndicatorContainer: {
+    activeIndicator: {
         position: 'absolute',
-        top: -14,
-        alignItems: 'center',
-    },
-    activeIndicatorLine: {
-        width: 27,
-        height: 6,
-        backgroundColor: colors.primary,
-        borderBottomLeftRadius: 5,
-        borderBottomRightRadius: 5,
-    },
-    activeIndicatorGlow: {
-        width: 27,
+        top: -12,
+        width: 24,
         height: 4,
-        backgroundColor: colors.primary,
-        ...(Platform.OS === 'web' ? {
-            filter: 'blur(4px)',
-        } : {
-            opacity: 0.5,
-        }),
+        backgroundColor: '#00D4FF',
+        borderBottomLeftRadius: 4,
+        borderBottomRightRadius: 4,
+        // Subtle shadow glow effect
+        shadowColor: '#00D4FF',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.8,
+        shadowRadius: 6,
+        elevation: 5,
     },
     iconContainer: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
+        // No background - icon floats
     },
     centerIconContainer: {
         backgroundColor: '#00C4E8',
-        ...(Platform.OS === 'web' ? {
-            boxShadow: '0px 0px 12px 2px rgba(0, 212, 255, 0.6)',
-        } : {}),
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        elevation: 8,
+        shadowColor: '#00D4FF',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 10,
     },
 });
 

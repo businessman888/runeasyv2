@@ -25,7 +25,18 @@ export class StravaAuthController {
      */
     @Get('login')
     login(@Res() res: Response) {
+        this.logger.log('=== STRAVA LOGIN INITIATED ===');
+
         const authUrl = this.stravaService.getAuthorizationUrl();
+
+        this.logger.log(`Redirecting to Strava authorization URL: ${authUrl}`);
+
+        if (!authUrl || authUrl.includes('client_id=&') || authUrl.includes('redirect_uri=&')) {
+            this.logger.error('STRAVA_CLIENT_ID or STRAVA_REDIRECT_URI is missing!');
+            this.logger.error(`Generated URL: ${authUrl}`);
+            return res.status(500).send('Configuração do Strava incompleta. Verifique STRAVA_CLIENT_ID e STRAVA_REDIRECT_URI no .env');
+        }
+
         return res.redirect(authUrl);
     }
 
