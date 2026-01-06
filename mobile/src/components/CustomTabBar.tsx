@@ -1,95 +1,90 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { colors } from '../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TabBarIcon } from './TabBarIcon';
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+    const insets = useSafeAreaInsets();
+
+    // Bottom position respects safe area (gesture bar on Android, home indicator on iOS)
+    const bottomPosition = Math.max(insets.bottom, 15);
+
     return (
-        <View style={styles.container}>
-            <View style={styles.tabBar}>
-                {state.routes.map((route, index) => {
-                    const { options } = descriptors[route.key];
-                    const isFocused = state.index === index;
-                    const isCenterTab = route.name === 'Badges';
+        <View style={[styles.tabBar, { bottom: bottomPosition }]}>
+            {state.routes.map((route, index) => {
+                const { options } = descriptors[route.key];
+                const isFocused = state.index === index;
+                const isCenterTab = route.name === 'Badges';
 
-                    const onPress = () => {
-                        const event = navigation.emit({
-                            type: 'tabPress',
-                            target: route.key,
-                            canPreventDefault: true,
-                        });
+                const onPress = () => {
+                    const event = navigation.emit({
+                        type: 'tabPress',
+                        target: route.key,
+                        canPreventDefault: true,
+                    });
 
-                        if (!isFocused && !event.defaultPrevented) {
-                            navigation.navigate(route.name);
-                        }
-                    };
+                    if (!isFocused && !event.defaultPrevented) {
+                        navigation.navigate(route.name);
+                    }
+                };
 
-                    const onLongPress = () => {
-                        navigation.emit({
-                            type: 'tabLongPress',
-                            target: route.key,
-                        });
-                    };
+                const onLongPress = () => {
+                    navigation.emit({
+                        type: 'tabLongPress',
+                        target: route.key,
+                    });
+                };
 
-                    const getIconName = (): 'home' | 'calendar' | 'trophy' | 'brain' | 'profile' => {
-                        switch (route.name) {
-                            case 'Home': return 'home';
-                            case 'Calendar': return 'calendar';
-                            case 'Badges': return 'trophy';
-                            case 'Evolution': return 'brain';
-                            case 'Settings': return 'profile';
-                            default: return 'home';
-                        }
-                    };
+                const getIconName = (): 'home' | 'calendar' | 'trophy' | 'brain' | 'profile' => {
+                    switch (route.name) {
+                        case 'Home': return 'home';
+                        case 'Calendar': return 'calendar';
+                        case 'Badges': return 'trophy';
+                        case 'Evolution': return 'brain';
+                        case 'Settings': return 'profile';
+                        default: return 'home';
+                    }
+                };
 
-                    return (
-                        <TouchableOpacity
-                            key={route.key}
-                            accessibilityRole="button"
-                            accessibilityState={isFocused ? { selected: true } : {}}
-                            accessibilityLabel={options.tabBarAccessibilityLabel}
-                            onPress={onPress}
-                            onLongPress={onLongPress}
-                            style={styles.tabItem}
-                        >
-                            {/* Single active indicator - glow line at top */}
-                            {isFocused && !isCenterTab && (
-                                <View style={styles.activeIndicator} />
-                            )}
+                return (
+                    <TouchableOpacity
+                        key={route.key}
+                        accessibilityRole="button"
+                        accessibilityState={isFocused ? { selected: true } : {}}
+                        accessibilityLabel={options.tabBarAccessibilityLabel}
+                        onPress={onPress}
+                        onLongPress={onLongPress}
+                        style={styles.tabItem}
+                    >
+                        {/* Active indicator - glow line at top */}
+                        {isFocused && !isCenterTab && (
+                            <View style={styles.activeIndicator} />
+                        )}
 
-                            {/* Icon - changes color only, no background */}
-                            <View style={[
-                                styles.iconContainer,
-                                isCenterTab && styles.centerIconContainer,
-                            ]}>
-                                <TabBarIcon
-                                    name={getIconName()}
-                                    color={isCenterTab ? '#FFFFFF' : (isFocused ? '#00D4FF' : '#6B6B8D')}
-                                    size={isCenterTab ? 25 : 24}
-                                />
-                            </View>
-                        </TouchableOpacity>
-                    );
-                })}
-            </View>
+                        {/* Icon */}
+                        <View style={[
+                            styles.iconContainer,
+                            isCenterTab && styles.centerIconContainer,
+                        ]}>
+                            <TabBarIcon
+                                name={getIconName()}
+                                color={isCenterTab ? '#FFFFFF' : (isFocused ? '#00D4FF' : '#6B6B8D')}
+                                size={isCenterTab ? 25 : 24}
+                            />
+                        </View>
+                    </TouchableOpacity>
+                );
+            })}
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        alignItems: 'center',
-        paddingBottom: Platform.OS === 'ios' ? 25 : 15,
-        paddingHorizontal: 20,
-        zIndex: 999,
-        elevation: 999,
-    },
     tabBar: {
+        position: 'absolute',
+        left: 20,
+        right: 20,
         flexDirection: 'row',
         backgroundColor: '#15152A',
         borderRadius: 40,
@@ -97,8 +92,9 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         justifyContent: 'space-around',
         alignItems: 'center',
-        width: '100%',
         maxWidth: 360,
+        alignSelf: 'center',
+        // Shadow for floating effect
         elevation: 10,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -2 },
@@ -120,7 +116,6 @@ const styles = StyleSheet.create({
         backgroundColor: '#00D4FF',
         borderBottomLeftRadius: 4,
         borderBottomRightRadius: 4,
-        // Subtle shadow glow effect
         shadowColor: '#00D4FF',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.8,
@@ -133,7 +128,6 @@ const styles = StyleSheet.create({
         borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
-        // No background - icon floats
     },
     centerIconContainer: {
         backgroundColor: '#00C4E8',

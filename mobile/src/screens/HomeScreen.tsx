@@ -3,7 +3,6 @@ import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
     ScrollView,
     TouchableOpacity,
     Image,
@@ -16,6 +15,7 @@ import { colors, typography, spacing, borderRadius, shadows } from '../theme';
 import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore, useStatsStore, useNotificationStore } from '../stores';
 import { CircularProgress } from '../components/CircularProgress';
 import { Skeleton, SkeletonCircle, SkeletonText } from '../components/Skeleton';
+import { ScreenContainer } from '../components/ScreenContainer';
 
 // Icon components using @expo/vector-icons
 function FireIcon({ size = 24, color = '#FFC400' }: { size?: number; color?: string }) {
@@ -194,7 +194,7 @@ export function HomeScreen({ navigation }: any) {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <ScreenContainer>
             <ScrollView
                 style={styles.scrollView}
                 contentContainerStyle={styles.content}
@@ -437,7 +437,7 @@ export function HomeScreen({ navigation }: any) {
                     )}
                 </View>
             </ScrollView>
-        </SafeAreaView>
+        </ScreenContainer>
     );
 }
 

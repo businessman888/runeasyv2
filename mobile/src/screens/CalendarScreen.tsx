@@ -3,7 +3,6 @@ import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
     ScrollView,
     TouchableOpacity,
     Image,
@@ -18,6 +17,7 @@ import {
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
 import { useTrainingStore, useStatsStore } from '../stores';
+import { ScreenContainer } from '../components/ScreenContainer';
 
 // Icon components using @expo/vector-icons
 function BackIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -418,7 +418,7 @@ export function CalendarScreen({ navigation }: any) {
     const days = getDaysInMonth();
 
     return (
-        <SafeAreaView style={styles.container}>
+        <ScreenContainer>
             {/* Locked State Overlay */}
             {isScheduleLocked && (
                 <View style={styles.lockedOverlay}>
@@ -699,11 +699,15 @@ export function CalendarScreen({ navigation }: any) {
                 animationType="none"
                 onRequestClose={closeModal}
             >
-                <TouchableOpacity
-                    style={styles.modalOverlay}
-                    activeOpacity={1}
-                    onPress={closeModal}
-                >
+                {/* Dark overlay - closes modal on tap */}
+                <View style={styles.modalOverlay}>
+                    <TouchableOpacity
+                        style={StyleSheet.absoluteFill}
+                        activeOpacity={1}
+                        onPress={closeModal}
+                    />
+
+                    {/* Modal Content - stops touch propagation */}
                     <Animated.View
                         style={[
                             styles.modalContainer,
@@ -722,24 +726,30 @@ export function CalendarScreen({ navigation }: any) {
                             }
                         ]}
                     >
-                        {/* Flexbox Sandwich: modalInnerContainer is flex: 1 */}
+                        {/* Inner container with flex: 1 */}
                         <View style={styles.modalInnerContainer}>
-                            {/* Header Container with PanResponder - Drag Area */}
-                            <View {...panResponder.panHandlers} style={{ paddingBottom: 10, backgroundColor: '#1C1C2E' }}>
+                            {/* DRAG HANDLE ONLY - PanResponder here */}
+                            <View
+                                {...panResponder.panHandlers}
+                                style={styles.dragHandleArea}
+                            >
                                 <View style={styles.modalHandle} />
-                                <Text style={styles.modalTitle}>
-                                    {selectedWorkout?.title || 'Treino do Dia'}
-                                </Text>
                             </View>
 
-                            {/* Scrollable Content */}
+                            {/* Static Header - no PanResponder */}
+                            <Text style={styles.modalTitle}>
+                                {selectedWorkout?.title || 'Treino do Dia'}
+                            </Text>
+
+                            {/* Scrollable Content - captures its own touches */}
                             <ScrollView
                                 style={styles.modalScrollView}
                                 contentContainerStyle={styles.modalScrollContent}
                                 showsVerticalScrollIndicator={false}
                                 bounces={false}
                                 nestedScrollEnabled={true}
-                                onStartShouldSetResponderCapture={() => true}
+                                onStartShouldSetResponder={() => true}
+                                onMoveShouldSetResponder={() => true}
                             >
                                 {/* Metrics Badges */}
                                 <View style={styles.modalBadges}>
@@ -845,9 +855,9 @@ export function CalendarScreen({ navigation }: any) {
                             )}
                         </View>
                     </Animated.View>
-                </TouchableOpacity>
+                </View>
             </Modal>
-        </SafeAreaView>
+        </ScreenContainer>
     );
 }
 
@@ -1253,6 +1263,11 @@ const styles = StyleSheet.create({
     },
     modalInnerContainer: {
         flex: 1,
+    },
+    dragHandleArea: {
+        paddingVertical: 8,
+        alignItems: 'center',
+        backgroundColor: '#1C1C2E',
     },
     modalScrollView: {
         flex: 1,

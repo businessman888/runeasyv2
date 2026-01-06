@@ -3,7 +3,6 @@ import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
     ScrollView,
     TouchableOpacity,
     Platform,
@@ -11,6 +10,7 @@ import {
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme';
 import { useGamificationStore } from '../stores';
+import { ScreenContainer } from '../components/ScreenContainer';
 
 // Icon components using @expo/vector-icons
 function BackIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -205,7 +205,7 @@ export function BadgesScreen({ navigation }: any) {
 
 
     return (
-        <SafeAreaView style={styles.container}>
+        <ScreenContainer>
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 {/* Header */}
                 <View style={styles.header}>
@@ -317,7 +317,7 @@ export function BadgesScreen({ navigation }: any) {
                     </View>
                 </View>
             </ScrollView>
-        </SafeAreaView>
+        </ScreenContainer>
     );
 }
 

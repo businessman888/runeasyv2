@@ -3,7 +3,6 @@ import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
     ScrollView,
     TouchableOpacity,
     Image,
@@ -13,6 +12,7 @@ import {
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
 import { useAuthStore } from '../stores';
+import { ScreenContainer } from '../components/ScreenContainer';
 
 // Icon components using @expo/vector-icons
 function PersonIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -69,7 +69,7 @@ export function SettingsScreen({ navigation }: any) {
         : 'Alex Runner';
 
     return (
-        <SafeAreaView style={styles.container}>
+        <ScreenContainer>
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 {/* Header */}
                 <View style={styles.header}>
@@ -214,7 +214,7 @@ export function SettingsScreen({ navigation }: any) {
 
                 <View style={styles.spacer} />
             </ScrollView>
-        </SafeAreaView>
+        </ScreenContainer>
     );
 }
 
