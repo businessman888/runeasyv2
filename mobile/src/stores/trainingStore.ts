@@ -10,7 +10,7 @@ interface Workout {
     distance_km: number;
     objective: string;
     tips: string[];
-    status: 'pending' | 'completed' | 'skipped';
+    status: 'pending' | 'completed' | 'skipped' | 'missed';
     strava_activity_id?: number;
     instructions_json: Array<{
         type: 'warmup' | 'main' | 'cooldown';
@@ -18,6 +18,23 @@ interface Workout {
         pace_min: number;
         pace_max: number;
     }>;
+}
+
+// Schedule day from API - type and status are authoritative
+export interface ScheduleDay {
+    date: string;
+    type: 'workout' | 'recovery' | null;
+    status: 'completed' | 'missed' | 'pending' | null;
+    workout: {
+        id: string;
+        type: string;
+        distance_km: number;
+        objective: string | null;
+        instructions_json: any[];
+        tips: string | null;
+    } | null;
+    is_today: boolean;
+    is_past: boolean;
 }
 
 interface TrainingPlan {
@@ -36,6 +53,9 @@ interface TrainingState {
     plan: TrainingPlan | null;
     workouts: Workout[];
     upcomingWorkouts: Workout[];
+    schedule: ScheduleDay[];
+    today: ScheduleDay | null;
+    nextWorkout: Workout | null;
     isLoading: boolean;
     error: string | null;
     generationStatus: GenerationStatus;
@@ -44,6 +64,7 @@ interface TrainingState {
     fetchPlan: () => Promise<void>;
     fetchWorkouts: (startDate: string, endDate: string) => Promise<void>;
     fetchUpcomingWorkouts: () => Promise<void>;
+    fetchSchedule: (startDate: string, endDate: string) => Promise<void>;
     skipWorkout: (workoutId: string, reason: string) => Promise<void>;
     checkPlanStatus: (planId: string) => Promise<boolean>;
     setGenerationStatus: (status: GenerationStatus) => void;
@@ -59,6 +80,9 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
     plan: null,
     workouts: [],
     upcomingWorkouts: [],
+    schedule: [],
+    today: null,
+    nextWorkout: null,
     isLoading: false,
     error: null,
     generationStatus: null,
@@ -113,6 +137,33 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         }
     },
 
+    fetchSchedule: async (startDate: string, endDate: string) => {
+        try {
+            set({ isLoading: true, error: null });
+            const userId = await getUserId();
+
+            if (!userId) return;
+
+            const response = await fetch(
+                `${API_URL}/training/schedule?start_date=${startDate}&end_date=${endDate}`,
+                { headers: { 'x-user-id': userId } }
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+                set({
+                    schedule: data.schedule,
+                    today: data.today,
+                    nextWorkout: data.next_workout,
+                });
+            }
+        } catch (error) {
+            set({ error: 'Falha ao carregar cronograma' });
+        } finally {
+            set({ isLoading: false });
+        }
+    },
+
     fetchUpcomingWorkouts: async () => {
         try {
             set({ isLoading: true, error: null });
@@ -155,7 +206,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
                     const start = new Date();
                     const end = new Date();
                     end.setMonth(end.getMonth() + 1);
-                    await get().fetchWorkouts(
+                    await get().fetchSchedule(
                         start.toISOString().split('T')[0],
                         end.toISOString().split('T')[0]
                     );
@@ -193,4 +244,5 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         }
     },
 }));
+
 

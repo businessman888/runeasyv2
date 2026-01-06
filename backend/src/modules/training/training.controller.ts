@@ -212,4 +212,43 @@ export class TrainingController {
         const workout = await this.trainingService.skipWorkout(userId, workoutId, dto.reason);
         return { workout };
     }
+
+    /**
+     * Get schedule with type and status for each day
+     * Returns: type ('workout' | 'recovery'), status ('completed' | 'missed' | 'pending')
+     * Use this endpoint to render calendar icons and conditional UI
+     */
+    @Get('schedule')
+    async getSchedule(
+        @Headers('x-user-id') userId: string,
+        @Query('start_date') startDate: string,
+        @Query('end_date') endDate: string,
+    ) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        if (!startDate || !endDate) {
+            throw new HttpException('start_date and end_date are required', HttpStatus.BAD_REQUEST);
+        }
+
+        try {
+            const schedule = await this.trainingService.getScheduleWithStatus(userId, startDate, endDate);
+            const nextWorkout = await this.trainingService.getNextWorkout(userId);
+            const todayEntry = schedule.find(s => s.is_today);
+
+            return {
+                schedule,
+                today: todayEntry || null,
+                next_workout: nextWorkout,
+            };
+        } catch (error) {
+            this.logger.error('Failed to get schedule', error);
+            throw new HttpException(
+                error.message || 'Failed to get schedule',
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
 }
+

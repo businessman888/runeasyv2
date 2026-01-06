@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
-import { useTrainingStore, useStatsStore } from '../stores';
+import { useTrainingStore, useStatsStore, ScheduleDay } from '../stores';
 import { ScreenContainer } from '../components/ScreenContainer';
 
 // Icon components using @expo/vector-icons
@@ -30,6 +30,18 @@ function BellIcon({ size = 24, color = '#EBEBF5' }: { size?: number; color?: str
 
 function CheckIcon({ size = 16, color = '#32CD32' }: { size?: number; color?: string }) {
     return <Ionicons name="checkmark" size={size} color={color} />;
+}
+
+function XIcon({ size = 14, color = '#FF4444' }: { size?: number; color?: string }) {
+    return <Ionicons name="close" size={size} color={color} />;
+}
+
+function BoltIcon({ size = 14, color = '#A78BFA' }: { size?: number; color?: string }) {
+    return <Ionicons name="flash" size={size} color={color} />;
+}
+
+function MoonIcon({ size = 48, color = '#A78BFA' }: { size?: number; color?: string }) {
+    return <Ionicons name="moon" size={size} color={color} />;
 }
 
 function TimerIcon({ size = 18, color = '#EBEBF5' }: { size?: number; color?: string }) {
@@ -153,7 +165,7 @@ const mockWorkoutData: WorkoutData = {
 };
 
 export function CalendarScreen({ navigation }: any) {
-    const { workouts, fetchWorkouts, upcomingWorkouts, fetchUpcomingWorkouts, plan, fetchPlan, generationStatus, checkPlanStatus } = useTrainingStore();
+    const { workouts, fetchWorkouts, upcomingWorkouts, fetchUpcomingWorkouts, plan, fetchPlan, generationStatus, checkPlanStatus, schedule, today, nextWorkout: storeNextWorkout, fetchSchedule } = useTrainingStore();
     const { summary, fetchSummary } = useStatsStore();
     const [selectedDate, setSelectedDate] = React.useState(new Date().getDate());
     const [currentMonth, setCurrentMonth] = React.useState(new Date());
@@ -238,6 +250,7 @@ export function CalendarScreen({ navigation }: any) {
     React.useEffect(() => {
         const start = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
         const end = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+        fetchSchedule(start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
         fetchWorkouts(start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
         fetchUpcomingWorkouts();
         fetchSummary();
@@ -392,19 +405,36 @@ export function CalendarScreen({ navigation }: any) {
         return days;
     };
 
-    // Get workout status for a day based on real data
-    const getWorkoutStatus = (day: number | null) => {
+    // Get workout status for a day based on API schedule data
+    const getScheduleForDay = (day: number): ScheduleDay | null => {
+        const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        return schedule.find(s => s.date === dateStr) || null;
+    };
+
+    // Get workout status for a day based on API data
+    // Returns null for days outside plan period (no icon rendered)
+    const getWorkoutStatus = (day: number | null): 'completed' | 'missed' | 'planned' | 'recovery' | null => {
         if (!day) return null;
-        const workout = getWorkoutForDay(day);
-        if (!workout) return null;
-        if (workout.status === 'completed') return 'completed';
-        if (workout.status === 'pending') return 'planned';
+        const scheduleDay = getScheduleForDay(day);
+        if (!scheduleDay) return null;
+
+        // Days outside plan period have type: null - don't render any icon
+        if (scheduleDay.type === null) return null;
+
+        if (scheduleDay.type === 'recovery') return 'recovery';
+        if (scheduleDay.status === 'completed') return 'completed';
+        if (scheduleDay.status === 'missed') return 'missed';
+        if (scheduleDay.status === 'pending') return 'planned';
         return null;
     };
 
-    // Get today's workout from upcoming workouts
-    const todayWorkout = upcomingWorkouts.length > 0 ? upcomingWorkouts[0] : null;
-    const nextWorkout = upcomingWorkouts.length > 1 ? upcomingWorkouts[1] : null;
+    // Get today's data from API schedule (authoritative source)
+    const todaySchedule = today;
+    const isTodayWithinPlan = todaySchedule?.type !== null && todaySchedule?.type !== undefined;
+    const isTodayRecovery = todaySchedule?.type === 'recovery';
+    const todayWorkout = todaySchedule?.type === 'workout' ? todaySchedule.workout : null;
+    // Next workout from API (always type: 'workout')
+    const nextWorkout = storeNextWorkout;
 
     // Calculate total volume and frequency
     const totalVolume = workouts.reduce((sum, w) => sum + (w.distance_km || 0), 0);
@@ -487,13 +517,13 @@ export function CalendarScreen({ navigation }: any) {
                             style={styles.monthNavButton}
                             onPress={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
                         >
-                            <Text style={styles.chevronIcon}>‹</Text>
+                            <Ionicons name="chevron-back" size={20} color="rgba(235, 235, 245, 0.8)" />
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.monthNavButton}
                             onPress={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
                         >
-                            <Text style={styles.chevronIcon}>›</Text>
+                            <Ionicons name="chevron-forward" size={20} color="rgba(235, 235, 245, 0.8)" />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -531,10 +561,20 @@ export function CalendarScreen({ navigation }: any) {
                                             ]}>
                                                 {day}
                                             </Text>
-                                            {/* Workout indicator */}
+                                            {/* Workout indicator based on API type/status */}
                                             {workoutStatus === 'completed' && !isSelected && (
                                                 <View style={styles.completedIndicator}>
                                                     <CheckIcon size={14} color="#32CD32" />
+                                                </View>
+                                            )}
+                                            {workoutStatus === 'missed' && !isSelected && (
+                                                <View style={styles.missedIndicator}>
+                                                    <XIcon size={12} color="#FF4444" />
+                                                </View>
+                                            )}
+                                            {workoutStatus === 'recovery' && !isSelected && (
+                                                <View style={styles.recoveryIndicator}>
+                                                    <BoltIcon size={12} color="#A78BFA" />
                                                 </View>
                                             )}
                                             {workoutStatus === 'planned' && !isSelected && (
@@ -560,21 +600,52 @@ export function CalendarScreen({ navigation }: any) {
                     </View>
                 </View>
 
-                {/* Today's Workouts Section */}
+                {/* Today's Section - Conditional based on API type */}
                 <View style={styles.todaySection}>
                     <View style={styles.todaySectionHeader}>
                         <View>
                             <Text style={styles.todayDate}>• Hoje, {new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }).toUpperCase()}</Text>
-                            <Text style={styles.todayTitle}>Treinos do dia</Text>
+                            <Text style={styles.todayTitle}>
+                                {!isTodayWithinPlan ? 'Sem Plano Ativo' : isTodayRecovery ? 'Dia de Recuperação' : 'Treinos do dia'}
+                            </Text>
                         </View>
-                        <View style={styles.totalKm}>
-                            <Text style={styles.totalKmValue}>{todayWorkout?.distance_km || 0} <Text style={styles.totalKmUnit}>km</Text></Text>
-                            <Text style={styles.totalKmLabel}>total</Text>
-                        </View>
+                        {isTodayWithinPlan && !isTodayRecovery && todayWorkout && (
+                            <View style={styles.totalKm}>
+                                <Text style={styles.totalKmValue}>{todayWorkout?.distance_km || 0} <Text style={styles.totalKmUnit}>km</Text></Text>
+                                <Text style={styles.totalKmLabel}>total</Text>
+                            </View>
+                        )}
                     </View>
 
-                    {/* Workout Detail Card */}
-                    {todayWorkout ? (
+                    {/* Recovery Card - Shown when type === 'recovery' */}
+                    {isTodayRecovery ? (
+                        <View style={styles.recoveryCard}>
+                            <View style={styles.recoveryCardHeader}>
+                                <MoonIcon size={48} color="#A78BFA" />
+                                <View style={styles.recoveryCardInfo}>
+                                    <Text style={styles.recoveryTitle}>Hoje é dia de Recovery</Text>
+                                    <Text style={styles.recoverySubtitle}>
+                                        Descanse para maximizar seus ganhos
+                                    </Text>
+                                </View>
+                            </View>
+                            <View style={styles.recoveryTips}>
+                                <View style={styles.recoveryTipItem}>
+                                    <BoltIcon size={16} color="#A78BFA" />
+                                    <Text style={styles.recoveryTipText}>Hidrate-se bem</Text>
+                                </View>
+                                <View style={styles.recoveryTipItem}>
+                                    <BoltIcon size={16} color="#A78BFA" />
+                                    <Text style={styles.recoveryTipText}>Durma 7-8 horas</Text>
+                                </View>
+                                <View style={styles.recoveryTipItem}>
+                                    <BoltIcon size={16} color="#A78BFA" />
+                                    <Text style={styles.recoveryTipText}>Alongamento leve</Text>
+                                </View>
+                            </View>
+                        </View>
+                    ) : todayWorkout ? (
+                        /* Workout Detail Card - Shown when type === 'workout' */
                         <View style={styles.workoutDetailCard}>
                             {/* Card Top Section */}
                             <View style={styles.cardTopSection}>
@@ -587,7 +658,7 @@ export function CalendarScreen({ navigation }: any) {
                                     <View style={styles.pendingBadge}>
                                         <View style={styles.pendingDot} />
                                         <Text style={styles.pendingText}>
-                                            {todayWorkout.status === 'completed' ? 'Concluído' : 'Pendente'}
+                                            {todaySchedule?.status === 'completed' ? 'Concluído' : 'Pendente'}
                                         </Text>
                                     </View>
                                 </View>
@@ -638,6 +709,21 @@ export function CalendarScreen({ navigation }: any) {
                                 <Text style={styles.viewDetailsText}>Ver detalhes do  treino</Text>
                                 <ArrowRightIcon size={20} color="#FFFFFF" />
                             </TouchableOpacity>
+                        </View>
+                    ) : !isTodayWithinPlan ? (
+                        /* No Plan Active - Show informative message */
+                        <View style={styles.workoutDetailCard}>
+                            <View style={styles.cardTopSection}>
+                                <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                                    <Ionicons name="calendar-outline" size={40} color="rgba(235, 235, 245, 0.4)" />
+                                    <Text style={[styles.workoutTitle, { textAlign: 'center', marginTop: 12 }]}>
+                                        Nenhum plano ativo para este período
+                                    </Text>
+                                    <Text style={[styles.workoutDescription, { textAlign: 'center', marginTop: 8 }]}>
+                                        Seu plano de treino já foi concluído ou ainda não começou
+                                    </Text>
+                                </View>
+                            </View>
                         </View>
                     ) : (
                         <View style={styles.workoutDetailCard}>
@@ -962,14 +1048,14 @@ const styles = StyleSheet.create({
     },
     monthNav: {
         flexDirection: 'row',
-        gap: spacing.sm,
+        gap: spacing.md,
     },
     monthNavButton: {
-        width: 32,
-        height: 32,
-        borderRadius: borderRadius.full,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.2)',
+        borderColor: 'rgba(255, 255, 255, 0.25)',
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -1039,6 +1125,14 @@ const styles = StyleSheet.create({
         height: 3,
         borderRadius: 1.5,
         backgroundColor: '#00D4FF',
+    },
+    missedIndicator: {
+        position: 'absolute',
+        bottom: -8,
+    },
+    recoveryIndicator: {
+        position: 'absolute',
+        bottom: -8,
     },
     legend: {
         flexDirection: 'row',
@@ -1520,5 +1614,51 @@ const styles = StyleSheet.create({
     },
     loadingDot3: {
         opacity: 1,
+    },
+
+    // Recovery Card Styles
+    recoveryCard: {
+        backgroundColor: 'rgba(167, 139, 250, 0.1)',
+        borderRadius: 16,
+        padding: spacing.lg,
+        borderWidth: 1,
+        borderColor: 'rgba(167, 139, 250, 0.3)',
+    },
+    recoveryCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.md,
+        marginBottom: spacing.lg,
+    },
+    recoveryCardInfo: {
+        flex: 1,
+    },
+    recoveryTitle: {
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.bold as any,
+        color: '#A78BFA',
+        marginBottom: 4,
+    },
+    recoverySubtitle: {
+        fontSize: typography.fontSizes.sm,
+        color: 'rgba(235, 235, 245, 0.6)',
+    },
+    recoveryTips: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing.md,
+    },
+    recoveryTipItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+        backgroundColor: 'rgba(167, 139, 250, 0.15)',
+        paddingVertical: spacing.xs,
+        paddingHorizontal: spacing.sm,
+        borderRadius: 12,
+    },
+    recoveryTipText: {
+        fontSize: typography.fontSizes.sm,
+        color: 'rgba(235, 235, 245, 0.8)',
     },
 });

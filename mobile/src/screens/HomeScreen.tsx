@@ -62,17 +62,32 @@ function LockIcon({ size = 24, color = '#6B7280' }: { size?: number; color?: str
     return <Ionicons name="lock-closed" size={size} color={color} />;
 }
 
+function MoonIcon({ size = 30, color = '#A78BFA' }: { size?: number; color?: string }) {
+    return <Ionicons name="moon" size={size} color={color} />;
+}
+
+function BedIcon({ size = 24, color = '#A78BFA' }: { size?: number; color?: string }) {
+    return <MaterialCommunityIcons name="bed" size={size} color={color} />;
+}
+
 export function HomeScreen({ navigation }: any) {
     const { user } = useAuthStore();
     const { stats, fetchStats, isLoading: gamificationLoading } = useGamificationStore();
-    const { upcomingWorkouts, fetchUpcomingWorkouts, isLoading: trainingLoading } = useTrainingStore();
+    const { upcomingWorkouts, fetchUpcomingWorkouts, isLoading: trainingLoading, today, nextWorkout: storeNextWorkout, fetchSchedule } = useTrainingStore();
     const { latestSummary, fetchLatestSummary, latestActivity, latestActivityLoading, fetchLatestActivity } = useFeedbackStore();
     const { summary, fetchSummary, isLoading: statsLoading } = useStatsStore();
     const { unreadCount, fetchUnreadCount } = useNotificationStore();
     const [isInitialLoading, setIsInitialLoading] = useState(true);
+    const [recoveryTimeLeft, setRecoveryTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 });
+    const [recoveryProgress, setRecoveryProgress] = useState(0);
 
     useEffect(() => {
         const loadData = async () => {
+            // Fetch schedule for current month
+            const start = new Date();
+            const end = new Date();
+            end.setMonth(end.getMonth() + 1);
+
             await Promise.all([
                 fetchStats(),
                 fetchUpcomingWorkouts(),
@@ -80,24 +95,63 @@ export function HomeScreen({ navigation }: any) {
                 fetchLatestActivity(),
                 fetchSummary(),
                 fetchUnreadCount(),
+                fetchSchedule(start.toISOString().split('T')[0], end.toISOString().split('T')[0]),
             ]);
             setIsInitialLoading(false);
         };
         loadData();
     }, []);
 
-    const nextWorkout = upcomingWorkouts?.[0];
-    // Use real data with proper fallbacks for new users
+    // Recovery countdown timer
+    useEffect(() => {
+        const updateRecoveryTimer = () => {
+            const now = new Date();
+            const endOfDay = new Date(now);
+            endOfDay.setHours(23, 59, 59, 999);
+
+            const diffMs = endOfDay.getTime() - now.getTime();
+            const hours = Math.floor(diffMs / (1000 * 60 * 60));
+            const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+            setRecoveryTimeLeft({ hours, minutes, seconds });
+
+            // Calculate progress: percentage of day completed
+            const startOfDay = new Date(now);
+            startOfDay.setHours(0, 0, 0, 0);
+            const totalDayMs = 24 * 60 * 60 * 1000;
+            const elapsedMs = now.getTime() - startOfDay.getTime();
+            setRecoveryProgress(Math.min((elapsedMs / totalDayMs) * 100, 100));
+        };
+
+        updateRecoveryTimer();
+        const interval = setInterval(updateRecoveryTimer, 1000);
+        return () => clearInterval(interval);
+    }, []);
+
+    // Use API data: today from store is authoritative
+    const todayData = today;
+    const isRecoveryDay = todayData?.type === 'recovery';
+    const nextWorkout = storeNextWorkout;
+    const todayWorkout = todayData?.type === 'workout' ? todayData.workout : null;
+
     const currentLevel = stats?.current_level ?? 1;
     const totalPoints = stats?.total_points ?? 0;
     const pointsToNext = stats?.points_to_next_level ?? 100;
     const currentStreak = stats?.current_streak ?? 0;
     const progress = pointsToNext > 0 ? Math.min((totalPoints / pointsToNext) * 100, 100) : 0;
 
-    // Check if user has completed any workouts (for AI card lock state)
     const hasCompletedWorkouts = (summary?.total_runs ?? 0) > 0;
 
-    // Handle Strava deep link
+    // Check if workout is for today (used for button enable/disable)
+    const isWorkoutToday = (dateStr: string): boolean => {
+        const workoutDate = new Date(dateStr + 'T00:00:00');
+        const todayDate = new Date();
+        todayDate.setHours(0, 0, 0, 0);
+        workoutDate.setHours(0, 0, 0, 0);
+        return workoutDate.getTime() === todayDate.getTime();
+    };
+
     const handleStartWorkout = async () => {
         try {
             const stravaURL = 'strava://record';
@@ -106,7 +160,6 @@ export function HomeScreen({ navigation }: any) {
             if (canOpen) {
                 await Linking.openURL(stravaURL);
             } else {
-                // Strava not installed - redirect to store
                 const storeURL = Platform.OS === 'ios'
                     ? 'https://apps.apple.com/app/strava/id426826309'
                     : 'https://play.google.com/store/apps/details?id=com.strava';
@@ -129,13 +182,11 @@ export function HomeScreen({ navigation }: any) {
         }
     };
 
-    // Real user data from authStore
     const userName = user?.profile?.firstname
         ? `${user.profile.firstname}${user.profile.lastname ? ' ' + user.profile.lastname : ''}`
         : 'Corredor';
     const profilePic = user?.profile?.profile_pic || 'https://i.pravatar.cc/100';
 
-    // Helper function to convert workout type to Portuguese display name
     const getWorkoutTypeName = (type: string): string => {
         const typeNames: Record<string, string> = {
             easy_run: 'Rodagem Leve',
@@ -147,7 +198,6 @@ export function HomeScreen({ navigation }: any) {
         return typeNames[type] || type;
     };
 
-    // Helper function to format workout date
     const formatWorkoutDate = (dateStr: string): string => {
         const date = new Date(dateStr + 'T00:00:00');
         const today = new Date();
@@ -164,10 +214,8 @@ export function HomeScreen({ navigation }: any) {
         }
     };
 
-    // Helper function to get pace from workout instructions
     const getWorkoutPace = (workout: any): string => {
         if (workout.instructions_json && workout.instructions_json.length > 0) {
-            // Find the main block or use first instruction with pace
             const mainBlock = workout.instructions_json.find((i: any) => i.type === 'main') || workout.instructions_json[0];
             if (mainBlock && mainBlock.pace_min) {
                 const paceMin = Math.floor(mainBlock.pace_min);
@@ -175,7 +223,6 @@ export function HomeScreen({ navigation }: any) {
                 return `${paceMin}:${paceSec.toString().padStart(2, '0')}`;
             }
         }
-        // Default pace based on workout type
         const defaultPaces: Record<string, string> = {
             easy_run: '6:30',
             long_run: '6:00',
@@ -192,6 +239,13 @@ export function HomeScreen({ navigation }: any) {
         if (hour < 18) return 'Boa tarde';
         return 'Boa noite';
     };
+
+    const formatTimeUnit = (value: number): string => {
+        return value.toString().padStart(2, '0');
+    };
+
+    // Determine if workout button should be enabled
+    const isButtonEnabled = nextWorkout ? isWorkoutToday(nextWorkout.scheduled_date) : false;
 
     return (
         <ScreenContainer>
@@ -283,7 +337,6 @@ export function HomeScreen({ navigation }: any) {
                                     {totalPoints}<Text style={styles.xpTotal}> / {pointsToNext}</Text>
                                 </Text>
                             </View>
-                            {/* Horizontal Progress Bar */}
                             <View style={styles.horizontalProgressBar}>
                                 <View style={[styles.horizontalProgressFill, { width: `${progress}%` }]} />
                             </View>
@@ -294,8 +347,69 @@ export function HomeScreen({ navigation }: any) {
                     </View>
                 </View>
 
-                {/* Workout Card */}
-                {nextWorkout ? (
+                {/* Recovery Card - Show when it's a recovery day */}
+                {isRecoveryDay && (
+                    <View style={styles.recoveryCard}>
+                        <View style={styles.recoveryHeader}>
+                            <View style={styles.recoveryBadge}>
+                                <BedIcon size={16} color="#A78BFA" />
+                                <Text style={styles.recoveryBadgeText}>Dia de Descanso</Text>
+                            </View>
+                            <MoonIcon size={30} color="#A78BFA" />
+                        </View>
+
+                        <Text style={styles.recoveryTitle}>Recuperação Ativa</Text>
+                        <Text style={styles.recoverySubtitle}>
+                            Seu corpo está se recuperando. Descanse bem para o próximo treino!
+                        </Text>
+
+                        {/* Countdown Timer */}
+                        <View style={styles.recoveryTimerContainer}>
+                            <Text style={styles.recoveryTimerLabel}>Tempo restante hoje</Text>
+                            <View style={styles.recoveryTimer}>
+                                <View style={styles.timerUnit}>
+                                    <Text style={styles.timerValue}>{formatTimeUnit(recoveryTimeLeft.hours)}</Text>
+                                    <Text style={styles.timerLabel}>horas</Text>
+                                </View>
+                                <Text style={styles.timerSeparator}>:</Text>
+                                <View style={styles.timerUnit}>
+                                    <Text style={styles.timerValue}>{formatTimeUnit(recoveryTimeLeft.minutes)}</Text>
+                                    <Text style={styles.timerLabel}>min</Text>
+                                </View>
+                                <Text style={styles.timerSeparator}>:</Text>
+                                <View style={styles.timerUnit}>
+                                    <Text style={styles.timerValue}>{formatTimeUnit(recoveryTimeLeft.seconds)}</Text>
+                                    <Text style={styles.timerLabel}>seg</Text>
+                                </View>
+                            </View>
+                        </View>
+
+                        {/* Recovery Progress Bar */}
+                        <View style={styles.recoveryProgressContainer}>
+                            <View style={styles.recoveryProgressBar}>
+                                <View style={[styles.recoveryProgressFill, { width: `${recoveryProgress}%` }]} />
+                            </View>
+                            <Text style={styles.recoveryProgressText}>
+                                {Math.round(recoveryProgress)}% do dia concluído
+                            </Text>
+                        </View>
+
+                        {/* Next Workout Preview (secondary) */}
+                        {nextWorkout && (
+                            <View style={styles.nextWorkoutPreview}>
+                                <CalendarSmallIcon size={16} color="rgba(235, 235, 245, 0.6)" />
+                                <Text style={styles.nextWorkoutPreviewText}>
+                                    Próximo: <Text style={styles.nextWorkoutPreviewBold}>
+                                        {getWorkoutTypeName(nextWorkout.type)}
+                                    </Text> - {formatWorkoutDate(nextWorkout.scheduled_date)}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                )}
+
+                {/* Workout Card - Show when it's NOT a recovery day or there's a scheduled workout */}
+                {!isRecoveryDay && nextWorkout && (
                     <View style={styles.workoutCard}>
                         <View style={styles.workoutHeader}>
                             <View style={styles.proximoBadge}>
@@ -335,14 +449,26 @@ export function HomeScreen({ navigation }: any) {
                         </View>
 
                         <TouchableOpacity
-                            style={styles.startButton}
+                            style={[
+                                styles.startButton,
+                                !isButtonEnabled && styles.startButtonDisabled
+                            ]}
                             onPress={handleStartWorkout}
+                            disabled={!isButtonEnabled}
                         >
-                            <ShoeIcon size={24} color="#0E0E1F" />
-                            <Text style={styles.startButtonText}>Iniciar Treino</Text>
+                            <ShoeIcon size={24} color={isButtonEnabled ? "#0E0E1F" : "#6B7280"} />
+                            <Text style={[
+                                styles.startButtonText,
+                                !isButtonEnabled && styles.startButtonTextDisabled
+                            ]}>
+                                {isButtonEnabled ? 'Iniciar Treino' : 'Disponível ' + formatWorkoutDate(nextWorkout.scheduled_date)}
+                            </Text>
                         </TouchableOpacity>
                     </View>
-                ) : (
+                )}
+
+                {/* No Workout Card - Only show if no recovery and no workout */}
+                {!nextWorkout && !isRecoveryDay && (
                     <View style={styles.workoutCard}>
                         <View style={styles.lockedContent}>
                             <RunningIcon size={48} color="#6B7280" />
@@ -635,6 +761,114 @@ const styles = StyleSheet.create({
         borderRadius: 3,
     },
 
+    // Recovery Card
+    recoveryCard: {
+        backgroundColor: colors.card,
+        borderRadius: borderRadius['2xl'],
+        padding: spacing.lg,
+        gap: spacing.md,
+        borderWidth: 1,
+        borderColor: 'rgba(167, 139, 250, 0.3)',
+    },
+    recoveryHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    recoveryBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        backgroundColor: 'rgba(167, 139, 250, 0.2)',
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.xs,
+        borderRadius: borderRadius.full,
+    },
+    recoveryBadgeText: {
+        fontSize: typography.fontSizes.xs,
+        fontWeight: typography.fontWeights.semibold as any,
+        color: '#A78BFA',
+    },
+    recoveryTitle: {
+        fontSize: typography.fontSizes['2xl'],
+        fontWeight: typography.fontWeights.bold as any,
+        color: colors.text,
+    },
+    recoverySubtitle: {
+        fontSize: typography.fontSizes.sm,
+        color: colors.textSecondary,
+        lineHeight: 20,
+    },
+    recoveryTimerContainer: {
+        alignItems: 'center',
+        paddingVertical: spacing.md,
+    },
+    recoveryTimerLabel: {
+        fontSize: typography.fontSizes.xs,
+        color: colors.textSecondary,
+        marginBottom: spacing.sm,
+    },
+    recoveryTimer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+    },
+    timerUnit: {
+        alignItems: 'center',
+    },
+    timerValue: {
+        fontSize: 32,
+        fontWeight: typography.fontWeights.bold as any,
+        color: '#A78BFA',
+        fontVariant: ['tabular-nums'],
+    },
+    timerLabel: {
+        fontSize: typography.fontSizes.xs,
+        color: colors.textSecondary,
+    },
+    timerSeparator: {
+        fontSize: 28,
+        fontWeight: typography.fontWeights.bold as any,
+        color: '#A78BFA',
+        marginBottom: 16,
+    },
+    recoveryProgressContainer: {
+        gap: spacing.sm,
+    },
+    recoveryProgressBar: {
+        height: 8,
+        backgroundColor: 'rgba(167, 139, 250, 0.2)',
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    recoveryProgressFill: {
+        height: '100%',
+        backgroundColor: '#A78BFA',
+        borderRadius: 4,
+    },
+    recoveryProgressText: {
+        fontSize: typography.fontSizes.xs,
+        color: colors.textSecondary,
+        textAlign: 'center',
+    },
+    nextWorkoutPreview: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        backgroundColor: '#0E0E1F',
+        borderRadius: borderRadius.lg,
+        padding: spacing.md,
+        marginTop: spacing.sm,
+    },
+    nextWorkoutPreviewText: {
+        fontSize: typography.fontSizes.sm,
+        color: colors.textSecondary,
+    },
+    nextWorkoutPreviewBold: {
+        fontWeight: typography.fontWeights.semibold as any,
+        color: colors.text,
+    },
+
     // Workout Card
     workoutCard: {
         backgroundColor: colors.card,
@@ -737,6 +971,12 @@ const styles = StyleSheet.create({
         marginTop: spacing.sm,
         ...shadows.neon,
     },
+    startButtonDisabled: {
+        backgroundColor: '#2A2A3E',
+        opacity: 0.7,
+        shadowOpacity: 0,
+        elevation: 0,
+    },
     startIcon: {
         fontSize: 18,
     },
@@ -744,6 +984,9 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.base,
         fontWeight: typography.fontWeights.bold as any,
         color: '#0A0A18',
+    },
+    startButtonTextDisabled: {
+        color: '#6B7280',
     },
 
     // AI Card

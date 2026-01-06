@@ -413,5 +413,168 @@ export class TrainingService {
         if (error) throw error;
         return data;
     }
+
+    /**
+     * Get schedule with type and status for each day in a date range
+     * Returns 'workout' or 'recovery' type, and 'completed', 'missed', or 'pending' status
+     * Days outside the plan period return type: null
+     */
+    async getScheduleWithStatus(userId: string, startDate: string, endDate: string): Promise<ScheduleDay[]> {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayStr = today.toISOString().split('T')[0];
+
+        // Get the active plan to determine date boundaries
+        const { data: activePlan, error: planError } = await this.supabaseService
+            .from('training_plans')
+            .select('id, created_at, duration_weeks')
+            .eq('user_id', userId)
+            .eq('status', 'active')
+            .single();
+
+        // Calculate plan start and end dates
+        let planStartDate: Date | null = null;
+        let planEndDate: Date | null = null;
+
+        if (activePlan && !planError) {
+            planStartDate = new Date(activePlan.created_at);
+            planStartDate.setHours(0, 0, 0, 0);
+
+            planEndDate = new Date(planStartDate);
+            planEndDate.setDate(planEndDate.getDate() + (activePlan.duration_weeks * 7) - 1);
+        }
+
+        // Get all workouts in range
+        const { data: workouts, error: workoutsError } = await this.supabaseService
+            .from('workouts')
+            .select('*')
+            .eq('user_id', userId)
+            .gte('scheduled_date', startDate)
+            .lte('scheduled_date', endDate)
+            .order('scheduled_date', { ascending: true });
+
+        if (workoutsError) throw workoutsError;
+
+        // Create a map of workouts by date
+        const workoutsByDate = new Map<string, any>();
+        for (const workout of workouts || []) {
+            workoutsByDate.set(workout.scheduled_date, workout);
+        }
+
+        // Generate schedule for each day in range
+        const schedule: ScheduleDay[] = [];
+        const start = new Date(startDate + 'T00:00:00');
+        const end = new Date(endDate + 'T00:00:00');
+
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const dateStr = d.toISOString().split('T')[0];
+            const workout = workoutsByDate.get(dateStr);
+            const isPast = d < today;
+            const isToday = dateStr === todayStr;
+
+            // Check if this date is within the plan period
+            const isWithinPlan = planStartDate && planEndDate
+                ? (d >= planStartDate && d <= planEndDate)
+                : false;
+
+            if (workout) {
+                // Determine workout status
+                let status: 'completed' | 'missed' | 'pending';
+
+                if (workout.status === 'completed') {
+                    status = 'completed';
+                } else if (isPast && workout.status !== 'completed') {
+                    // Past workout not completed = missed (retroactive check)
+                    status = 'missed';
+
+                    // Update database to mark as missed if still pending
+                    if (workout.status === 'pending') {
+                        await this.supabaseService
+                            .from('workouts')
+                            .update({ status: 'missed' })
+                            .eq('id', workout.id);
+                    }
+                } else {
+                    status = 'pending';
+                }
+
+                schedule.push({
+                    date: dateStr,
+                    type: 'workout',
+                    status,
+                    workout: {
+                        id: workout.id,
+                        type: workout.type,
+                        distance_km: workout.distance_km,
+                        objective: workout.objective,
+                        instructions_json: workout.instructions_json,
+                        tips: workout.tips,
+                    },
+                    is_today: isToday,
+                    is_past: isPast,
+                });
+            } else if (isWithinPlan) {
+                // No workout but within plan = recovery day
+                schedule.push({
+                    date: dateStr,
+                    type: 'recovery',
+                    status: isPast ? 'completed' : 'pending',
+                    workout: null,
+                    is_today: isToday,
+                    is_past: isPast,
+                });
+            } else {
+                // Outside plan period = no type (empty day)
+                schedule.push({
+                    date: dateStr,
+                    type: null,
+                    status: null,
+                    workout: null,
+                    is_today: isToday,
+                    is_past: isPast,
+                });
+            }
+        }
+
+        return schedule;
+    }
+
+    /**
+     * Get the next upcoming workout (type: 'workout' only)
+     */
+    async getNextWorkout(userId: string): Promise<any | null> {
+        const today = new Date().toISOString().split('T')[0];
+
+        const { data, error } = await this.supabaseService
+            .from('workouts')
+            .select('*')
+            .eq('user_id', userId)
+            .gte('scheduled_date', today)
+            .in('status', ['pending'])
+            .order('scheduled_date', { ascending: true })
+            .limit(1)
+            .single();
+
+        if (error && error.code !== 'PGRST116') throw error;
+        return data || null;
+    }
 }
+
+// Type definitions
+export interface ScheduleDay {
+    date: string;
+    type: 'workout' | 'recovery' | null;
+    status: 'completed' | 'missed' | 'pending' | null;
+    workout: {
+        id: string;
+        type: string;
+        distance_km: number;
+        objective: string | null;
+        instructions_json: any[];
+        tips: string | null;
+    } | null;
+    is_today: boolean;
+    is_past: boolean;
+}
+
 
