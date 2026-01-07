@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, View, StyleSheet } from 'react-native';
 import { CustomTabBar } from '../components/CustomTabBar';
+import { SplashScreen } from '../components/SplashScreen';
 
 import {
     LoginScreen,
@@ -137,12 +138,7 @@ export function AppNavigator({ navigationRef }: { navigationRef?: React.RefObjec
     }, []);
 
     if (isLoading) {
-        return (
-            <View style={styles.loadingContainer}>
-                <Text style={styles.loadingEmoji}>🏃</Text>
-                <Text style={styles.loadingText}>RunEasy</Text>
-            </View>
-        );
+        return <SplashScreen />;
     }
 
     return (
