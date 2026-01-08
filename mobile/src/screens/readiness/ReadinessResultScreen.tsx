@@ -3,17 +3,21 @@ import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
     StatusBar,
     TouchableOpacity,
     ScrollView,
     Animated,
     ActivityIndicator,
     Platform,
+    Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { useReadinessStore } from '../../stores/readinessStore';
 import { colors, spacing, typography } from '../../theme';
+
+const { width: screenWidth } = Dimensions.get('window');
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -202,8 +206,8 @@ export function ReadinessResultScreen({ navigation }: any) {
     if (error || !verdict) {
         return (
             <View style={styles.errorContainer}>
-                <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
-                <Text style={styles.warningIcon}>⚠️</Text>
+                <StatusBar barStyle="light-content" backgroundColor="#0E0E1F" />
+                <Ionicons name="warning-outline" size={64} color="#FFD700" />
                 <Text style={styles.errorText}>{error || 'Erro ao carregar resultado'}</Text>
                 <TouchableOpacity style={styles.retryButton} onPress={fetchVerdict}>
                     <Text style={styles.retryButtonText}>Tentar Novamente</Text>
@@ -217,86 +221,114 @@ export function ReadinessResultScreen({ navigation }: any) {
         minute: '2-digit',
     });
 
+    const insets = useSafeAreaInsets();
+
+    // Fade-in animation for content
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const slideAnim = useRef(new Animated.Value(30)).current;
+
+    useEffect(() => {
+        Animated.parallel([
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 600,
+                useNativeDriver: true,
+            }),
+            Animated.timing(slideAnim, {
+                toValue: 0,
+                duration: 600,
+                useNativeDriver: true,
+            }),
+        ]).start();
+    }, []);
+
     return (
-        <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+            <StatusBar barStyle="light-content" backgroundColor="#0E0E1F" />
 
-            <SafeAreaView style={styles.safeArea}>
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-                        <Text style={styles.backIcon}>←</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Veredito de Prontidão</Text>
-                    <TouchableOpacity style={styles.calendarButton}>
-                        <CalendarIcon />
-                    </TouchableOpacity>
-                </View>
-            </SafeAreaView>
-
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                <View style={styles.timeBadge}>
-                    <Text style={styles.timeText}>Análise gerada às {generatedTime}</Text>
-                    <Text style={styles.timeSubtext}>Baseada em Check-in + Strava</Text>
-                </View>
-
-                <ReadinessGauge score={verdict.readiness_score} color={verdict.status_color} />
-
-                {/* AI Analysis Card with Adjustment Subcard */}
-                <View style={styles.analysisCard}>
-                    <View style={styles.analysisHeader}>
-                        <HeartRateIcon />
-                        <View style={styles.analysisHeaderText}>
-                            <Text style={styles.analysisHeadline}>{verdict.ai_analysis.headline}</Text>
-                        </View>
-                    </View>
-                    <Text style={styles.analysisReasoning}>{verdict.ai_analysis.reasoning}</Text>
-
-                    {/* Adjustment Subcard - inside the main card */}
-                    <View style={styles.adjustmentSubcard}>
-                        <View style={styles.adjustmentIconContainer}>
-                            <AdjustmentIcon />
-                        </View>
-                        <View style={styles.adjustmentTextContainer}>
-                            <Text style={styles.adjustmentTitle}>AJUSTE PRÁTICO</Text>
-                            <Text style={styles.adjustmentText}>{verdict.ai_analysis.plan_adjustment}</Text>
-                        </View>
-                    </View>
-                </View>
-
-                {/* Metrics Grid 2x2 */}
-                <View style={styles.metricsGrid}>
-                    <MetricCard
-                        icon="sleep"
-                        label="Sono"
-                        value={verdict.metrics_summary?.[0]?.value || "7h 30m"}
-                        sublabel={verdict.metrics_summary?.[0]?.sublabel}
-                    />
-                    <MetricCard
-                        icon="strava"
-                        label="Carga Strava"
-                        value={verdict.metrics_summary?.[1]?.value || "Moderada"}
-                        sublabel={verdict.metrics_summary?.[1]?.sublabel}
-                    />
-                    <MetricCard
-                        icon="energy"
-                        label="Energia"
-                        value={verdict.metrics_summary?.[2]?.value || "8/10"}
-                        sublabel={verdict.metrics_summary?.[2]?.sublabel}
-                    />
-                    <MetricCard
-                        icon="stress"
-                        label="Estresse"
-                        value={verdict.metrics_summary?.[3]?.value || "Baixo"}
-                        sublabel={verdict.metrics_summary?.[3]?.sublabel}
-                    />
-                </View>
-            </ScrollView>
-
-            <View style={styles.footer}>
-                <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm}>
-                    <Text style={styles.confirmButtonText}>Confirmar</Text>
+            {/* Header */}
+            <View style={styles.header}>
+                <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+                    <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Veredito de Prontidão</Text>
+                <TouchableOpacity style={styles.calendarButton}>
+                    <Ionicons name="calendar-outline" size={24} color="#EBEBF5" />
                 </TouchableOpacity>
             </View>
+
+            <ScrollView
+                style={styles.content}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+            >
+                <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+                    {/* Time Badge */}
+                    <View style={styles.timeBadge}>
+                        <Text style={styles.timeText}>Análise gerada às {generatedTime}</Text>
+                        <Text style={styles.timeSubtext}>Baseada em Check-in + Strava</Text>
+                    </View>
+
+                    {/* Gauge */}
+                    <ReadinessGauge score={verdict.readiness_score} color={verdict.status_color} />
+
+                    {/* AI Analysis Card with Adjustment Subcard */}
+                    <View style={styles.analysisCard}>
+                        <View style={styles.analysisHeader}>
+                            <HeartRateIcon />
+                            <View style={styles.analysisHeaderText}>
+                                <Text style={styles.analysisHeadline}>{verdict.ai_analysis.headline}</Text>
+                            </View>
+                        </View>
+                        <Text style={styles.analysisReasoning}>{verdict.ai_analysis.reasoning}</Text>
+
+                        {/* Adjustment Subcard - inside the main card */}
+                        <View style={styles.adjustmentSubcard}>
+                            <View style={styles.adjustmentIconContainer}>
+                                <AdjustmentIcon />
+                            </View>
+                            <View style={styles.adjustmentTextContainer}>
+                                <Text style={styles.adjustmentTitle}>AJUSTE PRÁTICO</Text>
+                                <Text style={styles.adjustmentText}>{verdict.ai_analysis.plan_adjustment}</Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* Metrics Grid 2x2 */}
+                    <View style={styles.metricsGrid}>
+                        <MetricCard
+                            icon="sleep"
+                            label="Sono"
+                            value={verdict.metrics_summary?.[0]?.value || "7h 30m"}
+                            sublabel={verdict.metrics_summary?.[0]?.sublabel}
+                        />
+                        <MetricCard
+                            icon="strava"
+                            label="Carga Strava"
+                            value={verdict.metrics_summary?.[1]?.value || "Moderada"}
+                            sublabel={verdict.metrics_summary?.[1]?.sublabel}
+                        />
+                        <MetricCard
+                            icon="energy"
+                            label="Energia"
+                            value={verdict.metrics_summary?.[2]?.value || "8/10"}
+                            sublabel={verdict.metrics_summary?.[2]?.sublabel}
+                        />
+                        <MetricCard
+                            icon="stress"
+                            label="Estresse"
+                            value={verdict.metrics_summary?.[3]?.value || "Baixo"}
+                            sublabel={verdict.metrics_summary?.[3]?.sublabel}
+                        />
+                    </View>
+
+                    {/* Confirm Button - Inside ScrollView */}
+                    <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm}>
+                        <Text style={styles.confirmButtonText}>Confirmar</Text>
+                        <Ionicons name="arrow-forward-circle" size={22} color="#0E0E1F" />
+                    </TouchableOpacity>
+                </Animated.View>
+            </ScrollView>
         </View>
     );
 }
@@ -304,10 +336,7 @@ export function ReadinessResultScreen({ navigation }: any) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0A0A14',
-    },
-    safeArea: {
-        backgroundColor: '#0A0A14',
+        backgroundColor: '#0E0E1F',
     },
     header: {
         flexDirection: 'row',
@@ -338,8 +367,8 @@ const styles = StyleSheet.create({
     },
     timeBadge: {
         alignItems: 'center',
-        marginTop: spacing.lg,
-        marginBottom: spacing.xl,
+        marginTop: 32,
+        marginBottom: 28,
     },
     timeText: {
         fontSize: typography.fontSizes.lg,
@@ -435,17 +464,21 @@ const styles = StyleSheet.create({
     metricsGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: spacing.md,
-        marginBottom: spacing.xl,
+        gap: 16,
+        marginBottom: 32,
+        marginTop: 8,
     },
     metricCard: {
-        width: '47%',
-        backgroundColor: '#12121F',
+        flexBasis: '47%',
+        flexGrow: 1,
+        minHeight: 120,
+        backgroundColor: '#1A1A2E',
         borderRadius: 16,
-        padding: spacing.md,
+        padding: 16,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.05)',
+        borderColor: 'rgba(255, 255, 255, 0.08)',
         alignItems: 'center',
+        justifyContent: 'center',
     },
     metricIconContainer: {
         marginBottom: spacing.sm,
@@ -468,21 +501,20 @@ const styles = StyleSheet.create({
         marginTop: spacing.xs,
         textAlign: 'center',
     },
-    footer: {
-        paddingHorizontal: spacing.lg,
-        paddingTop: spacing.md,
-        paddingBottom: 100,
-    },
     confirmButton: {
+        flexDirection: 'row',
         backgroundColor: colors.primary,
         paddingVertical: 18,
         borderRadius: 32,
         alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginTop: 8,
     },
     confirmButtonText: {
         fontSize: typography.fontSizes.md,
         fontWeight: '700',
-        color: '#0A0A14',
+        color: '#0E0E1F',
     },
     loadingContainer: {
         flex: 1,

@@ -3,11 +3,13 @@ import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
     StatusBar,
     TouchableOpacity,
     Platform,
+    ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 
 // Questions bank for readiness quiz
@@ -76,6 +78,7 @@ interface ReadinessQuizScreenProps {
 export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
     const [currentStep, setCurrentStep] = useState(0);
     const [answers, setAnswers] = useState<Record<string, number>>({});
+    const insets = useSafeAreaInsets();
 
     const currentQuestion = READINESS_QUESTIONS[currentStep];
     const totalSteps = READINESS_QUESTIONS.length;
@@ -99,24 +102,28 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
+        <View style={[styles.container, { paddingTop: Math.max(insets.top, 20) + 40 }]}>
+            <StatusBar barStyle="light-content" backgroundColor="#0E0E1F" />
 
-            {/* Header */}
-            <View style={styles.header}>
-                <Text style={styles.headerTitle}>Prontidão diária</Text>
-                <Text style={styles.stepIndicator}>{currentStep + 1}/{totalSteps}</Text>
-            </View>
-
-            {/* Progress Bar */}
-            <View style={styles.progressBarContainer}>
-                <View style={styles.progressBar}>
-                    <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+            <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Header */}
+                <View style={styles.header}>
+                    <Text style={styles.headerTitle}>Prontidão diária</Text>
+                    <Text style={styles.stepIndicator}>{currentStep + 1}/{totalSteps}</Text>
                 </View>
-            </View>
 
-            {/* Question Card */}
-            <View style={styles.content}>
+                {/* Progress Bar */}
+                <View style={styles.progressBarContainer}>
+                    <View style={styles.progressBar}>
+                        <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+                    </View>
+                </View>
+
+                {/* Question Card */}
                 <View style={styles.questionCard}>
                     <Text style={styles.question}>{currentQuestion.question}</Text>
 
@@ -151,10 +158,8 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
                         })}
                     </View>
                 </View>
-            </View>
 
-            {/* Continue Button */}
-            <View style={styles.footer}>
+                {/* Continue Button - Inside ScrollView */}
                 <TouchableOpacity
                     style={[
                         styles.continueButton,
@@ -163,52 +168,61 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
                     onPress={handleContinue}
                     disabled={!selectedValue}
                 >
-                    <Text style={styles.continueButtonText}>Continuar</Text>
-                    <View style={styles.arrowContainer}>
-                        <Text style={styles.arrowText}>→</Text>
-                    </View>
+                    <Text style={[
+                        styles.continueButtonText,
+                        !selectedValue && styles.continueButtonTextDisabled,
+                    ]}>Continuar</Text>
+                    <Ionicons
+                        name="arrow-forward"
+                        size={20}
+                        color={selectedValue ? '#0E0E1F' : 'rgba(255,255,255,0.3)'}
+                    />
                 </TouchableOpacity>
-            </View>
-        </SafeAreaView>
+            </ScrollView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0A0A14',
+        backgroundColor: '#0E0E1F',
+    },
+    scrollView: {
+        flex: 1,
+    },
+    scrollContent: {
+        paddingHorizontal: spacing.lg,
+        paddingBottom: 40,
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: spacing.lg,
-        paddingTop: spacing.md,
-        paddingBottom: spacing.sm,
+        marginBottom: spacing.md,
     },
     headerTitle: {
-        fontSize: typography.fontSizes.sm,
-        color: 'rgba(255, 255, 255, 0.6)',
-        fontWeight: '500',
-    },
-    stepIndicator: {
-        fontSize: typography.fontSizes.sm,
-        color: colors.primary,
+        fontSize: typography.fontSizes.md,
+        color: 'rgba(255, 255, 255, 0.7)',
         fontWeight: '600',
     },
+    stepIndicator: {
+        fontSize: typography.fontSizes.md,
+        color: colors.primary,
+        fontWeight: '700',
+    },
     progressBarContainer: {
-        paddingHorizontal: spacing.lg,
-        paddingBottom: spacing.xl,
+        marginBottom: spacing.xl,
     },
     progressBar: {
-        height: 4,
+        height: 6,
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        borderRadius: 2,
+        borderRadius: 3,
         overflow: 'hidden',
     },
     progressFill: {
         height: '100%',
-        borderRadius: 2,
+        borderRadius: 3,
         ...Platform.select({
             web: {
                 backgroundImage: 'linear-gradient(90deg, #00D4FF, #00FFFF)',
@@ -218,49 +232,48 @@ const styles = StyleSheet.create({
             },
         }),
     },
-    content: {
-        flex: 1,
-        paddingHorizontal: spacing.lg,
-    },
     questionCard: {
-        backgroundColor: '#12121F',
+        backgroundColor: '#1A1A2E',
         borderRadius: 24,
-        padding: spacing.xl,
-        paddingTop: spacing['2xl'],
+        padding: 24,
+        paddingTop: 32,
+        marginBottom: 24,
     },
     question: {
-        fontSize: 24,
+        fontSize: 26,
         fontWeight: '700',
         color: colors.white,
         textAlign: 'center',
-        marginBottom: spacing['2xl'],
-        lineHeight: 32,
+        marginBottom: 32,
+        lineHeight: 36,
     },
     optionsContainer: {
-        gap: 34,
+        gap: 16,
     },
     optionCard: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#15152A',
-        paddingVertical: 20,
-        paddingHorizontal: spacing.lg,
+        backgroundColor: '#1A1A2E',
+        paddingVertical: 18,
+        paddingHorizontal: 20,
         borderRadius: 16,
         borderWidth: 2,
-        borderColor: 'transparent',
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        marginVertical: 4,
     },
     optionCardSelected: {
         borderColor: colors.primary,
-        backgroundColor: 'rgba(0, 212, 255, 0.08)',
+        backgroundColor: 'rgba(0, 212, 255, 0.12)',
     },
     optionLabel: {
         fontSize: 16,
         fontWeight: '500',
-        color: 'rgba(255, 255, 255, 0.8)',
+        color: 'rgba(255, 255, 255, 0.85)',
     },
     optionLabelSelected: {
         color: colors.primary,
+        fontWeight: '600',
     },
     radioOuter: {
         width: 24,
@@ -279,11 +292,7 @@ const styles = StyleSheet.create({
         width: 8,
         height: 8,
         borderRadius: 4,
-        backgroundColor: '#0A0A14',
-    },
-    footer: {
-        padding: spacing.lg,
-        paddingBottom: Platform.OS === 'ios' ? spacing.xl : spacing.lg,
+        backgroundColor: '#0E0E1F',
     },
     continueButton: {
         flexDirection: 'row',
@@ -292,23 +301,19 @@ const styles = StyleSheet.create({
         backgroundColor: colors.primary,
         paddingVertical: 18,
         borderRadius: 32,
-        gap: spacing.sm,
+        gap: 10,
+        marginTop: 16,
     },
     continueButtonDisabled: {
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
     },
     continueButtonText: {
         fontSize: typography.fontSizes.md,
-        fontWeight: '600',
-        color: '#0A0A14',
+        fontWeight: '700',
+        color: '#0E0E1F',
     },
-    arrowContainer: {
-        marginLeft: spacing.xs,
-    },
-    arrowText: {
-        fontSize: 18,
-        color: '#0A0A14',
-        fontWeight: '600',
+    continueButtonTextDisabled: {
+        color: 'rgba(255, 255, 255, 0.4)',
     },
 });
 

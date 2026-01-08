@@ -135,6 +135,26 @@ export function HomeScreen({ navigation }: any) {
     const nextWorkout = storeNextWorkout;
     const todayWorkout = todayData?.type === 'workout' ? todayData.workout : null;
 
+    // Refetch feedback when workout status changes to 'completed'
+    useEffect(() => {
+        if (todayData?.status === 'completed') {
+            // Delay to allow AI feedback to be generated
+            const timer = setTimeout(() => {
+                fetchLatestActivity();
+            }, 2000);
+
+            // Retry after 5 more seconds if still loading or no data
+            const retryTimer = setTimeout(() => {
+                fetchLatestActivity();
+            }, 7000);
+
+            return () => {
+                clearTimeout(timer);
+                clearTimeout(retryTimer);
+            };
+        }
+    }, [todayData?.status]);
+
     const currentLevel = stats?.current_level ?? 1;
     const totalPoints = stats?.total_points ?? 0;
     const pointsToNext = stats?.points_to_next_level ?? 100;
@@ -244,8 +264,13 @@ export function HomeScreen({ navigation }: any) {
         return value.toString().padStart(2, '0');
     };
 
-    // Determine if workout button should be enabled
-    const isButtonEnabled = nextWorkout ? isWorkoutToday(nextWorkout.scheduled_date) : false;
+    // Determine the main workout to display: today's workout takes priority
+    const hasTodayWorkout = todayWorkout !== null;
+    const mainWorkout = hasTodayWorkout ? { ...todayWorkout, scheduled_date: todayData?.date } : nextWorkout;
+
+    // Button is enabled only if there's a workout for TODAY that is still pending
+    const isTodayWorkoutPending = hasTodayWorkout && todayData?.status === 'pending';
+    const isButtonEnabled = isTodayWorkoutPending;
 
     return (
         <ScreenContainer>
@@ -408,23 +433,23 @@ export function HomeScreen({ navigation }: any) {
                     </View>
                 )}
 
-                {/* Workout Card - Show when it's NOT a recovery day or there's a scheduled workout */}
-                {!isRecoveryDay && nextWorkout && (
-                    <View style={styles.workoutCard}>
+                {/* Workout Card - Show when it's NOT a recovery day and there's a workout to show */}
+                {!isRecoveryDay && mainWorkout && (
+                    <View key={`main-workout-${mainWorkout.id || mainWorkout.scheduled_date}`} style={styles.workoutCard}>
                         <View style={styles.workoutHeader}>
                             <View style={styles.proximoBadge}>
-                                <View style={styles.proximoDot} />
-                                <Text style={styles.proximoText}>Próximo</Text>
+                                <View style={[styles.proximoDot, hasTodayWorkout && { backgroundColor: '#00D4FF' }]} />
+                                <Text style={styles.proximoText}>{hasTodayWorkout ? 'Hoje' : 'Próximo'}</Text>
                             </View>
                             <View style={styles.runnerIcon}>
                                 <RunningIcon size={30} color="#00D4FF" />
                             </View>
                         </View>
 
-                        <Text style={styles.workoutTitle}>{getWorkoutTypeName(nextWorkout.type)}</Text>
+                        <Text style={styles.workoutTitle}>{getWorkoutTypeName(mainWorkout.type)}</Text>
                         <View style={styles.workoutTimeRow}>
                             <CalendarSmallIcon size={16} />
-                            <Text style={styles.workoutTime}>{formatWorkoutDate(nextWorkout.scheduled_date)}</Text>
+                            <Text style={styles.workoutTime}>{formatWorkoutDate(mainWorkout.scheduled_date)}</Text>
                         </View>
 
                         <View style={styles.workoutStats}>
@@ -434,7 +459,7 @@ export function HomeScreen({ navigation }: any) {
                                     <Text style={styles.statLabel}>Distância</Text>
                                 </View>
                                 <Text style={styles.statValue}>
-                                    {nextWorkout.distance_km.toFixed(1)} <Text style={styles.statUnit}>km</Text>
+                                    {mainWorkout.distance_km.toFixed(1)} <Text style={styles.statUnit}>km</Text>
                                 </Text>
                             </View>
                             <View style={styles.statBox}>
@@ -443,7 +468,7 @@ export function HomeScreen({ navigation }: any) {
                                     <Text style={styles.statLabel}>Pace</Text>
                                 </View>
                                 <Text style={styles.statValue}>
-                                    {getWorkoutPace(nextWorkout)} <Text style={styles.statUnit}>/km</Text>
+                                    {getWorkoutPace(mainWorkout)} <Text style={styles.statUnit}>/km</Text>
                                 </Text>
                             </View>
                         </View>
@@ -461,14 +486,14 @@ export function HomeScreen({ navigation }: any) {
                                 styles.startButtonText,
                                 !isButtonEnabled && styles.startButtonTextDisabled
                             ]}>
-                                {isButtonEnabled ? 'Iniciar Treino' : 'Disponível ' + formatWorkoutDate(nextWorkout.scheduled_date)}
+                                {isButtonEnabled ? 'Iniciar Treino' : hasTodayWorkout ? 'Treino Concluído' : 'Disponível ' + formatWorkoutDate(mainWorkout.scheduled_date)}
                             </Text>
                         </TouchableOpacity>
                     </View>
                 )}
 
                 {/* No Workout Card - Only show if no recovery and no workout */}
-                {!nextWorkout && !isRecoveryDay && (
+                {!mainWorkout && !isRecoveryDay && (
                     <View style={styles.workoutCard}>
                         <View style={styles.lockedContent}>
                             <RunningIcon size={48} color="#6B7280" />

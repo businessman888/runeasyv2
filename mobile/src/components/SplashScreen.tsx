@@ -3,14 +3,14 @@ import { View, StyleSheet, Dimensions } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { StatusBar } from 'expo-status-bar';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 export function SplashScreen() {
     return (
         <View style={styles.container}>
             <StatusBar style="light" translucent backgroundColor="transparent" />
             <LottieView
-                source={require('../assets/animate/animation (1).json')}
+                source={require('../assets/animate/runLoad.json')}
                 autoPlay
                 loop
                 style={styles.animation}
@@ -27,7 +27,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     animation: {
-        width: width * 0.6,
-        height: width * 0.6,
+        width: width * 0.8,
+        height: width * 0.8,
     },
 });

@@ -1,17 +1,22 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
     ScrollView,
     TouchableOpacity,
     Platform,
+    Animated,
+    Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
 import { useFeedbackStore } from '../stores/feedbackStore';
 
-// SVG Icons
+const { width: screenWidth } = Dimensions.get('window');
+
+// SVG Icons with Ionicons fallback for native
 function BackIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
     if (Platform.OS === 'web') {
         return (
@@ -20,7 +25,7 @@ function BackIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: str
             </svg>
         );
     }
-    return <Text style={{ fontSize: size, color }}>←</Text>;
+    return <Ionicons name="arrow-back" size={size} color={color} />;
 }
 
 function ShareIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -31,7 +36,7 @@ function ShareIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: st
             </svg>
         );
     }
-    return <Text style={{ fontSize: size, color }}>↗</Text>;
+    return <Ionicons name="share-outline" size={size} color={color} />;
 }
 
 function CheckIcon({ size = 40, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -42,7 +47,7 @@ function CheckIcon({ size = 40, color = '#00D4FF' }: { size?: number; color?: st
             </svg>
         );
     }
-    return <Text style={{ fontSize: size, color }}>✓</Text>;
+    return <Ionicons name="checkmark" size={size} color={color} />;
 }
 
 function SpeedIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -53,7 +58,7 @@ function SpeedIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: st
             </svg>
         );
     }
-    return <Text style={{ fontSize: size, color }}>⏱</Text>;
+    return <Ionicons name="speedometer" size={size} color={color} />;
 }
 
 function RouteIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -64,7 +69,7 @@ function RouteIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: st
             </svg>
         );
     }
-    return <Text style={{ fontSize: size, color }}>📍</Text>;
+    return <Ionicons name="navigate" size={size} color={color} />;
 }
 
 function MountainIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -75,7 +80,7 @@ function MountainIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?:
             </svg>
         );
     }
-    return <Text style={{ fontSize: size, color }}>⛰</Text>;
+    return <Ionicons name="trending-up" size={size} color={color} />;
 }
 
 function ThumbUpIcon({ size = 24, color = '#32CD32' }: { size?: number; color?: string }) {
@@ -86,7 +91,7 @@ function ThumbUpIcon({ size = 24, color = '#32CD32' }: { size?: number; color?: 
             </svg>
         );
     }
-    return <Text style={{ fontSize: size, color }}>👍</Text>;
+    return <Ionicons name="thumbs-up" size={size} color={color} />;
 }
 
 function AlertIcon({ size = 24, color = '#FFD700' }: { size?: number; color?: string }) {
@@ -97,7 +102,7 @@ function AlertIcon({ size = 24, color = '#FFD700' }: { size?: number; color?: st
             </svg>
         );
     }
-    return <Text style={{ fontSize: size, color }}>⚠</Text>;
+    return <Ionicons name="warning" size={size} color={color} />;
 }
 
 // New Trophy Icon for Conquista card (yellow with circular background)
@@ -111,7 +116,7 @@ function ConquestaTrophyIcon({ size = 35 }: { size?: number }) {
             </svg>
         );
     }
-    return <Text style={{ fontSize: size }}>🏆</Text>;
+    return <Ionicons name="trophy" size={size} color="#FFC400" />;
 }
 
 // New Medal Icon for Conquista card (yellow circular with star medal)  
@@ -124,7 +129,7 @@ function ConquestaMedalIcon({ size = 64 }: { size?: number }) {
             </svg>
         );
     }
-    return <Text style={{ fontSize: size }}>🏅</Text>;
+    return <Ionicons name="medal" size={size} color="#FFC400" />;
 }
 
 function TrophyIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -135,7 +140,7 @@ function TrophyIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: s
             </svg>
         );
     }
-    return <Text style={{ fontSize: size, color }}>🏆</Text>;
+    return <Ionicons name="trophy" size={size} color={color} />;
 }
 
 function MedalIcon({ size = 24, color = '#FFD700' }: { size?: number; color?: string }) {
@@ -146,7 +151,7 @@ function MedalIcon({ size = 24, color = '#FFD700' }: { size?: number; color?: st
             </svg>
         );
     }
-    return <Text style={{ fontSize: size, color }}>🏅</Text>;
+    return <Ionicons name="medal" size={size} color={color} />;
 }
 
 function IdeaIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -157,7 +162,7 @@ function IdeaIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: str
             </svg>
         );
     }
-    return <Text style={{ fontSize: size, color }}>💡</Text>;
+    return <Ionicons name="bulb" size={size} color={color} />;
 }
 
 // Alarm icon for tip card
@@ -169,7 +174,7 @@ function AlarmIcon({ size = 23 }: { size?: number }) {
             </svg>
         );
     }
-    return <Text style={{ fontSize: size }}>🔔</Text>;
+    return <Ionicons name="notifications" size={size} color="rgba(235,235,245,0.6)" />;
 }
 // Heartbeat/ECG icon for VO2 card (left)
 function HeartbeatIcon({ size = 20, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -180,7 +185,7 @@ function HeartbeatIcon({ size = 20, color = '#00D4FF' }: { size?: number; color?
             </svg>
         );
     }
-    return <Text style={{ fontSize: size, color }}>📈</Text>;
+    return <Ionicons name="pulse" size={size} color={color} />;
 }
 
 // Trend Up icon for VO2 Max trend indicator
@@ -192,7 +197,7 @@ function TrendUpIcon({ size = 16, color = '#32CD32' }: { size?: number; color?: 
             </svg>
         );
     }
-    return <Text style={{ fontSize: size, color }}>↗</Text>;
+    return <Ionicons name="trending-up" size={size} color={color} />;
 }
 
 // Battery icon for VO2 card (right)
@@ -211,7 +216,7 @@ function BatteryIcon({ size = 18, color = '#00D4FF' }: { size?: number; color?: 
             </svg>
         );
     }
-    return <Text style={{ fontSize: size, color }}>🔋</Text>;
+    return <Ionicons name="battery-charging" size={size} color={color} />;
 }
 
 // Circular Score Component - New green check icon from Figma
@@ -369,9 +374,15 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
         return `${activityName} - ${isToday ? 'Hoje' : date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}, ${timeStr}`;
     };
 
+    const insets = useSafeAreaInsets();
+
     return (
-        <SafeAreaView style={styles.container}>
-            <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+            <ScrollView
+                style={styles.scrollView}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 40 }}
+            >
                 {/* Header */}
                 <View style={styles.header}>
                     <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
@@ -655,7 +666,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
 
                 <View style={styles.spacer} />
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -702,17 +713,23 @@ const styles = StyleSheet.create({
     scoreSection: {
         alignItems: 'center',
         paddingVertical: spacing.xl,
+        paddingHorizontal: spacing.lg,
+        marginBottom: 30,
     },
     scoreTitle: {
-        fontSize: 22,
+        fontSize: 18,
         fontWeight: '700',
         color: '#FFFFFF',
         marginTop: spacing.lg,
+        textAlign: 'center',
+        maxWidth: screenWidth - 48,
+        flexShrink: 1,
     },
     scoreSubtitle: {
         fontSize: 14,
         color: 'rgba(235,235,245,0.6)',
         marginTop: spacing.xs,
+        textAlign: 'center',
     },
     metricsHeaderOuter: {
         flexDirection: 'row',
@@ -727,7 +744,7 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         padding: spacing.lg,
         paddingTop: spacing.md,
-        marginBottom: spacing.lg,
+        marginBottom: 24,
     },
     metricsHeader: {
         flexDirection: 'row',
@@ -841,7 +858,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         borderRadius: 16,
         padding: spacing.lg,
-        marginBottom: spacing.md,
+        marginBottom: 24,
         borderWidth: 2,
     },
     analysisCardGreen: {
@@ -997,7 +1014,7 @@ const styles = StyleSheet.create({
         marginHorizontal: spacing.lg,
         borderRadius: 16,
         padding: spacing.lg,
-        marginBottom: spacing.lg,
+        marginBottom: 24,
         backgroundColor: '#1C1C2E',
         borderWidth: 0,
         overflow: 'hidden',

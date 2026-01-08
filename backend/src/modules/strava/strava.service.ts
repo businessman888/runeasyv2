@@ -290,5 +290,31 @@ export class StravaService {
         }
         return null;
     }
+
+    /**
+     * Get activities after a specific timestamp (for retroactive sync)
+     * @param accessToken - Strava access token
+     * @param afterTimestamp - Unix timestamp (seconds since epoch)
+     */
+    async getActivitiesAfter(
+        accessToken: string,
+        afterTimestamp: number,
+    ): Promise<StravaActivity[]> {
+        try {
+            const response = await this.fetchWithRetry(() =>
+                axios.get(`${this.baseUrl}/athlete/activities`, {
+                    headers: { Authorization: `Bearer ${accessToken}` },
+                    params: {
+                        after: afterTimestamp,
+                        per_page: 50,  // Get up to 50 activities
+                    },
+                }),
+            );
+            return response.data;
+        } catch (error) {
+            this.logger.error('Failed to get Strava activities after timestamp', error);
+            throw error;
+        }
+    }
 }
 

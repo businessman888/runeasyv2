@@ -3,11 +3,15 @@ import {
     Get,
     Query,
     Res,
+    Headers,
+    HttpException,
+    HttpStatus,
     Logger,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { StravaService } from './strava.service';
+import { StravaSyncService } from './strava-sync.service';
 import { SupabaseService } from '../../database';
 
 @Controller('auth/strava')
@@ -16,9 +20,27 @@ export class StravaAuthController {
 
     constructor(
         private readonly stravaService: StravaService,
+        private readonly stravaSyncService: StravaSyncService,
         private readonly supabaseService: SupabaseService,
         private readonly configService: ConfigService,
     ) { }
+
+    /**
+     * Sync recent Strava activities with scheduled workouts
+     * Used for retroactive sync when webhooks are missed
+     */
+    @Get('sync')
+    async syncActivities(@Headers('x-user-id') userId: string) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        this.logger.log(`Manual sync requested for user ${userId}`);
+
+        const result = await this.stravaSyncService.syncRecentActivities(userId);
+
+        return result;
+    }
 
     /**
      * Redirect to Strava OAuth authorization

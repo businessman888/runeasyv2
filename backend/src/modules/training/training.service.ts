@@ -541,6 +541,7 @@ export class TrainingService {
 
     /**
      * Get the next upcoming workout (type: 'workout' only)
+     * Returns the next pending workout AFTER today (not including today)
      */
     async getNextWorkout(userId: string): Promise<any | null> {
         const today = new Date().toISOString().split('T')[0];
@@ -549,7 +550,7 @@ export class TrainingService {
             .from('workouts')
             .select('*')
             .eq('user_id', userId)
-            .gte('scheduled_date', today)
+            .gt('scheduled_date', today)  // gt = strictly after today
             .in('status', ['pending'])
             .order('scheduled_date', { ascending: true })
             .limit(1)

@@ -361,7 +361,35 @@ export function CalendarScreen({ navigation }: any) {
         }
     };
 
-    // Handle today's workout card press (with start button)
+    // Handle selected date workout card press
+    const handleSelectedWorkoutPress = () => {
+        const selectedDateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`;
+        const scheduleDay = schedule.find(s => s.date === selectedDateStr);
+
+        if (scheduleDay?.workout) {
+            // Find full workout data from workouts array
+            const fullWorkout = workouts.find(w => w.id === scheduleDay.workout?.id);
+            if (fullWorkout) {
+                setSelectedWorkout(transformWorkoutToUI(fullWorkout));
+                // Show start button only if selected date is today and workout is pending
+                const todayDate = new Date();
+                const selectedDateObj = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), selectedDate);
+                todayDate.setHours(0, 0, 0, 0);
+                selectedDateObj.setHours(0, 0, 0, 0);
+                const isToday = selectedDateObj.getTime() === todayDate.getTime();
+                setShowStartButton(isToday && scheduleDay.status === 'pending');
+                setModalVisible(true);
+                Animated.spring(modalSlideAnim, {
+                    toValue: 1,
+                    useNativeDriver: true,
+                    tension: 65,
+                    friction: 11,
+                }).start();
+            }
+        }
+    };
+
+    // Handle today's workout card press (with start button) - kept for backward compatibility
     const handleTodayWorkoutPress = () => {
         if (upcomingWorkouts.length > 0) {
             setSelectedWorkout(transformWorkoutToUI(upcomingWorkouts[0]));
@@ -433,8 +461,56 @@ export function CalendarScreen({ navigation }: any) {
     const isTodayWithinPlan = todaySchedule?.type !== null && todaySchedule?.type !== undefined;
     const isTodayRecovery = todaySchedule?.type === 'recovery';
     const todayWorkout = todaySchedule?.type === 'workout' ? todaySchedule.workout : null;
-    // Next workout from API (always type: 'workout')
-    const nextWorkout = storeNextWorkout;
+
+    // Derived: Get schedule for selected date (reactive to selectedDate)
+    const getSelectedDateStr = () => {
+        return `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`;
+    };
+    const selectedDateSchedule = schedule.find(s => s.date === getSelectedDateStr()) || null;
+    const isSelectedDateRecovery = selectedDateSchedule?.type === 'recovery';
+    const selectedDateWorkout = selectedDateSchedule?.type === 'workout' ? selectedDateSchedule.workout : null;
+    const isSelectedDateWithinPlan = selectedDateSchedule?.type !== null && selectedDateSchedule?.type !== undefined;
+
+    // Check if selected date is today
+    const isSelectedDateToday = () => {
+        const today = new Date();
+        const selected = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), selectedDate);
+        today.setHours(0, 0, 0, 0);
+        selected.setHours(0, 0, 0, 0);
+        return selected.getTime() === today.getTime();
+    };
+
+    // Format selected date label (Hoje, Amanhã, or weekday)
+    const formatSelectedDateLabel = () => {
+        const today = new Date();
+        const selected = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), selectedDate);
+        today.setHours(0, 0, 0, 0);
+        selected.setHours(0, 0, 0, 0);
+        if (selected.getTime() === today.getTime()) return 'Hoje';
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        if (selected.getTime() === tomorrow.getTime()) return 'Amanhã';
+        const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        return weekdays[selected.getDay()];
+    };
+
+    // Format selected date display (e.g., "7 de JAN")
+    const formatSelectedDateDisplay = () => {
+        return `${selectedDate} de ${monthNames[currentMonth.getMonth()].slice(0, 3).toUpperCase()}`;
+    };
+
+    // Compute next workout: first pending workout after today
+    const computeNextWorkout = () => {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const pendingWorkout = schedule.find(s => s.date > todayStr && s.type === 'workout' && s.status === 'pending');
+        if (pendingWorkout?.workout) {
+            // Find full workout data from workouts array
+            const fullWorkout = workouts.find(w => w.id === pendingWorkout.workout?.id);
+            return fullWorkout || null;
+        }
+        return null;
+    };
+    const nextWorkout = computeNextWorkout() || storeNextWorkout;
 
     // Calculate total volume and frequency
     const totalVolume = workouts.reduce((sum, w) => sum + (w.distance_km || 0), 0);
@@ -600,30 +676,33 @@ export function CalendarScreen({ navigation }: any) {
                     </View>
                 </View>
 
-                {/* Today's Section - Conditional based on API type */}
-                <View style={styles.todaySection}>
+                {/* Selected Date Section - Reactive to calendar selection */}
+                <View
+                    key={`selected-date-section-${getSelectedDateStr()}`}
+                    style={[styles.todaySection, { minHeight: 200 }]}
+                >
                     <View style={styles.todaySectionHeader}>
                         <View>
-                            <Text style={styles.todayDate}>• Hoje, {new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }).toUpperCase()}</Text>
+                            <Text style={styles.todayDate}>• {formatSelectedDateLabel()}, {formatSelectedDateDisplay()}</Text>
                             <Text style={styles.todayTitle}>
-                                {!isTodayWithinPlan ? 'Sem Plano Ativo' : isTodayRecovery ? 'Dia de Recuperação' : 'Treinos do dia'}
+                                {!isSelectedDateWithinPlan ? 'Sem Plano Ativo' : isSelectedDateRecovery ? 'Dia de Recuperação' : 'Treinos do dia'}
                             </Text>
                         </View>
-                        {isTodayWithinPlan && !isTodayRecovery && todayWorkout && (
+                        {isSelectedDateWithinPlan && !isSelectedDateRecovery && selectedDateWorkout && (
                             <View style={styles.totalKm}>
-                                <Text style={styles.totalKmValue}>{todayWorkout?.distance_km || 0} <Text style={styles.totalKmUnit}>km</Text></Text>
+                                <Text style={styles.totalKmValue}>{selectedDateWorkout?.distance_km || 0} <Text style={styles.totalKmUnit}>km</Text></Text>
                                 <Text style={styles.totalKmLabel}>total</Text>
                             </View>
                         )}
                     </View>
 
-                    {/* Recovery Card - Shown when type === 'recovery' */}
-                    {isTodayRecovery ? (
-                        <View style={styles.recoveryCard}>
+                    {/* Recovery Card - Shown when selected date is recovery */}
+                    {isSelectedDateRecovery ? (
+                        <View key={`recovery-${getSelectedDateStr()}`} style={styles.recoveryCard}>
                             <View style={styles.recoveryCardHeader}>
                                 <MoonIcon size={48} color="#A78BFA" />
                                 <View style={styles.recoveryCardInfo}>
-                                    <Text style={styles.recoveryTitle}>Hoje é dia de Recovery</Text>
+                                    <Text style={styles.recoveryTitle}>Dia de Recuperação</Text>
                                     <Text style={styles.recoverySubtitle}>
                                         Descanse para maximizar seus ganhos
                                     </Text>
@@ -644,21 +723,21 @@ export function CalendarScreen({ navigation }: any) {
                                 </View>
                             </View>
                         </View>
-                    ) : todayWorkout ? (
-                        /* Workout Detail Card - Shown when type === 'workout' */
-                        <View style={styles.workoutDetailCard}>
+                    ) : selectedDateWorkout ? (
+                        /* Workout Detail Card - Shown when selected date has workout */
+                        <View key={`workout-${selectedDateWorkout.id}-${getSelectedDateStr()}`} style={styles.workoutDetailCard}>
                             {/* Card Top Section */}
                             <View style={styles.cardTopSection}>
                                 <View style={styles.workoutDetailHeader}>
                                     <View style={styles.intensityBadge}>
                                         <Text style={styles.intensityText}>
-                                            {todayWorkout.type === 'intervals' || todayWorkout.type === 'tempo' ? 'ALTA INTENSIDADE' : 'MODERADO'}
+                                            {selectedDateWorkout.type === 'intervals' || selectedDateWorkout.type === 'tempo' ? 'ALTA INTENSIDADE' : 'MODERADO'}
                                         </Text>
                                     </View>
                                     <View style={styles.pendingBadge}>
                                         <View style={styles.pendingDot} />
                                         <Text style={styles.pendingText}>
-                                            {todaySchedule?.status === 'completed' ? 'Concluído' : 'Pendente'}
+                                            {selectedDateSchedule?.status === 'completed' ? 'Concluído' : 'Pendente'}
                                         </Text>
                                     </View>
                                 </View>
@@ -674,20 +753,20 @@ export function CalendarScreen({ navigation }: any) {
                                                     'tempo': 'Tempo Run',
                                                     'recovery': 'Recuperação',
                                                 };
-                                                return `${labels[todayWorkout.type] || todayWorkout.type} - ${todayWorkout.distance_km}km`;
+                                                return `${labels[selectedDateWorkout.type] || selectedDateWorkout.type} - ${selectedDateWorkout.distance_km}km`;
                                             })()}
                                         </Text>
-                                        <Text style={styles.workoutDescription}>{todayWorkout.objective || 'Treino do dia'}</Text>
+                                        <Text style={styles.workoutDescription}>{selectedDateWorkout.objective || 'Treino do dia'}</Text>
                                         <View style={styles.workoutMetrics}>
                                             <View style={styles.metricItem}>
                                                 <TimerIcon size={20} color="#00D4FF" />
-                                                <Text style={styles.metricText}>{Math.round(todayWorkout.distance_km * 6)} min</Text>
+                                                <Text style={styles.metricText}>{Math.round(selectedDateWorkout.distance_km * 6)} min</Text>
                                             </View>
                                             <View style={styles.metricItem}>
                                                 <PaceClockIcon size={20} color="#00D4FF" />
                                                 <Text style={styles.metricText}>
-                                                    {todayWorkout.instructions_json?.[0]?.pace_min
-                                                        ? `${Math.floor(todayWorkout.instructions_json[0].pace_min)}:${String(Math.round((todayWorkout.instructions_json[0].pace_min % 1) * 60)).padStart(2, '0')} /km`
+                                                    {selectedDateWorkout.instructions_json?.[0]?.pace_min
+                                                        ? `${Math.floor(selectedDateWorkout.instructions_json[0].pace_min)}:${String(Math.round((selectedDateWorkout.instructions_json[0].pace_min % 1) * 60)).padStart(2, '0')} /km`
                                                         : '6:00 /km'}
                                                 </Text>
                                             </View>
@@ -703,21 +782,21 @@ export function CalendarScreen({ navigation }: any) {
                             {/* View Details Button - Bottom Section of Card */}
                             <TouchableOpacity
                                 style={styles.viewDetailsButton}
-                                onPress={handleTodayWorkoutPress}
+                                onPress={handleSelectedWorkoutPress}
                                 activeOpacity={0.7}
                             >
-                                <Text style={styles.viewDetailsText}>Ver detalhes do  treino</Text>
+                                <Text style={styles.viewDetailsText}>Ver detalhes do treino</Text>
                                 <ArrowRightIcon size={20} color="#FFFFFF" />
                             </TouchableOpacity>
                         </View>
-                    ) : !isTodayWithinPlan ? (
+                    ) : !isSelectedDateWithinPlan ? (
                         /* No Plan Active - Show informative message */
-                        <View style={styles.workoutDetailCard}>
+                        <View key={`no-plan-${getSelectedDateStr()}`} style={styles.workoutDetailCard}>
                             <View style={styles.cardTopSection}>
                                 <View style={{ alignItems: 'center', paddingVertical: 20 }}>
                                     <Ionicons name="calendar-outline" size={40} color="rgba(235, 235, 245, 0.4)" />
                                     <Text style={[styles.workoutTitle, { textAlign: 'center', marginTop: 12 }]}>
-                                        Nenhum plano ativo para este período
+                                        Nenhum plano ativo para esta data
                                     </Text>
                                     <Text style={[styles.workoutDescription, { textAlign: 'center', marginTop: 8 }]}>
                                         Seu plano de treino já foi concluído ou ainda não começou
@@ -726,18 +805,24 @@ export function CalendarScreen({ navigation }: any) {
                             </View>
                         </View>
                     ) : (
-                        <View style={styles.workoutDetailCard}>
+                        <View key={`rest-day-${getSelectedDateStr()}`} style={styles.workoutDetailCard}>
                             <View style={styles.cardTopSection}>
-                                <Text style={[styles.workoutTitle, { textAlign: 'center', paddingVertical: 20 }]}>
-                                    Nenhum treino agendado para hoje
-                                </Text>
+                                <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                                    <Ionicons name="bed-outline" size={40} color="#A78BFA" />
+                                    <Text style={[styles.workoutTitle, { textAlign: 'center', marginTop: 12 }]}>
+                                        Hoje é dia de recuperar as energias
+                                    </Text>
+                                    <Text style={[styles.workoutDescription, { textAlign: 'center', marginTop: 8 }]}>
+                                        Nenhum treino agendado para esta data
+                                    </Text>
+                                </View>
                             </View>
                         </View>
                     )}
 
                     {/* Next Workout Section */}
                     {nextWorkout && (
-                        <View style={styles.nextWorkoutSection}>
+                        <View key={`next-workout-section-${nextWorkout.id}`} style={styles.nextWorkoutSection}>
                             <View style={styles.nextWorkoutDivider} />
                             <Text style={styles.nextWorkoutLabel}>
                                 Próximo: {(() => {
@@ -747,6 +832,7 @@ export function CalendarScreen({ navigation }: any) {
                                 })()}
                             </Text>
                             <TouchableOpacity
+                                key={`next-workout-card-${nextWorkout.id}-${nextWorkout.scheduled_date}`}
                                 style={styles.nextWorkoutCard}
                                 onPress={handleNextWorkoutPress}
                                 activeOpacity={0.7}
