@@ -68,6 +68,7 @@ interface TrainingState {
     skipWorkout: (workoutId: string, reason: string) => Promise<void>;
     checkPlanStatus: (planId: string) => Promise<boolean>;
     setGenerationStatus: (status: GenerationStatus) => void;
+    clearScheduleData: () => void;
 }
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
@@ -88,6 +89,8 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
     generationStatus: null,
 
     setGenerationStatus: (status) => set({ generationStatus: status }),
+
+    clearScheduleData: () => set({ today: null, nextWorkout: null, schedule: [] }),
 
     fetchPlan: async () => {
         try {

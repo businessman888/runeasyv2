@@ -420,9 +420,14 @@ export class TrainingService {
      * Days outside the plan period return type: null
      */
     async getScheduleWithStatus(userId: string, startDate: string, endDate: string): Promise<ScheduleDay[]> {
-        const today = new Date();
+        // Calculate today in local timezone to avoid UTC timezone issues
+        const now = new Date();
+        const localNow = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+        const today = new Date(localNow);
         today.setHours(0, 0, 0, 0);
-        const todayStr = today.toISOString().split('T')[0];
+        const todayStr = localNow.toISOString().split('T')[0];
+
+        this.logger.debug(`[getScheduleWithStatus] Today: ${todayStr}, range: ${startDate} to ${endDate}`);
 
         // Get the active plan to determine date boundaries
         const { data: activePlan, error: planError } = await this.supabaseService
@@ -544,7 +549,12 @@ export class TrainingService {
      * Returns the next pending workout AFTER today (not including today)
      */
     async getNextWorkout(userId: string): Promise<any | null> {
-        const today = new Date().toISOString().split('T')[0];
+        // Calculate today in local timezone to avoid UTC timezone issues
+        const now = new Date();
+        const localDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+        const today = localDate.toISOString().split('T')[0];
+
+        this.logger.debug(`[getNextWorkout] Searching for workouts after ${today} for user ${userId}`);
 
         const { data, error } = await this.supabaseService
             .from('workouts')
@@ -557,6 +567,8 @@ export class TrainingService {
             .single();
 
         if (error && error.code !== 'PGRST116') throw error;
+
+        this.logger.debug(`[getNextWorkout] Found: ${data ? data.scheduled_date : 'none'}`);
         return data || null;
     }
 }

@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
 import { useFeedbackStore } from '../stores/feedbackStore';
+import { PoweredByStrava } from '../components/PoweredByStrava';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -439,6 +440,14 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                             </View>
                         </View>
                     ))}
+
+                    {/* Strava compliance branding - only when activity exists */}
+                    {activity && (
+                        <PoweredByStrava
+                            width={76}
+                            style={{ marginTop: 16 }}
+                        />
+                    )}
                 </View>
 
                 {/* Análise Inteligente */}
@@ -561,6 +570,11 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
 
                         {!latestActivity?.vo2_max?.is_valid && (
                             <Text style={styles.vo2Message}>Dados insuficientes para cálculo</Text>
+                        )}
+
+                        {/* Strava compliance branding - only when activity exists */}
+                        {latestActivity && (
+                            <PoweredByStrava width={76} style={{ marginTop: 12 }} />
                         )}
                     </View>
                 </View>
@@ -714,13 +728,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: spacing.xl,
         paddingHorizontal: spacing.lg,
-        marginBottom: 30,
+        marginTop: 30,
+        marginBottom: 48,
     },
     scoreTitle: {
         fontSize: 18,
         fontWeight: '700',
         color: '#FFFFFF',
-        marginTop: spacing.lg,
+        marginTop: 40,
         textAlign: 'center',
         maxWidth: screenWidth - 48,
         flexShrink: 1,
@@ -728,7 +743,8 @@ const styles = StyleSheet.create({
     scoreSubtitle: {
         fontSize: 14,
         color: 'rgba(235,235,245,0.6)',
-        marginTop: spacing.xs,
+        marginTop: 2,
+        marginBottom: 8,
         textAlign: 'center',
     },
     metricsHeaderOuter: {

@@ -6,11 +6,16 @@ import {
     ScrollView,
     TouchableOpacity,
     TextInput,
+    Image,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
 import { useFeedbackStore } from '../stores/feedbackStore';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { PoweredByStrava } from '../components/PoweredByStrava';
+
+// Official Strava icons
+const STRAVA_ICON = require('../assets/images/strava/bi_strava.png');
 
 // Icon components using @expo/vector-icons
 function BackIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
@@ -50,9 +55,15 @@ function BolinhaIcon({ color = '#00D4FF' }: { color?: string }) {
     );
 }
 
-// Strava icon
-function StravaIcon({ size = 20 }: { size?: number }) {
-    return <MaterialCommunityIcons name="strava" size={size} color="#FC4C02" />;
+// Strava icon using official image
+function StravaIconImage({ size = 20 }: { size?: number }) {
+    return (
+        <Image
+            source={STRAVA_ICON}
+            style={{ width: size, height: size }}
+            resizeMode="contain"
+        />
+    );
 }
 
 const getWorkoutDotColor = (type: string): string => {
@@ -159,6 +170,9 @@ export function TrainingHistoryScreen({ navigation }: any) {
                                 <Text style={styles.summaryMetricLabel}>Elevação</Text>
                             </View>
                         </View>
+
+                        {/* Strava compliance branding */}
+                        <PoweredByStrava width={76} style={{ marginTop: 16 }} />
                     </View>
                 )}
 
@@ -223,7 +237,10 @@ export function TrainingHistoryScreen({ navigation }: any) {
                                 <View style={styles.workoutDivider} />
                                 <View style={styles.workoutContent}>
                                     <View style={styles.workoutTitleRow}>
-                                        <Text style={styles.workoutTitle}>{workout.name}</Text>
+                                        <View style={styles.workoutTitleWithIcon}>
+                                            <StravaIconImage size={16} />
+                                            <Text style={styles.workoutTitle}>{workout.name}</Text>
+                                        </View>
                                         <BolinhaIcon color={getWorkoutDotColor(workout.type)} />
                                     </View>
                                     <View style={styles.workoutMetricsRow}>
@@ -243,7 +260,6 @@ export function TrainingHistoryScreen({ navigation }: any) {
                                     </View>
                                 </View>
                                 <View style={styles.workoutRightSection}>
-                                    <StravaIcon size={20} />
                                     <ChevronRightIcon size={20} color="rgba(235,235,245,0.6)" />
                                 </View>
                             </TouchableOpacity>
@@ -509,6 +525,11 @@ const styles = StyleSheet.create({
         // No rotation needed with chevron-down
     },
     bottomSpacer: {
-        height: 120,
+        height: 140,
+    },
+    workoutTitleWithIcon: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
     },
 });

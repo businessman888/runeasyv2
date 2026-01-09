@@ -102,7 +102,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
     };
 
     return (
-        <View style={[styles.container, { paddingTop: Math.max(insets.top, 20) + 40 }]}>
+        <View style={{ paddingTop: insets.top + 20, backgroundColor: '#0E0E1F', flex: 1 }}>
             <StatusBar barStyle="light-content" backgroundColor="#0E0E1F" />
 
             <ScrollView
@@ -125,10 +125,20 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
 
                 {/* Question Card */}
                 <View style={styles.questionCard}>
-                    <Text style={styles.question}>{currentQuestion.question}</Text>
+                    <Text style={{
+                        fontSize: 26,
+                        fontWeight: '700',
+                        color: colors.white,
+                        textAlign: 'center',
+                        marginTop: 40,
+                        marginBottom: 32,
+                        lineHeight: 34,
+                    }}>
+                        {currentQuestion.question}
+                    </Text>
 
-                    {/* Options */}
-                    <View style={styles.optionsContainer}>
+                    {/* Options with inline gap and padding */}
+                    <View style={{ gap: 20, paddingHorizontal: 20 }}>
                         {currentQuestion.options.map((option) => {
                             const isSelected = selectedValue === option.value;
                             return (
@@ -136,6 +146,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
                                     key={option.value}
                                     style={[
                                         styles.optionCard,
+                                        { minHeight: 56, paddingVertical: 16 },
                                         isSelected && styles.optionCardSelected,
                                     ]}
                                     onPress={() => handleSelectOption(option.value)}
@@ -159,25 +170,27 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
                     </View>
                 </View>
 
-                {/* Continue Button - Inside ScrollView */}
-                <TouchableOpacity
-                    style={[
-                        styles.continueButton,
-                        !selectedValue && styles.continueButtonDisabled,
-                    ]}
-                    onPress={handleContinue}
-                    disabled={!selectedValue}
-                >
-                    <Text style={[
-                        styles.continueButtonText,
-                        !selectedValue && styles.continueButtonTextDisabled,
-                    ]}>Continuar</Text>
-                    <Ionicons
-                        name="arrow-forward"
-                        size={20}
-                        color={selectedValue ? '#0E0E1F' : 'rgba(255,255,255,0.3)'}
-                    />
-                </TouchableOpacity>
+                {/* Continue Button - with bottom padding for navbar */}
+                <View style={{ paddingBottom: insets.bottom + 20, paddingHorizontal: 20, marginTop: 24 }}>
+                    <TouchableOpacity
+                        style={[
+                            styles.continueButton,
+                            !selectedValue && { backgroundColor: '#1A1A2E', opacity: 0.7 },
+                        ]}
+                        onPress={handleContinue}
+                        disabled={!selectedValue}
+                    >
+                        <Text style={[
+                            styles.continueButtonText,
+                            !selectedValue && { color: 'rgba(255,255,255,0.4)' },
+                        ]}>Continuar</Text>
+                        <Ionicons
+                            name="arrow-forward"
+                            size={20}
+                            color={selectedValue ? '#0E0E1F' : 'rgba(255,255,255,0.3)'}
+                        />
+                    </TouchableOpacity>
+                </View>
             </ScrollView>
         </View>
     );

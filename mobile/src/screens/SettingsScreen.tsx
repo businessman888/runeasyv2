@@ -27,8 +27,17 @@ function HistoryIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: 
     return <MaterialCommunityIcons name="history" size={size} color={color} />;
 }
 
-function StravaIcon({ size = 24 }: { size?: number }) {
-    return <MaterialCommunityIcons name="run" size={size} color="#FC4C02" />;
+// Official Strava icon image
+const STRAVA_ICON = require('../assets/images/strava/bi_strava.png');
+
+function StravaIconImage({ size = 36 }: { size?: number }) {
+    return (
+        <Image
+            source={STRAVA_ICON}
+            style={{ width: size, height: size }}
+            resizeMode="contain"
+        />
+    );
 }
 
 function NotificationIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
@@ -142,14 +151,13 @@ export function SettingsScreen({ navigation }: any) {
                     </View>
                 </View>
 
-                {/* INTEGRAÇÕES Section */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Integrações</Text>
                     <View style={styles.menuCard}>
-                        <View style={styles.menuItem}>
+                        <View style={[styles.menuItem, { paddingVertical: 16 }]}>
                             <View style={styles.menuItemLeft}>
                                 <View style={styles.stravaIconContainer}>
-                                    <StravaIcon size={36} />
+                                    <StravaIconImage size={36} />
                                 </View>
                                 <View style={styles.stravaTextContainer}>
                                     <Text style={styles.menuItemText}>Strava</Text>
@@ -158,13 +166,6 @@ export function SettingsScreen({ navigation }: any) {
                                     </Text>
                                 </View>
                             </View>
-                            <Switch
-                                value={isStravaConnected}
-                                onValueChange={() => { }}
-                                disabled={true}
-                                trackColor={{ false: '#39393D', true: '#00D4FF' }}
-                                thumbColor="#FFFFFF"
-                            />
                         </View>
                     </View>
                 </View>

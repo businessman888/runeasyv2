@@ -12,8 +12,10 @@ import {
     Animated,
 } from 'react-native';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, spacing } from '../theme';
 import { useReadinessStore, ReadinessAnswers } from '../stores/readinessStore';
+import { PoweredByStrava } from '../components/PoweredByStrava';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -253,6 +255,9 @@ const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> 
                     <MetricCardInline icon="stress" label="Estresse" value={verdict.metrics_summary?.[3]?.value || "Baixo"} sublabel={verdict.metrics_summary?.[3]?.sublabel} />
                 </View>
 
+                {/* Strava compliance branding */}
+                <PoweredByStrava width={76} style={{ marginTop: 8, marginRight: 4 }} />
+
                 {/* Button inside ScrollView so it scrolls and stays above navbar */}
                 <View style={resultStyles.footer}>
                     <TouchableOpacity style={resultStyles.confirmButton} onPress={onReset}><Text style={resultStyles.confirmButtonText}>Confirmar</Text></TouchableOpacity>
@@ -310,6 +315,7 @@ export function EvolutionScreen({ navigation }: any) {
     const [currentStep, setCurrentStep] = useState(0);
     const [answers, setAnswers] = useState<Record<string, number>>({});
     const [quizCompleted, setQuizCompleted] = useState(false);
+    const insets = useSafeAreaInsets();
     const {
         setAnswer,
         verdict,
@@ -389,7 +395,7 @@ export function EvolutionScreen({ navigation }: any) {
     }
 
     return (
-        <View style={styles.container}>
+        <View style={{ paddingTop: insets.top + 50, backgroundColor: '#0A0A14', flex: 1 }}>
             <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
 
             {/* Header */}
@@ -414,14 +420,19 @@ export function EvolutionScreen({ navigation }: any) {
                 showsVerticalScrollIndicator={false}
             >
                 <View style={styles.questionCard}>
-                    <Text style={styles.question}>{currentQuestion.question}</Text>
+                    <Text style={{
+                        fontSize: 26,
+                        fontWeight: '700',
+                        color: colors.white,
+                        textAlign: 'center',
+                        marginTop: 40,
+                        marginBottom: 32,
+                        lineHeight: 34,
+                    }}>{currentQuestion.question}</Text>
 
 
-                    {/* Options - dynamic gap based on whether options have descriptions */}
-                    <View style={[
-                        styles.optionsContainer,
-                        'description' in (currentQuestion.options[0] || {}) ? styles.optionsContainerCompact : styles.optionsContainerSpaced
-                    ]}>
+                    {/* Options - inline gap and padding for breathing room */}
+                    <View style={{ gap: 25, paddingHorizontal: 20 }}>
                         {currentQuestion.options.map((option) => {
                             const isSelected = selectedValue === option.value;
                             return (
@@ -429,6 +440,7 @@ export function EvolutionScreen({ navigation }: any) {
                                     key={option.value}
                                     style={[
                                         styles.optionCard,
+                                        { minHeight: 56, paddingVertical: 16 },
                                         isSelected && styles.optionCardSelected,
                                     ]}
                                     onPress={() => handleSelectOption(option.value)}
@@ -460,31 +472,23 @@ export function EvolutionScreen({ navigation }: any) {
                             );
                         })}
                     </View>
+
+                    {/* Continue Button - Inside ScrollView, only shows when option selected */}
+                    {selectedValue && (
+                        <View style={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: insets.bottom + 100 }}>
+                            <TouchableOpacity
+                                style={styles.continueButton}
+                                onPress={handleContinue}
+                            >
+                                <Text style={styles.continueButtonText}>Continuar</Text>
+                                <View style={styles.arrowContainer}>
+                                    <Text style={styles.arrowText}>→</Text>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </View>
             </ScrollView>
-
-            {/* Continue Button */}
-            <View style={styles.footer}>
-                <TouchableOpacity
-                    style={[
-                        styles.continueButton,
-                        !selectedValue && styles.continueButtonDisabled,
-                    ]}
-                    onPress={handleContinue}
-                    disabled={!selectedValue}
-                >
-                    <Text style={[
-                        styles.continueButtonText,
-                        !selectedValue && styles.continueButtonTextDisabled,
-                    ]}>Continuar</Text>
-                    <View style={styles.arrowContainer}>
-                        <Text style={[
-                            styles.arrowText,
-                            !selectedValue && styles.continueButtonTextDisabled,
-                        ]}>→</Text>
-                    </View>
-                </TouchableOpacity>
-            </View>
 
             {/* Locked Overlay */}
             {!canCheckIn && (

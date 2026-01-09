@@ -8,6 +8,8 @@ import {
     Dimensions,
     Platform,
     ImageBackground,
+    Image,
+    ActivityIndicator,
 } from 'react-native';
 import { colors, typography, spacing } from '../theme';
 import * as Storage from '../utils/storage';
@@ -34,15 +36,8 @@ const RunEasyLogo = () => (
     </Svg>
 );
 
-// Strava Icon Component (exact from Figma SVG - positioned to the right)
-const StravaIcon = () => (
-    <Svg width={15} height={20} viewBox="0 0 15 20" fill="none">
-        <Path
-            d="M5.91375 0L0 11.4062H3.485L5.9125 6.87125L8.325 11.4062H11.7825L5.91375 0ZM11.7825 11.4062L10.0663 14.8512L8.325 11.4062H5.68375L10.0663 20L14.4213 11.4062H11.7825Z"
-            fill="white"
-        />
-    </Svg>
-);
+// Official Strava "Connect with Strava" button image
+const STRAVA_CONNECT_BUTTON = require('../assets/images/strava/btn_strava_connect_with_orange_x2.png');
 
 export function LoginScreen({ navigation }: any) {
     const [isLoading, setIsLoading] = React.useState(false);
@@ -250,21 +245,24 @@ export function LoginScreen({ navigation }: any) {
                             </View>
                         )}
 
-                        {/* Strava Button - Icon on RIGHT */}
+                        {/* Official Strava Connect Button */}
                         <TouchableOpacity
-                            style={[styles.stravaButton, isLoading && styles.buttonDisabled]}
                             onPress={handleStravaLogin}
                             disabled={isLoading}
                             activeOpacity={0.8}
+                            style={styles.stravaButtonContainer}
                         >
-                            <Text style={styles.stravaButtonText}>
-                                {isLoading ? 'Conectando...' : 'Conectar com '}
-                            </Text>
-                            {!isLoading && <Text style={styles.stravaButtonTextBold}>Strava</Text>}
-                            {!isLoading && (
-                                <View style={styles.stravaIconContainer}>
-                                    <StravaIcon />
+                            {isLoading ? (
+                                <View style={styles.stravaLoadingContainer}>
+                                    <ActivityIndicator size="small" color="#FC4C02" />
+                                    <Text style={styles.stravaLoadingText}>Conectando...</Text>
                                 </View>
+                            ) : (
+                                <Image
+                                    source={STRAVA_CONNECT_BUTTON}
+                                    style={styles.stravaButtonImage}
+                                    resizeMode="contain"
+                                />
                             )}
                         </TouchableOpacity>
 
@@ -350,32 +348,31 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         fontSize: typography.fontSizes.sm,
     },
-    stravaButton: {
+    stravaButtonContainer: {
+        width: '100%',
+        maxWidth: 340,
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 48,
+    },
+    stravaButtonImage: {
+        width: 280,
+        height: 48,
+    },
+    stravaLoadingContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#FC4C02', // Strava Orange
+        backgroundColor: 'rgba(252, 76, 2, 0.1)',
         paddingVertical: 16,
         paddingHorizontal: 32,
         borderRadius: 16,
-        width: '100%',
-        maxWidth: 340,
+        gap: 12,
     },
-    buttonDisabled: {
-        opacity: 0.7,
-    },
-    stravaButtonText: {
-        color: colors.white,
+    stravaLoadingText: {
+        color: '#FC4C02',
         fontSize: 16,
-        fontWeight: '400',
-    },
-    stravaButtonTextBold: {
-        color: colors.white,
-        fontSize: 16,
-        fontWeight: '700',
-    },
-    stravaIconContainer: {
-        marginLeft: 8,
+        fontWeight: '600',
     },
     disclaimer: {
         fontSize: 12,

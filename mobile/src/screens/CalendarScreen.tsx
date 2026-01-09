@@ -1,4 +1,5 @@
-import React, { useRef } from 'react';
+import React, { useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
     View,
     Text,
@@ -247,6 +248,7 @@ export function CalendarScreen({ navigation }: any) {
         };
     }, [generationStatus, plan?.id]);
 
+    // Fetch schedule when month changes
     React.useEffect(() => {
         const start = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
         const end = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
@@ -255,6 +257,34 @@ export function CalendarScreen({ navigation }: any) {
         fetchUpcomingWorkouts();
         fetchSummary();
     }, [currentMonth]);
+
+    // Refetch data when screen gains focus for reactivity
+    useFocusEffect(
+        useCallback(() => {
+            const start = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+            const end = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 2, 0); // Extra month for tomorrow logic
+            fetchSchedule(start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
+            fetchWorkouts(start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
+            fetchUpcomingWorkouts();
+            fetchSummary();
+            fetchPlan();
+        }, [currentMonth])
+    );
+
+    // Helper: Get tomorrow's schedule entry (today + 1)
+    const getTomorrowEntry = (): ScheduleDay | null => {
+        const now = new Date();
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        // Construct YYYY-MM-DD using local time components to avoid UTC shift
+        const year = tomorrow.getFullYear();
+        const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+        const day = String(tomorrow.getDate()).padStart(2, '0');
+        const tomorrowStr = `${year}-${month}-${day}`;
+
+        return schedule.find(s => s.date === tomorrowStr) || null;
+    };
 
     // Helper: Transform API workout to UI WorkoutData format
     const transformWorkoutToUI = (workout: any): WorkoutData => {
@@ -346,19 +376,26 @@ export function CalendarScreen({ navigation }: any) {
         });
     };
 
-    // Handle next workout card press (without start button)
+    // Handle next workout card press (without start button) - shows tomorrow's event
     const handleNextWorkoutPress = () => {
-        if (upcomingWorkouts.length > 1) {
-            setSelectedWorkout(transformWorkoutToUI(upcomingWorkouts[1]));
-            setShowStartButton(false);
-            setModalVisible(true);
-            Animated.spring(modalSlideAnim, {
-                toValue: 1,
-                useNativeDriver: true,
-                tension: 65,
-                friction: 11,
-            }).start();
+        const tomorrowEntry = getTomorrowEntry();
+
+        // If tomorrow is a workout day, find the full workout and show modal
+        if (tomorrowEntry?.type === 'workout' && tomorrowEntry.workout) {
+            const fullWorkout = workouts.find(w => w.id === tomorrowEntry.workout?.id);
+            if (fullWorkout) {
+                setSelectedWorkout(transformWorkoutToUI(fullWorkout));
+                setShowStartButton(false);
+                setModalVisible(true);
+                Animated.spring(modalSlideAnim, {
+                    toValue: 1,
+                    useNativeDriver: true,
+                    tension: 65,
+                    friction: 11,
+                }).start();
+            }
         }
+        // If tomorrow is recovery, the card display handles it (no modal needed for recovery)
     };
 
     // Handle selected date workout card press
@@ -499,18 +536,8 @@ export function CalendarScreen({ navigation }: any) {
         return `${selectedDate} de ${monthNames[currentMonth.getMonth()].slice(0, 3).toUpperCase()}`;
     };
 
-    // Compute next workout: first pending workout after today
-    const computeNextWorkout = () => {
-        const todayStr = new Date().toISOString().split('T')[0];
-        const pendingWorkout = schedule.find(s => s.date > todayStr && s.type === 'workout' && s.status === 'pending');
-        if (pendingWorkout?.workout) {
-            // Find full workout data from workouts array
-            const fullWorkout = workouts.find(w => w.id === pendingWorkout.workout?.id);
-            return fullWorkout || null;
-        }
-        return null;
-    };
-    const nextWorkout = computeNextWorkout() || storeNextWorkout;
+    // Get tomorrow's entry
+    const tomorrowEntry = getTomorrowEntry();
 
     // Calculate total volume and frequency
     const totalVolume = workouts.reduce((sum, w) => sum + (w.distance_km || 0), 0);
@@ -820,45 +847,62 @@ export function CalendarScreen({ navigation }: any) {
                         </View>
                     )}
 
-                    {/* Next Workout Section */}
-                    {nextWorkout && (
-                        <View key={`next-workout-section-${nextWorkout.id}`} style={styles.nextWorkoutSection}>
+                    {/* Next Workout Section - Shows tomorrow's event (Workout or Recovery) */}
+                    {tomorrowEntry && tomorrowEntry.type !== null && (
+                        <View key={`next-section-${tomorrowEntry.date}`} style={styles.nextWorkoutSection}>
                             <View style={styles.nextWorkoutDivider} />
                             <Text style={styles.nextWorkoutLabel}>
                                 Próximo: {(() => {
-                                    const date = new Date(nextWorkout.scheduled_date);
+                                    const date = new Date(tomorrowEntry.date + 'T00:00:00'); // Ensure local date parsing
                                     const days = ['DOMINGO', 'SEGUNDA-FEIRA', 'TERÇA-FEIRA', 'QUARTA-FEIRA', 'QUINTA-FEIRA', 'SEXTA-FEIRA', 'SÁBADO'];
                                     return days[date.getDay()];
                                 })()}
                             </Text>
-                            <TouchableOpacity
-                                key={`next-workout-card-${nextWorkout.id}-${nextWorkout.scheduled_date}`}
-                                style={styles.nextWorkoutCard}
-                                onPress={handleNextWorkoutPress}
-                                activeOpacity={0.7}
-                            >
-                                <ProximoIcon size={47} />
-                                <View style={styles.nextWorkoutInfo}>
-                                    <Text style={styles.nextWorkoutTitle}>
-                                        {(() => {
-                                            const labels: Record<string, string> = {
-                                                'easy_run': 'Rodagem Leve',
-                                                'long_run': 'Longão',
-                                                'intervals': 'Intervalados',
-                                                'tempo': 'Tempo Run',
-                                                'recovery': 'Recuperação',
-                                            };
-                                            return `${labels[nextWorkout.type] || nextWorkout.type} de ${nextWorkout.distance_km}km`;
-                                        })()}
-                                    </Text>
-                                    <Text style={styles.nextWorkoutSubtitle}>
-                                        {nextWorkout.type === 'intervals' || nextWorkout.type === 'tempo'
-                                            ? 'Corrida de rua - alta intensidade'
-                                            : 'Corrida de rua - média intensidade'}
-                                    </Text>
+
+                            {/* Render based on type: Workout vs Recovery */}
+                            {tomorrowEntry.type === 'recovery' ? (
+                                <View style={styles.nextWorkoutCard}>
+                                    <View style={[styles.nextWorkoutIconContainer, { backgroundColor: 'rgba(167, 139, 250, 0.15)' }]}>
+                                        <Ionicons name="bed-outline" size={24} color="#A78BFA" />
+                                    </View>
+                                    <View style={styles.nextWorkoutInfo}>
+                                        <Text style={styles.nextWorkoutTitle}>Dia de Recuperação</Text>
+                                        <Text style={styles.nextWorkoutSubtitle}>
+                                            Descanso programado
+                                        </Text>
+                                    </View>
                                 </View>
-                                <ArrowRightIcon size={24} color="rgba(235,235,245,0.3)" />
-                            </TouchableOpacity>
+                            ) : tomorrowEntry.workout ? (
+                                <TouchableOpacity
+                                    key={`next-card-${tomorrowEntry.workout.id}`}
+                                    style={styles.nextWorkoutCard}
+                                    onPress={handleNextWorkoutPress}
+                                    activeOpacity={0.7}
+                                >
+                                    <ProximoIcon size={47} />
+                                    <View style={styles.nextWorkoutInfo}>
+                                        <Text style={styles.nextWorkoutTitle}>
+                                            {(() => {
+                                                const w = tomorrowEntry.workout!;
+                                                const labels: Record<string, string> = {
+                                                    'easy_run': 'Rodagem Leve',
+                                                    'long_run': 'Longão',
+                                                    'intervals': 'Intervalados',
+                                                    'tempo': 'Tempo Run',
+                                                    'recovery': 'Recuperação',
+                                                };
+                                                return `${labels[w.type] || w.type} - ${w.distance_km}km`;
+                                            })()}
+                                        </Text>
+                                        <Text style={styles.nextWorkoutSubtitle}>
+                                            {tomorrowEntry.workout.type === 'intervals' || tomorrowEntry.workout.type === 'tempo'
+                                                ? 'Corrida de rua - alta intensidade'
+                                                : 'Corrida de rua - média intensidade'}
+                                        </Text>
+                                    </View>
+                                    <ArrowRightIcon size={24} color="rgba(235,235,245,0.3)" />
+                                </TouchableOpacity>
+                            ) : null}
                         </View>
                     )}
                 </View>

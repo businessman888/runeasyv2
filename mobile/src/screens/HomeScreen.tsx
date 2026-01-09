@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
     View,
     Text,
@@ -16,6 +17,7 @@ import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore,
 import { CircularProgress } from '../components/CircularProgress';
 import { Skeleton, SkeletonCircle, SkeletonText } from '../components/Skeleton';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { PoweredByStrava } from '../components/PoweredByStrava';
 
 // Icon components using @expo/vector-icons
 function FireIcon({ size = 24, color = '#FFC400' }: { size?: number; color?: string }) {
@@ -73,7 +75,7 @@ function BedIcon({ size = 24, color = '#A78BFA' }: { size?: number; color?: stri
 export function HomeScreen({ navigation }: any) {
     const { user } = useAuthStore();
     const { stats, fetchStats, isLoading: gamificationLoading } = useGamificationStore();
-    const { upcomingWorkouts, fetchUpcomingWorkouts, isLoading: trainingLoading, today, nextWorkout: storeNextWorkout, fetchSchedule } = useTrainingStore();
+    const { upcomingWorkouts, fetchUpcomingWorkouts, isLoading: trainingLoading, today, nextWorkout: storeNextWorkout, fetchSchedule, clearScheduleData } = useTrainingStore();
     const { latestSummary, fetchLatestSummary, latestActivity, latestActivityLoading, fetchLatestActivity } = useFeedbackStore();
     const { summary, fetchSummary, isLoading: statsLoading } = useStatsStore();
     const { unreadCount, fetchUnreadCount } = useNotificationStore();
@@ -81,26 +83,36 @@ export function HomeScreen({ navigation }: any) {
     const [recoveryTimeLeft, setRecoveryTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 });
     const [recoveryProgress, setRecoveryProgress] = useState(0);
 
-    useEffect(() => {
-        const loadData = async () => {
-            // Fetch schedule for current month
-            const start = new Date();
-            const end = new Date();
-            end.setMonth(end.getMonth() + 1);
+    // Use useFocusEffect to refetch data when screen gains focus (revalidate on every visit)
+    useFocusEffect(
+        useCallback(() => {
+            const loadData = async () => {
+                // Clear stale data immediately to show skeleton
+                clearScheduleData();
+                setIsInitialLoading(true);
 
-            await Promise.all([
-                fetchStats(),
-                fetchUpcomingWorkouts(),
-                fetchLatestSummary(),
-                fetchLatestActivity(),
-                fetchSummary(),
-                fetchUnreadCount(),
-                fetchSchedule(start.toISOString().split('T')[0], end.toISOString().split('T')[0]),
-            ]);
-            setIsInitialLoading(false);
-        };
-        loadData();
-    }, []);
+                // Use dynamic dates: start of current month for calendar history, end 1 month ahead
+                const now = new Date();
+                const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                const startStr = startOfMonth.toISOString().split('T')[0];
+                const endDate = new Date(now);
+                endDate.setMonth(endDate.getMonth() + 1);
+                const endStr = endDate.toISOString().split('T')[0];
+
+                await Promise.all([
+                    fetchStats(),
+                    fetchUpcomingWorkouts(),
+                    fetchLatestSummary(),
+                    fetchLatestActivity(),
+                    fetchSummary(),
+                    fetchUnreadCount(),
+                    fetchSchedule(startStr, endStr),
+                ]);
+                setIsInitialLoading(false);
+            };
+            loadData();
+        }, [])
+    );
 
     // Recovery countdown timer
     useEffect(() => {
@@ -558,6 +570,9 @@ export function HomeScreen({ navigation }: any) {
                                 <Text style={styles.feedbackButtonText}>Ver feedback completo</Text>
                                 <ArrowRightIcon size={18} color="#00D4FF" />
                             </TouchableOpacity>
+
+                            {/* Strava compliance branding */}
+                            <PoweredByStrava width={76} style={{ marginTop: 12 }} />
                         </>
                     ) : hasCompletedWorkouts ? (
                         <>
