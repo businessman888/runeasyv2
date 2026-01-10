@@ -65,8 +65,11 @@ export class QuestionSetsParserService implements OnModuleInit {
      * Parse the markdown content into structured question sets
      */
     private parseMarkdownContent(content: string): QuestionSet[] {
+        // Pre-process content to fix common formatting issues
+        const cleanedContent = this.preprocessContent(content);
+
         const sets: QuestionSet[] = [];
-        const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const lines = cleanedContent.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
         let currentSet: Partial<QuestionSet> | null = null;
         let currentQuestions: ReadinessQuestion[] = [];
@@ -264,6 +267,88 @@ export class QuestionSetsParserService implements OnModuleInit {
             'vontade': 'Qual sua motivação para treinar?',
         };
         return defaults[category] || 'Como você está?';
+    }
+
+    /**
+     * Pre-process markdown content to fix formatting issues:
+     * - Join split option lines (e.g., "(5) Muito\nzen" -> "(5) Muito zen")
+     * - Fix broken words (e.g., "me nte" -> "mente")
+     * - Separate merged questions on same line
+     * - Remove "> o" markers
+     */
+    private preprocessContent(content: string): string {
+        let result = content;
+
+        // Fix common broken words
+        const brokenWords = [
+            ['me nte', 'mente'],
+            ['Mé dia', 'Média'],
+            ['Ne m', 'Nem'],
+            ['Cap acidade', 'Capacidade'],
+            ['c rítica', 'crítica'],
+            ['si stema', 'sistema'],
+            ['( 3)', '(3)'],
+        ];
+        for (const [broken, fixed] of brokenWords) {
+            result = result.replace(new RegExp(broken, 'g'), fixed);
+        }
+
+        // Remove "> o" markers
+        result = result.replace(/>\s*o\s*\n/g, '\n');
+
+        // Join lines that look like continuation of options:
+        // Pattern: line ending with "(5) Word" or "| (5) Word" followed by line with just text
+        const lines = result.split('\n');
+        const processedLines: string[] = [];
+
+        for (let i = 0; i < lines.length; i++) {
+            const currentLine = lines[i].trim();
+            const nextLine = lines[i + 1]?.trim() || '';
+
+            // Skip empty lines
+            if (!currentLine) {
+                processedLines.push('');
+                continue;
+            }
+
+            // Check if current line ends with incomplete option and next line is continuation
+            const endsWithPartialOption = /\(\d\)\s*\w+\s*$/.test(currentLine) && !/\|/.test(nextLine.slice(0, 5));
+            const looksLikeContinuation = nextLine &&
+                !nextLine.match(/^\d+\.?\s*(Sono|Dor|Energia|Estresse|Vontade)/i) &&
+                !nextLine.match(/^Set\s*\d+/i) &&
+                !nextLine.match(/^\(\d\)/) &&
+                !nextLine.match(/^>/);
+
+            // If we have "| (5)" at end of line and next line has the label
+            if (currentLine.match(/\|\s*\(\d\)\s*$/) && looksLikeContinuation) {
+                processedLines.push(currentLine + ' ' + nextLine);
+                i++; // Skip next line
+                continue;
+            }
+
+            // If line has partial option text (ends with "(5) Something" but next line continues)
+            if (currentLine.match(/\(\d\)\s+\S+\s*$/) &&
+                looksLikeContinuation &&
+                nextLine.length > 0 &&
+                nextLine.length < 30) {
+                processedLines.push(currentLine + ' ' + nextLine);
+                i++; // Skip next line
+                continue;
+            }
+
+            // Separate merged questions: "(5) Word X. Sono: Text" -> two lines
+            const mergedQuestion = currentLine.match(/(\(\d\)\s+\S+)\s+(\d+\.?\s*(Sono|Dor|Energia|Estresse|Vontade)\s*:)/i);
+            if (mergedQuestion) {
+                processedLines.push(currentLine.replace(mergedQuestion[2], ''));
+                processedLines.push(mergedQuestion[2] + currentLine.split(mergedQuestion[2])[1] || '');
+                continue;
+            }
+
+            processedLines.push(currentLine);
+        }
+
+        this.logger.log(`Preprocessed content: ${lines.length} -> ${processedLines.length} lines`);
+        return processedLines.join('\n');
     }
 
     /**
