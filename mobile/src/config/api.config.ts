@@ -1,41 +1,41 @@
 /**
  * API Configuration for RunEasy Mobile App
  * 
- * Uses __DEV__ to determine which API URL to use:
- * - Development: Cloudflare tunnel or localhost
- * - Production: Railway deployed API
+ * FORCED PRODUCTION MODE: Always connects to Railway server
+ * To switch back to dev mode, uncomment the __DEV__ logic below
  * 
  * IMPORTANT: All stores should import BASE_API_URL from this file
  */
 
-// Production API URL (Railway deployment)
-const PRODUCTION_BASE = 'https://runeasy-production.up.railway.app';
+// Production API URL (Railway deployment) - includes /api suffix
+const PRODUCTION_BASE = 'https://runeasy-production.up.railway.app/api';
 
-// Development API URL (from .env or fallback to localhost)
-const DEVELOPMENT_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+// Development API URL (currently unused - production forced)
+// const DEVELOPMENT_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
 
 /**
- * Get the appropriate base URL (without /api suffix)
+ * Get the API base URL
+ * Currently FORCED to production - ignores __DEV__
  */
 const getBaseUrl = (): string => {
-    let url = __DEV__ ? DEVELOPMENT_BASE : PRODUCTION_BASE;
-    // Remove /api suffix if present (we'll add it in BASE_API_URL)
-    if (url.endsWith('/api')) {
-        url = url.slice(0, -4);
-    }
-    return url;
+    // FORCED PRODUCTION MODE
+    return PRODUCTION_BASE;
+
+    // To restore dev mode, uncomment below and comment the line above:
+    // return __DEV__ ? DEVELOPMENT_BASE : PRODUCTION_BASE;
 };
 
 /**
  * API base URL WITHOUT /api suffix (for special routes like auth)
+ * Note: Since PRODUCTION_BASE already includes /api, we strip it here
  */
-export const API_URL = getBaseUrl();
+export const API_URL = PRODUCTION_BASE.replace('/api', '');
 
 /**
  * API base URL WITH /api suffix (for most API calls)
  * Use this in stores for consistency!
  */
-export const BASE_API_URL = `${getBaseUrl()}/api`;
+export const BASE_API_URL = getBaseUrl();
 
 /**
  * API endpoints

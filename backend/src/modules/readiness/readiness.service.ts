@@ -78,33 +78,37 @@ export class ReadinessService {
     /**
      * Check if user has already completed check-in today (after 3 AM reset)
      * Returns the existing verdict if found, null otherwise
+     * 
+     * TIMEZONE: Uses America/Sao_Paulo (BRT = UTC-3)
+     * RULE: New readiness day starts at 3:00 AM local time
+     * 
+     * Time windows:
+     * - 03:00 Day N to 02:59 Day N+1 = "Day N" for readiness purposes
      */
     async hasCheckedInToday(userId: string): Promise<ReadinessVerdict | null> {
         try {
             const supabase = this.supabaseService.getClient();
 
-            // Calculate 3 AM today in local timezone
-            const now = new Date();
-            const today3AM = new Date(now);
-            today3AM.setHours(3, 0, 0, 0);
+            // Get the start of today's readiness window (3 AM in São Paulo)
+            const windowStart = this.getReadinessWindowStart();
 
-            // If current time is before 3 AM, use yesterday's 3 AM
-            if (now < today3AM) {
-                today3AM.setDate(today3AM.getDate() - 1);
-            }
+            this.logger.debug(`Checking readiness for user ${userId} since ${windowStart.toISOString()}`);
 
             const { data, error } = await supabase
                 .from('readiness_history')
                 .select('*')
                 .eq('user_id', userId)
-                .gte('created_at', today3AM.toISOString())
+                .gte('created_at', windowStart.toISOString())
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .single();
 
             if (error || !data) {
+                this.logger.debug(`No readiness check-in found for user ${userId} in current window`);
                 return null;
             }
+
+            this.logger.log(`Found existing check-in for user ${userId} from ${data.created_at}`);
 
             // Reconstruct verdict from stored data
             return {
@@ -119,6 +123,47 @@ export class ReadinessService {
             this.logger.warn('Error checking today check-in status', error);
             return null;
         }
+    }
+
+    /**
+     * Calculate the start of the current readiness window
+     * 
+     * The readiness day starts at 3:00 AM in São Paulo timezone (America/Sao_Paulo)
+     * BRT = UTC-3 (no daylight saving since 2019)
+     * 
+     * Examples (times in São Paulo):
+     * - If now is 10:00 AM Jan 10 → window started at 03:00 AM Jan 10
+     * - If now is 02:30 AM Jan 10 → window started at 03:00 AM Jan 9 (still "yesterday")
+     */
+    private getReadinessWindowStart(): Date {
+        const SAO_PAULO_OFFSET_HOURS = -3; // UTC-3 for BRT
+        const CUTOFF_HOUR = 3; // 3 AM local time
+
+        // Get current UTC time
+        const nowUtc = new Date();
+
+        // Convert to São Paulo local time
+        const saoPauloNow = new Date(nowUtc.getTime() + (SAO_PAULO_OFFSET_HOURS * 60 * 60 * 1000));
+        const saoPauloHour = saoPauloNow.getUTCHours();
+
+        // Calculate today's 3 AM in São Paulo (as UTC)
+        const today3amSaoPaulo = new Date(Date.UTC(
+            saoPauloNow.getUTCFullYear(),
+            saoPauloNow.getUTCMonth(),
+            saoPauloNow.getUTCDate(),
+            CUTOFF_HOUR - SAO_PAULO_OFFSET_HOURS, // Convert 3 AM local to UTC (3 - (-3) = 6 UTC)
+            0, 0, 0
+        ));
+
+        // If current São Paulo time is before 3 AM, the window started yesterday at 3 AM
+        if (saoPauloHour < CUTOFF_HOUR) {
+            today3amSaoPaulo.setUTCDate(today3amSaoPaulo.getUTCDate() - 1);
+            this.logger.debug(`Current time is before 3 AM SP, using yesterday's window`);
+        }
+
+        this.logger.debug(`Readiness window start: ${today3amSaoPaulo.toISOString()} (3 AM São Paulo)`);
+
+        return today3amSaoPaulo;
     }
 
     /**
