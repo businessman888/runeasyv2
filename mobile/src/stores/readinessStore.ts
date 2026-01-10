@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Platform } from 'react-native';
 import * as Storage from '../utils/storage';
+import { BASE_API_URL } from '../config/api.config';
 
 // Types matching backend response
 export interface ReadinessVerdict {
@@ -62,20 +63,8 @@ interface ReadinessState {
     fetchReadinessStatus: () => Promise<void>;
 }
 
-// Use 10.0.2.2 for Android emulator, localhost for iOS simulator, or your actual IP for physical devices
-const getApiUrl = () => {
-    if (process.env.EXPO_PUBLIC_API_URL) {
-        return process.env.EXPO_PUBLIC_API_URL;
-    }
-    // Android emulator uses 10.0.2.2 to access host machine's localhost
-    if (Platform.OS === 'android') {
-        return 'http://10.0.2.2:3000/api';
-    }
-    // iOS simulator and web can use localhost
-    return 'http://localhost:3000/api';
-};
-
-const API_URL = getApiUrl();
+// API_URL imported from '../config/api.config' as BASE_API_URL
+const API_URL = BASE_API_URL;
 
 const getUserId = async () => {
     return await Storage.getItemAsync('user_id');

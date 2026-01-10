@@ -29,15 +29,24 @@ interface NotificationState {
     clearNotifications: () => void;
 }
 
-// API URL helper
+// API URL helper - ensures /api suffix
 const getApiUrl = () => {
-    if (process.env.EXPO_PUBLIC_API_URL) {
-        return process.env.EXPO_PUBLIC_API_URL;
+    let baseUrl = process.env.EXPO_PUBLIC_API_URL;
+
+    if (!baseUrl) {
+        if (Platform.OS === 'android') {
+            baseUrl = 'http://10.0.2.2:3000';
+        } else {
+            baseUrl = 'http://localhost:3000';
+        }
     }
-    if (Platform.OS === 'android') {
-        return 'http://10.0.2.2:3000/api';
+
+    // Ensure /api suffix
+    if (!baseUrl.endsWith('/api')) {
+        baseUrl = `${baseUrl}/api`;
     }
-    return 'http://localhost:3000/api';
+
+    return baseUrl;
 };
 
 const API_URL = getApiUrl();

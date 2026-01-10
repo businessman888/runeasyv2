@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import * as Storage from '../utils/storage';
+import { BASE_API_URL } from '../config/api.config';
 
 interface MetricsComparison {
     distance: { planned: number; executed: number; diff_percent: number };
@@ -155,7 +156,8 @@ interface FeedbackState {
     loadMoreWorkouts: () => Promise<void>;
 }
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
+// API_URL imported from '../config/api.config' as BASE_API_URL
+const API_URL = BASE_API_URL;
 
 const getUserId = async () => {
     return await Storage.getItemAsync('user_id');

@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import * as Storage from '../utils/storage';
+import { BASE_API_URL } from '../config/api.config';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
+// API_URL imported from '../config/api.config' as BASE_API_URL
+const API_URL = BASE_API_URL;
 
 interface OnboardingData {
     goal: string;

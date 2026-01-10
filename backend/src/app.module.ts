@@ -16,6 +16,7 @@ import { StatsModule } from './modules/stats';
 import { UsersModule } from './modules/users';
 import { ReadinessModule } from './modules/readiness';
 import { OnboardingModule } from './modules/onboarding';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { OnboardingModule } from './modules/onboarding';
     UsersModule,
     ReadinessModule,
     OnboardingModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Body, Headers, Logger, HttpException, HttpStatus } from '@nestjs/common';
-import { ReadinessService, ReadinessCheckInDto } from './readiness.service';
+import { ReadinessService } from './readiness.service';
+import { ReadinessCheckInDto } from './dto/readiness.dto';
 
 @Controller('readiness')
 export class ReadinessController {

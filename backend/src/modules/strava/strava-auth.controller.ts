@@ -162,12 +162,42 @@ export class StravaAuthController {
 
             const hasCompletedOnboarding = onboarding?.completed_at != null;
 
-            // Redirect to frontend with user info
-            const redirectPath = hasCompletedOnboarding ? '/home' : '/onboarding';
-            return res.redirect(`${frontendUrl}${redirectPath}?user_id=${userId}`);
+            // Trigger Strava activity sync in background (don't block redirect)
+            this.logger.log(`Starting background Strava sync for user ${userId}`);
+            this.stravaSyncService.syncRecentActivities(userId).catch((err) => {
+                this.logger.warn(`Background Strava sync failed for user ${userId}:`, err.message);
+            });
+
+            // Build redirect URL
+            // For Expo Go (exp:// URL), append query params directly after --/callback
+            // For web URLs, use path-based navigation
+            const isExpoUrl = frontendUrl?.startsWith('exp://');
+            let redirectUrl: string;
+
+            if (isExpoUrl) {
+                // Expo Go deep link format: exp://IP:PORT/--/callback?user_id=xxx&path=home
+                const path = hasCompletedOnboarding ? 'home' : 'onboarding';
+                redirectUrl = `${frontendUrl}?user_id=${userId}&path=${path}`;
+            } else {
+                // Web URL format: http://domain/home?user_id=xxx
+                const redirectPath = hasCompletedOnboarding ? '/home' : '/onboarding';
+                redirectUrl = `${frontendUrl}${redirectPath}?user_id=${userId}`;
+            }
+
+            this.logger.log('=== STRAVA CALLBACK REDIRECT ===');
+            this.logger.log(`FRONTEND_URL: ${frontendUrl}`);
+            this.logger.log(`Is Expo URL: ${isExpoUrl}`);
+            this.logger.log(`Has completed onboarding: ${hasCompletedOnboarding}`);
+            this.logger.log(`Final redirect URL: ${redirectUrl}`);
+
+            return res.redirect(redirectUrl);
         } catch (err) {
             this.logger.error('Strava callback error', err);
-            return res.redirect(`${frontendUrl}/login?error=auth_failed`);
+            const errorRedirect = frontendUrl?.startsWith('exp://')
+                ? `${frontendUrl}?error=auth_failed`
+                : `${frontendUrl}/login?error=auth_failed`;
+            this.logger.log(`Error redirect URL: ${errorRedirect}`);
+            return res.redirect(errorRedirect);
         }
     }
 }

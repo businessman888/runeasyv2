@@ -110,7 +110,8 @@ export function LoginScreen({ navigation }: any) {
         setError(null);
 
         // DEBUG: Log the URL being used
-        const loginUrl = `${API_URL}/auth/strava/login`;
+        // Backend uses /api prefix (set in main.ts), so route is /api/auth/strava/login
+        const loginUrl = `${API_URL}/api/auth/strava/login`;
         console.log('=== STRAVA LOGIN DEBUG ===');
         console.log('API_URL:', API_URL);
         console.log('Full login URL:', loginUrl);
@@ -155,7 +156,10 @@ export function LoginScreen({ navigation }: any) {
                         if (userId) {
                             await Storage.setItemAsync('user_id', userId);
 
-                            const pathname = url.pathname || '';
+                            // Check path param from backend (for Expo URLs)
+                            const pathParam = url.searchParams.get('path');
+                            const pathname = pathParam || url.pathname || '';
+                            console.log('Path param:', pathParam);
                             console.log('Pathname:', pathname);
 
                             if (pathname.includes('onboarding')) {
@@ -164,6 +168,8 @@ export function LoginScreen({ navigation }: any) {
                             } else {
                                 console.log('Existing user - logging in');
                                 await login(userId);
+                                // AppNavigator will automatically switch to Main when isAuthenticated becomes true
+                                console.log('Login complete - auth state updated, AppNavigator will switch routes');
                             }
                         }
                     } catch (parseError) {

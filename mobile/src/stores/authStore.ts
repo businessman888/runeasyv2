@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import * as Storage from '../utils/storage';
+import { BASE_API_URL } from '../config/api.config';
 
 interface User {
     id: string;
@@ -31,7 +32,8 @@ interface AuthState {
     syncStravaActivities: () => Promise<{ synced: number; message: string }>;
 }
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
+// API_URL imported from '../config/api.config' as BASE_API_URL
+const API_URL = BASE_API_URL;
 
 export const useAuthStore = create<AuthState>((set, get) => ({
     user: null,
@@ -47,27 +49,47 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     },
 
     login: async (userId: string) => {
+        console.log('=== AUTH STORE LOGIN ===');
+        console.log('userId:', userId);
+        console.log('API_URL:', API_URL);
+
         try {
             set({ isLoading: true });
 
             // Store userId securely
             await Storage.setItemAsync('user_id', userId);
+            console.log('userId saved to storage');
+
+            // Ensure API URL has /api prefix
+            const baseUrl = API_URL.endsWith('/api') ? API_URL : `${API_URL}/api`;
+            const userUrl = `${baseUrl}/users/${userId}`;
+            console.log('Fetching user from:', userUrl);
 
             // Fetch user data from API
-            const response = await fetch(`${API_URL}/users/${userId}`, {
+            const response = await fetch(userUrl, {
                 headers: {
                     'x-user-id': userId,
                 },
             });
 
+            console.log('User fetch response status:', response.status);
+
             if (response.ok) {
                 const userData = await response.json();
-                set({ user: userData.user, isAuthenticated: true });
+                console.log('User data received:', userData.user?.id);
+                set({ user: userData.user, isAuthenticated: true, isLoading: false });
+                console.log('Auth state set: isAuthenticated = true');
+            } else {
+                // Even if user fetch fails, set authenticated with userId
+                // This prevents returning to login screen
+                console.warn('User fetch failed, but setting authenticated anyway');
+                set({ user: null, isAuthenticated: true, isLoading: false });
             }
         } catch (error) {
             console.error('Login error:', error);
-        } finally {
-            set({ isLoading: false });
+            // Set authenticated even on error - we have the userId saved
+            set({ user: null, isAuthenticated: true, isLoading: false });
+            console.log('Error occurred but auth state set: isAuthenticated = true');
         }
     },
 
