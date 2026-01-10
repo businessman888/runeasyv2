@@ -133,7 +133,8 @@ export function PersonalInfoScreen({ navigation }: any) {
                 return;
             }
 
-            const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
+            const { BASE_API_URL } = require('../config/api.config');
+            const API_URL = BASE_API_URL;
             const nameParts = fullName.trim().split(' ');
             const firstname = nameParts[0] || '';
             const lastname = nameParts.slice(1).join(' ') || '';

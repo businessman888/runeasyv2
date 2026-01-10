@@ -13,6 +13,7 @@ import { colors } from '../../theme';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useAuthStore } from '../../stores/authStore';
 import Svg, { Path, Rect, G, Defs, Filter, FeFlood, FeColorMatrix, FeOffset, FeGaussianBlur, FeComposite, FeBlend, ClipPath, Circle } from 'react-native-svg';
+import { BASE_API_URL } from '../../config/api.config';
 
 // Badge de Conquista Icon (Yellow Trophy)
 const BadgeIcon = () => (
@@ -154,7 +155,7 @@ export function SmartPlanScreen({ navigation, route }: any) {
         try {
             // Save onboarding completion to backend
             if (userId) {
-                const API_URL = 'http://localhost:3000/api'; // TODO: Use env var
+                const API_URL = BASE_API_URL; // Using centralized config
 
                 // Save quiz data to user_onboarding table
                 await fetch(`${API_URL}/onboarding/complete`, {

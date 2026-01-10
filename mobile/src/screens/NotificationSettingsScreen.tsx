@@ -126,7 +126,8 @@ export function NotificationSettingsScreen({ navigation }: any) {
         },
     ]);
 
-    const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
+    // Import BASE_API_URL from centralized config
+    const API_URL = require('../config/api.config').BASE_API_URL;
 
     // Load preferences from backend
     useEffect(() => {

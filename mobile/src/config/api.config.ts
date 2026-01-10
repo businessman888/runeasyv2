@@ -9,7 +9,7 @@
  */
 
 // Production API URL (Railway deployment)
-const PRODUCTION_BASE = 'https://runeasy-api.up.railway.app';
+const PRODUCTION_BASE = 'https://runeasy-production.up.railway.app';
 
 // Development API URL (from .env or fallback to localhost)
 const DEVELOPMENT_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';

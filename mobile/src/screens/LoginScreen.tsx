@@ -15,10 +15,9 @@ import { colors, typography, spacing } from '../theme';
 import * as Storage from '../utils/storage';
 import { useAuthStore } from '../stores';
 import Svg, { Path } from 'react-native-svg';
+import { API_URL } from '../config/api.config';
 
 const { width, height } = Dimensions.get('window');
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
 
 // RunEasy Logo Component (exact from Figma SVG) - 355x116
 const RunEasyLogo = () => (
