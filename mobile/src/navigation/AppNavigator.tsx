@@ -25,6 +25,7 @@ import {
     LimitationsScreen,
     ReadinessQuizScreen,
     ReadinessResultScreen,
+    ReadinessSuccessScreen,
     PersonalInfoScreen,
     TrainingHistoryScreen,
     NotificationSettingsScreen,
@@ -319,6 +320,16 @@ export function AppNavigator({ navigationRef }: { navigationRef?: React.RefObjec
                             options={{
                                 headerShown: false,
                                 presentation: 'card',
+                            }}
+                        />
+                        <Stack.Screen
+                            name="ReadinessSuccess"
+                            component={ReadinessSuccessScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'card',
+                                animation: 'fade',
+                                gestureEnabled: false,
                             }}
                         />
                         <Stack.Screen

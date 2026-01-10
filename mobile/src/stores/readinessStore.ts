@@ -33,7 +33,9 @@ export interface ReadinessStatus {
     isUnlocked: boolean;
     hasCompletedFirstWorkout: boolean;
     canCheckInToday: boolean;
+    hasCompletedToday: boolean;
     lastCheckInDate: string | null;
+    todayVerdict: ReadinessVerdict | null;
 }
 
 interface ReadinessState {
@@ -201,7 +203,9 @@ export const useReadinessStore = create<ReadinessState>((set, get) => ({
                         isUnlocked: false,
                         hasCompletedFirstWorkout: false,
                         canCheckInToday: false,
+                        hasCompletedToday: false,
                         lastCheckInDate: null,
+                        todayVerdict: null,
                     },
                     statusLoading: false
                 });
@@ -234,7 +238,9 @@ export const useReadinessStore = create<ReadinessState>((set, get) => ({
                     isUnlocked: false,
                     hasCompletedFirstWorkout: false,
                     canCheckInToday: false,
+                    hasCompletedToday: false,
                     lastCheckInDate: null,
+                    todayVerdict: null,
                 },
                 statusLoading: false
             });

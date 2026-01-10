@@ -29,6 +29,13 @@ export class ReadinessService {
     async analyzeReadiness(dto: ReadinessCheckInDto): Promise<ReadinessVerdict> {
         this.logger.log(`Analyzing readiness for user: ${dto.userId}`);
 
+        // Check if already checked in today (after 3 AM)
+        const existingCheckIn = await this.hasCheckedInToday(dto.userId);
+        if (existingCheckIn) {
+            this.logger.log(`User ${dto.userId} already checked in today, returning existing verdict`);
+            return existingCheckIn;
+        }
+
         // 1. Get Strava load data (mock for now)
         const stravaData = await this.mockStravaService.getLoadData(dto.userId);
         const stravaDescription = this.mockStravaService.getLoadDescription(stravaData);
@@ -46,12 +53,204 @@ export class ReadinessService {
         };
 
         // 4. Get AI verdict
-        const verdict = await this.readinessAIService.analyzeReadiness(input);
+        let verdict = await this.readinessAIService.analyzeReadiness(input);
 
-        // 5. Save to database for history (optional)
+        // 5. ACWR Balancing Logic: Override red to yellow for borderline cases with positive check-in
+        const checkInAvg = (dto.answers.sleep + dto.answers.legs + dto.answers.mood + dto.answers.stress + dto.answers.motivation) / 5;
+        const acwr = stravaData.acwr || 1.0;
+
+        if (verdict.status_color === 'red' && acwr >= 1.4 && acwr <= 1.6 && checkInAvg >= 4) {
+            this.logger.log(`ACWR balancing: Overriding red to yellow (ACWR=${acwr}, check-in avg=${checkInAvg})`);
+            verdict = {
+                ...verdict,
+                status_color: 'yellow',
+                status_label: 'Sinal amarelo - Atenção',
+                readiness_score: Math.max(verdict.readiness_score, 45), // Ensure score is at least 45 for yellow
+            };
+        }
+
+        // 6. Save to database for history
         await this.saveReadinessResult(dto.userId, dto.answers, verdict);
 
         return verdict;
+    }
+
+    /**
+     * Check if user has already completed check-in today (after 3 AM reset)
+     * Returns the existing verdict if found, null otherwise
+     */
+    async hasCheckedInToday(userId: string): Promise<ReadinessVerdict | null> {
+        try {
+            const supabase = this.supabaseService.getClient();
+
+            // Calculate 3 AM today in local timezone
+            const now = new Date();
+            const today3AM = new Date(now);
+            today3AM.setHours(3, 0, 0, 0);
+
+            // If current time is before 3 AM, use yesterday's 3 AM
+            if (now < today3AM) {
+                today3AM.setDate(today3AM.getDate() - 1);
+            }
+
+            const { data, error } = await supabase
+                .from('readiness_history')
+                .select('*')
+                .eq('user_id', userId)
+                .gte('created_at', today3AM.toISOString())
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (error || !data) {
+                return null;
+            }
+
+            // Reconstruct verdict from stored data
+            return {
+                readiness_score: data.score,
+                status_color: data.status_color,
+                status_label: data.status_label,
+                ai_analysis: data.ai_analysis,
+                metrics_summary: data.metrics_summary || [],
+                generated_at: data.created_at,
+            };
+        } catch (error) {
+            this.logger.warn('Error checking today check-in status', error);
+            return null;
+        }
+    }
+
+    /**
+     * Get question set based on case index (0-17)
+     * Each case has 5 questions with varied wording
+     */
+    getQuestionSet(caseIndex: number): Array<{
+        id: string;
+        question: string;
+        options: Array<{ value: number; label: string; description?: string }>;
+    }> {
+        // Base questions that rotate with different framings
+        const baseQuestions = this.getBaseQuestions();
+
+        // Apply case-specific variations
+        const caseVariations = this.getCaseVariations(caseIndex);
+
+        return baseQuestions.map((q, idx) => ({
+            ...q,
+            question: caseVariations[idx]?.question || q.question,
+        }));
+    }
+
+    private getBaseQuestions(): Array<{
+        id: string;
+        question: string;
+        options: Array<{ value: number; label: string; description?: string }>;
+    }> {
+        return [
+            {
+                id: 'sleep',
+                question: 'Sua bateria carregou bem durante a noite?',
+                options: [
+                    { value: 5, label: '100% Full' },
+                    { value: 4, label: '75%' },
+                    { value: 3, label: '50%' },
+                    { value: 2, label: '25%' },
+                    { value: 1, label: 'Modo economia' },
+                ],
+            },
+            {
+                id: 'legs',
+                question: 'Como estão suas pernas hoje?',
+                options: [
+                    { value: 5, label: 'Com molas', description: 'Prontas para voar' },
+                    { value: 4, label: 'Leves', description: 'Sem peso' },
+                    { value: 3, label: 'Normais', description: 'Estão aí' },
+                    { value: 2, label: 'Pesadas', description: 'Cansadas' },
+                    { value: 1, label: 'Como chumbo', description: 'Travadas' },
+                ],
+            },
+            {
+                id: 'mood',
+                question: 'Qual o clima da sua mente?',
+                options: [
+                    { value: 5, label: 'Céu limpo', description: 'Energia máxima' },
+                    { value: 4, label: 'Ensolarado', description: 'Boa energia' },
+                    { value: 3, label: 'Instável', description: 'Oscilando' },
+                    { value: 2, label: 'Nublado', description: 'Desmotivado' },
+                    { value: 1, label: 'Tempestade', description: 'Energia baixa' },
+                ],
+            },
+            {
+                id: 'stress',
+                question: 'Como está o peso das preocupações?',
+                options: [
+                    { value: 5, label: 'Inexistente', description: 'Mente livre' },
+                    { value: 4, label: 'Leve', description: 'Quase não noto' },
+                    { value: 3, label: 'Presente', description: 'Estou ciente' },
+                    { value: 2, label: 'Pesado', description: 'Difícil carregar' },
+                    { value: 1, label: 'Insuportável', description: 'Me esmaga' },
+                ],
+            },
+            {
+                id: 'motivation',
+                question: 'Onde está sua motivação?',
+                options: [
+                    { value: 5, label: 'Já estou de tênis', description: 'Pronto!' },
+                    { value: 4, label: 'Vamos nessa!' },
+                    { value: 3, label: 'Talvez' },
+                    { value: 2, label: 'Preciso de café' },
+                    { value: 1, label: 'Ainda na cama' },
+                ],
+            },
+        ];
+    }
+
+    private getCaseVariations(caseIndex: number): Array<{ question: string }> {
+        const variations: Array<Array<{ question: string }>> = [
+            // Case 0 - Default
+            [
+                { question: 'Sua bateria carregou bem durante a noite?' },
+                { question: 'Como estão suas pernas hoje?' },
+                { question: 'Qual o clima da sua mente?' },
+                { question: 'Como está o peso das preocupações?' },
+                { question: 'Onde está sua motivação?' },
+            ],
+            // Case 1
+            [
+                { question: 'Quantas horas de sono reparador você teve?' },
+                { question: 'Suas pernas estão prontas para o treino?' },
+                { question: 'Como você está se sentindo mentalmente?' },
+                { question: 'O estresse está afetando você hoje?' },
+                { question: 'Você está animado para treinar?' },
+            ],
+            // Case 2
+            [
+                { question: 'Você acordou revigorado(a) hoje?' },
+                { question: 'Há alguma fadiga muscular nas pernas?' },
+                { question: 'Seu humor está positivo?' },
+                { question: 'Está conseguindo lidar bem com o estresse?' },
+                { question: 'Sente vontade de se exercitar?' },
+            ],
+            // Case 3
+            [
+                { question: 'A qualidade do seu sono foi boa?' },
+                { question: 'Suas pernas se recuperaram do último treino?' },
+                { question: 'Está com a mente clara e focada?' },
+                { question: 'O trabalho/vida pessoal está te estressando?' },
+                { question: 'Está motivado(a) a dar seu melhor?' },
+            ],
+            // Case 4-17: Create variations programmatically
+            ...Array.from({ length: 14 }, (_, i) => [
+                { question: `Como está sua energia após dormir? (${i + 4})` },
+                { question: `Sente suas pernas recuperadas? (${i + 4})` },
+                { question: `Seu estado mental está equilibrado? (${i + 4})` },
+                { question: `O estresse está controlado? (${i + 4})` },
+                { question: `Está pronto(a) para o treino? (${i + 4})` },
+            ]),
+        ];
+
+        return variations[caseIndex] || variations[0];
     }
 
     private async getTodayWorkout(userId: string): Promise<ReadinessInput['todayWorkout'] | undefined> {
@@ -156,7 +355,9 @@ export class ReadinessService {
         isUnlocked: boolean;
         hasCompletedFirstWorkout: boolean;
         canCheckInToday: boolean;
+        hasCompletedToday: boolean;
         lastCheckInDate: string | null;
+        todayVerdict: ReadinessVerdict | null;
     }> {
         const supabase = this.supabaseService.getClient();
 
@@ -169,29 +370,21 @@ export class ReadinessService {
 
         const hasCompletedFirstWorkout = (workoutCount ?? 0) > 0;
 
-        // 2. Get today's check-in status
-        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-
-        const { data: todayCheckIn } = await supabase
-            .from('readiness_checkins')
-            .select('*')
-            .eq('user_id', userId)
-            .eq('checkin_date', today)
-            .single();
+        // 2. Check readiness_history for today's check-in (after 3 AM)
+        const existingVerdict = await this.hasCheckedInToday(userId);
+        const hasCompletedToday = existingVerdict !== null;
 
         // User can check in if:
         // - They have completed first workout
-        // - AND (no check-in today OR check-in is available and not completed)
-        const canCheckInToday = hasCompletedFirstWorkout &&
-            (!todayCheckIn || (todayCheckIn.is_available && !todayCheckIn.completed_at));
+        // - AND have NOT already checked in today (after 3 AM)
+        const canCheckInToday = hasCompletedFirstWorkout && !hasCompletedToday;
 
-        // Get last completed check-in date
+        // Get last completed check-in date from readiness_history
         const { data: lastCheckIn } = await supabase
-            .from('readiness_checkins')
-            .select('checkin_date')
+            .from('readiness_history')
+            .select('created_at')
             .eq('user_id', userId)
-            .not('completed_at', 'is', null)
-            .order('checkin_date', { ascending: false })
+            .order('created_at', { ascending: false })
             .limit(1)
             .single();
 
@@ -199,7 +392,9 @@ export class ReadinessService {
             isUnlocked: hasCompletedFirstWorkout,
             hasCompletedFirstWorkout,
             canCheckInToday,
-            lastCheckInDate: lastCheckIn?.checkin_date || null,
+            hasCompletedToday,
+            lastCheckInDate: lastCheckIn?.created_at?.split('T')[0] || null,
+            todayVerdict: existingVerdict,
         };
     }
 
@@ -210,17 +405,39 @@ export class ReadinessService {
     ): Promise<void> {
         try {
             const supabase = this.supabaseService.getClient();
-            await supabase.from('readiness_history').insert({
+
+            // Ensure user exists in public.users before inserting (prevents FK violation)
+            await this.ensureUserProfile(userId);
+
+            const insertData = {
                 user_id: userId,
-                check_in_answers: answers,
-                readiness_score: verdict.readiness_score,
+                score: verdict.readiness_score, // Column is 'score', not 'readiness_score'
                 status_color: verdict.status_color,
                 status_label: verdict.status_label,
                 ai_analysis: verdict.ai_analysis,
+                check_in_answers: answers,
                 metrics_summary: verdict.metrics_summary,
-                created_at: new Date().toISOString(),
-            });
-            this.logger.log('Readiness result saved to history');
+                // created_at has default NOW() in table, no need to set it
+            };
+
+            this.logger.log(`Inserting readiness history for user ${userId}:`, JSON.stringify(insertData));
+
+            const { data, error } = await supabase
+                .from('readiness_history')
+                .insert(insertData)
+                .select()
+                .single();
+
+            if (error) {
+                this.logger.error(`Supabase insert error: ${error.message}`, {
+                    code: error.code,
+                    details: error.details,
+                    hint: error.hint,
+                });
+                throw error;
+            }
+
+            this.logger.log(`Readiness result saved successfully. ID: ${data?.id}`);
 
             // Schedule recovery analysis notification for 10 minutes later
             this.notificationService.scheduleRecoveryAnalysisNotification(userId, {
@@ -229,9 +446,55 @@ export class ReadinessService {
                 readiness_score: verdict.readiness_score,
                 status_label: verdict.status_label,
             });
-        } catch (error) {
-            // Don't fail the request if history save fails
-            this.logger.warn('Could not save readiness history', error);
+        } catch (error: any) {
+            // Log detailed error but don't fail the request
+            this.logger.error(`Failed to save readiness history: ${error?.message || error}`, error);
+        }
+    }
+
+    /**
+     * Ensures user profile exists in public.users table.
+     * Creates a basic profile if not exists to prevent FK violations.
+     */
+    private async ensureUserProfile(userId: string): Promise<void> {
+        try {
+            const supabase = this.supabaseService.getClient();
+
+            // First check if user exists
+            const { data: existingUser, error: checkError } = await supabase
+                .from('users')
+                .select('id')
+                .eq('id', userId)
+                .single();
+
+            if (existingUser) {
+                this.logger.debug(`User ${userId} already exists in public.users`);
+                return;
+            }
+
+            // If user doesn't exist, create basic profile
+            this.logger.log(`Creating basic profile for user ${userId} in public.users`);
+
+            const { error: insertError } = await supabase
+                .from('users')
+                .upsert({
+                    id: userId,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                }, {
+                    onConflict: 'id',
+                    ignoreDuplicates: true,
+                });
+
+            if (insertError) {
+                this.logger.warn(`Could not create user profile: ${insertError.message}`);
+                // Don't throw - we'll try the insert anyway and let it fail if needed
+            } else {
+                this.logger.log(`User profile created for ${userId}`);
+            }
+        } catch (error: any) {
+            this.logger.warn(`ensureUserProfile error: ${error?.message || error}`);
+            // Don't throw - continue to try the insert
         }
     }
 }

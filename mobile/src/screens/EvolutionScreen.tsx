@@ -11,6 +11,7 @@ import {
     ActivityIndicator,
     Animated,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, spacing } from '../theme';
@@ -191,10 +192,11 @@ const MetricCardInline: React.FC<{ label: string; value: string; sublabel?: stri
 // Inline Result Component (keeps navbar)
 const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> = ({ navigation, onReset }) => {
     const { verdict, isLoading, error, fetchVerdict } = useReadinessStore();
+    const insets = useSafeAreaInsets();
 
     if (isLoading) {
         return (
-            <View style={resultStyles.loadingContainer}>
+            <View style={[resultStyles.loadingContainer, { paddingTop: insets.top }]}>
                 <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
                 <ActivityIndicator size="large" color={colors.primary} />
                 <Text style={resultStyles.loadingText}>Analisando sua prontidão...</Text>
@@ -204,7 +206,7 @@ const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> 
 
     if (error || !verdict) {
         return (
-            <View style={resultStyles.errorContainer}>
+            <View style={[resultStyles.errorContainer, { paddingTop: insets.top }]}>
                 <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
                 <Text style={{ fontSize: 48 }}>⚠️</Text>
                 <Text style={resultStyles.errorText}>{error || 'Erro ao carregar resultado'}</Text>
@@ -218,15 +220,17 @@ const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> 
     const generatedTime = new Date(verdict.generated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
     return (
-        <View style={resultStyles.container}>
+        <View style={[resultStyles.container, { paddingTop: insets.top }]}>
             <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
-            <SafeAreaView style={resultStyles.safeArea}>
-                <View style={resultStyles.header}>
-                    <TouchableOpacity onPress={onReset} style={resultStyles.backButton}><Text style={resultStyles.backIcon}>←</Text></TouchableOpacity>
-                    <Text style={resultStyles.headerTitle}>Veredito de Prontidão</Text>
-                    <TouchableOpacity style={resultStyles.calendarButton}><CalendarIcon /></TouchableOpacity>
-                </View>
-            </SafeAreaView>
+            <View style={resultStyles.header}>
+                <TouchableOpacity onPress={onReset} style={resultStyles.backButton}>
+                    <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+                <Text style={resultStyles.headerTitle}>Veredito de Prontidão</Text>
+                <TouchableOpacity style={resultStyles.calendarButton}>
+                    <Ionicons name="calendar-outline" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+            </View>
 
             <ScrollView style={resultStyles.content} showsVerticalScrollIndicator={false}>
                 <View style={resultStyles.timeBadge}>
@@ -260,7 +264,12 @@ const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> 
 
                 {/* Button inside ScrollView so it scrolls and stays above navbar */}
                 <View style={resultStyles.footer}>
-                    <TouchableOpacity style={resultStyles.confirmButton} onPress={onReset}><Text style={resultStyles.confirmButtonText}>Confirmar</Text></TouchableOpacity>
+                    <TouchableOpacity
+                        style={resultStyles.confirmButton}
+                        onPress={() => navigation.navigate('ReadinessSuccess')}
+                    >
+                        <Text style={resultStyles.confirmButtonText}>Concluir</Text>
+                    </TouchableOpacity>
                 </View>
             </ScrollView>
         </View>
@@ -333,6 +342,14 @@ export function EvolutionScreen({ navigation }: any) {
         fetchReadinessStatus();
     }, []);
 
+    // Sync todayVerdict to store when available (prevents setState during render)
+    useEffect(() => {
+        const todayVerdict = readinessStatus?.todayVerdict;
+        if (todayVerdict && !verdict) {
+            useReadinessStore.setState({ verdict: todayVerdict });
+        }
+    }, [readinessStatus?.todayVerdict, verdict]);
+
     const currentQuestion = READINESS_QUESTIONS[currentStep];
     const totalSteps = READINESS_QUESTIONS.length;
     const progress = (currentStep + 1) / totalSteps;
@@ -367,14 +384,14 @@ export function EvolutionScreen({ navigation }: any) {
         resetQuiz();
     };
 
-    // Show loading state while checking status
-    if (statusLoading) {
+    // Show loading state while checking status OR if status not yet loaded
+    if (statusLoading || readinessStatus === null) {
         return (
             <View style={styles.container}>
                 <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <ActivityIndicator size="large" color={colors.primary} />
-                    <Text style={{ color: colors.white, marginTop: spacing.lg }}>Carregando...</Text>
+                    <Text style={{ color: colors.white, marginTop: spacing.lg }}>Verificando status...</Text>
                 </View>
             </View>
         );
@@ -383,6 +400,46 @@ export function EvolutionScreen({ navigation }: any) {
     // Show locked state if user cannot check in
     const canCheckIn = readinessStatus?.canCheckInToday ?? false;
     const hasCompletedFirstWorkout = readinessStatus?.hasCompletedFirstWorkout ?? false;
+    const hasCompletedToday = readinessStatus?.hasCompletedToday ?? false;
+    const todayVerdict = readinessStatus?.todayVerdict;
+
+    // PREVENTIVE BLOCK: If user has already checked in today, show result or success
+    if (hasCompletedToday) {
+        // If we have today's verdict (synced via useEffect), show it
+        if (todayVerdict || verdict) {
+            return (
+                <ReadinessResultInline
+                    navigation={navigation}
+                    onReset={handleResetQuiz}
+                />
+            );
+        }
+
+        // If no verdict available but still completed, show success message
+        return (
+            <View style={[styles.container, { paddingTop: insets.top }]}>
+                <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.lg }}>
+                    <Ionicons name="checkmark-circle" size={80} color={colors.primary} />
+                    <Text style={{ color: colors.white, fontSize: 24, fontWeight: '700', marginTop: spacing.lg, textAlign: 'center' }}>
+                        Prontidão Concluída!
+                    </Text>
+                    <Text style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: 16, marginTop: spacing.md, textAlign: 'center' }}>
+                        Você já realizou seu check-in de prontidão hoje.
+                    </Text>
+                    <Text style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: 14, marginTop: spacing.sm, textAlign: 'center' }}>
+                        Próximo check-in disponível amanhã após as 03:00 AM
+                    </Text>
+                    <TouchableOpacity
+                        style={{ backgroundColor: colors.primary, paddingVertical: 16, paddingHorizontal: 40, borderRadius: 30, marginTop: spacing.xl }}
+                        onPress={() => navigation.navigate('Home')}
+                    >
+                        <Text style={{ color: '#0A0A14', fontSize: 16, fontWeight: '600' }}>Voltar para Home</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
+    }
 
     // Show result screen inline when quiz is completed
     if (quizCompleted) {
@@ -413,11 +470,12 @@ export function EvolutionScreen({ navigation }: any) {
                 </View>
             </SafeAreaView>
 
-            {/* Question Card */}
+            {/* Question Card - ScrollView with flexGrow and paddingBottom for button space */}
             <ScrollView
                 style={styles.content}
-                contentContainerStyle={styles.contentContainer}
+                contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
                 showsVerticalScrollIndicator={false}
+                scrollEnabled={true}
             >
                 <View style={styles.questionCard}>
                     <Text style={{
@@ -472,21 +530,22 @@ export function EvolutionScreen({ navigation }: any) {
                             );
                         })}
                     </View>
+                </View>
 
-                    {/* Continue Button - Inside ScrollView, only shows when option selected */}
-                    {selectedValue && (
-                        <View style={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: insets.bottom + 100 }}>
-                            <TouchableOpacity
-                                style={styles.continueButton}
-                                onPress={handleContinue}
-                            >
-                                <Text style={styles.continueButtonText}>Continuar</Text>
-                                <View style={styles.arrowContainer}>
-                                    <Text style={styles.arrowText}>→</Text>
-                                </View>
-                            </TouchableOpacity>
-                        </View>
-                    )}
+                {/* Continue Button - Inside ScrollView flow, marginTop for separation, opacity-based visibility */}
+                <View style={{
+                    marginTop: 30,
+                    marginHorizontal: 20,
+                    opacity: selectedValue ? 1 : 0,
+                }}>
+                    <TouchableOpacity
+                        style={styles.continueButton}
+                        onPress={handleContinue}
+                        disabled={!selectedValue}
+                    >
+                        <Text style={styles.continueButtonText}>Continuar</Text>
+                        <Ionicons name="arrow-forward-outline" size={18} color="#0A0A14" style={{ marginLeft: 8 }} />
+                    </TouchableOpacity>
                 </View>
             </ScrollView>
 

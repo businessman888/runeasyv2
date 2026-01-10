@@ -19,6 +19,7 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
 import { useTrainingStore, useStatsStore, ScheduleDay } from '../stores';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { PoweredByStrava } from '../components/PoweredByStrava';
 
 // Icon components using @expo/vector-icons
 function BackIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -593,20 +594,27 @@ export function CalendarScreen({ navigation }: any) {
 
                 {/* Stats Bar */}
                 <View style={styles.statsBar}>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>Volume</Text>
-                        <View style={styles.statValueRow}>
-                            <Text style={styles.statValue}>{Math.round(summary?.total_distance_km || 0)}</Text>
-                            <Text style={styles.statUnit}> km</Text>
+                    {/* Stats Row */}
+                    <View style={styles.statsRow}>
+                        <View style={styles.statItem}>
+                            <Text style={styles.statLabel}>Volume</Text>
+                            <View style={styles.statValueRow}>
+                                <Text style={styles.statValue}>{Math.round(summary?.total_distance_km || 0)}</Text>
+                                <Text style={styles.statUnit}> km</Text>
+                            </View>
+                        </View>
+                        <View style={styles.statDivider} />
+                        <View style={styles.statItem}>
+                            <Text style={styles.statLabel}>Frequência</Text>
+                            <View style={styles.statValueRow}>
+                                <Text style={styles.statValue}>{summary?.total_runs || 0}</Text>
+                                <Text style={styles.statUnitMuted}> dias</Text>
+                            </View>
                         </View>
                     </View>
-                    <View style={styles.statDivider} />
-                    <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>Frequência</Text>
-                        <View style={styles.statValueRow}>
-                            <Text style={styles.statValue}>{summary?.total_runs || 0}</Text>
-                            <Text style={styles.statUnitMuted}> dias</Text>
-                        </View>
+                    {/* Strava Badge Row */}
+                    <View style={styles.stravaBadgeRow}>
+                        <PoweredByStrava width={55} />
                     </View>
                 </View>
 
@@ -1120,7 +1128,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     statsBar: {
-        flexDirection: 'row',
+        flexDirection: 'column',
         backgroundColor: '#15152A',
         marginHorizontal: spacing.lg,
         marginVertical: spacing.md,
@@ -1129,13 +1137,24 @@ const styles = StyleSheet.create({
         borderColor: 'rgba(0, 212, 255, 0.3)',
         padding: spacing.md,
     },
+    statsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    stravaBadgeRow: {
+        alignItems: 'flex-end',
+        marginTop: 8,
+        paddingRight: 4,
+    },
     statItem: {
         flex: 1,
         alignItems: 'center',
     },
     statDivider: {
         width: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        alignSelf: 'stretch',
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        marginHorizontal: spacing.md,
     },
     statLabel: {
         fontSize: typography.fontSizes.xs,

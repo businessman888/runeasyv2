@@ -184,8 +184,8 @@ export function ReadinessResultScreen({ navigation }: any) {
     }, []);
 
     const handleConfirm = () => {
-        resetQuiz();
-        navigation.navigate('Home');
+        // Navigate to success screen with fade animation
+        navigation.navigate('ReadinessSuccess');
     };
 
     const handleBack = () => {
@@ -243,24 +243,24 @@ export function ReadinessResultScreen({ navigation }: any) {
     }, []);
 
     return (
-        <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={[styles.container, { paddingTop: insets.top + 10 }]}>
             <StatusBar barStyle="light-content" backgroundColor="#0E0E1F" />
 
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+                    <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Veredito de Prontidão</Text>
                 <TouchableOpacity style={styles.calendarButton}>
-                    <Ionicons name="calendar-outline" size={24} color="#EBEBF5" />
+                    <Ionicons name="calendar-outline" size={24} color="#FFFFFF" />
                 </TouchableOpacity>
             </View>
 
             <ScrollView
                 style={styles.content}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+                contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
             >
                 <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
                     {/* Time Badge */}

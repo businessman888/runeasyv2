@@ -32,8 +32,19 @@ export class ReadinessController {
         }
 
         try {
+            // Check if user already completed check-in today (after 3 AM)
+            const existingVerdict = await this.readinessService.hasCheckedInToday(dto.userId);
+            if (existingVerdict) {
+                this.logger.log(`User ${dto.userId} already checked in today, returning existing verdict`);
+                return {
+                    ...existingVerdict,
+                    alreadyCompleted: true,
+                    message: 'Check-in já realizado hoje. Próximo disponível amanhã às 03:00 AM.',
+                };
+            }
+
             const verdict = await this.readinessService.analyzeReadiness(dto);
-            return verdict;
+            return { ...verdict, alreadyCompleted: false };
         } catch (error) {
             this.logger.error('Failed to analyze readiness', error);
             throw new HttpException(
@@ -60,5 +71,68 @@ export class ReadinessController {
                 HttpStatus.INTERNAL_SERVER_ERROR,
             );
         }
+    }
+
+    @Get('questions')
+    async getQuestions() {
+        this.logger.log('GET /api/readiness/questions');
+
+        try {
+            const caseIndex = this.calculateCurrentCase();
+            const questions = this.readinessService.getQuestionSet(caseIndex);
+
+            return {
+                caseIndex,
+                questions,
+                nextRotation: this.getNextRotationTime(),
+            };
+        } catch (error) {
+            this.logger.error('Failed to get questions', error);
+            throw new HttpException(
+                'Failed to get questions',
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    /**
+     * Calculate current question case based on days since epoch
+     * Changes at 3 AM each day, cycles through 18 cases
+     */
+    private calculateCurrentCase(): number {
+        const EPOCH_DATE = new Date('2026-01-01T03:00:00'); // Start date
+        const TOTAL_CASES = 18;
+
+        const now = new Date();
+        // Adjust for 3 AM cutoff - if before 3 AM, consider it the previous day
+        const adjustedNow = new Date(now);
+        if (now.getHours() < 3) {
+            adjustedNow.setDate(adjustedNow.getDate() - 1);
+        }
+        adjustedNow.setHours(3, 0, 0, 0);
+
+        const daysSinceEpoch = Math.floor(
+            (adjustedNow.getTime() - EPOCH_DATE.getTime()) / (1000 * 60 * 60 * 24)
+        );
+
+        const caseIndex = Math.abs(daysSinceEpoch) % TOTAL_CASES;
+        this.logger.debug(`Days since epoch: ${daysSinceEpoch}, Case index: ${caseIndex}`);
+
+        return caseIndex;
+    }
+
+    /**
+     * Get the next rotation time (next day at 3 AM)
+     */
+    private getNextRotationTime(): string {
+        const now = new Date();
+        const nextRotation = new Date(now);
+
+        if (now.getHours() >= 3) {
+            nextRotation.setDate(nextRotation.getDate() + 1);
+        }
+        nextRotation.setHours(3, 0, 0, 0);
+
+        return nextRotation.toISOString();
     }
 }
