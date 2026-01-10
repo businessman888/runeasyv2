@@ -75,19 +75,25 @@ export class QuestionSetsParserService implements OnModuleInit {
         // Question ID mapping based on position
         const questionIds = ['sleep', 'legs', 'mood', 'stress', 'motivation'];
 
+        this.logger.debug(`Parsing ${lines.length} non-empty lines`);
+
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
 
-            // Detect set header: "Set 2:", "SET 7", etc.
-            const setMatch = line.match(/^Set\s*(\d+)\s*[:\-]?\s*(.*)?$/i);
+            // Detect set header: "Set 2:", "SET 7", "Set 25: O Motivacional", etc.
+            // More flexible regex to catch various formats
+            const setMatch = line.match(/^Set\s*(\d+)\s*[:\-\.]?\s*(.*)?$/i);
             if (setMatch) {
-                // Save previous set if exists
+                // Save previous set if exists and has 5 questions
                 if (currentSet && currentQuestions.length >= 5) {
                     sets.push({
                         setNumber: currentSet.setNumber!,
                         setName: currentSet.setName || `Set ${currentSet.setNumber}`,
                         questions: currentQuestions.slice(0, 5),
                     });
+                    this.logger.debug(`Saved Set ${currentSet.setNumber} with ${currentQuestions.length} questions`);
+                } else if (currentSet && currentQuestions.length > 0) {
+                    this.logger.warn(`Set ${currentSet.setNumber} only had ${currentQuestions.length} questions (need 5)`);
                 }
 
                 // Start new set
@@ -97,14 +103,45 @@ export class QuestionSetsParserService implements OnModuleInit {
                 };
                 currentQuestions = [];
                 questionIndex = 0;
+                this.logger.debug(`Starting Set ${currentSet.setNumber}: ${currentSet.setName}`);
                 continue;
             }
 
-            // Detect question line: "1. Sono:", "2. Dor:", etc. or just "Sono:", "Dor:"
-            const questionMatch = line.match(/^(\d+\.)?\s*(Sono|Dor|Energia|Estresse|Vontade)\s*[:\-]\s*(.+)?$/i);
+            // Detect question line with multiple patterns:
+            // "1. Sono: Como você dormiu?" 
+            // "Sono: Como você dormiu?"
+            // "1.  Sono: Texto"
+            // "2. Dor: Texto"
+            const questionPatterns = [
+                /^(\d+)\.\s*(Sono|Dor|Energia|Estresse|Vontade)\s*[:\-]\s*(.+)?$/i,
+                /^(Sono|Dor|Energia|Estresse|Vontade)\s*[:\-]\s*(.+)?$/i,
+            ];
+
+            let questionMatch = null;
+            let category = '';
+            let questionText = '';
+
+            for (const pattern of questionPatterns) {
+                const match = line.match(pattern);
+                if (match) {
+                    if (match.length === 4) {
+                        // Pattern with number prefix
+                        category = match[2].toLowerCase();
+                        questionText = match[3]?.trim() || '';
+                    } else {
+                        // Pattern without number prefix
+                        category = match[1].toLowerCase();
+                        questionText = match[2]?.trim() || '';
+                    }
+                    questionMatch = match;
+                    break;
+                }
+            }
+
             if (questionMatch && currentSet) {
-                const category = questionMatch[2].toLowerCase();
-                const questionText = questionMatch[3]?.trim() || this.getDefaultQuestion(category);
+                if (!questionText) {
+                    questionText = this.getDefaultQuestion(category);
+                }
 
                 // Map category to question ID
                 const idMap: Record<string, string> = {
@@ -117,7 +154,7 @@ export class QuestionSetsParserService implements OnModuleInit {
 
                 const id = idMap[category] || questionIds[questionIndex % 5];
 
-                // Look ahead for options
+                // Look ahead for options (search more lines)
                 const options = this.parseOptionsFromLines(lines, i + 1);
 
                 if (options.length >= 5) {
@@ -127,6 +164,8 @@ export class QuestionSetsParserService implements OnModuleInit {
                         options: options.slice(0, 5),
                     });
                     questionIndex++;
+                } else {
+                    this.logger.debug(`Set ${currentSet.setNumber}: Question "${category}" only found ${options.length} options`);
                 }
             }
         }
@@ -138,6 +177,7 @@ export class QuestionSetsParserService implements OnModuleInit {
                 setName: currentSet.setName || `Set ${currentSet.setNumber}`,
                 questions: currentQuestions.slice(0, 5),
             });
+            this.logger.debug(`Saved final Set ${currentSet.setNumber} with ${currentQuestions.length} questions`);
         }
 
         // If we don't have set 1 (first questions before any "Set X" header)
@@ -150,8 +190,12 @@ export class QuestionSetsParserService implements OnModuleInit {
                     setName: 'O Clínico (Foco em Sintomas)',
                     questions: set1Questions.slice(0, 5),
                 });
+                this.logger.debug('Added Set 1 from initial questions');
             }
         }
+
+        this.logger.log(`Total sets parsed: ${sets.length}`);
+        sets.forEach(s => this.logger.debug(`  - Set ${s.setNumber}: ${s.setName}`));
 
         return sets.sort((a, b) => a.setNumber - b.setNumber);
     }
@@ -207,8 +251,8 @@ export class QuestionSetsParserService implements OnModuleInit {
     private parseOptionsFromLines(lines: string[], startIndex: number): Array<{ value: number; label: string }> {
         const options: Array<{ value: number; label: string }> = [];
 
-        // Check next few lines for options
-        for (let i = startIndex; i < Math.min(startIndex + 5, lines.length); i++) {
+        // Check next several lines for options (increased from 5 to 10 to handle multi-line formats)
+        for (let i = startIndex; i < Math.min(startIndex + 10, lines.length); i++) {
             const line = lines[i];
 
             // Skip markers like "> o"
@@ -230,6 +274,7 @@ export class QuestionSetsParserService implements OnModuleInit {
             // Stop if we found all 5 or hit a new question/set
             if (options.length >= 5) break;
             if (line.match(/^\d+\.\s*(Sono|Dor|Energia|Estresse|Vontade)/i)) break;
+            if (line.match(/^(Sono|Dor|Energia|Estresse|Vontade)\s*[:\-]/i)) break;
             if (line.match(/^Set\s*\d+/i)) break;
         }
 
