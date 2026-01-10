@@ -6,6 +6,7 @@ import { ReadinessService } from './readiness.service';
 import { MockStravaService } from './mock-strava.service';
 import { ReadinessAIService } from './readiness-ai.service';
 import { ReadinessScheduler } from './readiness-scheduler.service';
+import { QuestionSetsParserService } from './question-sets-parser.service';
 import { DatabaseModule } from '../../database';
 import { NotificationModule } from '../notifications';
 
@@ -22,6 +23,7 @@ import { NotificationModule } from '../notifications';
         MockStravaService,
         ReadinessAIService,
         ReadinessScheduler,
+        QuestionSetsParserService,
     ],
     exports: [ReadinessService],
 })

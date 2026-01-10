@@ -1,12 +1,16 @@
 import { Controller, Post, Get, Body, Headers, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ReadinessService } from './readiness.service';
 import { ReadinessCheckInDto } from './dto/readiness.dto';
+import { QuestionSetsParserService } from './question-sets-parser.service';
 
 @Controller('readiness')
 export class ReadinessController {
     private readonly logger = new Logger(ReadinessController.name);
 
-    constructor(private readonly readinessService: ReadinessService) { }
+    constructor(
+        private readonly readinessService: ReadinessService,
+        private readonly questionSetsParser: QuestionSetsParserService,
+    ) { }
 
     @Post('analyze')
     async analyzeReadiness(@Body() dto: ReadinessCheckInDto) {
@@ -79,13 +83,17 @@ export class ReadinessController {
         this.logger.log('GET /api/readiness/questions');
 
         try {
-            const caseIndex = this.calculateCurrentCase();
-            const questions = this.readinessService.getQuestionSet(caseIndex);
+            // Get today's question set using timezone-aware selection
+            const questionSet = this.questionSetsParser.getTodaysQuestionSet();
+
+            this.logger.log(`Using question set ${questionSet.setNumber}: "${questionSet.setName}"`);
 
             return {
-                caseIndex,
-                questions,
+                setNumber: questionSet.setNumber,
+                setName: questionSet.setName,
+                questions: questionSet.questions,
                 nextRotation: this.getNextRotationTime(),
+                totalSets: this.questionSetsParser.getAllSets().length,
             };
         } catch (error) {
             this.logger.error('Failed to get questions', error);
@@ -97,43 +105,32 @@ export class ReadinessController {
     }
 
     /**
-     * Calculate current question case based on days since epoch
-     * Changes at 3 AM each day, cycles through 18 cases
-     */
-    private calculateCurrentCase(): number {
-        const EPOCH_DATE = new Date('2026-01-01T03:00:00'); // Start date
-        const TOTAL_CASES = 18;
-
-        const now = new Date();
-        // Adjust for 3 AM cutoff - if before 3 AM, consider it the previous day
-        const adjustedNow = new Date(now);
-        if (now.getHours() < 3) {
-            adjustedNow.setDate(adjustedNow.getDate() - 1);
-        }
-        adjustedNow.setHours(3, 0, 0, 0);
-
-        const daysSinceEpoch = Math.floor(
-            (adjustedNow.getTime() - EPOCH_DATE.getTime()) / (1000 * 60 * 60 * 24)
-        );
-
-        const caseIndex = Math.abs(daysSinceEpoch) % TOTAL_CASES;
-        this.logger.debug(`Days since epoch: ${daysSinceEpoch}, Case index: ${caseIndex}`);
-
-        return caseIndex;
-    }
-
-    /**
-     * Get the next rotation time (next day at 3 AM)
+     * Get the next rotation time (next day at 3 AM São Paulo time)
      */
     private getNextRotationTime(): string {
-        const now = new Date();
-        const nextRotation = new Date(now);
+        const SAO_PAULO_OFFSET_HOURS = -3; // UTC-3
 
-        if (now.getHours() >= 3) {
-            nextRotation.setDate(nextRotation.getDate() + 1);
+        // Get current UTC time
+        const nowUtc = new Date();
+
+        // Convert to São Paulo local time
+        const saoPauloNow = new Date(nowUtc.getTime() + (SAO_PAULO_OFFSET_HOURS * 60 * 60 * 1000));
+        const saoPauloHour = saoPauloNow.getUTCHours();
+
+        // Calculate next 3 AM in São Paulo (as UTC)
+        const next3amSaoPaulo = new Date(Date.UTC(
+            saoPauloNow.getUTCFullYear(),
+            saoPauloNow.getUTCMonth(),
+            saoPauloNow.getUTCDate(),
+            3 - SAO_PAULO_OFFSET_HOURS, // Convert 3 AM local to UTC (3 - (-3) = 6 UTC)
+            0, 0, 0
+        ));
+
+        // If current São Paulo time is >= 3 AM, next rotation is tomorrow
+        if (saoPauloHour >= 3) {
+            next3amSaoPaulo.setUTCDate(next3amSaoPaulo.getUTCDate() + 1);
         }
-        nextRotation.setHours(3, 0, 0, 0);
 
-        return nextRotation.toISOString();
+        return next3amSaoPaulo.toISOString();
     }
 }
