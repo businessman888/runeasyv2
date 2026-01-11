@@ -19,11 +19,35 @@ export interface QuickPlanResponse {
 @Injectable()
 export class TrainingService {
     private readonly logger = new Logger(TrainingService.name);
+    private readonly SAO_PAULO_OFFSET_HOURS = -3; // UTC-3 (BRT)
 
     constructor(
         private readonly supabaseService: SupabaseService,
         private readonly trainingAIService: TrainingAIService,
     ) { }
+
+    /**
+     * Get today's date in São Paulo timezone (UTC-3)
+     * This ensures consistent date calculation regardless of server timezone
+     */
+    private getSaoPauloToday(): { date: Date; dateStr: string } {
+        const nowUtc = new Date();
+        // Convert to São Paulo local time
+        const saoPauloNow = new Date(nowUtc.getTime() + (this.SAO_PAULO_OFFSET_HOURS * 60 * 60 * 1000));
+
+        // Extract date components in São Paulo time
+        const year = saoPauloNow.getUTCFullYear();
+        const month = String(saoPauloNow.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(saoPauloNow.getUTCDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
+
+        // Create Date object for comparison (at midnight São Paulo time)
+        const date = new Date(`${dateStr}T00:00:00`);
+
+        this.logger.debug(`[getSaoPauloToday] UTC: ${nowUtc.toISOString()}, São Paulo date: ${dateStr}`);
+
+        return { date, dateStr };
+    }
 
     /**
      * Create a quick training plan (Prompt 1 only) - Fast response ~3-5s
@@ -365,7 +389,9 @@ export class TrainingService {
      * Get upcoming workouts
      */
     async getUpcomingWorkouts(userId: string, limit = 7) {
-        const today = new Date().toISOString().split('T')[0];
+        const { dateStr: today } = this.getSaoPauloToday();
+
+        this.logger.debug(`[getUpcomingWorkouts] Using São Paulo date: ${today}`);
 
         const { data, error } = await this.supabaseService
             .from('workouts')
@@ -420,12 +446,8 @@ export class TrainingService {
      * Days outside the plan period return type: null
      */
     async getScheduleWithStatus(userId: string, startDate: string, endDate: string): Promise<ScheduleDay[]> {
-        // Calculate today in local timezone to avoid UTC timezone issues
-        const now = new Date();
-        const localNow = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
-        const today = new Date(localNow);
-        today.setHours(0, 0, 0, 0);
-        const todayStr = localNow.toISOString().split('T')[0];
+        // Use São Paulo timezone for consistent date calculation
+        const { date: today, dateStr: todayStr } = this.getSaoPauloToday();
 
         this.logger.debug(`[getScheduleWithStatus] Today: ${todayStr}, range: ${startDate} to ${endDate}`);
 
@@ -549,12 +571,10 @@ export class TrainingService {
      * Returns the next pending workout AFTER today (not including today)
      */
     async getNextWorkout(userId: string): Promise<any | null> {
-        // Calculate today in local timezone to avoid UTC timezone issues
-        const now = new Date();
-        const localDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
-        const today = localDate.toISOString().split('T')[0];
+        // Use São Paulo timezone for consistent date calculation
+        const { dateStr: today } = this.getSaoPauloToday();
 
-        this.logger.debug(`[getNextWorkout] Searching for workouts after ${today} for user ${userId}`);
+        this.logger.debug(`[getNextWorkout] Searching for workouts after ${today} (São Paulo) for user ${userId}`);
 
         const { data, error } = await this.supabaseService
             .from('workouts')
