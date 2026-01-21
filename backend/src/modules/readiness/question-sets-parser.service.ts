@@ -267,33 +267,35 @@ export class QuestionSetsParserService implements OnModuleInit {
     }
 
     /**
-     * Get a random set number for today based on the readiness window
+     * Get a random set number for today based on São Paulo date
      * Uses a deterministic seed based on date so the same set is used all day
+     * 
+     * TIMEZONE: Uses America/Sao_Paulo (UTC-3)
+     * CUTOFF: Midnight (00:00) São Paulo time
      */
     getSetNumberForDay(date: Date): number {
-        // Use the readiness date (not calendar date) - day starts at 3 AM
-        const SAO_PAULO_OFFSET_HOURS = -3;
-        const CUTOFF_HOUR = 3;
+        const SAO_PAULO_OFFSET_HOURS = -3; // UTC-3 (BRT)
 
-        // Convert to São Paulo time
+        // Convert input date to São Paulo time
         const saoPauloTime = new Date(date.getTime() + (SAO_PAULO_OFFSET_HOURS * 60 * 60 * 1000));
-        const saoPauloHour = saoPauloTime.getUTCHours();
 
-        // Adjust date if before 3 AM (still "yesterday" in readiness terms)
-        let readinessDate = new Date(saoPauloTime);
-        if (saoPauloHour < CUTOFF_HOUR) {
-            readinessDate.setUTCDate(readinessDate.getUTCDate() - 1);
-        }
+        // Extract date components in São Paulo time
+        const year = saoPauloTime.getUTCFullYear();
+        const month = saoPauloTime.getUTCMonth();
+        const day = saoPauloTime.getUTCDate();
 
-        // Create a deterministic seed from the date
-        const dateString = `${readinessDate.getUTCFullYear()}-${readinessDate.getUTCMonth()}-${readinessDate.getUTCDate()}`;
+        // Create a deterministic seed from the São Paulo date
+        const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         const seed = this.hashString(dateString);
 
         // Use seed to pick a set number (1-40)
         const availableSets = this.questionSets.length > 0 ? this.questionSets.length : this.TOTAL_SETS;
         const setIndex = seed % availableSets;
+        const setNumber = this.questionSets[setIndex]?.setNumber || (setIndex + 1);
 
-        return this.questionSets[setIndex]?.setNumber || (setIndex + 1);
+        this.logger.log(`[QuestionSetsParser] Date: ${dateString} (São Paulo) → Set ${setNumber} (seed: ${seed}, index: ${setIndex})`);
+
+        return setNumber;
     }
 
     /**

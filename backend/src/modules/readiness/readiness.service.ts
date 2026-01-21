@@ -128,42 +128,36 @@ export class ReadinessService {
     /**
      * Calculate the start of the current readiness window
      * 
-     * The readiness day starts at 3:00 AM in São Paulo timezone (America/Sao_Paulo)
+     * The readiness day starts at MIDNIGHT (00:00) in São Paulo timezone (America/Sao_Paulo)
      * BRT = UTC-3 (no daylight saving since 2019)
      * 
      * Examples (times in São Paulo):
-     * - If now is 10:00 AM Jan 10 → window started at 03:00 AM Jan 10
-     * - If now is 02:30 AM Jan 10 → window started at 03:00 AM Jan 9 (still "yesterday")
+     * - If now is 10:00 AM Jan 10 → window started at 00:00 Jan 10
+     * - If now is 11:30 PM Jan 10 → window started at 00:00 Jan 10
      */
     private getReadinessWindowStart(): Date {
         const SAO_PAULO_OFFSET_HOURS = -3; // UTC-3 for BRT
-        const CUTOFF_HOUR = 3; // 3 AM local time
 
         // Get current UTC time
         const nowUtc = new Date();
 
         // Convert to São Paulo local time
         const saoPauloNow = new Date(nowUtc.getTime() + (SAO_PAULO_OFFSET_HOURS * 60 * 60 * 1000));
-        const saoPauloHour = saoPauloNow.getUTCHours();
 
-        // Calculate today's 3 AM in São Paulo (as UTC)
-        const today3amSaoPaulo = new Date(Date.UTC(
+        // Calculate today's midnight in São Paulo (as UTC)
+        // Midnight São Paulo = 03:00 UTC (0 - (-3) = 3 UTC)
+        const todayMidnightSaoPaulo = new Date(Date.UTC(
             saoPauloNow.getUTCFullYear(),
             saoPauloNow.getUTCMonth(),
             saoPauloNow.getUTCDate(),
-            CUTOFF_HOUR - SAO_PAULO_OFFSET_HOURS, // Convert 3 AM local to UTC (3 - (-3) = 6 UTC)
+            -SAO_PAULO_OFFSET_HOURS, // Convert 00:00 local to UTC (0 - (-3) = 3 UTC)
             0, 0, 0
         ));
 
-        // If current São Paulo time is before 3 AM, the window started yesterday at 3 AM
-        if (saoPauloHour < CUTOFF_HOUR) {
-            today3amSaoPaulo.setUTCDate(today3amSaoPaulo.getUTCDate() - 1);
-            this.logger.debug(`Current time is before 3 AM SP, using yesterday's window`);
-        }
+        const dateStr = `${saoPauloNow.getUTCFullYear()}-${String(saoPauloNow.getUTCMonth() + 1).padStart(2, '0')}-${String(saoPauloNow.getUTCDate()).padStart(2, '0')}`;
+        this.logger.log(`[ReadinessService] Window start: ${todayMidnightSaoPaulo.toISOString()} (Midnight São Paulo, date: ${dateStr})`);
 
-        this.logger.debug(`Readiness window start: ${today3amSaoPaulo.toISOString()} (3 AM São Paulo)`);
-
-        return today3amSaoPaulo;
+        return todayMidnightSaoPaulo;
     }
 
     /**
