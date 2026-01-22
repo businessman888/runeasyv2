@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { SupabaseService } from '../../database/supabase.service';
 import { NotificationService } from '../notifications/notification.service';
+import { RetrospectiveService } from './retrospective.service';
 
 @Injectable()
 export class TrainingSchedulerService {
@@ -11,6 +12,7 @@ export class TrainingSchedulerService {
     constructor(
         private readonly supabaseService: SupabaseService,
         private readonly notificationService: NotificationService,
+        private readonly retrospectiveService: RetrospectiveService,
     ) { }
 
     /**
@@ -162,4 +164,66 @@ export class TrainingSchedulerService {
         this.logger.log('Manually triggering workout reminders...');
         await this.sendWorkoutReminders();
     }
+
+    /**
+     * Check for completed training plans and generate retrospectives
+     * Runs at midnight São Paulo time (00:00 UTC-3)
+     */
+    @Cron('0 0 * * *', {
+        name: 'retrospective-check',
+        timeZone: 'America/Sao_Paulo',
+    })
+    async checkForCompletedPlans() {
+        const now = new Date();
+        this.logger.log(`[Retrospective Cron] Starting at ${now.toISOString()} (midnight São Paulo)`);
+
+        try {
+            await this.retrospectiveService.checkForCompletedPlans();
+            this.logger.log('[Retrospective Cron] Completed successfully');
+        } catch (error) {
+            this.logger.error('[Retrospective Cron] Failed:', error);
+        }
+    }
+
+    /**
+     * Send push notification when retrospective is ready
+     */
+    async sendRetrospectiveNotification(userId: string, retrospectiveId: string) {
+        const title = '🎯 Ciclo Concluído!';
+        const description = 'Sua retrospectiva está pronta. Veja como foi seu desempenho!';
+
+        await this.notificationService.createNotification(
+            userId,
+            'achievement',
+            title,
+            description,
+            {
+                retrospective_id: retrospectiveId,
+                screen: 'Retrospective',
+            },
+        );
+
+        await this.notificationService.sendPushNotification(
+            userId,
+            title,
+            description,
+            {
+                type: 'retrospective_ready',
+                retrospective_id: retrospectiveId,
+                screen: 'Retrospective',
+            },
+            { channelId: 'achievements' },
+        );
+
+        this.logger.log(`[Retrospective] Notification sent to user ${userId}`);
+    }
+
+    /**
+     * Manual trigger for retrospective check (testing)
+     */
+    async triggerRetrospectiveCheck() {
+        this.logger.log('Manually triggering retrospective check...');
+        await this.checkForCompletedPlans();
+    }
 }
+

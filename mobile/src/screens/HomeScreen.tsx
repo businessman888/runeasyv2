@@ -11,6 +11,7 @@ import {
     Linking,
     Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
 import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore, useStatsStore, useNotificationStore } from '../stores';
@@ -18,6 +19,7 @@ import { CircularProgress } from '../components/CircularProgress';
 import { Skeleton, SkeletonCircle, SkeletonText } from '../components/Skeleton';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { PoweredByStrava } from '../components/PoweredByStrava';
+import { BASE_API_URL } from '../config/api.config';
 
 // Icon components using @expo/vector-icons
 function FireIcon({ size = 24, color = '#FFC400' }: { size?: number; color?: string }) {
@@ -82,6 +84,7 @@ export function HomeScreen({ navigation }: any) {
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [recoveryTimeLeft, setRecoveryTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 });
     const [recoveryProgress, setRecoveryProgress] = useState(0);
+    const [retrospectiveReady, setRetrospectiveReady] = useState(false);
 
     // Use useFocusEffect to refetch data when screen gains focus (revalidate on every visit)
     useFocusEffect(
@@ -108,6 +111,21 @@ export function HomeScreen({ navigation }: any) {
                     fetchUnreadCount(),
                     fetchSchedule(startStr, endStr),
                 ]);
+
+                // Check if retrospective is ready
+                try {
+                    const userId = await AsyncStorage.getItem('userId');
+                    if (userId) {
+                        const response = await fetch(`${BASE_API_URL}/training/retrospective/ready`, {
+                            headers: { 'x-user-id': userId },
+                        });
+                        const result = await response.json();
+                        setRetrospectiveReady(result.isReady || false);
+                    }
+                } catch (e) {
+                    console.log('Retrospective check failed:', e);
+                }
+
                 setIsInitialLoading(false);
             };
             loadData();
@@ -344,6 +362,25 @@ export function HomeScreen({ navigation }: any) {
                         <FireIcon size={22} color="#FFC400" />
                         <Text style={styles.streakText}>{currentStreak} dias de sequência!</Text>
                     </View>
+                )}
+
+                {/* Retrospective Card - Show when ready */}
+                {retrospectiveReady && (
+                    <TouchableOpacity
+                        style={styles.retrospectiveCard}
+                        onPress={() => navigation.navigate('Retrospective')}
+                    >
+                        <View style={styles.retrospectiveContent}>
+                            <View style={styles.retrospectiveBadge}>
+                                <MaterialCommunityIcons name="trophy" size={18} color="#00D4FF" />
+                            </View>
+                            <View style={styles.retrospectiveText}>
+                                <Text style={styles.retrospectiveTitle}>Sua retrospectiva está pronta!</Text>
+                                <Text style={styles.retrospectiveSubtitle}>Veja como foi seu desempenho no ciclo</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={24} color="#00D4FF" />
+                        </View>
+                    </TouchableOpacity>
                 )}
 
                 {/* Level Card */}
@@ -1149,5 +1186,40 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.sm,
         color: '#6B7280',
         textAlign: 'center' as const,
+    },
+    // Retrospective Card
+    retrospectiveCard: {
+        backgroundColor: 'rgba(0, 212, 255, 0.08)',
+        borderRadius: borderRadius.lg,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 212, 255, 0.3)',
+        padding: spacing.md,
+        marginBottom: spacing.md,
+    },
+    retrospectiveContent: {
+        flexDirection: 'row' as const,
+        alignItems: 'center' as const,
+    },
+    retrospectiveBadge: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(0, 212, 255, 0.15)',
+        alignItems: 'center' as const,
+        justifyContent: 'center' as const,
+        marginRight: spacing.md,
+    },
+    retrospectiveText: {
+        flex: 1,
+    },
+    retrospectiveTitle: {
+        fontSize: typography.fontSizes.base,
+        fontWeight: typography.fontWeights.semibold as any,
+        color: colors.textLight,
+        marginBottom: 2,
+    },
+    retrospectiveSubtitle: {
+        fontSize: typography.fontSizes.sm,
+        color: colors.textSecondary,
     },
 });

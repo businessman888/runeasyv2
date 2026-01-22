@@ -4,6 +4,7 @@ import { TrainingService } from './training.service';
 import { TrainingAIService } from './training-ai.service';
 import { TrainingController } from './training.controller';
 import { TrainingSchedulerService } from './training-scheduler.service';
+import { RetrospectiveService } from './retrospective.service';
 import { NotificationModule } from '../notifications';
 
 @Module({
@@ -12,8 +13,9 @@ import { NotificationModule } from '../notifications';
         NotificationModule,
     ],
     controllers: [TrainingController],
-    providers: [TrainingService, TrainingAIService, TrainingSchedulerService],
-    exports: [TrainingService, TrainingAIService],
+    providers: [TrainingService, TrainingAIService, TrainingSchedulerService, RetrospectiveService],
+    exports: [TrainingService, TrainingAIService, RetrospectiveService],
 })
 export class TrainingModule { }
+
 

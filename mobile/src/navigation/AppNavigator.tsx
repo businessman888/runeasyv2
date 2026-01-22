@@ -30,6 +30,7 @@ import {
     TrainingHistoryScreen,
     NotificationSettingsScreen,
     HelpScreen,
+    RetrospectiveScreen,
 } from '../screens';
 import { PlanPreviewScreen as QuizPlanPreviewScreen } from '../screens/quiz/PlanPreviewScreen';
 import { PlanLoadingScreen } from '../screens/quiz/PlanLoadingScreen';
@@ -301,6 +302,14 @@ export function AppNavigator({ navigationRef }: { navigationRef?: React.RefObjec
                         <Stack.Screen
                             name="CoachAnalysis"
                             component={CoachAnalysisScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'card',
+                            }}
+                        />
+                        <Stack.Screen
+                            name="Retrospective"
+                            component={RetrospectiveScreen}
                             options={{
                                 headerShown: false,
                                 presentation: 'card',

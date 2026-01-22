@@ -13,6 +13,7 @@ import {
     UseGuards,
 } from '@nestjs/common';
 import { TrainingService, QuickPlanResponse, GenerationStatus } from './training.service';
+import { RetrospectiveService } from './retrospective.service';
 import { SupabaseService } from '../../database';
 import { SupabaseAuthGuard } from '../../common/guards/supabase-auth.guard';
 
@@ -36,6 +37,7 @@ export class TrainingController {
 
     constructor(
         private readonly trainingService: TrainingService,
+        private readonly retrospectiveService: RetrospectiveService,
         private readonly supabaseService: SupabaseService,
     ) { }
 
@@ -246,6 +248,91 @@ export class TrainingController {
             this.logger.error('Failed to get schedule', error);
             throw new HttpException(
                 error.message || 'Failed to get schedule',
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    // =============================================
+    // RETROSPECTIVE ENDPOINTS
+    // =============================================
+
+    /**
+     * Get the latest retrospective for the user
+     */
+    @Get('retrospective/latest')
+    async getLatestRetrospective(@Headers('x-user-id') userId: string) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        try {
+            const retrospective = await this.retrospectiveService.getLatestRetrospective(userId);
+
+            if (!retrospective) {
+                return { retrospective: null, hasRetrospective: false };
+            }
+
+            // Format pace for display
+            const formatPace = (seconds: number) => {
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.round(seconds % 60);
+                return `${mins}:${String(secs).padStart(2, '0')}`;
+            };
+
+            return {
+                hasRetrospective: true,
+                retrospective: {
+                    ...retrospective,
+                    avgPaceFormatted: formatPace(retrospective.avgPaceSeconds),
+                },
+            };
+        } catch (error) {
+            this.logger.error('Failed to get retrospective', error);
+            throw new HttpException(
+                error.message || 'Failed to get retrospective',
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    /**
+     * Check if user has a ready retrospective (for Home card)
+     */
+    @Get('retrospective/ready')
+    async hasReadyRetrospective(@Headers('x-user-id') userId: string) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        try {
+            const isReady = await this.retrospectiveService.hasReadyRetrospective(userId);
+            return { isReady };
+        } catch (error) {
+            this.logger.error('Failed to check retrospective status', error);
+            return { isReady: false };
+        }
+    }
+
+    /**
+     * Accept AI suggestion from retrospective
+     */
+    @Post('retrospective/:id/accept')
+    async acceptRetrospectiveSuggestion(
+        @Headers('x-user-id') userId: string,
+        @Param('id') retrospectiveId: string,
+    ) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        try {
+            const result = await this.retrospectiveService.acceptSuggestion(userId, retrospectiveId);
+            return result;
+        } catch (error) {
+            this.logger.error('Failed to accept suggestion', error);
+            throw new HttpException(
+                error.message || 'Failed to accept suggestion',
                 HttpStatus.INTERNAL_SERVER_ERROR,
             );
         }
