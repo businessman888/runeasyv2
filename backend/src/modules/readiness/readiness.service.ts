@@ -29,6 +29,7 @@ export class ReadinessService {
 
     async analyzeReadiness(dto: ReadinessCheckInDto): Promise<ReadinessVerdict> {
         this.logger.log(`Analyzing readiness for user: ${dto.userId}`);
+        this.logger.log(`[QuizSelection] Received setNumber in DTO: ${dto.setNumber ?? 'NOT PROVIDED'}`);
 
         // Check if already checked in today (after 3 AM)
         const existingCheckIn = await this.hasCheckedInToday(dto.userId);
@@ -465,6 +466,8 @@ export class ReadinessService {
             if (setNumber) {
                 insertData.set_number = setNumber;
                 this.logger.log(`[QuizSelection] Saving check-in with set_number: ${setNumber}`);
+            } else {
+                this.logger.warn(`[QuizSelection] WARNING: No set_number provided for user ${userId}. Exclusion logic will not track this check-in.`);
             }
 
             this.logger.log(`Inserting readiness history for user ${userId}:`, JSON.stringify(insertData));

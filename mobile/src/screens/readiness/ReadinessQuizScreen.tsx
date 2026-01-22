@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View,
     Text,
@@ -10,6 +10,7 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 import { BASE_API_URL } from '../../config/api.config';
@@ -107,42 +108,59 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
     const [isLoading, setIsLoading] = useState(true);
     const insets = useSafeAreaInsets();
 
-    // Fetch questions from backend on mount
-    useEffect(() => {
-        const fetchQuestions = async () => {
-            try {
-                const userId = await Storage.getItemAsync('user_id');
-                console.log('[ReadinessQuiz] Fetching questions for user:', userId);
+    // Fetch questions from backend EVERY time screen is focused (not just on mount)
+    useFocusEffect(
+        useCallback(() => {
+            let isMounted = true;
 
-                const headers: Record<string, string> = {
-                    'Content-Type': 'application/json',
-                };
-                if (userId) {
-                    headers['x-user-id'] = userId;
+            const fetchQuestions = async () => {
+                try {
+                    // Reset state when screen is focused
+                    setIsLoading(true);
+                    setCurrentStep(0);
+                    setAnswers({});
+
+                    const userId = await Storage.getItemAsync('user_id');
+                    console.log('[ReadinessQuiz] Fetching questions for user:', userId);
+
+                    const headers: Record<string, string> = {
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                    };
+                    if (userId) {
+                        headers['x-user-id'] = userId;
+                    }
+
+                    const response = await fetch(`${BASE_API_URL}/readiness/questions`, {
+                        method: 'GET',
+                        headers,
+                    });
+
+                    if (response.ok && isMounted) {
+                        const data: QuestionSetResponse = await response.json();
+                        console.log(`[ReadinessQuiz] Received Set #${data.setNumber}: "${data.setName}"`);
+                        setQuestions(data.questions);
+                        setQuestionSetNumber(data.setNumber);
+                    } else {
+                        console.warn('[ReadinessQuiz] Failed to fetch questions, using fallback. Status:', response.status);
+                    }
+                } catch (error) {
+                    console.error('[ReadinessQuiz] Error fetching questions:', error);
+                } finally {
+                    if (isMounted) {
+                        setIsLoading(false);
+                    }
                 }
+            };
 
-                const response = await fetch(`${BASE_API_URL}/readiness/questions`, {
-                    method: 'GET',
-                    headers,
-                });
+            fetchQuestions();
 
-                if (response.ok) {
-                    const data: QuestionSetResponse = await response.json();
-                    console.log(`[ReadinessQuiz] Received Set #${data.setNumber}: "${data.setName}"`);
-                    setQuestions(data.questions);
-                    setQuestionSetNumber(data.setNumber);
-                } else {
-                    console.warn('[ReadinessQuiz] Failed to fetch questions, using fallback');
-                }
-            } catch (error) {
-                console.error('[ReadinessQuiz] Error fetching questions:', error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchQuestions();
-    }, []);
+            return () => {
+                isMounted = false;
+            };
+        }, [])
+    );
 
     const currentQuestion = questions[currentStep];
     const totalSteps = questions.length;
