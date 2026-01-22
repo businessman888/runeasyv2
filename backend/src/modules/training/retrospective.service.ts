@@ -100,29 +100,42 @@ export class RetrospectiveService {
     /**
      * Check for plans that have ended and need retrospective generation
      * Called by scheduler at midnight São Paulo time
+     * Returns array of {userId, retroId} for notification dispatch
      */
-    async checkForCompletedPlans(): Promise<void> {
+    async checkForCompletedPlans(): Promise<Array<{ userId: string, retroId: string }>> {
         const { dateStr: today } = this.getSaoPauloToday();
         this.logger.log(`[Retrospective] Checking for completed plans on ${today} (São Paulo)`);
+
+        const generatedRetros: Array<{ userId: string, retroId: string }> = [];
 
         try {
             const supabase = this.supabaseService.getClient();
 
             // Find active plans where end_date has passed
-            const { data: completedPlans, error } = await supabase
+            // Also check that no retrospective already exists for this plan
+            const { data: activePlans, error } = await supabase
                 .from('training_plans')
                 .select('id, user_id, created_at, duration_weeks')
-                .eq('status', 'active')
-                .not('id', 'in',
-                    supabase.from('plan_retrospectives').select('plan_id')
-                );
+                .eq('status', 'active');
 
             if (error) {
                 this.logger.error('[Retrospective] Error fetching plans:', error);
-                return;
+                return generatedRetros;
             }
 
-            for (const plan of completedPlans || []) {
+            // Check each plan to see if it has ended and needs retrospective
+            for (const plan of activePlans || []) {
+                // Check if retrospective already exists
+                const { data: existingRetro } = await supabase
+                    .from('plan_retrospectives')
+                    .select('id')
+                    .eq('plan_id', plan.id)
+                    .maybeSingle();
+
+                if (existingRetro) {
+                    continue; // Skip if retrospective already exists
+                }
+
                 // Calculate plan end date
                 const startDate = new Date(plan.created_at);
                 const endDate = new Date(startDate);
@@ -132,12 +145,17 @@ export class RetrospectiveService {
 
                 if (endDateStr <= today) {
                     this.logger.log(`[Retrospective] Plan ${plan.id} has ended (${endDateStr}), generating retrospective...`);
-                    await this.generateRetrospective(plan.user_id, plan.id);
+                    const retro = await this.generateRetrospective(plan.user_id, plan.id);
+                    if (retro) {
+                        generatedRetros.push({ userId: plan.user_id, retroId: retro.id });
+                    }
                 }
             }
         } catch (error) {
             this.logger.error('[Retrospective] Error in checkForCompletedPlans:', error);
         }
+
+        return generatedRetros;
     }
 
     /**

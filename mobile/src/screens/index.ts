@@ -7,7 +7,6 @@ export * from './FeedbackScreen';
 export * from './EvolutionScreen';
 export * from './SettingsScreen';
 export * from './StatsScreen';
-export * from './PlanPreviewScreen';
 export * from './CoachAnalysisScreen';
 export * from './NotificationsScreen';
 export * from './PersonalInfoScreen';

@@ -178,8 +178,18 @@ export class TrainingSchedulerService {
         this.logger.log(`[Retrospective Cron] Starting at ${now.toISOString()} (midnight São Paulo)`);
 
         try {
-            await this.retrospectiveService.checkForCompletedPlans();
-            this.logger.log('[Retrospective Cron] Completed successfully');
+            const generatedRetros = await this.retrospectiveService.checkForCompletedPlans();
+
+            // Send notifications for each generated retrospective
+            for (const { userId, retroId } of generatedRetros) {
+                try {
+                    await this.sendRetrospectiveNotification(userId, retroId);
+                } catch (notifError) {
+                    this.logger.error(`[Retrospective Cron] Failed to send notification for retro ${retroId}:`, notifError);
+                }
+            }
+
+            this.logger.log(`[Retrospective Cron] Completed successfully, generated ${generatedRetros.length} retrospectives`);
         } catch (error) {
             this.logger.error('[Retrospective Cron] Failed:', error);
         }
