@@ -79,21 +79,28 @@ export class ReadinessController {
     }
 
     @Get('questions')
-    async getQuestions() {
-        this.logger.log('GET /api/readiness/questions');
+    async getQuestions(@Headers('x-user-id') userId: string) {
+        this.logger.log(`GET /api/readiness/questions - userId: ${userId || 'anonymous'}`);
 
         try {
-            // Get today's question set using timezone-aware selection
-            const questionSet = this.questionSetsParser.getTodaysQuestionSet();
+            let questionSet;
 
-            this.logger.log(`Using question set ${questionSet.setNumber}: "${questionSet.setName}"`);
+            if (userId) {
+                // User-specific selection with exclusion logic
+                questionSet = await this.questionSetsParser.getQuestionSetForUser(userId);
+            } else {
+                // Fallback for anonymous users (legacy behavior)
+                questionSet = this.questionSetsParser.getTodaysQuestionSet();
+            }
+
+            this.logger.log(`Delivering question set ${questionSet.setNumber}: "${questionSet.setName}"`);
 
             return {
                 setNumber: questionSet.setNumber,
                 setName: questionSet.setName,
                 questions: questionSet.questions,
                 nextRotation: this.getNextRotationTime(),
-                totalSets: this.questionSetsParser.getAllSets().length,
+                totalSets: 40,
             };
         } catch (error) {
             this.logger.error('Failed to get questions', error);

@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsNumber, Min, Max, ValidateNested, IsUUID } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, Min, Max, ValidateNested, IsOptional } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ReadinessAnswersDto {
@@ -36,4 +36,9 @@ export class ReadinessCheckInDto {
     @ValidateNested()
     @Type(() => ReadinessAnswersDto)
     answers: ReadinessAnswersDto;
+
+    @IsOptional()
+    @IsNumber()
+    setNumber?: number;
 }
+

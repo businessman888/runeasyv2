@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import { SupabaseService } from '../../database/supabase.service';
 
 /**
  * Question structure matching frontend expectations
@@ -25,7 +26,8 @@ export interface QuestionSet {
 }
 
 /**
- * Service to parse and manage the 40 question sets from OpenL markdown file
+ * Service to manage the 40 question sets for Readiness Quiz.
+ * Now fetches from Supabase database with user-based exclusion logic.
  */
 @Injectable()
 export class QuestionSetsParserService implements OnModuleInit {
@@ -33,8 +35,133 @@ export class QuestionSetsParserService implements OnModuleInit {
     private questionSets: QuestionSet[] = [];
     private readonly TOTAL_SETS = 40;
 
+    constructor(
+        private readonly supabaseService: SupabaseService,
+    ) { }
+
     async onModuleInit() {
+        // Load from file as fallback cache (legacy behavior)
         await this.loadQuestionSets();
+        // Also preload from database
+        await this.preloadFromDatabase();
+    }
+
+    /**
+     * Preload question sets from database into memory cache
+     */
+    private async preloadFromDatabase(): Promise<void> {
+        try {
+            const supabase = this.supabaseService.getClient();
+            const { data, error } = await supabase
+                .from('readiness_question_sets')
+                .select('*')
+                .order('set_number', { ascending: true });
+
+            if (error) {
+                this.logger.warn(`Failed to preload from database: ${error.message}`);
+                return;
+            }
+
+            if (data && data.length > 0) {
+                this.questionSets = data.map(row => this.mapDbToQuestionSet(row));
+                this.logger.log(`[QuestionSetsParser] Preloaded ${this.questionSets.length} sets from database`);
+            }
+        } catch (error: any) {
+            this.logger.warn(`Database preload error: ${error?.message}`);
+        }
+    }
+
+    /**
+     * Map database row to QuestionSet interface
+     */
+    private mapDbToQuestionSet(dbRow: any): QuestionSet {
+        return {
+            setNumber: dbRow.set_number,
+            setName: dbRow.set_name,
+            questions: dbRow.questions as ReadinessQuestion[],
+        };
+    }
+
+    /**
+     * Get question set for a specific user using exclusion logic.
+     * Selects the first set that the user has NOT responded to yet.
+     * Falls back to LRU (Least Recently Used) when all sets are exhausted.
+     */
+    async getQuestionSetForUser(userId: string): Promise<QuestionSet> {
+        this.logger.log(`[QuizSelection] Selecting question set for user ${userId}`);
+
+        try {
+            const supabase = this.supabaseService.getClient();
+
+            // 1. Get set_numbers already responded by this user
+            const { data: history, error: historyError } = await supabase
+                .from('readiness_history')
+                .select('set_number, created_at')
+                .eq('user_id', userId)
+                .not('set_number', 'is', null)
+                .order('created_at', { ascending: false });
+
+            if (historyError) {
+                this.logger.error(`[QuizSelection] Error fetching history: ${historyError.message}`);
+                return this.getFallbackSet();
+            }
+
+            const respondedSetNumbers = new Set(history?.map(h => h.set_number) || []);
+            const respondedCount = respondedSetNumbers.size;
+
+            this.logger.log(`[QuizSelection] User ${userId} has responded to ${respondedCount} sets`);
+
+            // 2. Get all available sets from database
+            const { data: allSets, error: setsError } = await supabase
+                .from('readiness_question_sets')
+                .select('*')
+                .order('set_number', { ascending: true });
+
+            if (setsError || !allSets?.length) {
+                this.logger.error(`[QuizSelection] Error fetching question sets: ${setsError?.message}`);
+                return this.getFallbackSet();
+            }
+
+            // 3. Find first unresponded set
+            const unrespondedSet = allSets.find(s => !respondedSetNumbers.has(s.set_number));
+
+            if (unrespondedSet) {
+                this.logger.log(`[QuizSelection] User ${userId} has responded ${respondedCount} sets. Delivering NEW Set #${unrespondedSet.set_number} ("${unrespondedSet.set_name}")`);
+                return this.mapDbToQuestionSet(unrespondedSet);
+            }
+
+            // 4. All sets exhausted - use LRU (Least Recently Used)
+            // The oldest responded set is at the end of the history array (sorted desc)
+            const oldestResponded = history?.[history.length - 1];
+            if (oldestResponded) {
+                const lruSet = allSets.find(s => s.set_number === oldestResponded.set_number);
+                if (lruSet) {
+                    this.logger.log(`[QuizSelection] User ${userId} completed all ${this.TOTAL_SETS} sets. Reusing LRU Set #${lruSet.set_number} (last used: ${oldestResponded.created_at})`);
+                    return this.mapDbToQuestionSet(lruSet);
+                }
+            }
+
+            // 5. Final fallback: first available set
+            this.logger.warn(`[QuizSelection] Fallback to first available set for user ${userId}`);
+            return this.mapDbToQuestionSet(allSets[0]);
+
+        } catch (error: any) {
+            this.logger.error(`[QuizSelection] Unexpected error for user ${userId}: ${error?.message}`);
+            return this.getFallbackSet();
+        }
+    }
+
+    /**
+     * Get fallback set when database operations fail
+     */
+    private getFallbackSet(): QuestionSet {
+        // Use cached sets from memory if available
+        if (this.questionSets.length > 0) {
+            const setNumber = this.getSetNumberForDay(new Date());
+            const set = this.questionSets.find(s => s.setNumber === setNumber);
+            return set || this.questionSets[0];
+        }
+        return this.getFallbackSets()[0];
     }
 
     /**

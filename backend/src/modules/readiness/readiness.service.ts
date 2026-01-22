@@ -13,6 +13,7 @@ export interface ReadinessCheckInDto {
         stress: number;     // 1-5
         motivation: number; // 1-5
     };
+    setNumber?: number;  // Question set number for exclusion tracking
 }
 
 @Injectable()
@@ -69,8 +70,8 @@ export class ReadinessService {
             };
         }
 
-        // 6. Save to database for history
-        await this.saveReadinessResult(dto.userId, dto.answers, verdict);
+        // 6. Save to database for history (including set_number for exclusion tracking)
+        await this.saveReadinessResult(dto.userId, dto.answers, verdict, dto.setNumber);
 
         return verdict;
     }
@@ -441,6 +442,7 @@ export class ReadinessService {
         userId: string,
         answers: ReadinessCheckInDto['answers'],
         verdict: ReadinessVerdict,
+        setNumber?: number,
     ): Promise<void> {
         try {
             const supabase = this.supabaseService.getClient();
@@ -448,7 +450,7 @@ export class ReadinessService {
             // Ensure user exists in public.users before inserting (prevents FK violation)
             await this.ensureUserProfile(userId);
 
-            const insertData = {
+            const insertData: Record<string, any> = {
                 user_id: userId,
                 score: verdict.readiness_score, // Column is 'score', not 'readiness_score'
                 status_color: verdict.status_color,
@@ -458,6 +460,12 @@ export class ReadinessService {
                 metrics_summary: verdict.metrics_summary,
                 // created_at has default NOW() in table, no need to set it
             };
+
+            // Include set_number for question set exclusion tracking
+            if (setNumber) {
+                insertData.set_number = setNumber;
+                this.logger.log(`[QuizSelection] Saving check-in with set_number: ${setNumber}`);
+            }
 
             this.logger.log(`Inserting readiness history for user ${userId}:`, JSON.stringify(insertData));
 

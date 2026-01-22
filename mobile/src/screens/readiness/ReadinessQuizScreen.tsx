@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -7,13 +7,37 @@ import {
     TouchableOpacity,
     Platform,
     ScrollView,
+    ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../../theme';
+import { BASE_API_URL } from '../../config/api.config';
+import * as Storage from '../../utils/storage';
+import { useReadinessStore } from '../../stores/readinessStore';
 
-// Questions bank for readiness quiz
-const READINESS_QUESTIONS = [
+// Question structure from backend
+interface QuestionOption {
+    value: number;
+    label: string;
+    description?: string;
+}
+
+interface Question {
+    id: string;
+    question: string;
+    options: QuestionOption[];
+}
+
+interface QuestionSetResponse {
+    setNumber: number;
+    setName: string;
+    questions: Question[];
+    totalSets: number;
+}
+
+// Fallback questions in case API fails
+const FALLBACK_QUESTIONS: Question[] = [
     {
         id: 'sleep',
         question: 'Sua bateria carregou bem durante a noite',
@@ -26,7 +50,7 @@ const READINESS_QUESTIONS = [
         ],
     },
     {
-        id: 'pain',
+        id: 'legs',
         question: 'Algum sinal de alerta nos músculos?',
         options: [
             { value: 5, label: 'Nenhuma dor' },
@@ -37,7 +61,7 @@ const READINESS_QUESTIONS = [
         ],
     },
     {
-        id: 'energy',
+        id: 'mood',
         question: 'Quão leve você sente o corpo agora?',
         options: [
             { value: 5, label: 'Flutuando' },
@@ -78,28 +102,98 @@ interface ReadinessQuizScreenProps {
 export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
     const [currentStep, setCurrentStep] = useState(0);
     const [answers, setAnswers] = useState<Record<string, number>>({});
+    const [questions, setQuestions] = useState<Question[]>(FALLBACK_QUESTIONS);
+    const [questionSetNumber, setQuestionSetNumber] = useState<number | undefined>(undefined);
+    const [isLoading, setIsLoading] = useState(true);
     const insets = useSafeAreaInsets();
 
-    const currentQuestion = READINESS_QUESTIONS[currentStep];
-    const totalSteps = READINESS_QUESTIONS.length;
+    // Fetch questions from backend on mount
+    useEffect(() => {
+        const fetchQuestions = async () => {
+            try {
+                const userId = await Storage.getItemAsync('user_id');
+                console.log('[ReadinessQuiz] Fetching questions for user:', userId);
+
+                const headers: Record<string, string> = {
+                    'Content-Type': 'application/json',
+                };
+                if (userId) {
+                    headers['x-user-id'] = userId;
+                }
+
+                const response = await fetch(`${BASE_API_URL}/readiness/questions`, {
+                    method: 'GET',
+                    headers,
+                });
+
+                if (response.ok) {
+                    const data: QuestionSetResponse = await response.json();
+                    console.log(`[ReadinessQuiz] Received Set #${data.setNumber}: "${data.setName}"`);
+                    setQuestions(data.questions);
+                    setQuestionSetNumber(data.setNumber);
+                } else {
+                    console.warn('[ReadinessQuiz] Failed to fetch questions, using fallback');
+                }
+            } catch (error) {
+                console.error('[ReadinessQuiz] Error fetching questions:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchQuestions();
+    }, []);
+
+    const currentQuestion = questions[currentStep];
+    const totalSteps = questions.length;
     const progress = (currentStep + 1) / totalSteps;
-    const selectedValue = answers[currentQuestion.id];
+    const selectedValue = currentQuestion ? answers[currentQuestion.id] : undefined;
+
+    // Get store actions
+    const { setAnswer, setSetNumber } = useReadinessStore();
 
     const handleSelectOption = (value: number) => {
+        if (!currentQuestion) return;
         setAnswers(prev => ({
             ...prev,
             [currentQuestion.id]: value,
         }));
+        // Also save to store for persistence
+        setAnswer(currentQuestion.id as any, value);
     };
 
     const handleContinue = () => {
         if (currentStep < totalSteps - 1) {
             setCurrentStep(prev => prev + 1);
         } else {
-            // Navigate to analysis screen with answers
-            navigation.navigate('ReadinessAnalysis', { answers });
+            // Save questionSetNumber to store before navigating
+            if (questionSetNumber) {
+                setSetNumber(questionSetNumber);
+            }
+            // Navigate to result screen (the store already has the answers)
+            navigation.navigate('ReadinessResult');
         }
     };
+
+    // Show loading state while fetching questions
+    if (isLoading) {
+        return (
+            <View style={[styles.container, { paddingTop: insets.top + 20, justifyContent: 'center', alignItems: 'center' }]}>
+                <StatusBar barStyle="light-content" backgroundColor="#0E0E1F" />
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={{ color: 'rgba(255,255,255,0.7)', marginTop: 16 }}>Carregando perguntas...</Text>
+            </View>
+        );
+    }
+
+    if (!currentQuestion) {
+        return (
+            <View style={[styles.container, { paddingTop: insets.top + 20, justifyContent: 'center', alignItems: 'center' }]}>
+                <StatusBar barStyle="light-content" backgroundColor="#0E0E1F" />
+                <Text style={{ color: colors.error }}>Erro ao carregar perguntas</Text>
+            </View>
+        );
+    }
 
     return (
         <View style={{ paddingTop: insets.top + 20, backgroundColor: '#0E0E1F', flex: 1 }}>

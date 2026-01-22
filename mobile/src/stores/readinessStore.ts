@@ -43,6 +43,7 @@ interface ReadinessState {
     // Quiz state
     answers: Partial<ReadinessAnswers>;
     currentStep: number;
+    setNumber: number | undefined; // Question set number for exclusion tracking
 
     // Verdict state
     verdict: ReadinessVerdict | null;
@@ -55,6 +56,7 @@ interface ReadinessState {
 
     // Actions
     setAnswer: (key: keyof ReadinessAnswers, value: number) => void;
+    setSetNumber: (setNumber: number) => void;
     nextStep: () => void;
     prevStep: () => void;
     resetQuiz: () => void;
@@ -76,6 +78,7 @@ const STEP_KEYS: (keyof ReadinessAnswers)[] = ['sleep', 'legs', 'mood', 'stress'
 export const useReadinessStore = create<ReadinessState>((set, get) => ({
     answers: {},
     currentStep: 0,
+    setNumber: undefined,
     verdict: null,
     isLoading: false,
     error: null,
@@ -86,6 +89,10 @@ export const useReadinessStore = create<ReadinessState>((set, get) => ({
         set((state) => ({
             answers: { ...state.answers, [key]: value },
         }));
+    },
+
+    setSetNumber: (setNumber: number) => {
+        set({ setNumber });
     },
 
     nextStep: () => {
@@ -109,13 +116,14 @@ export const useReadinessStore = create<ReadinessState>((set, get) => ({
         set({
             answers: {},
             currentStep: 0,
+            setNumber: undefined,
             verdict: null,
             error: null,
         });
     },
 
     fetchVerdict: async () => {
-        const { answers } = get();
+        const { answers, setNumber } = get();
 
         // Validate all answers are present
         const requiredKeys: (keyof ReadinessAnswers)[] = ['sleep', 'legs', 'mood', 'stress', 'motivation'];
@@ -140,7 +148,8 @@ export const useReadinessStore = create<ReadinessState>((set, get) => ({
             console.log('Fetching verdict with:', {
                 url: `${API_URL}/readiness/analyze`,
                 userId,
-                answers
+                answers,
+                setNumber
             });
 
             const response = await fetch(`${API_URL}/readiness/analyze`, {
@@ -152,6 +161,7 @@ export const useReadinessStore = create<ReadinessState>((set, get) => ({
                 body: JSON.stringify({
                     userId,
                     answers: answers as ReadinessAnswers,
+                    setNumber, // Include setNumber for exclusion tracking
                 }),
             });
 
