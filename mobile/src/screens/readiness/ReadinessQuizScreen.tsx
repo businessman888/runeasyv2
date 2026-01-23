@@ -37,65 +37,6 @@ interface QuestionSetResponse {
     totalSets: number;
 }
 
-// Fallback questions in case API fails
-const FALLBACK_QUESTIONS: Question[] = [
-    {
-        id: 'sleep',
-        question: 'Sua bateria carregou bem durante a noite',
-        options: [
-            { value: 5, label: '100% Full' },
-            { value: 4, label: '75%' },
-            { value: 3, label: '50%' },
-            { value: 2, label: '25%' },
-            { value: 1, label: '0%' },
-        ],
-    },
-    {
-        id: 'legs',
-        question: 'Algum sinal de alerta nos músculos?',
-        options: [
-            { value: 5, label: 'Nenhuma dor' },
-            { value: 4, label: 'Desconforto leve' },
-            { value: 3, label: 'Dor moderada' },
-            { value: 2, label: 'Dor significativa' },
-            { value: 1, label: 'Muita dor' },
-        ],
-    },
-    {
-        id: 'mood',
-        question: 'Quão leve você sente o corpo agora?',
-        options: [
-            { value: 5, label: 'Flutuando' },
-            { value: 4, label: 'Leve' },
-            { value: 3, label: 'Normal' },
-            { value: 2, label: 'Pesado' },
-            { value: 1, label: 'Muito pesado' },
-        ],
-    },
-    {
-        id: 'stress',
-        question: 'Como está o peso das preocupações hoje?',
-        options: [
-            { value: 5, label: 'Muito leve' },
-            { value: 4, label: 'Leve' },
-            { value: 3, label: 'Moderado' },
-            { value: 2, label: 'Pesado' },
-            { value: 1, label: 'Esmagador' },
-        ],
-    },
-    {
-        id: 'motivation',
-        question: 'Qual sua pressa para iniciar o treino?',
-        options: [
-            { value: 5, label: 'Máxima' },
-            { value: 4, label: 'Alta' },
-            { value: 3, label: 'Moderada' },
-            { value: 2, label: 'Baixa' },
-            { value: 1, label: 'Nenhuma' },
-        ],
-    },
-];
-
 interface ReadinessQuizScreenProps {
     navigation: any;
 }
@@ -103,7 +44,7 @@ interface ReadinessQuizScreenProps {
 export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
     const [currentStep, setCurrentStep] = useState(0);
     const [answers, setAnswers] = useState<Record<string, number>>({});
-    // Initialize with empty array to force loading state and verify network fetch
+    // Initialize with empty array to verify fetch works.
     const [questions, setQuestions] = useState<Question[]>([]);
     const [questionSetNumber, setQuestionSetNumber] = useState<number | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(true);
@@ -123,6 +64,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
                         setCurrentStep(0);
                         setAnswers({});
                         setQuestionSetNumber(undefined);
+                        setQuestions([]); // Limpa perguntas anteriores para forçar loading
                     }
 
                     const userId = await Storage.getItemAsync('user_id');
@@ -149,22 +91,15 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
                     if (response.ok && isMounted) {
                         const data: QuestionSetResponse = await response.json();
                         console.log(`[ReadinessQuiz] Success! Received Set #${data.setNumber}: "${data.setName}"`);
+                        console.log(`[ReadinessQuiz] Questions received:`, data.questions.length);
                         setQuestions(data.questions);
                         setQuestionSetNumber(data.setNumber);
                     } else {
                         const errorText = await response.text();
                         console.error('[ReadinessQuiz] Failed to fetch questions. Status:', response.status, 'Body:', errorText);
-
-                        if (isMounted && questions.length === 0) {
-                            console.warn('[ReadinessQuiz] Using fallback questions due to API failure.');
-                            setQuestions(FALLBACK_QUESTIONS);
-                        }
                     }
                 } catch (error) {
                     console.error('[ReadinessQuiz] Network Error fetching questions:', error);
-                    if (isMounted && questions.length === 0) {
-                        setQuestions(FALLBACK_QUESTIONS);
-                    }
                 } finally {
                     if (isMounted) {
                         setIsLoading(false);
@@ -175,6 +110,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
             fetchQuestions();
 
             return () => {
+                console.log('[ReadinessQuiz] Screen blurred/unmounted. Cleanup.');
                 isMounted = false;
             };
         }, [])
@@ -182,7 +118,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
 
     const currentQuestion = questions[currentStep];
     const totalSteps = questions.length;
-    const progress = (currentStep + 1) / totalSteps;
+    const progress = totalSteps > 0 ? (currentStep + 1) / totalSteps : 0;
     const selectedValue = currentQuestion ? answers[currentQuestion.id] : undefined;
 
     // Get store actions
@@ -222,11 +158,26 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
         );
     }
 
-    if (!currentQuestion) {
+    if (!currentQuestion || questions.length === 0) {
         return (
             <View style={[styles.container, { paddingTop: insets.top + 20, justifyContent: 'center', alignItems: 'center' }]}>
                 <StatusBar barStyle="light-content" backgroundColor="#0E0E1F" />
-                <Text style={{ color: colors.error }}>Erro ao carregar perguntas</Text>
+                <Ionicons name="cloud-offline-outline" size={48} color={colors.error} />
+                <Text style={{ color: colors.white, marginTop: 16, fontSize: 16, fontWeight: '600' }}>Erro ao carregar perguntas</Text>
+                <Text style={{ color: 'rgba(255,255,255,0.6)', marginTop: 8, textAlign: 'center', maxWidth: 300 }}>
+                    Verifique sua conexão e tente novamente.
+                </Text>
+                <TouchableOpacity
+                    style={styles.retryButton}
+                    onPress={() => {
+                        // Forcing navigation listener to trigger via simple state update or re-nav
+                        setIsLoading(true);
+                        // Re-trigger fetch logic (simplified for retry button, ideally calls fetchQuestions directly)
+                        navigation.replace('ReadinessQuiz');
+                    }}
+                >
+                    <Text style={styles.retryButtonText}>Tentar Novamente</Text>
+                </TouchableOpacity>
             </View>
         );
     }
@@ -457,6 +408,18 @@ const styles = StyleSheet.create({
     },
     continueButtonTextDisabled: {
         color: 'rgba(255, 255, 255, 0.4)',
+    },
+    retryButton: {
+        backgroundColor: colors.primary,
+        paddingVertical: 14,
+        paddingHorizontal: 32,
+        borderRadius: 24,
+        marginTop: 24,
+    },
+    retryButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#0A0A14',
     },
 });
 
