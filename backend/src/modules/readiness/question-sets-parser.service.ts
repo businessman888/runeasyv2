@@ -93,7 +93,7 @@ export class QuestionSetsParserService implements OnModuleInit {
         try {
             const supabase = this.supabaseService.getClient();
 
-            // 1. Get set_numbers already responded by this user
+            // 1. Get set_numbers already responded by this user (explicitly filter nulls in JS too)
             const { data: history, error: historyError } = await supabase
                 .from('readiness_history')
                 .select('set_number, created_at')
@@ -106,8 +106,12 @@ export class QuestionSetsParserService implements OnModuleInit {
                 return this.getFallbackSet();
             }
 
-            const respondedSetNumbers = new Set(history?.map(h => h.set_number) || []);
+            const respondedSetNumbers = new Set(
+                history?.filter(h => h.set_number != null).map(h => h.set_number) || []
+            );
             const respondedCount = respondedSetNumbers.size;
+
+            this.logger.log(`[QuizSelection] User ${userId} has responded to ${respondedCount} sets: [${Array.from(respondedSetNumbers).join(', ')}]`);
 
             this.logger.log(`[QuizSelection] User ${userId} has responded to ${respondedCount} sets`);
 

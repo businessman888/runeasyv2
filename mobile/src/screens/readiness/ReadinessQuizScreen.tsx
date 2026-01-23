@@ -103,7 +103,8 @@ interface ReadinessQuizScreenProps {
 export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
     const [currentStep, setCurrentStep] = useState(0);
     const [answers, setAnswers] = useState<Record<string, number>>({});
-    const [questions, setQuestions] = useState<Question[]>(FALLBACK_QUESTIONS);
+    // Initialize with empty array to force loading state and verify network fetch
+    const [questions, setQuestions] = useState<Question[]>([]);
     const [questionSetNumber, setQuestionSetNumber] = useState<number | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(true);
     const insets = useSafeAreaInsets();
@@ -114,11 +115,15 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
             let isMounted = true;
 
             const fetchQuestions = async () => {
+                console.log('[ReadinessQuiz] Screen focused. Starting fetch sequence...');
                 try {
                     // Reset state when screen is focused
-                    setIsLoading(true);
-                    setCurrentStep(0);
-                    setAnswers({});
+                    if (isMounted) {
+                        setIsLoading(true);
+                        setCurrentStep(0);
+                        setAnswers({});
+                        setQuestionSetNumber(undefined);
+                    }
 
                     const userId = await Storage.getItemAsync('user_id');
                     console.log('[ReadinessQuiz] Fetching questions for user:', userId);
@@ -127,26 +132,39 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
                         'Content-Type': 'application/json',
                         'Cache-Control': 'no-cache, no-store, must-revalidate',
                         'Pragma': 'no-cache',
+                        'Expires': '0',
                     };
                     if (userId) {
                         headers['x-user-id'] = userId;
                     }
 
+                    console.log('[ReadinessQuiz] Sending GET request to:', `${BASE_API_URL}/readiness/questions`);
                     const response = await fetch(`${BASE_API_URL}/readiness/questions`, {
                         method: 'GET',
                         headers,
                     });
 
+                    console.log('[ReadinessQuiz] Response status:', response.status);
+
                     if (response.ok && isMounted) {
                         const data: QuestionSetResponse = await response.json();
-                        console.log(`[ReadinessQuiz] Received Set #${data.setNumber}: "${data.setName}"`);
+                        console.log(`[ReadinessQuiz] Success! Received Set #${data.setNumber}: "${data.setName}"`);
                         setQuestions(data.questions);
                         setQuestionSetNumber(data.setNumber);
                     } else {
-                        console.warn('[ReadinessQuiz] Failed to fetch questions, using fallback. Status:', response.status);
+                        const errorText = await response.text();
+                        console.error('[ReadinessQuiz] Failed to fetch questions. Status:', response.status, 'Body:', errorText);
+
+                        if (isMounted && questions.length === 0) {
+                            console.warn('[ReadinessQuiz] Using fallback questions due to API failure.');
+                            setQuestions(FALLBACK_QUESTIONS);
+                        }
                     }
                 } catch (error) {
-                    console.error('[ReadinessQuiz] Error fetching questions:', error);
+                    console.error('[ReadinessQuiz] Network Error fetching questions:', error);
+                    if (isMounted && questions.length === 0) {
+                        setQuestions(FALLBACK_QUESTIONS);
+                    }
                 } finally {
                     if (isMounted) {
                         setIsLoading(false);
