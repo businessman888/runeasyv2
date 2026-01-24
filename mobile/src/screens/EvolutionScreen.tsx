@@ -567,83 +567,87 @@ export function EvolutionScreen({ navigation }: any) {
             </SafeAreaView>
 
             {/* Question Card - ScrollView with flexGrow and paddingBottom for button space */}
-            <ScrollView
-                style={styles.content}
-                contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
-                showsVerticalScrollIndicator={false}
-                scrollEnabled={true}
-            >
-                <View style={styles.questionCard}>
-                    <Text style={{
-                        fontSize: 26,
-                        fontWeight: '700',
-                        color: colors.white,
-                        textAlign: 'center',
-                        marginTop: 40,
-                        marginBottom: 32,
-                        lineHeight: 34,
-                    }}>{currentQuestion?.question}</Text>
+            {/* FORCE REMOUNT: Key depends on questionSetNumber to ensure fresh render when set changes */}
+            {!questionsLoading && questions.length > 0 && (
+                <ScrollView
+                    key={`quiz-set-${questionSetNumber ?? 'loading'}`}
+                    style={styles.content}
+                    contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
+                    showsVerticalScrollIndicator={false}
+                    scrollEnabled={true}
+                >
+                    <View style={styles.questionCard}>
+                        <Text style={{
+                            fontSize: 26,
+                            fontWeight: '700',
+                            color: colors.white,
+                            textAlign: 'center',
+                            marginTop: 40,
+                            marginBottom: 32,
+                            lineHeight: 34,
+                        }}>{currentQuestion?.question}</Text>
 
 
-                    {/* Options - inline gap and padding for breathing room */}
-                    <View style={{ gap: 25, paddingHorizontal: 20 }}>
-                        {currentQuestion?.options.map((option) => {
-                            const isSelected = selectedValue === option.value;
-                            return (
-                                <TouchableOpacity
-                                    key={option.value}
-                                    style={[
-                                        styles.optionCard,
-                                        { minHeight: 56, paddingVertical: 16 },
-                                        isSelected && styles.optionCardSelected,
-                                    ]}
-                                    onPress={() => handleSelectOption(option.value)}
-                                    activeOpacity={0.8}
-                                >
-                                    <View style={styles.optionTextContainer}>
-                                        <Text style={[
-                                            styles.optionLabel,
-                                            isSelected && styles.optionLabelSelected,
-                                        ]}>
-                                            {option.label}
-                                        </Text>
-                                        {option.description && (
+                        {/* Options - inline gap and padding for breathing room */}
+                        <View style={{ gap: 25, paddingHorizontal: 20 }}>
+                            {currentQuestion?.options.map((option) => {
+                                const isSelected = selectedValue === option.value;
+                                return (
+                                    <TouchableOpacity
+                                        key={option.value}
+                                        style={[
+                                            styles.optionCard,
+                                            { minHeight: 56, paddingVertical: 16 },
+                                            isSelected && styles.optionCardSelected,
+                                        ]}
+                                        onPress={() => handleSelectOption(option.value)}
+                                        activeOpacity={0.8}
+                                    >
+                                        <View style={styles.optionTextContainer}>
                                             <Text style={[
-                                                styles.optionDescription,
-                                                isSelected && styles.optionDescriptionSelected,
+                                                styles.optionLabel,
+                                                isSelected && styles.optionLabelSelected,
                                             ]}>
-                                                {option.description}
+                                                {option.label}
                                             </Text>
-                                        )}
-                                    </View>
-                                    <View style={[
-                                        styles.radioOuter,
-                                        isSelected && styles.radioOuterSelected,
-                                    ]}>
-                                        {isSelected && <View style={styles.radioInner} />}
-                                    </View>
-                                </TouchableOpacity>
-                            );
-                        })}
+                                            {option.description && (
+                                                <Text style={[
+                                                    styles.optionDescription,
+                                                    isSelected && styles.optionDescriptionSelected,
+                                                ]}>
+                                                    {option.description}
+                                                </Text>
+                                            )}
+                                        </View>
+                                        <View style={[
+                                            styles.radioOuter,
+                                            isSelected && styles.radioOuterSelected,
+                                        ]}>
+                                            {isSelected && <View style={styles.radioInner} />}
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
                     </View>
-                </View>
 
-                {/* Continue Button - Inside ScrollView flow, marginTop for separation, opacity-based visibility */}
-                <View style={{
-                    marginTop: 30,
-                    marginHorizontal: 20,
-                    opacity: selectedValue ? 1 : 0,
-                }}>
-                    <TouchableOpacity
-                        style={styles.continueButton}
-                        onPress={handleContinue}
-                        disabled={!selectedValue}
-                    >
-                        <Text style={styles.continueButtonText}>Continuar</Text>
-                        <Ionicons name="arrow-forward-outline" size={18} color="#0A0A14" style={{ marginLeft: 8 }} />
-                    </TouchableOpacity>
-                </View>
-            </ScrollView>
+                    {/* Continue Button - Inside ScrollView flow, marginTop for separation, opacity-based visibility */}
+                    <View style={{
+                        marginTop: 30,
+                        marginHorizontal: 20,
+                        opacity: selectedValue ? 1 : 0,
+                    }}>
+                        <TouchableOpacity
+                            style={styles.continueButton}
+                            onPress={handleContinue}
+                            disabled={!selectedValue}
+                        >
+                            <Text style={styles.continueButtonText}>Continuar</Text>
+                            <Ionicons name="arrow-forward-outline" size={18} color="#0A0A14" style={{ marginLeft: 8 }} />
+                        </TouchableOpacity>
+                    </View>
+                </ScrollView>
+            )}
 
             {/* Locked Overlay */}
             {!canCheckIn && (
