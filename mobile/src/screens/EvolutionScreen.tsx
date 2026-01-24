@@ -312,19 +312,30 @@ export function EvolutionScreen({ navigation }: any) {
             let isMounted = true;
 
             const fetchQuestionsData = async (headers: Record<string, string>) => {
-                console.log('[EvolutionScreen] 📥 Fetching questions...');
-                const url = `${API_URL}${API_ENDPOINTS.READINESS_QUESTIONS}`;
+                // Add timestamp to force bypass any network cache
+                const url = `${API_URL}${API_ENDPOINTS.READINESS_QUESTIONS}?_t=${Date.now()}`;
+                console.log('[EvolutionScreen] 📥 Fetching questions from:', url);
 
                 try {
                     const response = await fetch(url, { method: 'GET', headers });
+
                     if (response.ok && isMounted) {
                         const data: QuestionSetResponse = await response.json();
-                        console.log(`[EvolutionScreen] ✅ Received Set #${data.setNumber}`);
-                        setQuestions(data.questions);
+                        console.log(`[EvolutionScreen] ✅ Received Set #${data.setNumber}: "${data.setName}"`);
+
+                        if (data.questions && data.questions.length > 0) {
+                            console.log(`[EvolutionScreen] 📝 First Question Payload: "${data.questions[0].question}"`);
+                        } else {
+                            console.warn('[EvolutionScreen] ⚠️ Received empty questions array!');
+                        }
+
+                        // Force new array reference to ensure React re-render
+                        setQuestions([...data.questions]);
                         setQuestionSetNumber(data.setNumber);
                         setQuestionsLoading(false);
                     } else {
-                        console.error('[EvolutionScreen] ❌ Failed to fetch questions');
+                        const text = await response.text();
+                        console.error('[EvolutionScreen] ❌ Failed to fetch questions:', response.status, text);
                         setQuestionsLoading(false);
                     }
                 } catch (error) {
