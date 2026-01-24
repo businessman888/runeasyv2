@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../../theme';
-import { BASE_API_URL } from '../../config/api.config';
+import { BASE_API_URL, API_URL, API_ENDPOINTS } from '../../config/api.config';
 import * as Storage from '../../utils/storage';
 import { useReadinessStore } from '../../stores/readinessStore';
 
@@ -55,20 +55,59 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
         useCallback(() => {
             let isMounted = true;
 
-            const fetchQuestions = async () => {
-                console.log('[ReadinessQuiz] Screen focused. Starting fetch sequence...');
+            const fetchQuestionsData = async (headers: Record<string, string>) => {
+                console.log('[ReadinessQuiz] 📥 Step 2: Fetching questions...');
+                // Use API_URL + API_ENDPOINTS to ensure correct path without double /api
+                // endpoint already contains /api prefix
+                const url = `${API_URL}${API_ENDPOINTS.READINESS_QUESTIONS}`;
+                console.log('[ReadinessQuiz] 🌐 URL:', url);
+
                 try {
-                    // Reset state when screen is focused
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        headers,
+                    });
+
+                    console.log('[ReadinessQuiz] 📡 Questions Response status:', response.status);
+
+                    if (response.ok && isMounted) {
+                        const data: QuestionSetResponse = await response.json();
+                        console.log(`[ReadinessQuiz] ✅ Success! Received Set #${data.setNumber}: "${data.setName}"`);
+                        console.log(`[ReadinessQuiz] Questions count:`, data.questions?.length);
+                        setQuestions(data.questions);
+                        setQuestionSetNumber(data.setNumber);
+                    } else {
+                        const errorText = await response.text();
+                        console.error('[ReadinessQuiz] ❌ Failed to fetch questions. Body:', errorText);
+                    }
+                } catch (error) {
+                    console.error('[ReadinessQuiz] 💥 Network Error fetching questions:', error);
+                }
+            };
+
+            const initializeScreen = async () => {
+                console.log('[ReadinessQuiz] 🚀 Screen focused. Starting initialization sequence...');
+
+                try {
                     if (isMounted) {
                         setIsLoading(true);
-                        setCurrentStep(0);
-                        setAnswers({});
+                        setQuestions([]); // Force empty state
                         setQuestionSetNumber(undefined);
-                        setQuestions([]); // Limpa perguntas anteriores para forçar loading
+                        setAnswers({});
                     }
 
+                    // 1. Limpeza de Cache (Solicitada)
+                    console.log('[ReadinessQuiz] 🧹 Step 0: Clearing local cache...');
+                    try {
+                        await Storage.deleteItemAsync('readiness_questions');
+                        console.log('[ReadinessQuiz] Cache cleared.');
+                    } catch (e) {
+                        console.warn('[ReadinessQuiz] Failed to clear cache (non-fatal):', e);
+                    }
+
+                    // Prepare headers
                     const userId = await Storage.getItemAsync('user_id');
-                    console.log('[ReadinessQuiz] Fetching questions for user:', userId);
+                    console.log('[ReadinessQuiz] 👤 User ID:', userId);
 
                     const headers: Record<string, string> = {
                         'Content-Type': 'application/json',
@@ -80,26 +119,33 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
                         headers['x-user-id'] = userId;
                     }
 
-                    console.log('[ReadinessQuiz] Sending GET request to:', `${BASE_API_URL}/readiness/questions`);
-                    const response = await fetch(`${BASE_API_URL}/readiness/questions`, {
-                        method: 'GET',
-                        headers,
-                    });
+                    // 2. Verificar Status (Solicitado: Sequence Check)
+                    console.log('[ReadinessQuiz] 🔍 Step 1: Checking readiness status...');
+                    const statusUrl = `${API_URL}${API_ENDPOINTS.READINESS_STATUS}`;
+                    const statusRes = await fetch(statusUrl, { method: 'GET', headers });
 
-                    console.log('[ReadinessQuiz] Response status:', response.status);
+                    if (statusRes.ok) {
+                        const statusData = await statusRes.json();
+                        console.log('[ReadinessQuiz] 📊 Status received. Completed today?', statusData.hasCompletedToday);
 
-                    if (response.ok && isMounted) {
-                        const data: QuestionSetResponse = await response.json();
-                        console.log(`[ReadinessQuiz] Success! Received Set #${data.setNumber}: "${data.setName}"`);
-                        console.log(`[ReadinessQuiz] Questions received:`, data.questions.length);
-                        setQuestions(data.questions);
-                        setQuestionSetNumber(data.setNumber);
+                        // "Garanta que o fetchQuestions() seja chamado explicitamente dentro do bloco if (!hasCompleted)"
+                        if (!statusData.hasCompletedToday) {
+                            console.log('[ReadinessQuiz] ▶️ User has NOT completed today. Proceeding to fetch questions...');
+                            await fetchQuestionsData(headers);
+                        } else {
+                            console.warn('[ReadinessQuiz] ⚠️ User ALREADY completed check-in today.');
+                            // Still fetching to avoid broken screen if user navigates here, but logging warning
+                            console.log('[ReadinessQuiz] ▶️ Fetching questions anyway for review mode...');
+                            await fetchQuestionsData(headers);
+                        }
                     } else {
-                        const errorText = await response.text();
-                        console.error('[ReadinessQuiz] Failed to fetch questions. Status:', response.status, 'Body:', errorText);
+                        console.error('[ReadinessQuiz] ❌ Status check failed:', statusRes.status);
+                        // Fallback: try to fetch questions anyway
+                        await fetchQuestionsData(headers);
                     }
+
                 } catch (error) {
-                    console.error('[ReadinessQuiz] Network Error fetching questions:', error);
+                    console.error('[ReadinessQuiz] 💥 Critical initialization error:', error);
                 } finally {
                     if (isMounted) {
                         setIsLoading(false);
@@ -107,7 +153,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
                 }
             };
 
-            fetchQuestions();
+            initializeScreen();
 
             return () => {
                 console.log('[ReadinessQuiz] Screen blurred/unmounted. Cleanup.');
