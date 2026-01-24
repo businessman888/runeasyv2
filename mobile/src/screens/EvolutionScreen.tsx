@@ -306,22 +306,28 @@ export function EvolutionScreen({ navigation }: any) {
         setSetNumber, // Import action to save set number
     } = useReadinessStore();
 
+    // Fetch lock to prevent race conditions
+    const fetchSessionId = useRef(0);
+
     // Fetch questions from backend EVERY time screen is focused
     useFocusEffect(
         useCallback(() => {
             let isMounted = true;
+            // Increment session ID for this focus instance
+            fetchSessionId.current += 1;
+            const currentSessionId = fetchSessionId.current;
 
             const fetchQuestionsData = async (headers: Record<string, string>) => {
                 // Add timestamp to force bypass any network cache
                 const url = `${API_URL}${API_ENDPOINTS.READINESS_QUESTIONS}?_t=${Date.now()}`;
-                console.log('[EvolutionScreen] 📥 Fetching questions from:', url);
+                console.log(`[EvolutionScreen] 📥 Fetching questions (Session ${currentSessionId}) from:`, url);
 
                 try {
                     const response = await fetch(url, { method: 'GET', headers });
 
-                    if (response.ok && isMounted) {
+                    if (response.ok && isMounted && currentSessionId === fetchSessionId.current) {
                         const data: QuestionSetResponse = await response.json();
-                        console.log(`[EvolutionScreen] ✅ Received Set #${data.setNumber}: "${data.setName}"`);
+                        console.log(`[EvolutionScreen] ✅ Received Set #${data.setNumber}: "${data.setName}" (Session ${currentSessionId})`);
 
                         if (data.questions && data.questions.length > 0) {
                             console.log(`[EvolutionScreen] 📝 First Question Payload: "${data.questions[0].question}"`);
@@ -333,6 +339,8 @@ export function EvolutionScreen({ navigation }: any) {
                         setQuestions([...data.questions]);
                         setQuestionSetNumber(data.setNumber);
                         setQuestionsLoading(false);
+                    } else if (currentSessionId !== fetchSessionId.current) {
+                        console.log(`[EvolutionScreen] 🚫 Ignoring stale response from Session ${currentSessionId} (Current: ${fetchSessionId.current})`);
                     } else {
                         const text = await response.text();
                         console.error('[EvolutionScreen] ❌ Failed to fetch questions:', response.status, text);
@@ -340,20 +348,21 @@ export function EvolutionScreen({ navigation }: any) {
                     }
                 } catch (error) {
                     console.error('[EvolutionScreen] 💥 Error fetching questions:', error);
-                    if (isMounted) setQuestionsLoading(false);
+                    if (isMounted && currentSessionId === fetchSessionId.current) setQuestionsLoading(false);
                 }
             };
 
             const initializeScreen = async () => {
                 try {
                     if (isMounted) {
+                        console.log(`[EvolutionScreen] 🔄 Initializing Screen (Session ${currentSessionId})`);
                         setQuestionsLoading(true);
-                        setQuestions([]);
+                        setQuestions([]); // Clear immediately
                         setAnswers({});
                         setCurrentStep(0);
                     }
 
-                    // 1. Clear Local Cache
+                    // 1. Clear Local Cache (Just in case, though we rely on API)
                     await Storage.deleteItemAsync('readiness_questions');
 
                     // 2. Prepare Headers
@@ -367,14 +376,31 @@ export function EvolutionScreen({ navigation }: any) {
                     if (userId) headers['x-user-id'] = userId;
 
                     // 3. Check Status
-                    await fetchReadinessStatus(); // Use store action which updates readinessStatus
+                    // We must refetch status to know if user completed today
+                    // But we prioritize this check before populating questions
+                    await fetchReadinessStatus();
 
-                    // We can also fetch status directly if we want more control, but store is fine if we watch it.
-                    // However, to ensure sequence for questions, let's fetch questions if status allows.
-                    // Since fetchReadinessStatus is async, we can wait for it, but updating store might be decoupled.
-                    // Let's just fetch questions directly here to ensure data availability regardless of status blocking UI.
-                    // The UI below handles blocking if status says completed.
-                    await fetchQuestionsData(headers);
+                    // Access fresh status from store (it's updated by fetchReadinessStatus)
+                    const storeState = useReadinessStore.getState();
+                    const status = storeState.readinessStatus;
+
+                    // Log status date for debugging
+                    console.log(`[EvolutionScreen] 📅 Status Check: CompletedToday=${status?.hasCompletedToday}`);
+                    if (status?.todayVerdict) {
+                        console.log(`[EvolutionScreen] ⚖️ Verdict Date: ${status.todayVerdict.generated_at}`);
+                    }
+
+                    // Strict precedence: If completed today, don't even process questions.
+                    if (status?.hasCompletedToday) {
+                        console.log('[EvolutionScreen] 🛑 User completed today. Skipping question fetch.');
+                        if (isMounted) setQuestionsLoading(false);
+                        return; // Stop here
+                    }
+
+                    // If we are here, we need questions.
+                    if (currentSessionId === fetchSessionId.current) {
+                        await fetchQuestionsData(headers);
+                    }
 
                 } catch (e) {
                     console.error(e);
@@ -391,13 +417,15 @@ export function EvolutionScreen({ navigation }: any) {
     useEffect(() => {
         const todayVerdict = readinessStatus?.todayVerdict;
         if (todayVerdict && !verdict) {
+            // Optional: Check date freshness here if needed, but backend handles it.
+            // We just ensure we don't display old verdict if hasCompletedToday is false (handled above)
             useReadinessStore.setState({ verdict: todayVerdict });
         }
     }, [readinessStatus?.todayVerdict, verdict]);
 
     const currentQuestion = questions[currentStep];
     const totalSteps = questions.length;
-    const progress = (currentStep + 1) / totalSteps;
+    const progress = totalSteps > 0 ? (currentStep + 1) / totalSteps : 0;
     const selectedValue = answers[currentQuestion?.id];
 
     const handleSelectOption = (value: number) => {
