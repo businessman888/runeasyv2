@@ -8,7 +8,8 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
     const insets = useSafeAreaInsets();
 
     // Bottom position respects safe area (gesture bar on Android, home indicator on iOS)
-    const bottomPosition = Math.max(insets.bottom, 15);
+    // Adding extra spacing for "respiro" as requested
+    const bottomPosition = Math.max(insets.bottom + 10, 25);
 
     return (
         <View style={[styles.tabBar, { bottom: bottomPosition }]}>

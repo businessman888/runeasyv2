@@ -22,7 +22,7 @@ export function ScreenContainer({
         <View
             style={[
                 styles.container,
-                { paddingTop: insets.top },
+                { paddingTop: insets.top, paddingBottom: insets.bottom },
                 style,
             ]}
         >

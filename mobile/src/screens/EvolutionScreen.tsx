@@ -195,7 +195,7 @@ const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> 
                 </TouchableOpacity>
             </View>
 
-            <ScrollView style={resultStyles.content} showsVerticalScrollIndicator={false}>
+            <ScrollView style={resultStyles.content} contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
                 <View style={resultStyles.timeBadge}>
                     <Text style={resultStyles.timeText}>Análise gerada às {generatedTime}</Text>
                     <Text style={resultStyles.timeSubtext}>Baseada em Check-in + Strava</Text>
@@ -224,17 +224,17 @@ const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> 
 
                 {/* Strava compliance branding */}
                 <PoweredByStrava width={76} style={{ marginTop: 8, marginRight: 4 }} />
-
-                {/* Button inside ScrollView so it scrolls and stays above navbar */}
-                <View style={resultStyles.footer}>
-                    <TouchableOpacity
-                        style={resultStyles.confirmButton}
-                        onPress={() => navigation.navigate('ReadinessSuccess')}
-                    >
-                        <Text style={resultStyles.confirmButtonText}>Concluir</Text>
-                    </TouchableOpacity>
-                </View>
             </ScrollView>
+
+            {/* Floating Footer for Result Screen */}
+            <View style={[resultStyles.floatingFooter, { paddingBottom: Math.max(insets.bottom, 20) + 70, zIndex: 10 }]}>
+                <TouchableOpacity
+                    style={resultStyles.confirmButton}
+                    onPress={() => navigation.navigate('ReadinessSuccess')}
+                >
+                    <Text style={resultStyles.confirmButtonText}>Concluir</Text>
+                </TouchableOpacity>
+            </View>
         </View>
     );
 };
@@ -272,6 +272,14 @@ const resultStyles = StyleSheet.create({
     metricLabel: { fontSize: typography.fontSizes.xs, color: 'rgba(255, 255, 255, 0.5)', textAlign: 'center', marginBottom: spacing.xs },
     metricValue: { fontSize: typography.fontSizes.lg, fontWeight: '700', color: colors.white, textAlign: 'center' },
     metricSublabel: { fontSize: typography.fontSizes.xs, color: colors.primary, marginTop: spacing.xs, textAlign: 'center' },
+    floatingFooter: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        paddingHorizontal: spacing.lg,
+        paddingTop: spacing.md,
+    },
     footer: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 100 },
     confirmButton: { backgroundColor: colors.primary, paddingVertical: 18, borderRadius: 32, alignItems: 'center' },
     confirmButtonText: { fontSize: typography.fontSizes.md, fontWeight: '700', color: '#0A0A14' },
@@ -548,23 +556,22 @@ export function EvolutionScreen({ navigation }: any) {
     }
 
     return (
-        <View style={{ paddingTop: insets.top + 50, backgroundColor: '#0A0A14', flex: 1 }}>
+        <View style={{ paddingTop: insets.top + (Platform.OS === 'android' ? 10 : 0), paddingBottom: insets.bottom, backgroundColor: '#0A0A14', flex: 1 }}>
             <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
 
             {/* Header */}
-            <SafeAreaView style={styles.safeArea}>
-                <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Prontidão diária</Text>
-                    <Text style={styles.stepIndicator}>{currentStep + 1}/{totalSteps}</Text>
-                </View>
+            {/* Header */}
+            <View style={[styles.header, { marginTop: insets.top }]}>
+                <Text style={styles.headerTitle}>Prontidão diária</Text>
+                <Text style={styles.stepIndicator}>{currentStep + 1}/{totalSteps}</Text>
+            </View>
 
-                {/* Progress Bar */}
-                <View style={styles.progressBarContainer}>
-                    <View style={styles.progressBar}>
-                        <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-                    </View>
+            {/* Progress Bar */}
+            <View style={styles.progressBarContainer}>
+                <View style={styles.progressBar}>
+                    <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
                 </View>
-            </SafeAreaView>
+            </View>
 
             {/* Question Card - ScrollView with flexGrow and paddingBottom for button space */}
             {/* FORCE REMOUNT: Key depends on questionSetNumber to ensure fresh render when set changes */}
@@ -576,7 +583,7 @@ export function EvolutionScreen({ navigation }: any) {
                     showsVerticalScrollIndicator={false}
                     scrollEnabled={true}
                 >
-                    <View style={styles.questionCard}>
+                    <View style={[styles.questionCard, { marginBottom: Math.max(insets.bottom, 20) + 120 }]}>
                         <Text style={{
                             fontSize: 26,
                             fontWeight: '700',
@@ -631,22 +638,24 @@ export function EvolutionScreen({ navigation }: any) {
                         </View>
                     </View>
 
-                    {/* Continue Button - Inside ScrollView flow, marginTop for separation, opacity-based visibility */}
-                    <View style={{
-                        marginTop: 30,
-                        marginHorizontal: 20,
-                        opacity: selectedValue ? 1 : 0,
-                    }}>
-                        <TouchableOpacity
-                            style={styles.continueButton}
-                            onPress={handleContinue}
-                            disabled={!selectedValue}
-                        >
-                            <Text style={styles.continueButtonText}>Continuar</Text>
-                            <Ionicons name="arrow-forward-outline" size={18} color="#0A0A14" style={{ marginLeft: 8 }} />
-                        </TouchableOpacity>
-                    </View>
                 </ScrollView>
+            )}
+
+            {/* Floating Continue Button */}
+            {!questionsLoading && questions.length > 0 && (
+                <View style={[styles.floatingFooter, { paddingBottom: Math.max(insets.bottom, 20) + 90, zIndex: 10 }]}>
+                    <TouchableOpacity
+                        style={[
+                            styles.continueButton,
+                            !selectedValue && styles.continueButtonDisabled
+                        ]}
+                        onPress={handleContinue}
+                        disabled={!selectedValue}
+                    >
+                        <Text style={styles.continueButtonText}>Continuar</Text>
+                        <Ionicons name="arrow-forward-outline" size={18} color="#0A0A14" style={{ marginLeft: 8 }} />
+                    </TouchableOpacity>
+                </View>
             )}
 
             {/* Locked Overlay */}
@@ -707,7 +716,8 @@ const styles = StyleSheet.create({
     },
     progressBarContainer: {
         paddingHorizontal: spacing.lg,
-        paddingBottom: spacing.xl,
+        paddingBottom: spacing.xs,
+        marginTop: spacing.md,
     },
     progressBar: {
         height: 4,
@@ -799,6 +809,39 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
+    floatingFooter: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        paddingHorizontal: spacing.lg,
+        paddingTop: spacing.md,
+        // Gradient or background to ensure readability if content scrolls behind?
+        // For now transparent or simple padding.
+    },
+    continueButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.primary,
+        paddingVertical: 16,
+        borderRadius: 32,
+        elevation: 4,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+    },
+    continueButtonDisabled: {
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        shadowOpacity: 0,
+        elevation: 0,
+    },
+    continueButtonText: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#0A0A14',
+    },
     radioOuterSelected: {
         borderColor: colors.primary,
         backgroundColor: colors.primary,
@@ -813,23 +856,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.lg,
         paddingTop: spacing.xl,
         paddingBottom: 140, // Space for tab bar + equal spacing
-    },
-    continueButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.primary,
-        paddingVertical: 18,
-        borderRadius: 32,
-        gap: spacing.sm,
-    },
-    continueButtonDisabled: {
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    continueButtonText: {
-        fontSize: typography.fontSizes.md,
-        fontWeight: '600',
-        color: '#0A0A14',
     },
     continueButtonTextDisabled: {
         color: 'rgba(255, 255, 255, 0.4)',

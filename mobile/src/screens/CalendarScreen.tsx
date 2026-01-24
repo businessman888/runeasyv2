@@ -15,6 +15,7 @@ import {
     Alert,
     PanResponder,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
 import { useTrainingStore, useStatsStore, ScheduleDay } from '../stores';
@@ -549,6 +550,7 @@ export function CalendarScreen({ navigation }: any) {
         'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
     const weekDays = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
+    const insets = useSafeAreaInsets();
     const days = getDaysInMonth();
 
     return (
@@ -1066,7 +1068,7 @@ export function CalendarScreen({ navigation }: any) {
 
                             {/* Fixed Start Workout Button at bottom */}
                             {showStartButton && (
-                                <View style={styles.startWorkoutContainer}>
+                                <View style={[styles.startWorkoutContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
                                     <TouchableOpacity
                                         style={styles.startWorkoutButton}
                                         onPress={closeModal}

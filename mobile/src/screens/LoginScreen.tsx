@@ -11,6 +11,7 @@ import {
     Image,
     ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, spacing } from '../theme';
 import * as Storage from '../utils/storage';
 import { useAuthStore } from '../stores';
@@ -209,6 +210,8 @@ export function LoginScreen({ navigation }: any) {
         }
     };
 
+    const insets = useSafeAreaInsets();
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
@@ -222,7 +225,13 @@ export function LoginScreen({ navigation }: any) {
                 {/* Overlay with #0E0E1F at 80% opacity */}
                 <View style={styles.overlay} />
 
-                <View style={styles.content}>
+                <View style={[
+                    styles.content,
+                    {
+                        paddingTop: insets.top + 20,
+                        paddingBottom: insets.bottom + 20
+                    }
+                ]}>
                     {/* Logo Section - Top */}
                     <View style={styles.logoContainer}>
                         <RunEasyLogo />

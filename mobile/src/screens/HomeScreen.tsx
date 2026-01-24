@@ -11,6 +11,7 @@ import {
     Linking,
     Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
@@ -85,6 +86,8 @@ export function HomeScreen({ navigation }: any) {
     const [recoveryTimeLeft, setRecoveryTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 });
     const [recoveryProgress, setRecoveryProgress] = useState(0);
     const [retrospectiveReady, setRetrospectiveReady] = useState(false);
+
+    const insets = useSafeAreaInsets();
 
     // Use useFocusEffect to refetch data when screen gains focus (revalidate on every visit)
     useFocusEffect(
@@ -522,34 +525,40 @@ export function HomeScreen({ navigation }: any) {
                             </View>
                         </View>
 
-                        <TouchableOpacity
-                            style={[
-                                styles.startButton,
-                                !isButtonEnabled && styles.startButtonDisabled
-                            ]}
-                            onPress={handleStartWorkout}
-                            disabled={!isButtonEnabled}
-                        >
-                            <ShoeIcon size={24} color={isButtonEnabled ? "#0E0E1F" : "#6B7280"} />
-                            <Text style={[
-                                styles.startButtonText,
-                                !isButtonEnabled && styles.startButtonTextDisabled
-                            ]}>
-                                {isButtonEnabled ? 'Iniciar Treino' : hasTodayWorkout ? 'Treino Concluído' : 'Disponível ' + formatWorkoutDate(mainWorkout.scheduled_date)}
-                            </Text>
-                        </TouchableOpacity>
+
+                        {/* Button is hidden here if enabled (shown as floating instead) */}
+                        {!isButtonEnabled && (
+                            <TouchableOpacity
+                                style={[
+                                    styles.startButton,
+                                    !isButtonEnabled && styles.startButtonDisabled
+                                ]}
+                                onPress={handleStartWorkout}
+                                disabled={!isButtonEnabled}
+                            >
+                                <ShoeIcon size={24} color={isButtonEnabled ? "#0E0E1F" : "#6B7280"} />
+                                <Text style={[
+                                    styles.startButtonText,
+                                    !isButtonEnabled && styles.startButtonTextDisabled
+                                ]}>
+                                    {isButtonEnabled ? 'Iniciar Treino' : hasTodayWorkout ? 'Treino Concluído' : 'Disponível ' + formatWorkoutDate(mainWorkout.scheduled_date)}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 )}
 
                 {/* No Workout Card - Only show if no recovery and no workout */}
-                {!mainWorkout && !isRecoveryDay && (
-                    <View style={styles.workoutCard}>
-                        <View style={styles.lockedContent}>
-                            <RunningIcon size={48} color="#6B7280" />
-                            <Text style={styles.lockedText}>Nenhum treino agendado</Text>
+                {
+                    !mainWorkout && !isRecoveryDay && (
+                        <View style={styles.workoutCard}>
+                            <View style={styles.lockedContent}>
+                                <RunningIcon size={48} color="#6B7280" />
+                                <Text style={styles.lockedText}>Nenhum treino agendado</Text>
+                            </View>
                         </View>
-                    </View>
-                )}
+                    )
+                }
 
                 {/* AI Analysis Card */}
                 <View style={styles.aiCard}>
@@ -640,7 +649,23 @@ export function HomeScreen({ navigation }: any) {
                     )}
                 </View>
             </ScrollView>
-        </ScreenContainer>
+
+            {/* Floating Start Workout Button - Only show pending today's workout */}
+            {
+                mainWorkout && isButtonEnabled && (
+                    <View style={[styles.floatingFooter, { paddingBottom: Math.max(insets.bottom, 20) + 90, zIndex: 10 }]}>
+                        <TouchableOpacity
+                            style={styles.floatingStartButton}
+                            onPress={handleStartWorkout}
+                            activeOpacity={0.8}
+                        >
+                            <ShoeIcon size={24} color="#0E0E1F" />
+                            <Text style={styles.startButtonText}>Iniciar Treino</Text>
+                        </TouchableOpacity>
+                    </View>
+                )
+            }
+        </ScreenContainer >
     );
 }
 
@@ -1221,5 +1246,30 @@ const styles = StyleSheet.create({
     retrospectiveSubtitle: {
         fontSize: typography.fontSizes.sm,
         color: colors.textSecondary,
+    },
+    floatingFooter: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        paddingHorizontal: spacing.lg,
+        paddingTop: spacing.md,
+        // Optional: gradient background fade if needed, but transparent with just button is ok relative to Tab Bar.
+        // Actually, TabBar has a background. If button floats above it, it overlaps page content.
+    },
+    floatingStartButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.sm,
+        backgroundColor: '#00D4FF',
+        paddingVertical: 16,
+        paddingHorizontal: spacing.xl,
+        borderRadius: 32,
+        shadowColor: '#00D4FF',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+        elevation: 6,
     },
 });
