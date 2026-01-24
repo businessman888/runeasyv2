@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -13,70 +13,34 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, typography, spacing } from '../theme';
 import { useReadinessStore, ReadinessAnswers } from '../stores/readinessStore';
 import { PoweredByStrava } from '../components/PoweredByStrava';
+import { BASE_API_URL, API_URL, API_ENDPOINTS } from '../config/api.config';
+import * as Storage from '../utils/storage';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
-// Questions bank for readiness quiz
-const READINESS_QUESTIONS = [
-    {
-        id: 'sleep',
-        question: 'Sua bateria carregou bem durante a noite',
-        options: [
-            { value: 5, label: '100% Full' },
-            { value: 4, label: '75%' },
-            { value: 3, label: '50%' },
-            { value: 2, label: '25%' },
-            { value: 1, label: '0%' },
-        ],
-    },
-    {
-        id: 'legs',
-        question: 'Como suas pernas estão se sentindo hoje?',
-        options: [
-            { value: 1, label: 'Como Chumbo' },
-            { value: 2, label: 'Pesadas' },
-            { value: 3, label: 'Normais' },
-            { value: 4, label: 'Leves' },
-            { value: 5, label: 'Com molas' },
-        ],
-    },
-    {
-        id: 'mood',
-        question: "Qual o seu 'clima' interno neste momento",
-        options: [
-            { value: 1, label: 'Tempestade', description: 'Energia caótica ou baixa' },
-            { value: 2, label: 'Nublado', description: 'Desmotivado ou cansado' },
-            { value: 3, label: 'Instável', description: 'Oscilando, mas ok' },
-            { value: 4, label: 'Ensolarado', description: 'Boa energia e foco' },
-            { value: 5, label: 'Céu limpo', description: 'Energia máxima, pronto!' },
-        ],
-    },
-    {
-        id: 'stress',
-        question: 'Como está o peso das preocupações hoje?',
-        options: [
-            { value: 1, label: 'Insuportável', description: 'Sinto-me esmagado' },
-            { value: 2, label: 'Pesado', description: 'Difícil de carregar' },
-            { value: 3, label: 'Presente', description: 'Estou ciente delas' },
-            { value: 4, label: 'Leve', description: 'Quase não noto' },
-            { value: 5, label: 'Inexistente', description: 'Mente livre e clara' },
-        ],
-    },
-    {
-        id: 'motivation',
-        question: 'Sua bateria carregou bem durante a noite',
-        options: [
-            { value: 1, label: 'Ainda na cama' },
-            { value: 2, label: 'Preciso de café' },
-            { value: 3, label: 'Talvez' },
-            { value: 4, label: 'Vamos nessa!' },
-            { value: 5, label: 'Já estou de tênis' },
-        ],
-    },
-];
+// Question types
+interface QuestionOption {
+    value: number;
+    label: string;
+    description?: string;
+}
+
+interface Question {
+    id: string;
+    question: string;
+    options: QuestionOption[];
+}
+
+interface QuestionSetResponse {
+    setNumber: number;
+    setName: string;
+    questions: Question[];
+    totalSets: number;
+}
 
 // Map question IDs to store keys
 const STEP_TO_STORE_KEY: Record<string, keyof ReadinessAnswers> = {
@@ -323,6 +287,11 @@ export function EvolutionScreen({ navigation }: any) {
     const [currentStep, setCurrentStep] = useState(0);
     const [answers, setAnswers] = useState<Record<string, number>>({});
     const [quizCompleted, setQuizCompleted] = useState(false);
+    // Dynamic questions state
+    const [questions, setQuestions] = useState<Question[]>([]);
+    const [questionSetNumber, setQuestionSetNumber] = useState<number | undefined>(undefined);
+    const [questionsLoading, setQuestionsLoading] = useState(true);
+
     const insets = useSafeAreaInsets();
     const {
         setAnswer,
@@ -334,12 +303,78 @@ export function EvolutionScreen({ navigation }: any) {
         readinessStatus,
         statusLoading,
         fetchReadinessStatus,
+        setSetNumber, // Import action to save set number
     } = useReadinessStore();
 
-    // Fetch readiness status on mount
-    useEffect(() => {
-        fetchReadinessStatus();
-    }, []);
+    // Fetch questions from backend EVERY time screen is focused
+    useFocusEffect(
+        useCallback(() => {
+            let isMounted = true;
+
+            const fetchQuestionsData = async (headers: Record<string, string>) => {
+                console.log('[EvolutionScreen] 📥 Fetching questions...');
+                const url = `${API_URL}${API_ENDPOINTS.READINESS_QUESTIONS}`;
+
+                try {
+                    const response = await fetch(url, { method: 'GET', headers });
+                    if (response.ok && isMounted) {
+                        const data: QuestionSetResponse = await response.json();
+                        console.log(`[EvolutionScreen] ✅ Received Set #${data.setNumber}`);
+                        setQuestions(data.questions);
+                        setQuestionSetNumber(data.setNumber);
+                        setQuestionsLoading(false);
+                    } else {
+                        console.error('[EvolutionScreen] ❌ Failed to fetch questions');
+                        setQuestionsLoading(false);
+                    }
+                } catch (error) {
+                    console.error('[EvolutionScreen] 💥 Error fetching questions:', error);
+                    if (isMounted) setQuestionsLoading(false);
+                }
+            };
+
+            const initializeScreen = async () => {
+                try {
+                    if (isMounted) {
+                        setQuestionsLoading(true);
+                        setQuestions([]);
+                        setAnswers({});
+                        setCurrentStep(0);
+                    }
+
+                    // 1. Clear Local Cache
+                    await Storage.deleteItemAsync('readiness_questions');
+
+                    // 2. Prepare Headers
+                    const userId = await Storage.getItemAsync('user_id');
+                    const headers: Record<string, string> = {
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache',
+                        'Expires': '0',
+                    };
+                    if (userId) headers['x-user-id'] = userId;
+
+                    // 3. Check Status
+                    await fetchReadinessStatus(); // Use store action which updates readinessStatus
+
+                    // We can also fetch status directly if we want more control, but store is fine if we watch it.
+                    // However, to ensure sequence for questions, let's fetch questions if status allows.
+                    // Since fetchReadinessStatus is async, we can wait for it, but updating store might be decoupled.
+                    // Let's just fetch questions directly here to ensure data availability regardless of status blocking UI.
+                    // The UI below handles blocking if status says completed.
+                    await fetchQuestionsData(headers);
+
+                } catch (e) {
+                    console.error(e);
+                }
+            };
+
+            initializeScreen();
+
+            return () => { isMounted = false; };
+        }, [])
+    );
 
     // Sync todayVerdict to store when available (prevents setState during render)
     useEffect(() => {
@@ -349,8 +384,8 @@ export function EvolutionScreen({ navigation }: any) {
         }
     }, [readinessStatus?.todayVerdict, verdict]);
 
-    const currentQuestion = READINESS_QUESTIONS[currentStep];
-    const totalSteps = READINESS_QUESTIONS.length;
+    const currentQuestion = questions[currentStep];
+    const totalSteps = questions.length;
     const progress = (currentStep + 1) / totalSteps;
     const selectedValue = answers[currentQuestion?.id];
 
@@ -372,6 +407,8 @@ export function EvolutionScreen({ navigation }: any) {
         } else {
             // All questions answered, show result inline (keeps navbar)
             setQuizCompleted(true);
+            // Save set number to store before fetching verdict
+            if (questionSetNumber) setSetNumber(questionSetNumber);
             fetchVerdict();
         }
     };
@@ -383,24 +420,45 @@ export function EvolutionScreen({ navigation }: any) {
         resetQuiz();
     };
 
-    // Show loading state while checking status OR if status not yet loaded
-    if (statusLoading || readinessStatus === null) {
+    // Show loading state while checking status OR fetching questions
+    if (statusLoading || readinessStatus === null || (questionsLoading && questions.length === 0)) {
         return (
             <View style={styles.container}>
                 <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <ActivityIndicator size="large" color={colors.primary} />
-                    <Text style={{ color: colors.white, marginTop: spacing.lg }}>Verificando status...</Text>
+                    <Text style={{ color: colors.white, marginTop: spacing.lg }}>
+                        {questionsLoading ? 'Carregando questionário...' : 'Verificando status...'}
+                    </Text>
                 </View>
             </View>
         );
     }
 
-    // Show locked state if user cannot check in
+    // Extract status variables (readinessStatus is safe here due to previous check)
     const canCheckIn = readinessStatus?.canCheckInToday ?? false;
     const hasCompletedFirstWorkout = readinessStatus?.hasCompletedFirstWorkout ?? false;
     const hasCompletedToday = readinessStatus?.hasCompletedToday ?? false;
     const todayVerdict = readinessStatus?.todayVerdict;
+
+    // Safety check if questions failed to load and user hasn't completed quiz
+    if (!quizCompleted && !hasCompletedToday && questions.length === 0) {
+        return (
+            <View style={[styles.container, { paddingTop: insets.top }]}>
+                <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
+                    <Text style={{ color: colors.white, marginTop: spacing.lg }}>Erro ao carregar perguntas</Text>
+                    <TouchableOpacity
+                        style={{ marginTop: 20, padding: 10, backgroundColor: colors.primary, borderRadius: 20 }}
+                        onPress={() => fetchReadinessStatus()}
+                    >
+                        <Text style={{ fontWeight: 'bold' }}>Tentar Novamente</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
+    }
 
     // PREVENTIVE BLOCK: If user has already checked in today, show result or success
     if (hasCompletedToday) {
@@ -485,12 +543,12 @@ export function EvolutionScreen({ navigation }: any) {
                         marginTop: 40,
                         marginBottom: 32,
                         lineHeight: 34,
-                    }}>{currentQuestion.question}</Text>
+                    }}>{currentQuestion?.question}</Text>
 
 
                     {/* Options - inline gap and padding for breathing room */}
                     <View style={{ gap: 25, paddingHorizontal: 20 }}>
-                        {currentQuestion.options.map((option) => {
+                        {currentQuestion?.options.map((option) => {
                             const isSelected = selectedValue === option.value;
                             return (
                                 <TouchableOpacity
