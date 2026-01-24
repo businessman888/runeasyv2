@@ -195,7 +195,7 @@ const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> 
                 </TouchableOpacity>
             </View>
 
-            <ScrollView style={resultStyles.content} contentContainerStyle={{ paddingBottom: insets.bottom + 80 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={resultStyles.content} contentContainerStyle={{ paddingBottom: insets.bottom + 120 }} showsVerticalScrollIndicator={false}>
                 <View style={resultStyles.timeBadge}>
                     <Text style={resultStyles.timeText}>Análise gerada às {generatedTime}</Text>
                     <Text style={resultStyles.timeSubtext}>Baseada em Check-in + Strava</Text>
@@ -573,6 +573,8 @@ export function EvolutionScreen({ navigation }: any) {
                 <ScrollView
                     key={`quiz-set-${questionSetNumber ?? 'loading'}`}
                     style={styles.content}
+                    contentContainerStyle={{ flexGrow: 1, paddingBottom: insets.bottom + 120 }}
+                    showsVerticalScrollIndicator={false}
                     scrollEnabled={true}
                 >
                     <View style={styles.questionCard}>
