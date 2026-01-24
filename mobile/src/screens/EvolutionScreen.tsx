@@ -195,7 +195,7 @@ const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> 
                 </TouchableOpacity>
             </View>
 
-            <ScrollView style={resultStyles.content} contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={resultStyles.content} contentContainerStyle={{ paddingBottom: insets.bottom + 80 }} showsVerticalScrollIndicator={false}>
                 <View style={resultStyles.timeBadge}>
                     <Text style={resultStyles.timeText}>Análise gerada às {generatedTime}</Text>
                     <Text style={resultStyles.timeSubtext}>Baseada em Check-in + Strava</Text>
@@ -224,18 +224,19 @@ const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> 
 
                 {/* Strava compliance branding */}
                 <PoweredByStrava width={76} style={{ marginTop: 8, marginRight: 4 }} />
-            </ScrollView>
 
-            {/* Floating Footer for Result Screen */}
-            <View style={[resultStyles.floatingFooter, { paddingBottom: Math.max(insets.bottom, 20) + 70, zIndex: 10 }]}>
-                <TouchableOpacity
-                    style={resultStyles.confirmButton}
-                    onPress={() => navigation.navigate('ReadinessSuccess')}
-                >
-                    <Text style={resultStyles.confirmButtonText}>Concluir</Text>
-                </TouchableOpacity>
-            </View>
-        </View>
+
+                {/* Natural Flow Button */}
+                <View style={{ marginTop: spacing.xl }}>
+                    <TouchableOpacity
+                        style={resultStyles.confirmButton}
+                        onPress={() => navigation.navigate('ReadinessSuccess')}
+                    >
+                        <Text style={resultStyles.confirmButtonText}>Concluir</Text>
+                    </TouchableOpacity>
+                </View>
+            </ScrollView>
+        </View >
     );
 };
 
@@ -272,14 +273,7 @@ const resultStyles = StyleSheet.create({
     metricLabel: { fontSize: typography.fontSizes.xs, color: 'rgba(255, 255, 255, 0.5)', textAlign: 'center', marginBottom: spacing.xs },
     metricValue: { fontSize: typography.fontSizes.lg, fontWeight: '700', color: colors.white, textAlign: 'center' },
     metricSublabel: { fontSize: typography.fontSizes.xs, color: colors.primary, marginTop: spacing.xs, textAlign: 'center' },
-    floatingFooter: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        paddingHorizontal: spacing.lg,
-        paddingTop: spacing.md,
-    },
+
     footer: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 100 },
     confirmButton: { backgroundColor: colors.primary, paddingVertical: 18, borderRadius: 32, alignItems: 'center' },
     confirmButtonText: { fontSize: typography.fontSizes.md, fontWeight: '700', color: '#0A0A14' },
@@ -579,11 +573,9 @@ export function EvolutionScreen({ navigation }: any) {
                 <ScrollView
                     key={`quiz-set-${questionSetNumber ?? 'loading'}`}
                     style={styles.content}
-                    contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
-                    showsVerticalScrollIndicator={false}
                     scrollEnabled={true}
                 >
-                    <View style={[styles.questionCard, { marginBottom: Math.max(insets.bottom, 20) + 120 }]}>
+                    <View style={styles.questionCard}>
                         <Text style={{
                             fontSize: 26,
                             fontWeight: '700',
@@ -638,24 +630,22 @@ export function EvolutionScreen({ navigation }: any) {
                         </View>
                     </View>
 
-                </ScrollView>
-            )}
+                    {/* Natural Flow Continue Button inside ScrollView */}
+                    <View style={{ marginTop: spacing.xl, paddingBottom: spacing.lg }}>
+                        <TouchableOpacity
+                            style={[
+                                styles.continueButton,
+                                !selectedValue && styles.continueButtonDisabled
+                            ]}
+                            onPress={handleContinue}
+                            disabled={!selectedValue}
+                        >
+                            <Text style={styles.continueButtonText}>Continuar</Text>
+                            <Ionicons name="arrow-forward-outline" size={18} color="#0A0A14" style={{ marginLeft: 8 }} />
+                        </TouchableOpacity>
+                    </View>
 
-            {/* Floating Continue Button */}
-            {!questionsLoading && questions.length > 0 && (
-                <View style={[styles.floatingFooter, { paddingBottom: Math.max(insets.bottom, 20) + 90, zIndex: 10 }]}>
-                    <TouchableOpacity
-                        style={[
-                            styles.continueButton,
-                            !selectedValue && styles.continueButtonDisabled
-                        ]}
-                        onPress={handleContinue}
-                        disabled={!selectedValue}
-                    >
-                        <Text style={styles.continueButtonText}>Continuar</Text>
-                        <Ionicons name="arrow-forward-outline" size={18} color="#0A0A14" style={{ marginLeft: 8 }} />
-                    </TouchableOpacity>
-                </View>
+                </ScrollView>
             )}
 
             {/* Locked Overlay */}
@@ -809,16 +799,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    floatingFooter: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        paddingHorizontal: spacing.lg,
-        paddingTop: spacing.md,
-        // Gradient or background to ensure readability if content scrolls behind?
-        // For now transparent or simple padding.
-    },
+
     continueButton: {
         flexDirection: 'row',
         alignItems: 'center',
