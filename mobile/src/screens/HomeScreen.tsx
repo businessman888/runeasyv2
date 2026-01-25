@@ -526,25 +526,22 @@ export function HomeScreen({ navigation }: any) {
                         </View>
 
 
-                        {/* Button is hidden here if enabled (shown as floating instead) */}
-                        {!isButtonEnabled && (
-                            <TouchableOpacity
-                                style={[
-                                    styles.startButton,
-                                    !isButtonEnabled && styles.startButtonDisabled
-                                ]}
-                                onPress={handleStartWorkout}
-                                disabled={!isButtonEnabled}
-                            >
-                                <ShoeIcon size={24} color={isButtonEnabled ? "#0E0E1F" : "#6B7280"} />
-                                <Text style={[
-                                    styles.startButtonText,
-                                    !isButtonEnabled && styles.startButtonTextDisabled
-                                ]}>
-                                    {isButtonEnabled ? 'Iniciar Treino' : hasTodayWorkout ? 'Treino Concluído' : 'Disponível ' + formatWorkoutDate(mainWorkout.scheduled_date)}
-                                </Text>
-                            </TouchableOpacity>
-                        )}
+                        <TouchableOpacity
+                            style={[
+                                styles.startButton,
+                                !isButtonEnabled && styles.startButtonDisabled
+                            ]}
+                            onPress={handleStartWorkout}
+                            disabled={!isButtonEnabled}
+                        >
+                            <ShoeIcon size={24} color={isButtonEnabled ? "#0E0E1F" : "#6B7280"} />
+                            <Text style={[
+                                styles.startButtonText,
+                                !isButtonEnabled && styles.startButtonTextDisabled
+                            ]}>
+                                {isButtonEnabled ? 'Iniciar Treino' : hasTodayWorkout ? 'Treino Concluído' : 'Disponível ' + formatWorkoutDate(mainWorkout.scheduled_date)}
+                            </Text>
+                        </TouchableOpacity>
                     </View>
                 )}
 
@@ -650,21 +647,7 @@ export function HomeScreen({ navigation }: any) {
                 </View>
             </ScrollView>
 
-            {/* Floating Start Workout Button - Only show pending today's workout */}
-            {
-                mainWorkout && isButtonEnabled && (
-                    <View style={[styles.floatingFooter, { paddingBottom: Math.max(insets.bottom, 20) + 90, zIndex: 10 }]}>
-                        <TouchableOpacity
-                            style={styles.floatingStartButton}
-                            onPress={handleStartWorkout}
-                            activeOpacity={0.8}
-                        >
-                            <ShoeIcon size={24} color="#0E0E1F" />
-                            <Text style={styles.startButtonText}>Iniciar Treino</Text>
-                        </TouchableOpacity>
-                    </View>
-                )
-            }
+
         </ScreenContainer >
     );
 }
