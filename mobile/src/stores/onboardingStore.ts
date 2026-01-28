@@ -7,13 +7,19 @@ const API_URL = BASE_API_URL;
 
 interface OnboardingData {
     goal: string;
-    level: string;
+    experience_level: string; // Level: beginner, intermediate, advanced
     daysPerWeek: number;
+    hasInjury: boolean; // Pace screen - injury question
+    injuryDetails: string; // Pace screen - injury details
+    paceMinutes: string; // Timeframe screen - pace minutes
+    paceSeconds: string; // Timeframe screen - pace seconds
+    dontKnowPace: boolean; // Timeframe screen - don't know pace option
     currentPace5k: number | null;
     targetWeeks: number;
-    limitations: string | null;
+    limitations: string | null; // Limitations screen - physical limitations
     preferredDays: number[];
 }
+
 
 // Generated plan result from AI
 export interface GeneratedPlanResult {
@@ -64,8 +70,13 @@ interface OnboardingState {
 
 const initialData: Partial<OnboardingData> = {
     goal: '',
-    level: '',
+    experience_level: '',
     daysPerWeek: 3,
+    hasInjury: false,
+    injuryDetails: '',
+    paceMinutes: '',
+    paceSeconds: '',
+    dontKnowPace: false,
     currentPace5k: null,
     targetWeeks: 8,
     limitations: null,
@@ -128,7 +139,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
 
             const requestBody = {
                 goal: data.goal || '10k',
-                level: data.level || 'beginner',
+                level: data.experience_level || 'beginner',
                 days_per_week: data.daysPerWeek || 3,
                 current_pace_5k: data.currentPace5k,
                 target_weeks: data.targetWeeks || 8,

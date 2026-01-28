@@ -1,65 +1,53 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors } from '../theme';
-
-import LockIcon from '../assets/quiz-icons/lock.svg';
-import Step1Icon from '../assets/quiz-icons/step1.svg';
-import Step2Icon from '../assets/quiz-icons/step2.svg';
-import Step3Icon from '../assets/quiz-icons/step3.svg';
-import Step4Icon from '../assets/quiz-icons/step4.svg';
-import Step5Icon from '../assets/quiz-icons/step5.svg';
-import Step6Icon from '../assets/quiz-icons/step6.svg';
+import Svg, { Path } from 'react-native-svg';
 
 interface QuizProgressBarProps {
     currentStep: number;
     totalSteps?: number;
 }
 
-export function QuizProgressBar({ currentStep, totalSteps = 6 }: QuizProgressBarProps) {
-    const getStepIcon = (step: number, isActive: boolean) => {
-        if (!isActive) return LockIcon;
+// Lightning/Flash Icon for XP badge
+const FlashIcon = () => (
+    <Svg width={15} height={15} viewBox="0 0 15 15" fill="none">
+        <Path
+            d="M8.625 0.9375L3.28125 8.4375H7.5L6.375 14.0625L11.7188 6.5625H7.5L8.625 0.9375Z"
+            fill="#00D4FF"
+        />
+    </Svg>
+);
 
-        switch (step) {
-            case 1: return Step1Icon;
-            case 2: return Step2Icon;
-            case 3: return Step3Icon;
-            case 4: return Step4Icon;
-            case 5: return Step5Icon;
-            case 6: return Step6Icon;
-            default: return LockIcon;
-        }
-    };
+export function QuizProgressBar({ currentStep, totalSteps = 9 }: QuizProgressBarProps) {
+    const progress = ((currentStep + 1) / totalSteps) * 100;
+    const xp = (currentStep + 1) * 10; // 10 XP por step
 
     return (
         <View style={styles.container}>
-            <Text style={styles.text}>
-                Passo <Text style={styles.activeText}>{currentStep}</Text> DE {totalSteps}
-            </Text>
+            {/* Top Row: Pontuação label and XP badge */}
+            <View style={styles.topRow}>
+                <Text style={styles.scoreLabel}>Pontuação</Text>
+                <View style={styles.xpBadge}>
+                    <FlashIcon />
+                    <Text style={styles.xpText}>{xp}XP</Text>
+                </View>
+            </View>
 
-            <View style={styles.stepsContainer}>
-                {Array.from({ length: totalSteps }, (_, i) => i + 1).map((step) => {
-                    const isActive = step <= currentStep;
-                    const IconComponent = getStepIcon(step, isActive);
+            {/* Progress Bar */}
+            <View style={styles.progressBarContainer}>
+                <View
+                    style={[
+                        styles.progressBarFill,
+                        { width: `${progress}%` }
+                    ]}
+                />
+            </View>
 
-                    return (
-                        <View key={step} style={styles.stepItem}>
-                            <View style={styles.iconContainer}>
-                                <IconComponent
-                                    width="100%"
-                                    height="100%"
-                                    fill={isActive ? '#00D4FF' : '#3A3A3C'}
-                                    style={{
-                                        opacity: isActive ? 1 : 0.6,
-                                    }}
-                                />
-                            </View>
-                            <View style={[
-                                styles.bar,
-                                isActive && styles.activeBar
-                            ]} />
-                        </View>
-                    );
-                })}
+            {/* Bottom Row: Progress label  */}
+            <View style={styles.bottomRow}>
+                <Text style={styles.progressLabel}>
+                    Progresso:{' '}
+                    <Text style={styles.progressValue}>{Math.round(progress)}%</Text>
+                </Text>
             </View>
         </View>
     );
@@ -67,41 +55,64 @@ export function QuizProgressBar({ currentStep, totalSteps = 6 }: QuizProgressBar
 
 const styles = StyleSheet.create({
     container: {
+        paddingHorizontal: 9,
         marginBottom: 32,
     },
-    text: {
-        color: 'rgba(235, 235, 245, 0.6)',
-        fontSize: 13,
-        fontWeight: '400',
+    topRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         marginBottom: 12,
     },
-    activeText: {
-        color: '#00D4FF',
-        fontWeight: '600',
+    scoreLabel: {
+        fontSize: 14,
+        fontWeight: '400',
+        fontFamily: 'Poppins',
+        color: 'rgba(235, 235, 245, 1)', // var(--text/primary)
     },
-    stepsContainer: {
+    xpBadge: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        gap: 8,
-    },
-    stepItem: {
-        flex: 1,
         alignItems: 'center',
+        backgroundColor: '#131313', // var(--bg/secondary)
+        borderWidth: 1,
+        borderColor: '#00D4FF', // var(--accent/cyan-primary)
+        borderRadius: 20,
+        paddingHorizontal: 12,
+        paddingVertical: 5,
+        gap: 4,
     },
-    iconContainer: {
-        height: 24,
-        width: 24,
-        marginBottom: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
+    xpText: {
+        fontSize: 14,
+        fontWeight: '600',
+        fontFamily: 'Inter',
+        color: '#00D4FF', // var(--accent/cyan-primary)
     },
-    bar: {
+    progressBarContainer: {
         height: 4,
-        width: '100%',
-        backgroundColor: 'rgba(235, 235, 245, 0.1)',
-        borderRadius: 2,
+        backgroundColor: 'rgba(235, 235, 245, 0.1)', // var(--neutral/glass-stroke)
+        borderRadius: 20,
+        overflow: 'hidden',
+        marginBottom: 6,
     },
-    activeBar: {
-        backgroundColor: '#00D4FF',
+    progressBarFill: {
+        height: '100%',
+        backgroundColor: '#00D4FF', // var(--accent/cyan-primary)
+        borderRadius: 20,
+    },
+    bottomRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    progressLabel: {
+        fontSize: 11,
+        fontWeight: '400',
+        fontFamily: 'Poppins',
+        color: 'rgba(235, 235, 245, 0.6)', // var(--text/secondary)
+    },
+    progressValue: {
+        fontSize: 11,
+        fontWeight: '700',
+        fontFamily: 'Inter',
+        color: '#00D4FF', // var(--accent/cyan-primary)
     },
 });
