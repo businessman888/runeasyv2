@@ -3,12 +3,13 @@
  * 
  * This hook manages push notification registration, listeners, and navigation
  * when the user interacts with notifications (foreground and background).
+ * 
+ * Uses navigationRef instead of useNavigation to work outside NavigationContainer.
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import * as Notifications from 'expo-notifications';
-import { useNavigation, NavigationProp } from '@react-navigation/native';
-import { AppState, AppStateStatus, Platform } from 'react-native';
+import { AppState, AppStateStatus } from 'react-native';
 import {
     registerForPushNotificationsAsync,
     savePushTokenToBackend,
@@ -16,17 +17,7 @@ import {
     NotificationType,
 } from '../services/notifications';
 import { useAuthStore } from '../stores';
-
-// Define navigation params for type safety
-type RootStackParamList = {
-    Main: { initialTab?: string };
-    Retrospective: undefined;
-    Feedback: { feedbackId: string };
-    WorkoutDetail: { workoutId: string };
-    CoachAnalysis: { analysisId?: string };
-    ReadinessQuiz: undefined;
-    Notifications: undefined;
-};
+import { navigate, isNavigationReady } from '../navigation/navigationRef';
 
 interface NotificationData {
     type?: NotificationType | string;
@@ -47,6 +38,7 @@ interface UseNotificationsReturn {
 
 /**
  * Hook to manage push notifications lifecycle
+ * Safe to use anywhere - doesn't require NavigationContainer
  */
 export function useNotifications(): UseNotificationsReturn {
     const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
@@ -57,63 +49,73 @@ export function useNotifications(): UseNotificationsReturn {
     const responseListener = useRef<Notifications.EventSubscription | null>(null);
     const appState = useRef<AppStateStatus>(AppState.currentState);
 
-    const navigation = useNavigation<NavigationProp<RootStackParamList>>();
     const { user, isAuthenticated } = useAuthStore();
 
     /**
      * Navigate to the appropriate screen based on notification data
+     * Uses navigationRef which is safe to call from anywhere
      */
     const handleNotificationNavigation = useCallback((data: NotificationData) => {
+        // Don't navigate if not authenticated or navigation not ready
+        if (!isAuthenticated || !isNavigationReady()) {
+            console.log('[Notifications] Navigation not ready or user not authenticated, skipping navigation');
+            return;
+        }
+
         console.log('[Notifications] Handling navigation for data:', data);
 
         const screen = data.screen || data.type;
 
-        switch (screen) {
-            case 'Retrospective':
-            case NotificationTypes.RETROSPECTIVE_READY:
-                console.log('[Notifications] Navigating to Retrospective screen');
-                navigation.navigate('Retrospective');
-                break;
+        try {
+            switch (screen) {
+                case 'Retrospective':
+                case NotificationTypes.RETROSPECTIVE_READY:
+                    console.log('[Notifications] Navigating to Retrospective screen');
+                    navigate('Retrospective');
+                    break;
 
-            case 'Feedback':
-            case NotificationTypes.FEEDBACK_READY:
-                if (data.feedbackId) {
-                    console.log('[Notifications] Navigating to Feedback screen');
-                    navigation.navigate('Feedback', { feedbackId: data.feedbackId });
-                }
-                break;
+                case 'Feedback':
+                case NotificationTypes.FEEDBACK_READY:
+                    if (data.feedbackId) {
+                        console.log('[Notifications] Navigating to Feedback screen');
+                        navigate('Feedback', { feedbackId: data.feedbackId });
+                    }
+                    break;
 
-            case 'WorkoutDetail':
-            case NotificationTypes.WORKOUT_REMINDER:
-                if (data.workoutId) {
-                    console.log('[Notifications] Navigating to WorkoutDetail screen');
-                    navigation.navigate('WorkoutDetail', { workoutId: data.workoutId });
-                }
-                break;
+                case 'WorkoutDetail':
+                case NotificationTypes.WORKOUT_REMINDER:
+                    if (data.workoutId) {
+                        console.log('[Notifications] Navigating to WorkoutDetail screen');
+                        navigate('WorkoutDetail', { workoutId: data.workoutId });
+                    }
+                    break;
 
-            case 'CoachAnalysis':
-            case NotificationTypes.RECOVERY_ANALYSIS:
-                console.log('[Notifications] Navigating to CoachAnalysis screen');
-                navigation.navigate('CoachAnalysis', { analysisId: data.analysisId as string });
-                break;
+                case 'CoachAnalysis':
+                case NotificationTypes.RECOVERY_ANALYSIS:
+                    console.log('[Notifications] Navigating to CoachAnalysis screen');
+                    navigate('CoachAnalysis', { analysisId: data.analysisId });
+                    break;
 
-            case NotificationTypes.BADGE_EARNED:
-            case NotificationTypes.LEVEL_UP:
-                console.log('[Notifications] Navigating to Evolution tab');
-                navigation.navigate('Main', { initialTab: 'Evolution' });
-                break;
+                case NotificationTypes.BADGE_EARNED:
+                case NotificationTypes.LEVEL_UP:
+                    console.log('[Notifications] Navigating to Evolution tab');
+                    navigate('Main', { initialTab: 'Evolution' });
+                    break;
 
-            case NotificationTypes.STREAK_WARNING:
-                console.log('[Notifications] Navigating to Home tab');
-                navigation.navigate('Main', { initialTab: 'Home' });
-                break;
+                case NotificationTypes.STREAK_WARNING:
+                    console.log('[Notifications] Navigating to Home tab');
+                    navigate('Main', { initialTab: 'Home' });
+                    break;
 
-            default:
-                console.log('[Notifications] Unknown notification type, navigating to Notifications screen');
-                navigation.navigate('Notifications');
-                break;
+                default:
+                    console.log('[Notifications] Unknown notification type, navigating to Notifications screen');
+                    navigate('Notifications');
+                    break;
+            }
+        } catch (error) {
+            console.error('[Notifications] Navigation error:', error);
         }
-    }, [navigation]);
+    }, [isAuthenticated]);
 
     /**
      * Register for push notifications and save token to backend
@@ -161,9 +163,11 @@ export function useNotifications(): UseNotificationsReturn {
                 console.log('[Notifications] User tapped notification:', response);
                 const data = response.notification.request.content.data as NotificationData;
 
-                // Navigate to appropriate screen
-                if (data && isAuthenticated) {
-                    handleNotificationNavigation(data);
+                // Navigate to appropriate screen with a small delay to ensure navigation is ready
+                if (data) {
+                    setTimeout(() => {
+                        handleNotificationNavigation(data);
+                    }, 300);
                 }
             }
         );
@@ -177,7 +181,7 @@ export function useNotifications(): UseNotificationsReturn {
                 responseListener.current.remove();
             }
         };
-    }, [handleNotificationNavigation, isAuthenticated]);
+    }, [handleNotificationNavigation]);
 
     /**
      * Register push notifications when user authenticates
@@ -220,10 +224,10 @@ export function useNotifications(): UseNotificationsReturn {
                 const data = response.notification.request.content.data as NotificationData;
                 console.log('[Notifications] App opened from notification (cold start):', data);
 
-                // Small delay to ensure navigation is ready
+                // Longer delay for cold start to ensure navigation is fully ready
                 setTimeout(() => {
                     handleNotificationNavigation(data);
-                }, 500);
+                }, 1000);
             }
         };
 

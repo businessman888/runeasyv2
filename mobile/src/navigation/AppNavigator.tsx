@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, View, StyleSheet } from 'react-native';
 import { CustomTabBar } from '../components/CustomTabBar';
 import { SplashScreen } from '../components/SplashScreen';
+import { navigationRef, setNavigationReady } from './navigationRef';
 
 import {
     LoginScreen,
@@ -132,11 +133,18 @@ function MainTabs({ route, navigation }: any) {
 }
 
 // Root Navigator
-export function AppNavigator({ navigationRef }: { navigationRef?: React.RefObject<any> }) {
+export function AppNavigator() {
     const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
 
     React.useEffect(() => {
         checkAuth();
+    }, []);
+
+    // Set navigation as not ready when unmounting
+    React.useEffect(() => {
+        return () => {
+            setNavigationReady(false);
+        };
     }, []);
 
     if (isLoading) {
@@ -144,7 +152,13 @@ export function AppNavigator({ navigationRef }: { navigationRef?: React.RefObjec
     }
 
     return (
-        <NavigationContainer ref={navigationRef}>
+        <NavigationContainer
+            ref={navigationRef}
+            onReady={() => {
+                setNavigationReady(true);
+                console.log('[Navigation] NavigationContainer is ready');
+            }}
+        >
             <Stack.Navigator
                 id="RootStack"
                 screenOptions={{

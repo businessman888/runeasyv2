@@ -1,10 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet, View, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppNavigator } from './src/navigation';
-import { NavigationContainerRef } from '@react-navigation/native';
 import { useNotifications } from './src/hooks/useNotifications';
 
 // Error Boundary to catch rendering errors
@@ -43,7 +42,13 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-// Notification Manager Component - handles push notification lifecycle
+/**
+ * Notification Manager Component
+ * 
+ * Handles push notification lifecycle.
+ * Safe to use anywhere - doesn't require NavigationContainer context
+ * because useNotifications uses navigationRef internally.
+ */
 function NotificationManager() {
   const { expoPushToken, notification, isRegistered } = useNotifications();
 
@@ -63,23 +68,15 @@ function NotificationManager() {
   return null;
 }
 
-// Main App Component wrapped with navigation for hook access
-function AppContent() {
-  return (
-    <>
-      <NotificationManager />
-      <AppNavigator />
-    </>
-  );
-}
-
 export default function App() {
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
         <GestureHandlerRootView style={styles.container}>
           <StatusBar style="light" translucent backgroundColor="transparent" />
-          <AppContent />
+          {/* NotificationManager is safe to use here because it uses navigationRef */}
+          <NotificationManager />
+          <AppNavigator />
         </GestureHandlerRootView>
       </SafeAreaProvider>
     </ErrorBoundary>
