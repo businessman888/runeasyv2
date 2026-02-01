@@ -381,6 +381,35 @@ const styles = StyleSheet.create({
     keypadTextDisabled: {
         color: 'rgba(235, 235, 245, 0.3)',
     },
+    // Number pad styles (used in JSX)
+    numberPad: {
+        flex: 1,
+        justifyContent: 'center',
+        marginTop: 16,
+    },
+    numberRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        marginBottom: 8,
+    },
+    numberButton: {
+        width: 70,
+        height: 48,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginHorizontal: 15,
+    },
+    numberButtonDisabled: {
+        opacity: 0.4,
+    },
+    numberText: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: colors.white,
+    },
+    numberTextDisabled: {
+        color: 'rgba(235, 235, 245, 0.3)',
+    },
     nextButtonContainer: {
         position: 'absolute',
         bottom: 30,
