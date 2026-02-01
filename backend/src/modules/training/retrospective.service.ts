@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../../database';
+import { NotificationService } from '../notifications/notification.service';
 import Anthropic from '@anthropic-ai/sdk';
 
 /**
@@ -73,6 +74,8 @@ export class RetrospectiveService {
     constructor(
         private readonly supabaseService: SupabaseService,
         private readonly configService: ConfigService,
+        @Inject(forwardRef(() => NotificationService))
+        private readonly notificationService: NotificationService,
     ) {
         const apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
         if (apiKey) {
@@ -229,6 +232,9 @@ export class RetrospectiveService {
                 .from('training_plans')
                 .update({ status: 'completed' })
                 .eq('id', planId);
+
+            // Send push notification and create notification record
+            await this.sendRetrospectiveNotification(userId, updated.id);
 
             this.logger.log(`[Retrospective] Successfully generated for plan ${planId}`);
             return this.mapToRetrospective(updated);
@@ -561,4 +567,58 @@ Responda APENAS com JSON.`;
             processedAt: data.processed_at,
         };
     }
+
+    /**
+     * Send push notification and create notification record when retrospective is ready
+     */
+    private async sendRetrospectiveNotification(userId: string, retrospectiveId: string): Promise<void> {
+        try {
+            const supabase = this.supabaseService.getClient();
+
+            // Create notification record in the database
+            const { error: notifError } = await supabase
+                .from('notifications')
+                .insert({
+                    user_id: userId,
+                    type: 'recovery_analysis',
+                    title: 'Sua retrospectiva está pronta! 🏆',
+                    description: 'Veja como foi seu desempenho no ciclo e receba sugestões para o próximo plano.',
+                    is_read: false,
+                    metadata: {
+                        retrospectiveId,
+                        screen: 'Retrospective',
+                        type: 'retrospective_ready',
+                    },
+                });
+
+            if (notifError) {
+                this.logger.warn('[Retrospective] Failed to create notification record:', notifError);
+            } else {
+                this.logger.log('[Retrospective] Notification record created');
+            }
+
+            // Send push notification
+            const pushSent = await this.notificationService.sendPushNotification(
+                userId,
+                'Sua retrospectiva está pronta! 🏆',
+                'Veja como foi seu desempenho no ciclo e receba sugestões para o próximo plano.',
+                {
+                    type: 'retrospective_ready',
+                    screen: 'Retrospective',
+                    retrospectiveId,
+                },
+                { channelId: 'reminders' }
+            );
+
+            if (pushSent) {
+                this.logger.log('[Retrospective] Push notification sent successfully');
+            } else {
+                this.logger.warn('[Retrospective] Failed to send push notification');
+            }
+        } catch (error) {
+            this.logger.error('[Retrospective] Error sending notification:', error);
+            // Don't throw - notification failure shouldn't fail retrospective generation
+        }
+    }
 }
+
