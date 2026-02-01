@@ -68,7 +68,6 @@ export interface Retrospective {
 @Injectable()
 export class RetrospectiveService {
     private readonly logger = new Logger(RetrospectiveService.name);
-    private readonly SAO_PAULO_OFFSET_HOURS = -3;
     private anthropic: Anthropic;
 
     constructor(
@@ -83,17 +82,24 @@ export class RetrospectiveService {
 
     /**
      * Get São Paulo date for consistent timezone handling
+     * Uses Intl.DateTimeFormat for correct DST handling
      */
     private getSaoPauloToday(): { date: Date; dateStr: string } {
-        const nowUtc = new Date();
-        const saoPauloNow = new Date(nowUtc.getTime() + (this.SAO_PAULO_OFFSET_HOURS * 60 * 60 * 1000));
+        const now = new Date();
 
-        const year = saoPauloNow.getUTCFullYear();
-        const month = String(saoPauloNow.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(saoPauloNow.getUTCDate()).padStart(2, '0');
-        const dateStr = `${year}-${month}-${day}`;
+        // Use Intl.DateTimeFormat for proper timezone conversion (handles DST automatically)
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Sao_Paulo',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+
+        // en-CA locale gives us YYYY-MM-DD format directly
+        const dateStr = formatter.format(now);
 
         const date = new Date(`${dateStr}T00:00:00`);
+        this.logger.debug(`[Retrospective] São Paulo today: ${dateStr}`);
         return { date, dateStr };
     }
 

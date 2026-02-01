@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "74528549958",
+    "project_id": "runeasy-f858c",
+    "storage_bucket": "runeasy-f858c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:74528549958:android:eca94f24923e77b51d6e47",
+        "android_client_info": {
+          "package_name": "com.runeasy.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCboNEKS58GEknYkVJ0ZklFYnEt7vmk11w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

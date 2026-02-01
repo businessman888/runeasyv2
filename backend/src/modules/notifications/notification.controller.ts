@@ -105,6 +105,58 @@ export class NotificationController {
         const updated = await this.notificationService.updatePreferences(userId, preferences);
         return { preferences: updated };
     }
+
+    /**
+     * Save user's push token
+     */
+    @Post('push-token')
+    async savePushToken(
+        @Headers('x-user-id') userId: string,
+        @Body() dto: { pushToken: string },
+    ) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        if (!dto.pushToken) {
+            throw new HttpException('Push token required', HttpStatus.BAD_REQUEST);
+        }
+
+        await this.notificationService.savePushToken(userId, dto.pushToken);
+
+        return { success: true, message: 'Push token saved successfully' };
+    }
+
+    /**
+     * Test push notification (for development/debugging)
+     */
+    @Post('test-push')
+    async testPushNotification(
+        @Headers('x-user-id') userId: string,
+        @Body() dto?: { title?: string; body?: string },
+    ) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        const title = dto?.title || '🧪 Teste de Notificação RunEasy';
+        const body = dto?.body || 'Se você está vendo isso, as push notifications estão funcionando!';
+
+        const sent = await this.notificationService.sendPushNotification(
+            userId,
+            title,
+            body,
+            {
+                type: 'test',
+                screen: 'Retrospective', // Test deep linking to Retrospective
+            },
+        );
+
+        return {
+            success: sent,
+            message: sent ? 'Push notification sent' : 'Failed to send notification (token may be missing)'
+        };
+    }
 }
 
 // Keep legacy endpoints on /users path

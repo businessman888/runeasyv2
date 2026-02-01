@@ -337,5 +337,74 @@ export class TrainingController {
             );
         }
     }
+
+    /**
+     * Manually trigger retrospective generation for a user
+     * Used for recovery when cron job fails, and for debugging
+     */
+    @Post('retrospective/generate')
+    async manuallyGenerateRetrospective(@Headers('x-user-id') userId: string) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        this.logger.log(`[Retrospective] Manual trigger requested for user ${userId}`);
+
+        try {
+            // Get active plan for this user
+            const { data: activePlan } = await this.supabaseService
+                .from('training_plans')
+                .select('id, created_at, duration_weeks, status')
+                .eq('user_id', userId)
+                .eq('status', 'active')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (!activePlan) {
+                throw new HttpException('No active plan found for user', HttpStatus.NOT_FOUND);
+            }
+
+            // Check if retrospective already exists
+            const { data: existingRetro } = await this.supabaseService
+                .from('plan_retrospectives')
+                .select('id')
+                .eq('plan_id', activePlan.id)
+                .maybeSingle();
+
+            if (existingRetro) {
+                return {
+                    success: true,
+                    message: 'Retrospective already exists',
+                    retrospective_id: existingRetro.id,
+                    already_existed: true,
+                };
+            }
+
+            // Generate retrospective
+            const retrospective = await this.retrospectiveService.generateRetrospective(
+                userId,
+                activePlan.id,
+            );
+
+            if (!retrospective) {
+                throw new HttpException('Failed to generate retrospective', HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+
+            return {
+                success: true,
+                message: 'Retrospective generated successfully',
+                retrospective_id: retrospective.id,
+                plan_id: activePlan.id,
+                already_existed: false,
+            };
+        } catch (error) {
+            this.logger.error('[Retrospective] Manual generation failed:', error);
+            throw new HttpException(
+                error.message || 'Failed to generate retrospective',
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
 }
 

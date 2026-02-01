@@ -1,6 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { SupabaseService } from '../../database';
 import axios from 'axios';
+import * as admin from 'firebase-admin';
+import * as path from 'path';
 
 interface ExpoPushMessage {
     to: string;
@@ -35,11 +37,42 @@ export interface AppNotification {
 }
 
 @Injectable()
-export class NotificationService {
+export class NotificationService implements OnModuleInit {
     private readonly logger = new Logger(NotificationService.name);
     private readonly expoPushUrl = 'https://exp.host/--/api/v2/push/send';
+    private firebaseInitialized = false;
 
     constructor(private readonly supabaseService: SupabaseService) { }
+
+    /**
+     * Initialize Firebase Admin SDK on module init
+     */
+    onModuleInit() {
+        this.initializeFirebase();
+    }
+
+    /**
+     * Initialize Firebase Admin with service account
+     */
+    private initializeFirebase(): void {
+        if (this.firebaseInitialized || admin.apps.length > 0) {
+            this.firebaseInitialized = true;
+            return;
+        }
+
+        try {
+            const serviceAccountPath = path.join(process.cwd(), 'firebase-service-account.json');
+
+            admin.initializeApp({
+                credential: admin.credential.cert(serviceAccountPath),
+            });
+
+            this.firebaseInitialized = true;
+            this.logger.log('Firebase Admin SDK initialized successfully');
+        } catch (error) {
+            this.logger.error('Failed to initialize Firebase Admin SDK:', error);
+        }
+    }
 
     /**
      * Save user's push token
@@ -76,7 +109,7 @@ export class NotificationService {
     }
 
     /**
-     * Send a push notification to a user
+     * Send push notification to user (supports both Expo and native FCM tokens)
      */
     async sendPushNotification(
         userId: string,
@@ -92,12 +125,28 @@ export class NotificationService {
             return false;
         }
 
-        // Validate Expo push token format
-        if (!pushToken.startsWith('ExponentPushToken[')) {
-            this.logger.warn(`Invalid push token format for user ${userId}`);
-            return false;
-        }
+        // Determine if it's an Expo token or native FCM token
+        const isExpoToken = pushToken.startsWith('ExponentPushToken[');
 
+        if (isExpoToken) {
+            // Send via Expo Push API
+            return this.sendViaExpoPush(pushToken, title, body, data, options);
+        } else {
+            // Send via Firebase FCM (native token)
+            return this.sendViaFCM(pushToken, title, body, data, options);
+        }
+    }
+
+    /**
+     * Send push notification via Expo Push API
+     */
+    private async sendViaExpoPush(
+        pushToken: string,
+        title: string,
+        body: string,
+        data?: Record<string, unknown>,
+        options?: { channelId?: string; badge?: number },
+    ): Promise<boolean> {
         const message: ExpoPushMessage = {
             to: pushToken,
             title,
@@ -123,18 +172,93 @@ export class NotificationService {
             );
 
             const ticket = response.data[0];
-
             if (ticket.status === 'error') {
-                this.logger.error(`Push notification error: ${ticket.message}`, ticket.details);
+                this.logger.error('Expo push error:', ticket.message);
                 return false;
             }
 
-            this.logger.log(`Push notification sent to user ${userId}: ${ticket.id}`);
+            this.logger.log('Expo push sent successfully');
             return true;
         } catch (error) {
-            this.logger.error('Failed to send push notification', error);
+            this.logger.error('Failed to send Expo push notification:', error);
             return false;
         }
+    }
+
+    /**
+     * Send push notification via Firebase Cloud Messaging (FCM) using Admin SDK
+     */
+    private async sendViaFCM(
+        fcmToken: string,
+        title: string,
+        body: string,
+        data?: Record<string, unknown>,
+        options?: { channelId?: string; badge?: number },
+    ): Promise<boolean> {
+        if (!this.firebaseInitialized) {
+            this.logger.error('Firebase Admin SDK not initialized');
+            return false;
+        }
+
+        // Build the FCM v1 message format
+        const message: admin.messaging.Message = {
+            token: fcmToken,
+            notification: {
+                title,
+                body,
+            },
+            android: {
+                priority: 'high',
+                notification: {
+                    sound: 'default',
+                    channelId: options?.channelId || 'default',
+                    icon: 'notification_icon',
+                    color: '#FF6B35',
+                },
+            },
+            data: data ? this.stringifyData(data) : undefined,
+        };
+
+        try {
+            const messageId = await admin.messaging().send(message);
+            this.logger.log(`FCM push sent successfully: ${messageId}`);
+            return true;
+        } catch (error: any) {
+            // Handle specific FCM errors
+            if (error.code === 'messaging/registration-token-not-registered') {
+                this.logger.warn('FCM token expired or invalid, should be removed');
+            } else if (error.code === 'messaging/invalid-argument') {
+                this.logger.error('Invalid FCM message format:', error.message);
+            } else {
+                this.logger.error('Failed to send FCM push notification:', error);
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Stringify data values for FCM (FCM requires all data values to be strings)
+     */
+    private stringifyData(data: Record<string, unknown>): Record<string, string> {
+        const result: Record<string, string> = {};
+        for (const [key, value] of Object.entries(data)) {
+            result[key] = typeof value === 'string' ? value : JSON.stringify(value);
+        }
+        return result;
+    }
+
+    /**
+     * Helper to get workout type name in Portuguese
+     */
+    private getWorkoutTypeName(workoutType: string): string {
+        const types: Record<string, string> = {
+            'easy_run': 'Corrida Leve',
+            'long_run': 'Longão',
+            'interval': 'Intervalado',
+            'tempo': 'Tempo Run',
+            'recovery': 'Recuperação',
+        };
+        return types[workoutType] || workoutType;
     }
 
     /**
@@ -156,8 +280,8 @@ export class NotificationService {
             {
                 feedback_id: feedbackId,
                 workout_type: workoutType,
-                screen: 'CoachAnalysis', // Navigate to feedback screen
-                feedbackId, // For navigation params
+                screen: 'CoachAnalysis',
+                feedbackId,
             },
         );
 
@@ -271,19 +395,7 @@ export class NotificationService {
                 type: 'daily_readiness',
                 action: 'open_readiness_quiz',
             },
-            { channelId: 'readiness' },
         );
-    }
-
-    private getWorkoutTypeName(type: string): string {
-        const types: Record<string, string> = {
-            'easy_run': 'Corrida Leve',
-            'long_run': 'Long Run',
-            'intervals': 'Treino Intervalado',
-            'tempo': 'Tempo Run',
-            'recovery': 'Corrida de Recuperação',
-        };
-        return types[type] || type;
     }
 
     // ==================== IN-APP NOTIFICATIONS ====================

@@ -11,6 +11,9 @@ build/
 .env.local
 .env.*.local
 
+# Firebase credentials (NEVER commit this)
+firebase-service-account.json
+
 # Logs
 logs/
 *.log
