@@ -53,6 +53,7 @@ export class NotificationService implements OnModuleInit {
 
     /**
      * Initialize Firebase Admin with service account
+     * Supports both env var (for Railway) and file path (for local dev)
      */
     private initializeFirebase(): void {
         if (this.firebaseInitialized || admin.apps.length > 0) {
@@ -61,14 +62,27 @@ export class NotificationService implements OnModuleInit {
         }
 
         try {
-            const serviceAccountPath = path.join(process.cwd(), 'firebase-service-account.json');
+            // Try environment variable first (for Railway/production)
+            const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
 
+            if (serviceAccountJson) {
+                const serviceAccount = JSON.parse(serviceAccountJson);
+                admin.initializeApp({
+                    credential: admin.credential.cert(serviceAccount),
+                });
+                this.firebaseInitialized = true;
+                this.logger.log('Firebase Admin SDK initialized from env var');
+                return;
+            }
+
+            // Fallback to file path (for local development)
+            const serviceAccountPath = path.join(process.cwd(), 'firebase-service-account.json');
             admin.initializeApp({
                 credential: admin.credential.cert(serviceAccountPath),
             });
 
             this.firebaseInitialized = true;
-            this.logger.log('Firebase Admin SDK initialized successfully');
+            this.logger.log('Firebase Admin SDK initialized from file');
         } catch (error) {
             this.logger.error('Failed to initialize Firebase Admin SDK:', error);
         }
