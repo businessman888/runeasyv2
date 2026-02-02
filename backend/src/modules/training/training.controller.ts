@@ -3,6 +3,7 @@ import {
     Get,
     Post,
     Put,
+    Delete,
     Body,
     Param,
     Query,
@@ -298,6 +299,7 @@ export class TrainingController {
 
     /**
      * Check if user has a ready retrospective (for Home card)
+     * Returns isReady flag and retrospective ID if available
      */
     @Get('retrospective/ready')
     async hasReadyRetrospective(@Headers('x-user-id') userId: string) {
@@ -306,11 +308,27 @@ export class TrainingController {
         }
 
         try {
-            const isReady = await this.retrospectiveService.hasReadyRetrospective(userId);
-            return { isReady };
+            const retrospective = await this.retrospectiveService.getLatestRetrospective(userId);
+
+            if (!retrospective) {
+                return { isReady: false, retrospectiveId: null };
+            }
+
+            // Check if it was created in the last 7 days (still "fresh")
+            const createdAt = new Date(retrospective.createdAt);
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+            const isReady = createdAt > sevenDaysAgo;
+
+            return {
+                isReady,
+                retrospectiveId: retrospective.id,
+                createdAt: retrospective.createdAt,
+            };
         } catch (error) {
             this.logger.error('Failed to check retrospective status', error);
-            return { isReady: false };
+            return { isReady: false, retrospectiveId: null };
         }
     }
 
@@ -406,5 +424,63 @@ export class TrainingController {
             );
         }
     }
+
+    /**
+     * Admin endpoint to delete retrospective and related notifications for testing
+     * Also reactivates the plan so generateRetrospective can be called again
+     */
+    @Delete('retrospective/reset')
+    async resetRetrospective(@Headers('x-user-id') userId: string) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        try {
+            // Delete all retrospectives for this user
+            const { data: deletedRetros, error: retroError } = await this.supabaseService
+                .from('plan_retrospectives')
+                .delete()
+                .eq('user_id', userId)
+                .select('id');
+
+            if (retroError) {
+                this.logger.error('Failed to delete retrospectives:', retroError);
+            }
+
+            // Delete all notifications for this user
+            const { data: deletedNotifs, error: notifError } = await this.supabaseService
+                .from('notifications')
+                .delete()
+                .eq('user_id', userId)
+                .select('id');
+
+            if (notifError) {
+                this.logger.error('Failed to delete notifications:', notifError);
+            }
+
+            // Reactivate all completed plans for this user
+            const { data: updatedPlans, error: planError } = await this.supabaseService
+                .from('training_plans')
+                .update({ status: 'active' })
+                .eq('user_id', userId)
+                .eq('status', 'completed')
+                .select('id');
+
+            if (planError) {
+                this.logger.error('Failed to reactivate plans:', planError);
+            }
+
+            return {
+                success: true,
+                deletedRetrospectives: deletedRetros?.length || 0,
+                deletedNotifications: deletedNotifs?.length || 0,
+                reactivatedPlans: updatedPlans?.length || 0,
+            };
+        } catch (error) {
+            this.logger.error('[Retrospective] Reset failed:', error);
+            throw new HttpException('Failed to reset retrospective', HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 }
+
 
