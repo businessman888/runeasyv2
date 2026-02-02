@@ -12,7 +12,7 @@ import {
     Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Storage from '../utils/storage';
 import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
 import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore, useStatsStore, useNotificationStore } from '../stores';
@@ -117,7 +117,7 @@ export function HomeScreen({ navigation }: any) {
 
                 // Check if retrospective is ready
                 try {
-                    const userId = await AsyncStorage.getItem('userId');
+                    const userId = await Storage.getItemAsync('user_id');
                     if (userId) {
                         const response = await fetch(`${BASE_API_URL}/training/retrospective/ready`, {
                             headers: { 'x-user-id': userId },

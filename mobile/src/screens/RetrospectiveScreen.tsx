@@ -14,7 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { PoweredByStrava } from '../components/PoweredByStrava';
 import { BASE_API_URL } from '../config/api.config';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Storage from '../utils/storage';
 
 interface RetrospectiveData {
     id: string;
@@ -57,7 +57,7 @@ export function RetrospectiveScreen() {
 
     const loadRetrospective = async () => {
         try {
-            const userId = await AsyncStorage.getItem('userId');
+            const userId = await Storage.getItemAsync('user_id');
             if (!userId) return;
 
             const response = await fetch(`${BASE_API_URL}/training/retrospective/latest`, {
@@ -90,7 +90,7 @@ export function RetrospectiveScreen() {
         if (!data) return;
         setAccepting(true);
         try {
-            const userId = await AsyncStorage.getItem('userId');
+            const userId = await Storage.getItemAsync('user_id');
             await fetch(`${BASE_API_URL}/training/retrospective/${data.id}/accept`, {
                 method: 'POST',
                 headers: { 'x-user-id': userId || '' },
