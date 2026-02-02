@@ -2,6 +2,8 @@ import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../../database';
 import { NotificationService } from '../notifications/notification.service';
+import { TrainingService } from './training.service';
+import { TrainingPlanRequest } from './training-ai.service';
 import Anthropic from '@anthropic-ai/sdk';
 
 /**
@@ -76,6 +78,8 @@ export class RetrospectiveService {
         private readonly configService: ConfigService,
         @Inject(forwardRef(() => NotificationService))
         private readonly notificationService: NotificationService,
+        @Inject(forwardRef(() => TrainingService))
+        private readonly trainingService: TrainingService,
     ) {
         const apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
         if (apiKey) {
@@ -495,26 +499,97 @@ Responda APENAS com JSON.`;
 
     /**
      * Accept AI suggestion and create new plan
+     * 1. Get retrospective with suggested goal
+     * 2. Archive retrospective
+     * 3. Get and archive old plan
+     * 4. Generate new plan based on suggestion
+     * 5. Delete notification
      */
     async acceptSuggestion(userId: string, retrospectiveId: string): Promise<any> {
         const supabase = this.supabaseService.getClient();
 
-        const { data: retro } = await supabase
+        this.logger.log(`[AcceptSuggestion] Starting for user ${userId}, retro ${retrospectiveId}`);
+
+        // 1. Get retrospective
+        const { data: retro, error: retroError } = await supabase
             .from('plan_retrospectives')
             .select('*')
             .eq('id', retrospectiveId)
             .eq('user_id', userId)
             .single();
 
-        if (!retro) {
+        if (retroError || !retro) {
             throw new Error('Retrospective not found');
         }
 
-        // Return the suggested goal info for the frontend to start onboarding
+        this.logger.log(`[AcceptSuggestion] Found retro with goal: ${retro.suggested_next_goal_type}`);
+
+        // 2. Archive retrospective
+        await supabase
+            .from('plan_retrospectives')
+            .update({ status: 'archived' })
+            .eq('id', retrospectiveId);
+
+        // 3. Get old plan to inherit some parameters
+        const { data: oldPlan } = await supabase
+            .from('training_plans')
+            .select('id, goal, level, days_per_week, target_pace, duration_weeks')
+            .eq('id', retro.plan_id)
+            .single();
+
+        // Archive old plan
+        if (oldPlan) {
+            await supabase
+                .from('training_plans')
+                .update({ status: 'archived' })
+                .eq('id', oldPlan.id);
+
+            this.logger.log(`[AcceptSuggestion] Archived old plan ${oldPlan.id}`);
+        }
+
+        // 4. Build TrainingPlanRequest from suggestion + old plan params
+        const newGoalType = retro.suggested_next_goal_type || oldPlan?.goal || '5k';
+        const level = oldPlan?.level || 'intermediate';
+        const daysPerWeek = oldPlan?.days_per_week || 3;
+
+        // Use avg pace from retrospective as current pace
+        const currentPace5k = retro.avg_pace_seconds
+            ? retro.avg_pace_seconds / 60 // Convert to minutes
+            : null;
+
+        const planRequest: TrainingPlanRequest = {
+            goal: newGoalType,
+            level: level,
+            daysPerWeek: daysPerWeek,
+            currentPace5k: currentPace5k,
+            targetWeeks: 8, // Standard cycle
+            limitations: null,
+            preferredDays: [], // Will be filled by AI
+        };
+
+        this.logger.log(`[AcceptSuggestion] Creating new plan with: goal=${newGoalType}, level=${level}, days=${daysPerWeek}`);
+
+        // 5. Generate new plan
+        const newPlan = await this.trainingService.createQuickPlan(userId, planRequest);
+
+        this.logger.log(`[AcceptSuggestion] New plan created: ${newPlan.plan_id}`);
+
+        // 6. Delete notifications related to this retrospective
+        await supabase
+            .from('notifications')
+            .delete()
+            .eq('user_id', userId)
+            .or(`type.eq.retrospective_ready,metadata->>retrospectiveId.eq.${retrospectiveId}`);
+
+        this.logger.log(`[AcceptSuggestion] Deleted related notifications`);
+
         return {
-            suggestedGoal: retro.suggested_next_goal,
-            suggestedGoalType: retro.suggested_next_goal_type,
-            message: 'Use this info to pre-fill the onboarding for next plan',
+            success: true,
+            message: 'Novo plano gerado com sucesso!',
+            newPlanId: newPlan.plan_id,
+            planHeader: newPlan.planHeader,
+            planHeadline: newPlan.planHeadline,
+            nextWorkout: newPlan.nextWorkout,
         };
     }
 

@@ -95,8 +95,12 @@ export function RetrospectiveScreen() {
                 method: 'POST',
                 headers: { 'x-user-id': userId || '' },
             });
-            // Navigate to onboarding to start new plan
-            (navigation as any).navigate('Onboarding');
+            // Success! The plan is already generated.
+            // Navigate back to Home (MainTabs) to see the new workout
+            (navigation as any).reset({
+                index: 0,
+                routes: [{ name: 'MainTabs' }],
+            });
         } catch (error) {
             console.error('Failed to accept:', error);
         } finally {
