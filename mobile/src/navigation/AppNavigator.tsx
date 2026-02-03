@@ -397,14 +397,6 @@ export function AppNavigator() {
                             }}
                         />
                         <Stack.Screen
-                            name="Retrospective"
-                            component={RetrospectiveScreen}
-                            options={{
-                                headerShown: false,
-                                presentation: 'card',
-                            }}
-                        />
-                        <Stack.Screen
                             name="CustomizeGoal"
                             component={CustomizeGoalScreen}
                             options={{
