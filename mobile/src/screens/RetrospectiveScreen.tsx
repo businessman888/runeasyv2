@@ -109,7 +109,8 @@ export function RetrospectiveScreen() {
     };
 
     const handleCustomize = () => {
-        (navigation as any).navigate('Onboarding');
+        if (!data) return;
+        (navigation as any).navigate('CustomizeGoal', { retrospectiveId: data.id });
     };
 
     if (loading) {

@@ -32,6 +32,7 @@ import {
     NotificationSettingsScreen,
     HelpScreen,
     RetrospectiveScreen,
+    CustomizeGoalScreen,
 } from '../screens';
 import { PlanPreviewScreen as QuizPlanPreviewScreen } from '../screens/quiz/PlanPreviewScreen';
 import { PlanLoadingScreen } from '../screens/quiz/PlanLoadingScreen';
@@ -393,6 +394,22 @@ export function AppNavigator() {
                             options={{
                                 headerShown: false,
                                 presentation: 'card',
+                            }}
+                        />
+                        <Stack.Screen
+                            name="Retrospective"
+                            component={RetrospectiveScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'card',
+                            }}
+                        />
+                        <Stack.Screen
+                            name="CustomizeGoal"
+                            component={CustomizeGoalScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'modal',
                             }}
                         />
                     </>

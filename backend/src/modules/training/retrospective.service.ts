@@ -68,6 +68,15 @@ export interface Retrospective {
     processedAt: string | null;
 }
 
+export interface CustomizePlanDto {
+    distance_goal: string;
+    time_goal: string;
+    duration_weeks: number;
+    training_days: string[]; // ['Dom', 'Seg'...]
+    intense_day?: string;
+    target_pace: string;
+}
+
 @Injectable()
 export class RetrospectiveService {
     private readonly logger = new Logger(RetrospectiveService.name);
@@ -590,6 +599,80 @@ Responda APENAS com JSON.`;
             planHeader: newPlan.planHeader,
             planHeadline: newPlan.planHeadline,
             nextWorkout: newPlan.nextWorkout,
+        };
+    }
+
+    /**
+     * Customize new plan with manual parameters
+     */
+    async customizePlan(userId: string, retrospectiveId: string, params: CustomizePlanDto): Promise<any> {
+        const supabase = this.supabaseService.getClient();
+        this.logger.log(`[CustomizePlan] Starting for user ${userId}, retro ${retrospectiveId}`);
+
+        // 1. Get retrospective
+        const { data: retro, error: retroError } = await supabase
+            .from('plan_retrospectives')
+            .select('*')
+            .eq('id', retrospectiveId)
+            .eq('user_id', userId)
+            .single();
+
+        if (retroError || !retro) {
+            throw new Error('Retrospective not found');
+        }
+
+        // 2. Archive retrospective
+        await supabase
+            .from('plan_retrospectives')
+            .update({ status: 'archived' })
+            .eq('id', retrospectiveId);
+
+        // 3. Archive old plan
+        if (retro.plan_id) {
+            await supabase
+                .from('training_plans')
+                .update({ status: 'archived' })
+                .eq('id', retro.plan_id);
+        }
+
+        // 4. Map Params to TrainingPlanRequest
+        // Map simplified days ["Dom", "Seg"] to number[] [0, 1]
+        const dayMap: Record<string, number> = { 'Dom': 0, 'Seg': 1, 'Ter': 2, 'Qua': 3, 'Qui': 4, 'Sex': 5, 'Sáb': 6 };
+        const preferredDays = params.training_days.map(d => dayMap[d] ?? 0);
+
+        // Parse pace "5:30" -> pace number if needed, but AI takes text description in prompts better sometimes
+        // Actually, TrainingPlanRequest expects currentPace5k as number, but we added optional targetPace as string.
+        // We will pass the manual targetPace string directly.
+
+        const planRequest: TrainingPlanRequest = {
+            goal: params.distance_goal, // '5k', '10k', '21km', '42km'
+            level: 'intermediate', // Default or infer? Let's keep 'intermediate' or try to fetch from user stats if possible. For now intermediate is safe.
+            daysPerWeek: params.training_days.length,
+            currentPace5k: null, // Let AI rely on targetPace
+            targetWeeks: params.duration_weeks,
+            limitations: null,
+            preferredDays: preferredDays,
+            targetTime: params.time_goal,
+            targetPace: params.target_pace,
+        };
+
+        this.logger.log(`[CustomizePlan] Creating plan with target pace: ${params.target_pace}`);
+
+        // 5. Generate new plan
+        const newPlan = await this.trainingService.createQuickPlan(userId, planRequest);
+
+        // 6. Delete notifications
+        await supabase
+            .from('notifications')
+            .delete()
+            .eq('user_id', userId)
+            // Cleanup both retro ready and generic notifications for this flow
+            .or(`type.eq.retrospective_ready`);
+
+        return {
+            success: true,
+            newPlanId: newPlan.plan_id,
+            planHeader: newPlan.planHeader,
         };
     }
 

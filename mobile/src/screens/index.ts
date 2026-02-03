@@ -14,6 +14,7 @@ export * from './TrainingHistoryScreen';
 export * from './NotificationSettingsScreen';
 export * from './HelpScreen';
 export * from './RetrospectiveScreen';
+export * from './CustomizeGoalScreen';
 
 // Quiz Screens
 export * from './quiz';

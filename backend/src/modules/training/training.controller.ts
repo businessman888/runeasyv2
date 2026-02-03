@@ -14,7 +14,8 @@ import {
     UseGuards,
 } from '@nestjs/common';
 import { TrainingService, QuickPlanResponse, GenerationStatus } from './training.service';
-import { RetrospectiveService } from './retrospective.service';
+import { RetrospectiveService, CustomizePlanDto } from './retrospective.service';
+import { TrainingAIService } from './training-ai.service';
 import { SupabaseService } from '../../database';
 import { SupabaseAuthGuard } from '../../common/guards/supabase-auth.guard';
 
@@ -351,6 +352,30 @@ export class TrainingController {
             this.logger.error('Failed to accept suggestion', error);
             throw new HttpException(
                 error.message || 'Failed to accept suggestion',
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    /**
+     * Customize new plan with manual parameters
+     */
+    @Post('retrospective/:id/customize')
+    async customizeRetrospectivePlan(
+        @Headers('x-user-id') userId: string,
+        @Param('id') retrospectiveId: string,
+        @Body() params: CustomizePlanDto
+    ) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        try {
+            return await this.retrospectiveService.customizePlan(userId, retrospectiveId, params);
+        } catch (error) {
+            this.logger.error('Failed to customize plan', error);
+            throw new HttpException(
+                error.message || 'Failed to customize plan',
                 HttpStatus.INTERNAL_SERVER_ERROR,
             );
         }
