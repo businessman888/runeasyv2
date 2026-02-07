@@ -8,12 +8,12 @@ export class UsersService {
     constructor(private readonly supabaseService: SupabaseService) { }
 
     /**
-     * Get user by ID
+     * Get user by ID (includes onboarding_completed flag for navigation control)
      */
     async getUser(userId: string) {
         const { data, error } = await this.supabaseService
             .from('users')
-            .select('id, email, strava_athlete_id, profile, subscription_status, created_at')
+            .select('id, email, strava_athlete_id, profile, subscription_status, created_at, onboarding_completed')
             .eq('id', userId)
             .single();
 
@@ -24,6 +24,30 @@ export class UsersService {
 
         return data;
     }
+
+    /**
+     * Mark user onboarding as complete (called after quiz submission)
+     */
+    async markOnboardingComplete(userId: string) {
+        const { data, error } = await this.supabaseService
+            .from('users')
+            .update({
+                onboarding_completed: true,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', userId)
+            .select()
+            .single();
+
+        if (error) {
+            this.logger.error(`Failed to mark onboarding complete for user ${userId}`, error);
+            throw error;
+        }
+
+        this.logger.log(`Onboarding marked complete for user ${userId}`);
+        return data;
+    }
+
 
     /**
      * Update user profile

@@ -16,6 +16,7 @@ interface User {
     };
     subscription_status: 'trial' | 'active' | 'expired';
     created_at: string;
+    onboarding_completed: boolean; // NEW: Controls navigation lock
 }
 
 interface AuthState {
@@ -34,6 +35,19 @@ interface AuthState {
 
 // API_URL imported from '../config/api.config' as BASE_API_URL
 const API_URL = BASE_API_URL;
+
+/**
+ * KILL SWITCH: Clear all auth tokens
+ * Called when user is not found in DB or auth fails
+ */
+async function clearAllAuthTokens() {
+    console.log('[AUTH] KILL SWITCH - Clearing all tokens');
+    await Storage.deleteItemAsync('user_id');
+    await Storage.deleteItemAsync('strava_access_token');
+    await Storage.deleteItemAsync('strava_refresh_token');
+    await Storage.deleteItemAsync('auth_state');
+    console.log('[AUTH] All tokens cleared');
+}
 
 export const useAuthStore = create<AuthState>((set, get) => ({
     user: null,
@@ -56,10 +70,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         try {
             set({ isLoading: true });
 
-            // Store userId securely
-            await Storage.setItemAsync('user_id', userId);
-            console.log('userId saved to storage');
-
             // Ensure API URL has /api prefix
             const baseUrl = API_URL.endsWith('/api') ? API_URL : `${API_URL}/api`;
             const userUrl = `${baseUrl}/users/${userId}`;
@@ -77,32 +87,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             if (response.ok) {
                 const userData = await response.json();
                 console.log('User data received:', userData.user?.id);
+                console.log('Onboarding completed:', userData.user?.onboarding_completed);
+
+                // Store userId ONLY if user exists
+                await Storage.setItemAsync('user_id', userId);
+
                 set({ user: userData.user, isAuthenticated: true, isLoading: false });
                 console.log('Auth state set: isAuthenticated = true');
             } else {
-                // Even if user fetch fails, set authenticated with userId
-                // This prevents returning to login screen
-                console.warn('User fetch failed, but setting authenticated anyway');
-                set({ user: null, isAuthenticated: true, isLoading: false });
+                // KILL SWITCH: User not found - clear ALL tokens
+                console.warn('[AUTH] User not found in DB - activating kill switch');
+                await clearAllAuthTokens();
+                set({ user: null, isAuthenticated: false, isLoading: false });
+                console.log('[AUTH] Forcing re-login');
             }
         } catch (error) {
             console.error('Login error:', error);
-            // Set authenticated even on error - we have the userId saved
-            set({ user: null, isAuthenticated: true, isLoading: false });
-            console.log('Error occurred but auth state set: isAuthenticated = true');
+            // KILL SWITCH: On error, clear tokens to prevent stale auth
+            await clearAllAuthTokens();
+            set({ user: null, isAuthenticated: false, isLoading: false });
+            console.log('[AUTH] Error occurred - kill switch activated');
         }
     },
 
     logout: async () => {
         console.log('=== AUTH STORE LOGOUT ===');
         try {
-            // Clear all auth-related storage keys
-            await Storage.deleteItemAsync('user_id');
-            // Also clear any potential stale OAuth tokens/cache
-            await Storage.deleteItemAsync('strava_access_token');
-            await Storage.deleteItemAsync('strava_refresh_token');
-            await Storage.deleteItemAsync('auth_state');
-            console.log('All auth storage keys cleared successfully');
+            await clearAllAuthTokens();
             set({ user: null, isAuthenticated: false });
             console.log('Auth state reset: isAuthenticated = false');
         } catch (error) {
@@ -127,6 +138,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
                 if (response.ok) {
                     const userData = await response.json();
+                    console.log('[AUTH] User validated:', userData.user?.id);
+                    console.log('[AUTH] Onboarding completed:', userData.user?.onboarding_completed);
                     set({ user: userData.user, isAuthenticated: true });
 
                     // Trigger retroactive Strava sync in background (recovers missed webhooks)
@@ -134,7 +147,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                         headers: { 'x-user-id': userId },
                     }).catch(() => { }); // Silent sync - don't block app start
                 } else {
-                    await Storage.deleteItemAsync('user_id');
+                    // KILL SWITCH: User deleted from DB - clear tokens
+                    console.warn('[AUTH] User not found during checkAuth - activating kill switch');
+                    await clearAllAuthTokens();
                     set({ user: null, isAuthenticated: false });
                 }
             } else {
@@ -142,6 +157,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             }
         } catch (error) {
             console.error('Auth check error:', error);
+            // On network error, keep trying but don't auto-login
             set({ user: null, isAuthenticated: false });
         } finally {
             set({ isLoading: false });

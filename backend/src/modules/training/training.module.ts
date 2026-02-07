@@ -6,11 +6,13 @@ import { TrainingController } from './training.controller';
 import { TrainingSchedulerService } from './training-scheduler.service';
 import { RetrospectiveService } from './retrospective.service';
 import { NotificationModule } from '../notifications';
+import { UsersModule } from '../users/users.module';
 
 @Module({
     imports: [
         ScheduleModule.forRoot(),
         NotificationModule,
+        UsersModule,
     ],
     controllers: [TrainingController],
     providers: [TrainingService, TrainingAIService, TrainingSchedulerService, RetrospectiveService],

@@ -135,7 +135,7 @@ function MainTabs({ route, navigation }: any) {
 
 // Root Navigator
 export function AppNavigator() {
-    const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
+    const { isAuthenticated, isLoading, checkAuth, user } = useAuthStore();
 
     React.useEffect(() => {
         checkAuth();
@@ -152,6 +152,14 @@ export function AppNavigator() {
         return <SplashScreen />;
     }
 
+    // CRITICAL: 3-state navigation logic
+    // 1. NOT authenticated -> Login only
+    // 2. Authenticated BUT onboarding NOT complete -> Onboarding ONLY (LOCKED)
+    // 3. Authenticated AND onboarding complete -> Main + other screens
+    const onboardingCompleted = user?.onboarding_completed ?? false;
+
+    console.log('[Navigation] isAuthenticated:', isAuthenticated, 'onboardingCompleted:', onboardingCompleted);
+
     return (
         <NavigationContainer
             ref={navigationRef}
@@ -164,7 +172,7 @@ export function AppNavigator() {
                 id="RootStack"
                 screenOptions={{
                     headerStyle: {
-                        backgroundColor: colors.white,
+                        backgroundColor: colors.background,
                     },
                     headerTintColor: colors.text,
                     headerTitleStyle: {
@@ -173,55 +181,29 @@ export function AppNavigator() {
                 }}
             >
                 {!isAuthenticated ? (
+                    /* ================================================
+                       STATE 1: NOT AUTHENTICATED - Login screen only
+                       ================================================ */
                     <>
                         <Stack.Screen
                             name="Login"
                             component={LoginScreen}
                             options={{ headerShown: false }}
                         />
+                    </>
+                ) : !onboardingCompleted ? (
+                    /* ================================================
+                       STATE 2: AUTHENTICATED but ONBOARDING INCOMPLETE
+                       User is LOCKED here - cannot escape to Home
+                       ================================================ */
+                    <>
                         <Stack.Screen
                             name="Onboarding"
                             component={OnboardingScreen}
                             options={{
                                 headerShown: false,
-                                gestureEnabled: false,
+                                gestureEnabled: false, // Prevent swipe back
                             }}
-                        />
-                        {/* Quiz Screens */}
-                        <Stack.Screen
-                            name="Quiz_Objective"
-                            component={ObjectiveScreen}
-                            options={{ headerShown: false }}
-                        />
-                        <Stack.Screen
-                            name="Quiz_Level"
-                            component={LevelScreen}
-                            options={{ headerShown: false }}
-                        />
-                        <Stack.Screen
-                            name="Quiz_Frequency"
-                            component={FrequencyScreen}
-                            options={{ headerShown: false }}
-                        />
-                        <Stack.Screen
-                            name="Quiz_Pace"
-                            component={PaceScreen}
-                            options={{ headerShown: false }}
-                        />
-                        <Stack.Screen
-                            name="Quiz_Timeframe"
-                            component={TimeframeScreen}
-                            options={{ headerShown: false }}
-                        />
-                        <Stack.Screen
-                            name="Quiz_Limitations"
-                            component={LimitationsScreen}
-                            options={{ headerShown: false }}
-                        />
-                        <Stack.Screen
-                            name="Quiz_PlanPreview"
-                            component={QuizPlanPreviewScreen}
-                            options={{ headerShown: false }}
                         />
                         <Stack.Screen
                             name="Quiz_PlanLoading"
@@ -231,71 +213,18 @@ export function AppNavigator() {
                         <Stack.Screen
                             name="SmartPlan"
                             component={SmartPlanScreen}
-                            options={{ headerShown: false }}
-                        />
-                        {/* Plan Preview Screen */}
-                        <Stack.Screen
-                            name="PlanPreview"
-                            component={OldPlanPreviewScreen}
                             options={{ headerShown: false }}
                         />
                     </>
                 ) : (
+                    /* ================================================
+                       STATE 3: AUTHENTICATED and ONBOARDING COMPLETE
+                       Full app access - Home and all features
+                       ================================================ */
                     <>
                         <Stack.Screen
                             name="Main"
                             component={MainTabs}
-                            options={{ headerShown: false }}
-                        />
-                        {/* Quiz Screens - accessible after auth for new users */}
-                        <Stack.Screen
-                            name="Quiz_Objective"
-                            component={ObjectiveScreen}
-                            options={{ headerShown: false }}
-                        />
-                        <Stack.Screen
-                            name="Quiz_Level"
-                            component={LevelScreen}
-                            options={{ headerShown: false }}
-                        />
-                        <Stack.Screen
-                            name="Quiz_Frequency"
-                            component={FrequencyScreen}
-                            options={{ headerShown: false }}
-                        />
-                        <Stack.Screen
-                            name="Quiz_Pace"
-                            component={PaceScreen}
-                            options={{ headerShown: false }}
-                        />
-                        <Stack.Screen
-                            name="Quiz_Timeframe"
-                            component={TimeframeScreen}
-                            options={{ headerShown: false }}
-                        />
-                        <Stack.Screen
-                            name="Quiz_Limitations"
-                            component={LimitationsScreen}
-                            options={{ headerShown: false }}
-                        />
-                        <Stack.Screen
-                            name="Quiz_PlanPreview"
-                            component={QuizPlanPreviewScreen}
-                            options={{ headerShown: false }}
-                        />
-                        <Stack.Screen
-                            name="Quiz_PlanLoading"
-                            component={PlanLoadingScreen}
-                            options={{ headerShown: false, gestureEnabled: false }}
-                        />
-                        <Stack.Screen
-                            name="SmartPlan"
-                            component={SmartPlanScreen}
-                            options={{ headerShown: false }}
-                        />
-                        <Stack.Screen
-                            name="PlanPreview"
-                            component={OldPlanPreviewScreen}
                             options={{ headerShown: false }}
                         />
                         <Stack.Screen

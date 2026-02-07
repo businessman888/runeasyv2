@@ -18,6 +18,7 @@ import { RetrospectiveService, CustomizePlanDto } from './retrospective.service'
 import { TrainingAIService } from './training-ai.service';
 import { SupabaseService } from '../../database';
 import { SupabaseAuthGuard } from '../../common/guards/supabase-auth.guard';
+import { UsersService } from '../users/users.service';
 
 interface CreatePlanDto {
     // Biometrics (New)
@@ -59,6 +60,7 @@ export class TrainingController {
         private readonly trainingService: TrainingService,
         private readonly retrospectiveService: RetrospectiveService,
         private readonly supabaseService: SupabaseService,
+        private readonly usersService: UsersService,
     ) { }
 
     /**
@@ -105,6 +107,11 @@ export class TrainingController {
                 completed_at: new Date().toISOString(),
                 responses_json: dto,
             });
+
+            // CRITICAL: Mark onboarding as complete in users table
+            // This unlocks the user from the Onboarding screen
+            await this.usersService.markOnboardingComplete(userId);
+            this.logger.log(`Onboarding marked complete for user ${userId}`);
 
             // Create QUICK training plan (Prompt 1 only - fast ~3-5s)
             // Background process will generate remaining weeks (Prompt 2)
