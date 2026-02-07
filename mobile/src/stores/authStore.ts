@@ -94,11 +94,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     },
 
     logout: async () => {
+        console.log('=== AUTH STORE LOGOUT ===');
         try {
+            // Clear all auth-related storage keys
             await Storage.deleteItemAsync('user_id');
+            // Also clear any potential stale OAuth tokens/cache
+            await Storage.deleteItemAsync('strava_access_token');
+            await Storage.deleteItemAsync('strava_refresh_token');
+            await Storage.deleteItemAsync('auth_state');
+            console.log('All auth storage keys cleared successfully');
             set({ user: null, isAuthenticated: false });
+            console.log('Auth state reset: isAuthenticated = false');
         } catch (error) {
             console.error('Logout error:', error);
+            // Still reset state even if storage deletion fails
+            set({ user: null, isAuthenticated: false });
         }
     },
 

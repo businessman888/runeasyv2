@@ -139,7 +139,7 @@ export class StravaService {
         this.logger.log(`STRAVA_CLIENT_ID: ${clientId ? clientId.substring(0, 5) + '...' : 'MISSING!'}`);
         this.logger.log(`STRAVA_REDIRECT_URI: ${redirectUri || 'MISSING!'}`);
 
-        const authUrl = `${this.oauthUrl}/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scopes}`;
+        const authUrl = `${this.oauthUrl}/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scopes}&approval_prompt=force`;
 
         this.logger.log(`Generated auth URL: ${authUrl}`);
 
