@@ -1,108 +1,117 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { colors, typography, borderRadius, shadows } from '../theme';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// ============================================
+// FORCED COLORS (Figma exact values from node 428-464)
+// ============================================
+const FORCED_BG_DARK = '#0F0F1E';     // Dark background for text on cyan
+const FORCED_BACK_BG = '#1C1C2E';     // Back button background
+const FORCED_CYAN = '#00D4FF';        // Accent cyan - MAIN HIGHLIGHT
+const FORCED_TEXT_SECONDARY = 'rgba(235, 235, 245, 0.6)'; // Back button text
 
 interface FixedNavigationButtonsProps {
-    onBack: () => void;
+    onBack?: () => void;
     onContinue: () => void;
-    showBack: boolean;
-    continueDisabled: boolean;
-    isLastStep: boolean;
-    isSubmitting?: boolean;
+    showBack?: boolean;
+    continueDisabled?: boolean;
+    isLastStep?: boolean;
 }
 
-export function FixedNavigationButtons({
+export const FixedNavigationButtons: React.FC<FixedNavigationButtonsProps> = ({
     onBack,
     onContinue,
-    showBack,
-    continueDisabled,
-    isLastStep,
-    isSubmitting = false,
-}: FixedNavigationButtonsProps) {
-    const continueText = isSubmitting
-        ? 'Criando plano...'
-        : isLastStep
-            ? 'Criar meu plano'
-            : 'Continuar';
+    showBack = true,
+    continueDisabled = false,
+    isLastStep = false,
+}) => {
+    const buttonWidth = showBack ? (SCREEN_WIDTH - 48) / 2 - 6 : SCREEN_WIDTH - 48;
 
     return (
         <View style={styles.container}>
+            {/* Back Button - Only show if showBack is true */}
             {showBack && (
                 <TouchableOpacity
-                    style={styles.backButton}
+                    style={[styles.backButton, { width: buttonWidth }]}
                     onPress={onBack}
                     activeOpacity={0.7}
                 >
-                    <Text style={styles.backButtonText}>Voltar</Text>
+                    <Text style={styles.backText}>Voltar</Text>
                 </TouchableOpacity>
             )}
 
+            {/* Continue Button */}
             <TouchableOpacity
                 style={[
                     styles.continueButton,
-                    !showBack && styles.continueButtonFull,
-                    continueDisabled && styles.continueButtonDisabled
+                    { width: buttonWidth },
+                    continueDisabled && styles.continueButtonDisabled,
                 ]}
                 onPress={onContinue}
-                disabled={continueDisabled || isSubmitting}
+                disabled={continueDisabled}
                 activeOpacity={0.7}
             >
                 <Text style={[
-                    styles.continueButtonText,
-                    continueDisabled && styles.continueButtonTextDisabled
-                ]}>{continueText}</Text>
+                    styles.continueText,
+                    continueDisabled && styles.continueTextDisabled,
+                ]}>
+                    {isLastStep ? 'Finalizar' : 'Continuar'}
+                </Text>
             </TouchableOpacity>
         </View>
     );
-}
+};
 
 const styles = StyleSheet.create({
     container: {
         flexDirection: 'row',
-        paddingHorizontal: 16,
-        paddingBottom: 16,
-        paddingTop: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 12,
         gap: 12,
-        backgroundColor: colors.background,
     },
     backButton: {
-        flex: 1,
-        height: 56,
-        backgroundColor: colors.card,
-        borderRadius: borderRadius['2xl'],
-        alignItems: 'center',
+        height: 55,
+        backgroundColor: FORCED_BACK_BG,
+        borderRadius: 40,
         justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: colors.border,
+        alignItems: 'center',
     },
-    backButtonText: {
-        fontSize: typography.fontSizes.xl,
-        fontWeight: typography.fontWeights.medium,
-        color: colors.textSecondary,
+    backText: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 18,
+        fontWeight: '500',
+        color: FORCED_TEXT_SECONDARY,
     },
     continueButton: {
-        flex: 1,
-        height: 56,
-        backgroundColor: colors.primary,
-        borderRadius: borderRadius['2xl'],
-        alignItems: 'center',
+        height: 55,
+        // CYAN BACKGROUND for contrast (main highlight)
+        backgroundColor: FORCED_CYAN,
+        borderRadius: 40,
         justifyContent: 'center',
-        ...shadows.neon,
-    },
-    continueButtonFull: {
-        flex: 1,
+        alignItems: 'center',
+        // Neon shadow effect
+        shadowColor: FORCED_CYAN,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.6,
+        shadowRadius: 12,
+        elevation: 8,
     },
     continueButtonDisabled: {
-        backgroundColor: colors.card,
-        opacity: 0.6,
-        ...shadows.sm,
+        backgroundColor: '#1C1C2E',
+        shadowOpacity: 0,
+        elevation: 0,
     },
-    continueButtonText: {
-        fontSize: typography.fontSizes.xl,
-        fontWeight: typography.fontWeights.semibold,
-        color: colors.background,
+    continueText: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 18,
+        fontWeight: '500',
+        // DARK TEXT on cyan background for contrast
+        color: FORCED_BG_DARK,
     },
-    continueButtonTextDisabled: {
-        color: colors.textMuted,
+    continueTextDisabled: {
+        color: FORCED_TEXT_SECONDARY,
     },
 });
