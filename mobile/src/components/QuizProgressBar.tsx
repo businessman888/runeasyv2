@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { colors, typography, borderRadius } from '../theme';
 
 interface QuizProgressBarProps {
     currentStep: number;
@@ -12,14 +13,14 @@ const FlashIcon = () => (
     <Svg width={15} height={15} viewBox="0 0 15 15" fill="none">
         <Path
             d="M8.625 0.9375L3.28125 8.4375H7.5L6.375 14.0625L11.7188 6.5625H7.5L8.625 0.9375Z"
-            fill="#00D4FF"
+            fill={colors.primary}
         />
     </Svg>
 );
 
-export function QuizProgressBar({ currentStep, totalSteps = 9 }: QuizProgressBarProps) {
-    const progress = ((currentStep + 1) / totalSteps) * 100;
-    const xp = (currentStep + 1) * 10; // 10 XP por step
+export function QuizProgressBar({ currentStep, totalSteps = 14 }: QuizProgressBarProps) {
+    const progress = (currentStep / totalSteps) * 100;
+    const xp = currentStep * 10; // 10 XP por step
 
     return (
         <View style={styles.container}>
@@ -55,8 +56,8 @@ export function QuizProgressBar({ currentStep, totalSteps = 9 }: QuizProgressBar
 
 const styles = StyleSheet.create({
     container: {
-        paddingHorizontal: 9,
-        marginBottom: 32,
+        paddingHorizontal: 4,
+        marginBottom: 24,
     },
     topRow: {
         flexDirection: 'row',
@@ -65,54 +66,50 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     scoreLabel: {
-        fontSize: 14,
-        fontWeight: '400',
-        fontFamily: 'Poppins',
-        color: 'rgba(235, 235, 245, 1)', // var(--text/primary)
+        fontSize: typography.fontSizes.md,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textLight,
     },
     xpBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#131313', // var(--bg/secondary)
+        backgroundColor: colors.card,
         borderWidth: 1,
-        borderColor: '#00D4FF', // var(--accent/cyan-primary)
-        borderRadius: 20,
+        borderColor: colors.primary,
+        borderRadius: borderRadius.full,
         paddingHorizontal: 12,
         paddingVertical: 5,
         gap: 4,
     },
     xpText: {
-        fontSize: 14,
-        fontWeight: '600',
-        fontFamily: 'Inter',
-        color: '#00D4FF', // var(--accent/cyan-primary)
+        fontSize: typography.fontSizes.md,
+        fontWeight: typography.fontWeights.semibold,
+        color: colors.primary,
     },
     progressBarContainer: {
         height: 4,
-        backgroundColor: 'rgba(235, 235, 245, 0.1)', // var(--neutral/glass-stroke)
-        borderRadius: 20,
+        backgroundColor: colors.glassWhite,
+        borderRadius: borderRadius.full,
         overflow: 'hidden',
         marginBottom: 6,
     },
     progressBarFill: {
         height: '100%',
-        backgroundColor: '#00D4FF', // var(--accent/cyan-primary)
-        borderRadius: 20,
+        backgroundColor: colors.primary,
+        borderRadius: borderRadius.full,
     },
     bottomRow: {
         flexDirection: 'row',
         alignItems: 'center',
     },
     progressLabel: {
-        fontSize: 11,
-        fontWeight: '400',
-        fontFamily: 'Poppins',
-        color: 'rgba(235, 235, 245, 0.6)', // var(--text/secondary)
+        fontSize: typography.fontSizes.sm,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textSecondary,
     },
     progressValue: {
-        fontSize: 11,
-        fontWeight: '700',
-        fontFamily: 'Inter',
-        color: '#00D4FF', // var(--accent/cyan-primary)
+        fontSize: typography.fontSizes.sm,
+        fontWeight: typography.fontWeights.bold,
+        color: colors.primary,
     },
 });

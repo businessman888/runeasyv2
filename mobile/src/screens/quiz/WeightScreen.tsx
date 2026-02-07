@@ -1,251 +1,213 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
+    StyleSheet,
     TouchableOpacity,
     TextInput,
-    StyleSheet,
-    ScrollView,
 } from 'react-native';
-import { colors, borderRadius } from '../../theme';
+import { colors, typography, borderRadius, shadows } from '../../theme';
+
+const QUICK_OPTIONS = [50, 60, 70, 80, 90, 100];
 
 interface WeightScreenProps {
-    value: number | null;
-    onChange: (weight: number) => void;
+    value?: number | null;
+    onChange?: (value: number) => void;
 }
 
-const WEIGHT_OPTIONS = [50, 60, 70, 80, 90, 100];
+export function WeightScreen({ value, onChange }: WeightScreenProps) {
+    const [selectedWeight, setSelectedWeight] = useState<number | null>(value || null);
+    const [customWeight, setCustomWeight] = useState<string>(value ? String(value) : '');
 
-export const WeightScreen: React.FC<WeightScreenProps> = ({
-    value,
-    onChange,
-}) => {
-    const [customWeight, setCustomWeight] = useState('');
-    const [isCustomSelected, setIsCustomSelected] = useState(false);
+    useEffect(() => {
+        if (value) {
+            setSelectedWeight(value);
+            setCustomWeight(String(value));
+        }
+    }, [value]);
 
-    const handleSelectOption = (weight: number) => {
-        setIsCustomSelected(false);
-        setCustomWeight('');
-        onChange(weight);
-    };
-
-    const handleCustomChange = (text: string) => {
-        // Only allow numbers and one decimal point
-        const filtered = text.replace(/[^0-9.]/g, '');
-        const parts = filtered.split('.');
-        const formatted = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filtered;
-
-        setCustomWeight(formatted);
-        setIsCustomSelected(true);
-
-        const numValue = parseFloat(formatted);
-        if (!isNaN(numValue) && numValue > 0) {
-            onChange(numValue);
+    const handleQuickSelect = (weight: number) => {
+        setSelectedWeight(weight);
+        setCustomWeight(String(weight));
+        if (onChange) {
+            onChange(weight);
         }
     };
 
-    const handleCustomFocus = () => {
-        setIsCustomSelected(true);
-    };
+    const handleCustomChange = (text: string) => {
+        // Only allow numbers
+        const numericText = text.replace(/[^0-9]/g, '');
+        setCustomWeight(numericText);
 
-    const isOptionSelected = (weight: number) => {
-        return !isCustomSelected && value === weight;
+        const weight = parseInt(numericText, 10);
+        if (!isNaN(weight) && weight > 0 && weight <= 300) {
+            setSelectedWeight(weight);
+            if (onChange) {
+                onChange(weight);
+            }
+        } else if (numericText === '') {
+            setSelectedWeight(null);
+        }
     };
 
     return (
-        <View style={styles.container}>
-            {/* Header */}
-            <View style={styles.header}>
+        <>
+            {/* Title Section */}
+            <View style={styles.titleContainer}>
                 <Text style={styles.title}>
-                    Qual é o seu <Text style={styles.titleHighlight}>peso{'\n'}atual</Text>?
+                    Qual é o seu peso{'\n'}
+                    <Text style={styles.titleHighlight}>atual?</Text>
                 </Text>
                 <Text style={styles.subtitle}>
-                    Escolha a opção exata ou a{'\n'}mais próxima.
+                    Usamos para calcular suas zonas de esforço e calorias.
                 </Text>
             </View>
 
-            {/* Options */}
-            <ScrollView
-                style={styles.optionsContainer}
-                contentContainerStyle={styles.optionsContent}
-                showsVerticalScrollIndicator={false}
-            >
-                {/* Custom Input Option */}
-                <TouchableOpacity
-                    style={[
-                        styles.optionCard,
-                        styles.customOptionCard,
-                        isCustomSelected && styles.optionCardSelected,
-                    ]}
-                    onPress={handleCustomFocus}
-                    activeOpacity={0.7}
-                >
-                    <Text style={[
-                        styles.customLabel,
-                        isCustomSelected && styles.customLabelSelected,
-                    ]}>
-                        Outro
-                    </Text>
-                    <View style={[
-                        styles.customInputContainer,
-                        isCustomSelected && styles.customInputContainerSelected,
-                    ]}>
-                        <TextInput
-                            style={[
-                                styles.customInput,
-                                isCustomSelected && styles.customInputSelected,
-                            ]}
-                            value={customWeight}
-                            onChangeText={handleCustomChange}
-                            onFocus={handleCustomFocus}
-                            placeholder="Digite seu peso..."
-                            placeholderTextColor="rgba(0,127,153,0.3)"
-                            keyboardType="decimal-pad"
-                        />
-                    </View>
-                    <View style={[
-                        styles.radioOuter,
-                        isCustomSelected && styles.radioOuterSelected,
-                    ]}>
-                        {isCustomSelected && <View style={styles.radioInner} />}
-                    </View>
-                </TouchableOpacity>
-
-                {/* Preset Options */}
-                {WEIGHT_OPTIONS.map((weight) => (
+            {/* Quick Selection Pills */}
+            <View style={styles.pillsContainer}>
+                {QUICK_OPTIONS.map((weight) => (
                     <TouchableOpacity
                         key={weight}
                         style={[
-                            styles.optionCard,
-                            isOptionSelected(weight) && styles.optionCardSelected,
+                            styles.pill,
+                            selectedWeight === weight && styles.pillSelected
                         ]}
-                        onPress={() => handleSelectOption(weight)}
+                        onPress={() => handleQuickSelect(weight)}
                         activeOpacity={0.7}
                     >
-                        <Text style={styles.optionText}>{weight}KG</Text>
-                        <View style={[
-                            styles.radioOuter,
-                            isOptionSelected(weight) && styles.radioOuterSelected,
+                        <Text style={[
+                            styles.pillText,
+                            selectedWeight === weight && styles.pillTextSelected
                         ]}>
-                            {isOptionSelected(weight) && <View style={styles.radioInner} />}
-                        </View>
+                            {weight}kg
+                        </Text>
                     </TouchableOpacity>
                 ))}
-            </ScrollView>
-        </View>
+            </View>
+
+            {/* Custom Input */}
+            <View style={styles.customInputContainer}>
+                <Text style={styles.customLabel}>Peso exato (kg)</Text>
+                <View style={styles.inputWrapper}>
+                    <TextInput
+                        style={styles.input}
+                        value={customWeight}
+                        onChangeText={handleCustomChange}
+                        keyboardType="numeric"
+                        placeholder="Ex: 75"
+                        placeholderTextColor={colors.textMuted}
+                        maxLength={3}
+                    />
+                    <Text style={styles.inputSuffix}>kg</Text>
+                </View>
+            </View>
+
+            {/* Display Selected */}
+            {selectedWeight && (
+                <View style={styles.selectedCard}>
+                    <Text style={styles.selectedLabel}>Peso selecionado</Text>
+                    <Text style={styles.selectedValue}>{selectedWeight} kg</Text>
+                </View>
+            )}
+        </>
     );
-};
+}
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    header: {
-        paddingHorizontal: 25,
-        marginBottom: 20,
+    titleContainer: {
+        marginBottom: 32,
     },
     title: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: colors.textLight,
-        lineHeight: 32,
+        fontSize: typography.fontSizes['3xl'],
+        fontWeight: typography.fontWeights.bold,
+        color: colors.text,
+        lineHeight: 40,
+        marginBottom: 12,
     },
     titleHighlight: {
         color: colors.primary,
     },
     subtitle: {
-        fontSize: 15,
-        color: 'rgba(235,235,245,0.6)',
-        marginTop: 12,
-        lineHeight: 22,
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textSecondary,
+        lineHeight: 24,
     },
-    optionsContainer: {
-        flex: 1,
-    },
-    optionsContent: {
-        paddingHorizontal: 11,
-        paddingVertical: 5,
-        gap: 12,
-    },
-    optionCard: {
+    pillsContainer: {
         flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#1C1C2E',
-        borderRadius: 15,
-        paddingVertical: 18,
-        paddingHorizontal: 28,
-        shadowColor: '#000',
-        shadowOffset: { width: 2, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 4,
+        flexWrap: 'wrap',
+        gap: 12,
+        marginBottom: 32,
     },
-    optionCardSelected: {
-        backgroundColor: 'rgba(0,127,153,0.3)',
-        borderWidth: 1,
+    pill: {
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.full,
+        borderWidth: 2,
+        borderColor: 'transparent',
+    },
+    pillSelected: {
         borderColor: colors.primary,
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.4,
-        shadowRadius: 4,
+        backgroundColor: 'rgba(0, 212, 255, 0.08)',
     },
-    customOptionCard: {
-        backgroundColor: colors.background,
-        borderWidth: 1,
-        borderColor: 'rgba(0,127,153,0.3)',
-        borderStyle: 'dashed',
+    pillText: {
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.semibold,
+        color: colors.textSecondary,
     },
-    optionText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: colors.textLight,
-    },
-    customLabel: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: 'rgba(0,127,153,0.3)',
-    },
-    customLabelSelected: {
-        color: colors.textLight,
+    pillTextSelected: {
+        color: colors.primary,
     },
     customInputContainer: {
-        flex: 1,
-        marginHorizontal: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(0,127,153,0.3)',
-        borderRadius: 10,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
+        marginBottom: 32,
     },
-    customInputContainerSelected: {
-        borderColor: colors.primary,
+    customLabel: {
+        fontSize: typography.fontSizes.md,
+        fontWeight: typography.fontWeights.medium,
+        color: colors.textSecondary,
+        marginBottom: 12,
     },
-    customInput: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: 'rgba(0,127,153,0.3)',
-    },
-    customInputSelected: {
-        color: colors.textLight,
-    },
-    radioOuter: {
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        borderWidth: 1,
-        borderColor: 'rgba(235,235,245,0.1)',
+    inputWrapper: {
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.xl,
+        borderWidth: 2,
+        borderColor: colors.border,
+        paddingHorizontal: 20,
     },
-    radioOuterSelected: {
+    input: {
+        flex: 1,
+        fontSize: typography.fontSizes['2xl'],
+        fontWeight: typography.fontWeights.bold,
+        color: colors.text,
+        paddingVertical: 16,
+    },
+    inputSuffix: {
+        fontSize: typography.fontSizes.xl,
+        fontWeight: typography.fontWeights.medium,
+        color: colors.textSecondary,
+    },
+    selectedCard: {
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.xl,
+        padding: 20,
+        alignItems: 'center',
+        borderWidth: 2,
         borderColor: colors.primary,
+        ...shadows.neon,
     },
-    radioInner: {
-        width: 20,
-        height: 20,
-        borderRadius: 10,
-        backgroundColor: colors.primary,
+    selectedLabel: {
+        fontSize: typography.fontSizes.md,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textSecondary,
+        marginBottom: 4,
+    },
+    selectedValue: {
+        fontSize: 48,
+        fontWeight: typography.fontWeights.bold,
+        color: colors.primary,
     },
 });
 

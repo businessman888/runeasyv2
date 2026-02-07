@@ -1,214 +1,219 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
-    TouchableOpacity,
     StyleSheet,
+    TouchableOpacity,
+    ScrollView,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { colors, borderRadius } from '../../theme';
+import { colors, typography, borderRadius, shadows } from '../../theme';
+import Svg, { Path } from 'react-native-svg';
 
-interface StartDateScreenProps {
-    value: Date | null;
-    onChange: (date: Date) => void;
-}
-
-const WEEKDAYS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
 const MONTHS = [
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
 ];
 
-export const StartDateScreen: React.FC<StartDateScreenProps> = ({
-    value,
-    onChange,
-}) => {
+const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+// Calendar Icon
+const CalendarIcon = () => (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+        <Path
+            d="M19 4H18V2H16V4H8V2H6V4H5C3.89 4 3 4.9 3 6V20C3 21.1 3.89 22 5 22H19C20.1 22 21 21.1 21 20V6C21 4.9 20.1 4 19 4ZM19 20H5V9H19V20ZM9 11H7V13H9V11ZM13 11H11V13H13V11ZM17 11H15V13H17V11ZM9 15H7V17H9V15ZM13 15H11V17H13V15ZM17 15H15V17H17V15Z"
+            fill={colors.primary}
+        />
+    </Svg>
+);
+
+// Arrow Icons
+const ChevronLeft = () => (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+        <Path d="M15.41 7.41L14 6L8 12L14 18L15.41 16.59L10.83 12L15.41 7.41Z" fill={colors.textSecondary} />
+    </Svg>
+);
+
+const ChevronRight = () => (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+        <Path d="M8.59 16.59L10 18L16 12L10 6L8.59 7.41L13.17 12L8.59 16.59Z" fill={colors.textSecondary} />
+    </Svg>
+);
+
+interface StartDateScreenProps {
+    value?: string | null;
+    onChange?: (value: string) => void;
+}
+
+export function StartDateScreen({ value, onChange }: StartDateScreenProps) {
     const today = new Date();
-    const [currentMonth, setCurrentMonth] = useState(today.getMonth());
-    const [currentYear, setCurrentYear] = useState(today.getFullYear());
+    today.setHours(0, 0, 0, 0);
 
-    // Get calendar days for current month
-    const calendarDays = useMemo(() => {
-        const firstDay = new Date(currentYear, currentMonth, 1);
-        const lastDay = new Date(currentYear, currentMonth + 1, 0);
+    const [selectedDate, setSelectedDate] = useState<Date | null>(
+        value ? new Date(value) : null
+    );
+    const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
+
+    useEffect(() => {
+        if (value) {
+            setSelectedDate(new Date(value));
+        }
+    }, [value]);
+
+    const getDaysInMonth = (date: Date) => {
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
         const daysInMonth = lastDay.getDate();
-        const startingDayOfWeek = firstDay.getDay();
+        const startingDay = firstDay.getDay();
 
-        const days: (number | null)[] = [];
+        const days: (Date | null)[] = [];
 
-        // Add empty slots for days before the first day of the month
-        for (let i = 0; i < startingDayOfWeek; i++) {
+        // Add empty slots for days before the first of the month
+        for (let i = 0; i < startingDay; i++) {
             days.push(null);
         }
 
-        // Add days of the month
+        // Add all days of the month
         for (let i = 1; i <= daysInMonth; i++) {
-            days.push(i);
+            days.push(new Date(year, month, i));
         }
 
         return days;
-    }, [currentMonth, currentYear]);
+    };
 
-    const goToPreviousMonth = () => {
-        if (currentMonth === 0) {
-            setCurrentMonth(11);
-            setCurrentYear(currentYear - 1);
-        } else {
-            setCurrentMonth(currentMonth - 1);
+    const handleDateSelect = (date: Date) => {
+        if (date < today) return; // Can't select past dates
+
+        setSelectedDate(date);
+        if (onChange) {
+            onChange(date.toISOString().split('T')[0]);
         }
     };
 
-    const goToNextMonth = () => {
-        if (currentMonth === 11) {
-            setCurrentMonth(0);
-            setCurrentYear(currentYear + 1);
-        } else {
-            setCurrentMonth(currentMonth + 1);
-        }
+    const handlePrevMonth = () => {
+        setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
     };
 
-    const handleDayPress = (day: number) => {
-        const selectedDate = new Date(currentYear, currentMonth, day);
-        // Only allow selecting today or future dates
-        if (selectedDate >= new Date(today.getFullYear(), today.getMonth(), today.getDate())) {
-            onChange(selectedDate);
-        }
+    const handleNextMonth = () => {
+        setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
     };
 
-    const isDaySelected = (day: number) => {
-        if (!value || !day) return false;
-        return (
-            value.getDate() === day &&
-            value.getMonth() === currentMonth &&
-            value.getFullYear() === currentYear
-        );
+    const isDateSelected = (date: Date | null) => {
+        if (!date || !selectedDate) return false;
+        return date.toDateString() === selectedDate.toDateString();
     };
 
-    const isDayDisabled = (day: number) => {
-        if (!day) return true;
-        const date = new Date(currentYear, currentMonth, day);
-        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        return date < todayStart;
+    const isToday = (date: Date | null) => {
+        if (!date) return false;
+        return date.toDateString() === today.toDateString();
     };
 
-    const isToday = (day: number) => {
-        if (!day) return false;
-        return (
-            today.getDate() === day &&
-            today.getMonth() === currentMonth &&
-            today.getFullYear() === currentYear
-        );
+    const isPast = (date: Date | null) => {
+        if (!date) return true;
+        return date < today;
     };
 
-    // Can go to previous month if it's current or future month
-    const canGoPrevious = !(currentMonth === today.getMonth() && currentYear === today.getFullYear());
+    const days = getDaysInMonth(currentMonth);
 
     return (
-        <View style={styles.container}>
-            {/* Header */}
-            <View style={styles.header}>
+        <>
+            {/* Title Section */}
+            <View style={styles.titleContainer}>
                 <Text style={styles.title}>
-                    Quando você quer{'\n'}iniciar os{' '}
-                    <Text style={styles.titleHighlight}>treinamentos</Text>?
+                    Quando você quer{'\n'}
+                    <Text style={styles.titleHighlight}>começar?</Text>
+                </Text>
+                <Text style={styles.subtitle}>
+                    Escolha a data de início do seu plano de treinamento.
                 </Text>
             </View>
 
-            {/* Calendar */}
-            <View style={styles.calendarContainer}>
-                {/* Month Navigation */}
-                <View style={styles.monthHeader}>
+            {/* Calendar Header */}
+            <View style={styles.calendarHeader}>
+                <TouchableOpacity onPress={handlePrevMonth} style={styles.navButton}>
+                    <ChevronLeft />
+                </TouchableOpacity>
+                <Text style={styles.monthYear}>
+                    {MONTHS[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+                </Text>
+                <TouchableOpacity onPress={handleNextMonth} style={styles.navButton}>
+                    <ChevronRight />
+                </TouchableOpacity>
+            </View>
+
+            {/* Weekday Headers */}
+            <View style={styles.weekdaysRow}>
+                {WEEKDAYS.map((day) => (
+                    <Text key={day} style={styles.weekdayText}>{day}</Text>
+                ))}
+            </View>
+
+            {/* Calendar Grid */}
+            <View style={styles.calendarGrid}>
+                {days.map((date, index) => (
                     <TouchableOpacity
-                        onPress={goToPreviousMonth}
-                        disabled={!canGoPrevious}
-                        style={[styles.navButton, !canGoPrevious && styles.navButtonDisabled]}
+                        key={index}
+                        style={[
+                            styles.dayCell,
+                            date && isDateSelected(date) && styles.dayCellSelected,
+                            date && isToday(date) && !isDateSelected(date) && styles.dayCellToday,
+                            date && isPast(date) && styles.dayCellDisabled
+                        ]}
+                        onPress={() => date && handleDateSelect(date)}
+                        disabled={!date || isPast(date)}
                     >
-                        <Ionicons
-                            name="chevron-back"
-                            size={24}
-                            color={canGoPrevious ? colors.textLight : 'rgba(235,235,245,0.3)'}
-                        />
+                        {date && (
+                            <Text style={[
+                                styles.dayText,
+                                isDateSelected(date) && styles.dayTextSelected,
+                                isToday(date) && !isDateSelected(date) && styles.dayTextToday,
+                                isPast(date) && styles.dayTextDisabled
+                            ]}>
+                                {date.getDate()}
+                            </Text>
+                        )}
                     </TouchableOpacity>
-                    <Text style={styles.monthTitle}>
-                        {MONTHS[currentMonth]} {currentYear}
-                    </Text>
-                    <TouchableOpacity onPress={goToNextMonth} style={styles.navButton}>
-                        <Ionicons name="chevron-forward" size={24} color={colors.textLight} />
-                    </TouchableOpacity>
-                </View>
-
-                {/* Weekday Headers */}
-                <View style={styles.weekdaysRow}>
-                    {WEEKDAYS.map((day) => (
-                        <Text key={day} style={styles.weekdayText}>{day}</Text>
-                    ))}
-                </View>
-
-                {/* Calendar Grid */}
-                <View style={styles.calendarGrid}>
-                    {calendarDays.map((day, index) => (
-                        <TouchableOpacity
-                            key={index}
-                            style={[
-                                styles.dayCell,
-                                isDaySelected(day!) && styles.dayCellSelected,
-                                isToday(day!) && !isDaySelected(day!) && styles.dayCellToday,
-                            ]}
-                            onPress={() => day && handleDayPress(day)}
-                            disabled={isDayDisabled(day!)}
-                            activeOpacity={0.7}
-                        >
-                            {day && (
-                                <Text style={[
-                                    styles.dayText,
-                                    isDaySelected(day) && styles.dayTextSelected,
-                                    isDayDisabled(day) && styles.dayTextDisabled,
-                                    isToday(day) && !isDaySelected(day) && styles.dayTextToday,
-                                ]}>
-                                    {day}
-                                </Text>
-                            )}
-                        </TouchableOpacity>
-                    ))}
-                </View>
+                ))}
             </View>
 
             {/* Selected Date Display */}
-            {value && (
-                <View style={styles.selectedDateContainer}>
-                    <Text style={styles.selectedDateLabel}>Data selecionada:</Text>
-                    <Text style={styles.selectedDateValue}>
-                        {value.getDate().toString().padStart(2, '0')} de {MONTHS[value.getMonth()]} de {value.getFullYear()}
-                    </Text>
+            {selectedDate && (
+                <View style={styles.selectedCard}>
+                    <CalendarIcon />
+                    <View style={styles.selectedTextContainer}>
+                        <Text style={styles.selectedLabel}>Data selecionada</Text>
+                        <Text style={styles.selectedValue}>
+                            {selectedDate.getDate()} de {MONTHS[selectedDate.getMonth()]} de {selectedDate.getFullYear()}
+                        </Text>
+                    </View>
                 </View>
             )}
-        </View>
+        </>
     );
-};
+}
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    header: {
-        paddingHorizontal: 25,
-        marginBottom: 20,
+    titleContainer: {
+        marginBottom: 24,
     },
     title: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: colors.textLight,
-        lineHeight: 32,
+        fontSize: typography.fontSizes['3xl'],
+        fontWeight: typography.fontWeights.bold,
+        color: colors.text,
+        lineHeight: 40,
+        marginBottom: 12,
     },
     titleHighlight: {
         color: colors.primary,
     },
-    calendarContainer: {
-        marginHorizontal: 11,
-        backgroundColor: '#1C1C2E',
-        borderRadius: 15,
-        padding: 16,
+    subtitle: {
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textSecondary,
+        lineHeight: 24,
     },
-    monthHeader: {
+    calendarHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -217,78 +222,81 @@ const styles = StyleSheet.create({
     navButton: {
         padding: 8,
     },
-    navButtonDisabled: {
-        opacity: 0.3,
-    },
-    monthTitle: {
-        fontSize: 17,
-        fontWeight: '700',
-        color: colors.textLight,
+    monthYear: {
+        fontSize: typography.fontSizes.xl,
+        fontWeight: typography.fontWeights.semibold,
+        color: colors.text,
     },
     weekdaysRow: {
         flexDirection: 'row',
-        justifyContent: 'space-around',
-        marginBottom: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(235,235,245,0.1)',
-        paddingBottom: 12,
+        marginBottom: 8,
     },
     weekdayText: {
-        width: 40,
+        flex: 1,
         textAlign: 'center',
-        fontSize: 12,
-        fontWeight: '600',
-        color: colors.primary,
+        fontSize: typography.fontSizes.sm,
+        fontWeight: typography.fontWeights.medium,
+        color: colors.textSecondary,
     },
     calendarGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
+        marginBottom: 24,
     },
     dayCell: {
         width: '14.28%',
         aspectRatio: 1,
         alignItems: 'center',
         justifyContent: 'center',
+        borderRadius: borderRadius.lg,
     },
     dayCellSelected: {
         backgroundColor: colors.primary,
-        borderRadius: 20,
+        ...shadows.neon,
     },
     dayCellToday: {
-        borderWidth: 1,
+        borderWidth: 2,
         borderColor: colors.primary,
-        borderRadius: 20,
+    },
+    dayCellDisabled: {
+        opacity: 0.3,
     },
     dayText: {
-        fontSize: 15,
-        fontWeight: '500',
-        color: colors.textLight,
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.medium,
+        color: colors.text,
     },
     dayTextSelected: {
         color: colors.background,
-        fontWeight: '700',
-    },
-    dayTextDisabled: {
-        color: 'rgba(235,235,245,0.3)',
+        fontWeight: typography.fontWeights.bold,
     },
     dayTextToday: {
         color: colors.primary,
     },
-    selectedDateContainer: {
+    dayTextDisabled: {
+        color: colors.textMuted,
+    },
+    selectedCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 20,
-        gap: 8,
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.xl,
+        padding: 16,
+        borderWidth: 2,
+        borderColor: colors.primary,
+        ...shadows.neon,
     },
-    selectedDateLabel: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: 'rgba(235,235,245,0.6)',
+    selectedTextContainer: {
+        marginLeft: 12,
     },
-    selectedDateValue: {
-        fontSize: 14,
-        fontWeight: '700',
+    selectedLabel: {
+        fontSize: typography.fontSizes.md,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textSecondary,
+    },
+    selectedValue: {
+        fontSize: typography.fontSizes.xl,
+        fontWeight: typography.fontWeights.semibold,
         color: colors.primary,
     },
 });

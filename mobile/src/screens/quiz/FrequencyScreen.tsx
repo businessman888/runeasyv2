@@ -8,24 +8,22 @@ import {
     Platform,
     Pressable,
 } from 'react-native';
-import { colors, typography, spacing } from '../../theme';
-import Svg, { Path, Rect } from 'react-native-svg';
+import { colors, typography, borderRadius, shadows } from '../../theme';
+import Svg, { Path } from 'react-native-svg';
 
 const { width } = Dimensions.get('window');
 const SLIDER_PADDING = 30;
 const SLIDER_WIDTH = width - 40 - SLIDER_PADDING;
 
-// Lightbulb Icon
+// Lightbulb Icon using theme colors
 const IdeaIcon = () => (
     <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
         <Path
             d="M12 2C8.13 2 5 5.13 5 9C5 11.38 6.19 13.47 8 14.74V17C8 17.55 8.45 18 9 18H15C15.55 18 16 17.55 16 17V14.74C17.81 13.47 19 11.38 19 9C19 5.13 15.87 2 12 2ZM14.85 13.1L14 13.7V16H10V13.7L9.15 13.1C7.8 12.16 7 10.63 7 9C7 6.24 9.24 4 12 4C14.76 4 17 6.24 17 9C17 10.63 16.2 12.16 14.85 13.1ZM9 21C9 21.55 9.45 22 10 22H14C14.55 22 15 21.55 15 21V20H9V21Z"
-            fill="#00D4FF"
+            fill={colors.primary}
         />
     </Svg>
 );
-
-
 
 const DAYS = [2, 3, 4, 5, 6, 7];
 
@@ -84,7 +82,7 @@ export function FrequencyScreen({ value, onChange }: FrequencyScreenProps) {
                 : (e.target as HTMLElement).parentElement?.getBoundingClientRect();
 
             if (rect) {
-                const x = moveEvent.clientX - rect.x - 15; // Adjust for thumb width
+                const x = moveEvent.clientX - rect.x - 15;
                 const clampedX = Math.max(0, Math.min(x, SLIDER_WIDTH));
                 const newDay = positionToDay(clampedX);
                 handleSelectDay(newDay);
@@ -206,9 +204,9 @@ const styles = StyleSheet.create({
         marginBottom: 40,
     },
     title: {
-        fontSize: 28,
-        fontWeight: '700',
-        color: colors.white,
+        fontSize: typography.fontSizes['3xl'],
+        fontWeight: typography.fontWeights.bold,
+        color: colors.text,
         lineHeight: 36,
         textAlign: 'center',
     },
@@ -218,14 +216,14 @@ const styles = StyleSheet.create({
     },
     bigNumber: {
         fontSize: 96,
-        fontWeight: '700',
-        color: '#00D4FF',
+        fontWeight: typography.fontWeights.bold,
+        color: colors.primary,
         lineHeight: 110,
     },
     daysLabel: {
-        fontSize: 16,
-        fontWeight: '400',
-        color: 'rgba(235, 235, 245, 0.6)',
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textSecondary,
         marginTop: -10,
     },
     sliderContainer: {
@@ -240,13 +238,13 @@ const styles = StyleSheet.create({
     } as any,
     sliderTrack: {
         height: 4,
-        backgroundColor: 'rgba(235, 235, 245, 0.1)',
-        borderRadius: 20,
+        backgroundColor: colors.glassWhite,
+        borderRadius: borderRadius.full,
     },
     sliderFill: {
         height: 4,
-        backgroundColor: '#00D4FF',
-        borderRadius: 20,
+        backgroundColor: colors.primary,
+        borderRadius: borderRadius.full,
     },
     sliderThumbContainer: {
         position: 'absolute',
@@ -260,20 +258,16 @@ const styles = StyleSheet.create({
         width: 30,
         height: 30,
         borderRadius: 15,
-        backgroundColor: '#00D4FF',
+        backgroundColor: colors.primary,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#00D4FF',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 8,
-        elevation: 8,
+        ...shadows.neon,
     },
     sliderThumbInner: {
         width: 10,
         height: 10,
         borderRadius: 5,
-        backgroundColor: '#0E0E1F',
+        backgroundColor: colors.backgroundLight,
     },
     daysRow: {
         flexDirection: 'row',
@@ -284,17 +278,17 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     dayNumber: {
-        fontSize: 15,
-        fontWeight: '700',
-        color: 'rgba(235, 235, 245, 0.6)',
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.bold,
+        color: colors.textSecondary,
     },
     dayNumberActive: {
-        color: '#00D4FF',
+        color: colors.primary,
     },
     tipCard: {
         flexDirection: 'row',
-        backgroundColor: '#15152A',
-        borderRadius: 16,
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.xl,
         padding: 16,
         alignItems: 'flex-start',
     },
@@ -305,9 +299,9 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     tipText: {
-        fontSize: 11,
-        fontWeight: '400',
-        color: 'rgba(235, 235, 245, 0.6)',
+        fontSize: typography.fontSizes.sm,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textSecondary,
         lineHeight: 16,
     },
 });

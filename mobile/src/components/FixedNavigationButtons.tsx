@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { colors, typography, borderRadius, shadows } from '../theme';
 
 interface FixedNavigationButtonsProps {
     onBack: () => void;
@@ -46,7 +47,10 @@ export function FixedNavigationButtons({
                 disabled={continueDisabled || isSubmitting}
                 activeOpacity={0.7}
             >
-                <Text style={styles.continueButtonText}>{continueText}</Text>
+                <Text style={[
+                    styles.continueButtonText,
+                    continueDisabled && styles.continueButtonTextDisabled
+                ]}>{continueText}</Text>
             </TouchableOpacity>
         </View>
     );
@@ -55,53 +59,50 @@ export function FixedNavigationButtons({
 const styles = StyleSheet.create({
     container: {
         flexDirection: 'row',
-        paddingHorizontal: 11,
-        paddingBottom: 12,
+        paddingHorizontal: 16,
+        paddingBottom: 16,
         paddingTop: 12,
-        gap: 11,
+        gap: 12,
+        backgroundColor: colors.background,
     },
     backButton: {
         flex: 1,
-        height: 55,
-        backgroundColor: '#1C1C2E',
-        borderRadius: 40,
+        height: 56,
+        backgroundColor: colors.card,
+        borderRadius: borderRadius['2xl'],
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 2, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 4,
+        borderWidth: 1,
+        borderColor: colors.border,
     },
     backButtonText: {
-        fontSize: 18,
-        fontWeight: '500',
-        fontFamily: 'Poppins',
-        color: 'rgba(235, 235, 245, 0.6)',
+        fontSize: typography.fontSizes.xl,
+        fontWeight: typography.fontWeights.medium,
+        color: colors.textSecondary,
     },
     continueButton: {
         flex: 1,
-        height: 55,
-        backgroundColor: '#15152A',
-        borderRadius: 40,
+        height: 56,
+        backgroundColor: colors.primary,
+        borderRadius: borderRadius['2xl'],
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 2, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 4,
+        ...shadows.neon,
     },
     continueButtonFull: {
         flex: 1,
     },
     continueButtonDisabled: {
-        opacity: 0.5,
+        backgroundColor: colors.card,
+        opacity: 0.6,
+        ...shadows.sm,
     },
     continueButtonText: {
-        fontSize: 18,
-        fontWeight: '500',
-        fontFamily: 'Poppins',
-        color: '#00D4FF',
+        fontSize: typography.fontSizes.xl,
+        fontWeight: typography.fontWeights.semibold,
+        color: colors.background,
+    },
+    continueButtonTextDisabled: {
+        color: colors.textMuted,
     },
 });

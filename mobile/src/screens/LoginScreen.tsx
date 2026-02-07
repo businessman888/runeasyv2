@@ -134,6 +134,8 @@ export function LoginScreen({ navigation }: any) {
                 console.log('=== EXPO GO OAUTH FLOW ===');
                 console.log('Callback URL (for backend FRONTEND_URL):', callbackUrl);
                 console.log('Login URL:', loginUrl);
+                console.log('=== URL RECEBIDA NO APP ===');
+                console.log('URL RECEBIDA NO APP:', loginUrl);
 
                 // Set up a listener for deep link callback BEFORE opening browser
                 const handleDeepLink = async (event: { url: string }) => {

@@ -1,149 +1,221 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
-    TouchableOpacity,
     StyleSheet,
-    ScrollView,
+    TouchableOpacity,
 } from 'react-native';
-import { colors, borderRadius } from '../../theme';
+import { colors, typography, borderRadius, shadows } from '../../theme';
+import Svg, { Path } from 'react-native-svg';
+
+const DAYS = [
+    { id: 0, short: 'Dom', full: 'Domingo' },
+    { id: 1, short: 'Seg', full: 'Segunda' },
+    { id: 2, short: 'Ter', full: 'Terça' },
+    { id: 3, short: 'Qua', full: 'Quarta' },
+    { id: 4, short: 'Qui', full: 'Quinta' },
+    { id: 5, short: 'Sex', full: 'Sexta' },
+    { id: 6, short: 'Sáb', full: 'Sábado' },
+];
+
+// Fire Icon for intense day
+const FireIcon = () => (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+        <Path
+            d="M12 23C7.03 23 3 18.97 3 14C3 10.61 4.61 7.55 7.25 5.65L8.66 7.06C6.61 8.54 5.25 10.96 5.25 13.75C5.25 17.89 8.86 21.25 13 21.25C17.14 21.25 20.75 17.89 20.75 13.75C20.75 10.61 19.03 7.84 16.41 6.33L17.78 4.96C20.59 7.02 22.5 10.27 22.5 14C22.5 18.97 18.47 23 12 23ZM12 3.5C12 5.98 11 9 9.5 11C9.5 11 10.5 12 12 12C14 12 15.5 10.5 15.5 8.5C15.5 6.5 14 5 12 3.5Z"
+            fill={colors.accent}
+        />
+    </Svg>
+);
 
 interface IntenseDayScreenProps {
-    availableDays: number[]; // Days selected in previous screen
-    value: number | null;
-    onChange: (day: number) => void;
+    value?: number | null;
+    availableDays?: number[];
+    onChange?: (value: number) => void;
 }
 
-const DAY_NAMES: Record<number, string> = {
-    0: 'Domingo',
-    1: 'Segunda-feira',
-    2: 'Terça-feira',
-    3: 'Quarta-feira',
-    4: 'Quinta-feira',
-    5: 'Sexta-feira',
-    6: 'Sábado',
-};
+export function IntenseDayScreen({ value, availableDays = [], onChange }: IntenseDayScreenProps) {
+    const [selectedDay, setSelectedDay] = useState<number | null>(value ?? null);
 
-export const IntenseDayScreen: React.FC<IntenseDayScreenProps> = ({
-    availableDays,
-    value,
-    onChange,
-}) => {
-    const isDaySelected = (day: number) => value === day;
+    useEffect(() => {
+        if (value !== undefined) {
+            setSelectedDay(value);
+        }
+    }, [value]);
 
-    // Sort days to display in order
-    const sortedDays = [...availableDays].sort((a, b) => a - b);
+    const handleDaySelect = (dayId: number) => {
+        setSelectedDay(dayId);
+        if (onChange) {
+            onChange(dayId);
+        }
+    };
+
+    const filteredDays = DAYS.filter(day => availableDays.includes(day.id));
+
+    if (filteredDays.length === 0) {
+        return (
+            <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>
+                    Por favor, selecione os dias disponíveis primeiro.
+                </Text>
+            </View>
+        );
+    }
 
     return (
-        <View style={styles.container}>
-            {/* Header */}
-            <View style={styles.header}>
+        <>
+            {/* Title Section */}
+            <View style={styles.titleContainer}>
                 <Text style={styles.title}>
-                    Qual o seu <Text style={styles.titleHighlight}>melhor dia</Text>
-                    {'\n'}para o treino mais{'\n'}intenso da semana?
+                    Qual dia você prefere{'\n'}
+                    <Text style={styles.titleHighlight}>treinar mais forte?</Text>
+                </Text>
+                <Text style={styles.subtitle}>
+                    No treino intenso, você terá sessões mais longas e desafiadoras.
                 </Text>
             </View>
 
-            {/* Options */}
-            <ScrollView
-                style={styles.optionsContainer}
-                contentContainerStyle={styles.optionsContent}
-                showsVerticalScrollIndicator={false}
-            >
-                {sortedDays.map((day) => (
+            {/* Icon */}
+            <View style={styles.iconContainer}>
+                <View style={styles.iconWrapper}>
+                    <FireIcon />
+                </View>
+                <Text style={styles.iconLabel}>Treino Intenso</Text>
+            </View>
+
+            {/* Days Selection */}
+            <View style={styles.daysContainer}>
+                {filteredDays.map((day) => (
                     <TouchableOpacity
-                        key={day}
+                        key={day.id}
                         style={[
-                            styles.optionCard,
-                            isDaySelected(day) && styles.optionCardSelected,
+                            styles.dayCard,
+                            selectedDay === day.id && styles.dayCardSelected
                         ]}
-                        onPress={() => onChange(day)}
+                        onPress={() => handleDaySelect(day.id)}
                         activeOpacity={0.7}
                     >
-                        <Text style={styles.optionText}>{DAY_NAMES[day]}</Text>
-                        <View style={[
-                            styles.radioOuter,
-                            isDaySelected(day) && styles.radioOuterSelected,
+                        <Text style={[
+                            styles.dayShort,
+                            selectedDay === day.id && styles.dayShortSelected
                         ]}>
-                            {isDaySelected(day) && <View style={styles.radioInner} />}
-                        </View>
+                            {day.short}
+                        </Text>
+                        <Text style={[
+                            styles.dayFull,
+                            selectedDay === day.id && styles.dayFullSelected
+                        ]}>
+                            {day.full}
+                        </Text>
                     </TouchableOpacity>
                 ))}
-            </ScrollView>
-        </View>
+            </View>
+
+            {/* Tip */}
+            <View style={styles.tipCard}>
+                <Text style={styles.tipText}>
+                    💡 Escolha um dia em que você tenha mais tempo e energia disponível.
+                </Text>
+            </View>
+        </>
     );
-};
+}
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    header: {
-        paddingHorizontal: 25,
-        marginBottom: 20,
+    titleContainer: {
+        marginBottom: 32,
     },
     title: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: colors.textLight,
-        lineHeight: 32,
+        fontSize: typography.fontSizes['3xl'],
+        fontWeight: typography.fontWeights.bold,
+        color: colors.text,
+        lineHeight: 40,
+        marginBottom: 12,
     },
     titleHighlight: {
         color: colors.primary,
     },
-    optionsContainer: {
-        flex: 1,
+    subtitle: {
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textSecondary,
+        lineHeight: 24,
     },
-    optionsContent: {
-        paddingHorizontal: 11,
-        paddingVertical: 5,
-        gap: 12,
-    },
-    optionCard: {
-        flexDirection: 'row',
+    iconContainer: {
         alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#1C1C2E',
-        borderRadius: 15,
-        paddingVertical: 18,
-        paddingHorizontal: 28,
-        shadowColor: '#000',
-        shadowOffset: { width: 2, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 4,
+        marginBottom: 32,
     },
-    optionCardSelected: {
-        backgroundColor: 'rgba(0,127,153,0.3)',
-        borderWidth: 1,
-        borderColor: colors.primary,
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.4,
-        shadowRadius: 4,
-    },
-    optionText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: colors.textLight,
-    },
-    radioOuter: {
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        borderWidth: 1,
-        borderColor: 'rgba(235,235,245,0.1)',
+    iconWrapper: {
+        width: 64,
+        height: 64,
+        borderRadius: borderRadius.full,
+        backgroundColor: 'rgba(245, 158, 11, 0.15)',
         alignItems: 'center',
         justifyContent: 'center',
+        marginBottom: 8,
     },
-    radioOuterSelected: {
-        borderColor: colors.primary,
+    iconLabel: {
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.semibold,
+        color: colors.accent,
     },
-    radioInner: {
-        width: 20,
-        height: 20,
-        borderRadius: 10,
-        backgroundColor: colors.primary,
+    daysContainer: {
+        gap: 12,
+        marginBottom: 24,
+    },
+    dayCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.xl,
+        padding: 16,
+        borderWidth: 2,
+        borderColor: 'transparent',
+    },
+    dayCardSelected: {
+        borderColor: colors.accent,
+        backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    },
+    dayShort: {
+        fontSize: typography.fontSizes.xl,
+        fontWeight: typography.fontWeights.bold,
+        color: colors.textSecondary,
+        width: 50,
+    },
+    dayShortSelected: {
+        color: colors.accent,
+    },
+    dayFull: {
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textSecondary,
+        flex: 1,
+    },
+    dayFullSelected: {
+        color: colors.text,
+    },
+    tipCard: {
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.lg,
+        padding: 16,
+    },
+    tipText: {
+        fontSize: typography.fontSizes.md,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textSecondary,
+        lineHeight: 20,
+    },
+    emptyContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 32,
+    },
+    emptyText: {
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textSecondary,
+        textAlign: 'center',
     },
 });
 

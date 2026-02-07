@@ -1,230 +1,210 @@
-import React, { useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
-    TouchableOpacity,
     StyleSheet,
+    TouchableOpacity,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { colors, borderRadius } from '../../theme';
-
-interface AvailableDaysScreenProps {
-    value: number[]; // 0=DOM, 1=SEG, ..., 6=SAB
-    onChange: (days: number[]) => void;
-}
+import { colors, typography, borderRadius, shadows } from '../../theme';
+import Svg, { Path } from 'react-native-svg';
 
 const DAYS = [
-    { key: 0, label: 'DOM' },
-    { key: 1, label: 'SEG' },
-    { key: 2, label: 'TER' },
-    { key: 3, label: 'QUA' },
-    { key: 4, label: 'QUI' },
-    { key: 5, label: 'SEX' },
-    { key: 6, label: 'SAB' },
+    { id: 0, short: 'Dom', full: 'Domingo' },
+    { id: 1, short: 'Seg', full: 'Segunda' },
+    { id: 2, short: 'Ter', full: 'Terça' },
+    { id: 3, short: 'Qua', full: 'Quarta' },
+    { id: 4, short: 'Qui', full: 'Quinta' },
+    { id: 5, short: 'Sex', full: 'Sexta' },
+    { id: 6, short: 'Sáb', full: 'Sábado' },
 ];
 
-export const AvailableDaysScreen: React.FC<AvailableDaysScreenProps> = ({
-    value,
-    onChange,
-}) => {
-    // Check for consecutive days without rest
-    const hasConsecutiveDays = useMemo(() => {
-        if (value.length < 3) return false;
+// Warning Icon
+const WarningIcon = () => (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+        <Path
+            d="M12 2L1 21H23L12 2ZM12 16C11.45 16 11 15.55 11 15V13C11 12.45 11.45 12 12 12S13 12.45 13 13V15C13 15.55 12.55 16 12 16ZM13 18H11V20H13V18Z"
+            fill={colors.warning}
+        />
+    </Svg>
+);
 
-        const sorted = [...value].sort((a, b) => a - b);
-        let consecutiveCount = 1;
+interface AvailableDaysScreenProps {
+    value?: number[] | null;
+    onChange?: (value: number[]) => void;
+}
 
-        for (let i = 0; i < sorted.length - 1; i++) {
-            // Check for normal consecutive or wrap-around (SAB->DOM)
-            if (sorted[i + 1] - sorted[i] === 1 ||
-                (sorted[i] === 6 && sorted[0] === 0)) {
-                consecutiveCount++;
-                if (consecutiveCount >= 3) return true;
-            } else {
-                consecutiveCount = 1;
-            }
+export function AvailableDaysScreen({ value, onChange }: AvailableDaysScreenProps) {
+    const [selectedDays, setSelectedDays] = useState<number[]>(value || []);
+
+    useEffect(() => {
+        if (value) {
+            setSelectedDays(value);
         }
-        return false;
     }, [value]);
 
-    const toggleDay = (day: number) => {
-        if (value.includes(day)) {
-            onChange(value.filter(d => d !== day));
+    const handleDayToggle = (dayId: number) => {
+        let newDays: number[];
+        if (selectedDays.includes(dayId)) {
+            newDays = selectedDays.filter(d => d !== dayId);
         } else {
-            onChange([...value, day]);
+            newDays = [...selectedDays, dayId].sort((a, b) => a - b);
+        }
+        setSelectedDays(newDays);
+        if (onChange) {
+            onChange(newDays);
         }
     };
 
-    const isDaySelected = (day: number) => value.includes(day);
-
-    // Generate feedback message
-    const feedbackMessage = useMemo(() => {
-        if (value.length === 0) {
-            return 'Selecione os dias que você tem disponíveis para treinar.';
+    // Check for consecutive training days (3+ in a row)
+    const hasConsecutiveDays = () => {
+        const sorted = [...selectedDays].sort((a, b) => a - b);
+        let consecutive = 1;
+        for (let i = 1; i < sorted.length; i++) {
+            if (sorted[i] === sorted[i - 1] + 1 || (sorted[i - 1] === 6 && sorted[i] === 0)) {
+                consecutive++;
+                if (consecutive >= 3) return true;
+            } else {
+                consecutive = 1;
+            }
         }
-
-        if (hasConsecutiveDays) {
-            return `Você selecionou ${value.length} dias para treinar. Recomendamos um dia de descanso entre treinos intensos para melhor recuperação.`;
-        }
-
-        return `Você selecionou os ${value.length} dias para treinar, Ótimo! Você está respeitando os dias de descanso para uma boa recuperação.`;
-    }, [value.length, hasConsecutiveDays]);
+        return false;
+    };
 
     return (
-        <View style={styles.container}>
-            {/* Header */}
-            <View style={styles.header}>
+        <>
+            {/* Title Section */}
+            <View style={styles.titleContainer}>
                 <Text style={styles.title}>
-                    Quais destes dias da{'\n'}semana você tem{'\n'}
-                    <Text style={styles.titleHighlight}>disponíveis</Text> para treinar?
+                    Quais dias você pode{'\n'}
+                    <Text style={styles.titleHighlight}>treinar?</Text>
+                </Text>
+                <Text style={styles.subtitle}>
+                    Selecione os dias disponíveis para seu treino semanal.
                 </Text>
             </View>
 
-            {/* Days Pills */}
-            <View style={styles.content}>
-                <View style={styles.daysRow}>
-                    {DAYS.map((day) => (
-                        <TouchableOpacity
-                            key={day.key}
-                            style={[
-                                styles.dayPill,
-                                isDaySelected(day.key) && styles.dayPillSelected,
-                            ]}
-                            onPress={() => toggleDay(day.key)}
-                            activeOpacity={0.7}
-                        >
-                            <Text style={[
-                                styles.dayText,
-                                isDaySelected(day.key) && styles.dayTextSelected,
-                            ]}>
-                                {day.label}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-
-                {/* Feedback Card */}
-                {value.length > 0 && (
-                    <View style={[
-                        styles.feedbackCard,
-                        hasConsecutiveDays && styles.feedbackCardWarning,
-                    ]}>
-                        <View style={styles.feedbackIcon}>
-                            <Ionicons
-                                name={hasConsecutiveDays ? 'warning' : 'bulb'}
-                                size={24}
-                                color={hasConsecutiveDays ? colors.warning : colors.primary}
-                            />
-                        </View>
-                        <View style={styles.feedbackContent}>
-                            <Text style={styles.feedbackText}>
-                                {feedbackMessage.split(hasConsecutiveDays ? 'Recomendamos' : 'Ótimo').map((part, i) => {
-                                    if (i === 0) {
-                                        return (
-                                            <Text key={i}>
-                                                {part.includes(`${value.length} dias`) ? (
-                                                    <>
-                                                        Você selecionou os{' '}
-                                                        <Text style={styles.feedbackHighlight}>{value.length} dias</Text>
-                                                        {' '}para treinar
-                                                        {!hasConsecutiveDays && ', '}
-                                                    </>
-                                                ) : part}
-                                            </Text>
-                                        );
-                                    }
-                                    return (
-                                        <Text key={i}>
-                                            {hasConsecutiveDays ? 'Recomendamos' : 'Ótimo'}
-                                            {part}
-                                        </Text>
-                                    );
-                                })}
-                            </Text>
-                        </View>
-                    </View>
-                )}
+            {/* Days Grid */}
+            <View style={styles.daysGrid}>
+                {DAYS.map((day) => (
+                    <TouchableOpacity
+                        key={day.id}
+                        style={[
+                            styles.dayCard,
+                            selectedDays.includes(day.id) && styles.dayCardSelected
+                        ]}
+                        onPress={() => handleDayToggle(day.id)}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={[
+                            styles.dayText,
+                            selectedDays.includes(day.id) && styles.dayTextSelected
+                        ]}>
+                            {day.short}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
             </View>
-        </View>
+
+            {/* Selected Count */}
+            <View style={styles.countContainer}>
+                <Text style={styles.countText}>
+                    <Text style={styles.countNumber}>{selectedDays.length}</Text> dias selecionados
+                </Text>
+            </View>
+
+            {/* Warning for consecutive days */}
+            {hasConsecutiveDays() && (
+                <View style={styles.warningCard}>
+                    <WarningIcon />
+                    <Text style={styles.warningText}>
+                        Treinar 3+ dias consecutivos pode aumentar o risco de lesões. Considere alternar dias de descanso.
+                    </Text>
+                </View>
+            )}
+        </>
     );
-};
+}
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    header: {
-        paddingHorizontal: 25,
-        marginBottom: 20,
+    titleContainer: {
+        marginBottom: 32,
     },
     title: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: colors.textLight,
-        lineHeight: 32,
+        fontSize: typography.fontSizes['3xl'],
+        fontWeight: typography.fontWeights.bold,
+        color: colors.text,
+        lineHeight: 40,
+        marginBottom: 12,
     },
     titleHighlight: {
         color: colors.primary,
     },
-    content: {
-        flex: 1,
-        paddingHorizontal: 11,
+    subtitle: {
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textSecondary,
+        lineHeight: 24,
     },
-    daysRow: {
+    daysGrid: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingVertical: 16,
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        gap: 12,
+        marginBottom: 24,
     },
-    dayPill: {
-        paddingHorizontal: 6,
-        paddingVertical: 10,
-        minWidth: 44,
+    dayCard: {
+        width: 70,
+        height: 70,
+        borderRadius: borderRadius.xl,
+        backgroundColor: colors.card,
         alignItems: 'center',
         justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: 'transparent',
     },
-    dayPillSelected: {
-        backgroundColor: 'rgba(0,127,153,0.3)',
-        borderWidth: 1,
+    dayCardSelected: {
         borderColor: colors.primary,
-        borderRadius: 10,
+        backgroundColor: 'rgba(0, 212, 255, 0.08)',
+        ...shadows.neon,
     },
     dayText: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: colors.textLight,
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.semibold,
+        color: colors.textSecondary,
     },
     dayTextSelected: {
         color: colors.primary,
     },
-    feedbackCard: {
-        flexDirection: 'row',
-        backgroundColor: '#1C1C2E',
-        borderWidth: 1,
-        borderColor: colors.primary,
-        borderRadius: 15,
-        padding: 16,
-        marginTop: 60,
-    },
-    feedbackCardWarning: {
-        borderColor: colors.warning,
-    },
-    feedbackIcon: {
-        width: 40,
+    countContainer: {
         alignItems: 'center',
-        paddingTop: 4,
+        marginBottom: 24,
     },
-    feedbackContent: {
-        flex: 1,
-        paddingLeft: 8,
+    countText: {
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textSecondary,
     },
-    feedbackText: {
-        fontSize: 13,
-        fontWeight: '500',
-        color: 'rgba(235,235,245,0.6)',
-        lineHeight: 20,
-    },
-    feedbackHighlight: {
+    countNumber: {
+        fontSize: typography.fontSizes['2xl'],
+        fontWeight: typography.fontWeights.bold,
         color: colors.primary,
+    },
+    warningCard: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        backgroundColor: 'rgba(255, 196, 0, 0.1)',
+        borderRadius: borderRadius.lg,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: colors.warning,
+        gap: 12,
+    },
+    warningText: {
+        flex: 1,
+        fontSize: typography.fontSizes.md,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.warning,
+        lineHeight: 20,
     },
 });
 

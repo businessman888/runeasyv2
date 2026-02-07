@@ -1,143 +1,178 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
-    TouchableOpacity,
     StyleSheet,
+    TouchableOpacity,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, borderRadius } from '../../theme';
+import { colors, typography, borderRadius, shadows } from '../../theme';
 import { WheelPickerModal } from '../../components/WheelPickerModal';
 
-interface BirthDateScreenProps {
-    value: { day: number; month: number; year: number } | null;
-    onChange: (date: { day: number; month: number; year: number }) => void;
+interface BirthDateValue {
+    day: number;
+    month: number;
+    year: number;
 }
 
-const MONTHS = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-];
+interface BirthDateScreenProps {
+    value?: BirthDateValue | null;
+    onChange?: (value: BirthDateValue) => void;
+}
 
-export const BirthDateScreen: React.FC<BirthDateScreenProps> = ({
-    value,
-    onChange,
-}) => {
-    const [modalVisible, setModalVisible] = useState(false);
+export function BirthDateScreen({ value, onChange }: BirthDateScreenProps) {
+    const [selectedDate, setSelectedDate] = useState<BirthDateValue>(
+        value || { day: 15, month: 6, year: 1990 }
+    );
+    const [isModalVisible, setIsModalVisible] = useState(false);
 
-    const formatDate = (date: { day: number; month: number; year: number }) => {
-        return `${date.day.toString().padStart(2, '0')} de ${MONTHS[date.month]} de ${date.year}`;
-    };
+    useEffect(() => {
+        if (value) {
+            setSelectedDate(value);
+        }
+    }, [value]);
 
     const handleConfirm = (selection: { day: number; month: number; year: number }) => {
-        onChange(selection);
-        setModalVisible(false);
+        // Modal returns 0-indexed month, we store 1-indexed
+        const newDate = { day: selection.day, month: selection.month + 1, year: selection.year };
+        setSelectedDate(newDate);
+        setIsModalVisible(false);
+        if (onChange) {
+            onChange(newDate);
+        }
+    };
+
+    const formatDate = () => {
+        const months = [
+            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+        ];
+        return `${selectedDate.day} de ${months[selectedDate.month - 1]} de ${selectedDate.year}`;
+    };
+
+    const calculateAge = () => {
+        const today = new Date();
+        let age = today.getFullYear() - selectedDate.year;
+        const monthDiff = today.getMonth() + 1 - selectedDate.month;
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < selectedDate.day)) {
+            age--;
+        }
+        return age;
     };
 
     return (
-        <View style={styles.container}>
-            {/* Header */}
-            <View style={styles.header}>
+        <>
+            {/* Title Section */}
+            <View style={styles.titleContainer}>
                 <Text style={styles.title}>
-                    Qual a sua data{'\n'}de <Text style={styles.titleHighlight}>Nascimento</Text>?
+                    Qual a sua data de{'\n'}
+                    <Text style={styles.titleHighlight}>nascimento?</Text>
                 </Text>
                 <Text style={styles.subtitle}>
-                    Escolha a data exata em que você{'\n'}nasceu.
+                    Usamos sua idade para personalizar a intensidade dos treinos.
                 </Text>
             </View>
 
-            {/* Date Selector Card */}
-            <View style={styles.content}>
-                <TouchableOpacity
-                    style={[
-                        styles.dateCard,
-                        value && styles.dateCardSelected,
-                    ]}
-                    onPress={() => setModalVisible(true)}
-                    activeOpacity={0.7}
-                >
-                    <Text style={[
-                        styles.dateText,
-                        value && styles.dateTextSelected,
-                    ]}>
-                        {value ? formatDate(value) : 'Data de nascimento'}
-                    </Text>
-                    <View style={styles.iconContainer}>
-                        <Ionicons
-                            name="calendar"
-                            size={24}
-                            color={value ? colors.primary : colors.primary}
-                        />
-                    </View>
-                </TouchableOpacity>
+            {/* Date Display Card */}
+            <TouchableOpacity
+                style={styles.dateCard}
+                onPress={() => setIsModalVisible(true)}
+                activeOpacity={0.7}
+            >
+                <View style={styles.dateContent}>
+                    <Text style={styles.dateText}>{formatDate()}</Text>
+                    <Text style={styles.ageText}>{calculateAge()} anos</Text>
+                </View>
+                <View style={styles.editIcon}>
+                    <Text style={styles.editIconText}>✎</Text>
+                </View>
+            </TouchableOpacity>
+
+            {/* Info Tip */}
+            <View style={styles.tipCard}>
+                <Text style={styles.tipText}>
+                    💡 Sua idade nos ajuda a calcular zonas de frequência cardíaca e adaptar a progressão do treino.
+                </Text>
             </View>
 
-            {/* Modal */}
+            {/* Wheel Picker Modal */}
             <WheelPickerModal
-                visible={modalVisible}
-                onCancel={() => setModalVisible(false)}
+                visible={isModalVisible}
+                onCancel={() => setIsModalVisible(false)}
                 onConfirm={handleConfirm}
-                initialValue={value || { day: 1, month: 0, year: 2000 }}
+                initialValue={{ day: selectedDate.day, month: selectedDate.month - 1, year: selectedDate.year }}
             />
-        </View>
+        </>
     );
-};
+}
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    header: {
-        paddingHorizontal: 25,
-        marginBottom: 20,
+    titleContainer: {
+        marginBottom: 32,
     },
     title: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: colors.textLight,
-        lineHeight: 32,
+        fontSize: typography.fontSizes['3xl'],
+        fontWeight: typography.fontWeights.bold,
+        color: colors.text,
+        lineHeight: 40,
+        marginBottom: 12,
     },
     titleHighlight: {
         color: colors.primary,
     },
     subtitle: {
-        fontSize: 15,
-        color: 'rgba(235,235,245,0.6)',
-        marginTop: 12,
-        lineHeight: 22,
-    },
-    content: {
-        paddingHorizontal: 25,
-        marginTop: 60,
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textSecondary,
+        lineHeight: 24,
     },
     dateCard: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: 'transparent',
-        borderWidth: 1,
-        borderColor: '#1C1C2E',
-        borderRadius: 20,
-        paddingVertical: 20,
-        paddingHorizontal: 28,
-    },
-    dateCardSelected: {
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.xl,
+        padding: 20,
+        marginBottom: 24,
+        borderWidth: 2,
         borderColor: colors.primary,
-        backgroundColor: 'rgba(0,127,153,0.15)',
+        ...shadows.neon,
+    },
+    dateContent: {
+        flex: 1,
     },
     dateText: {
-        fontSize: 15,
-        color: 'rgba(235,235,245,0.6)',
+        fontSize: typography.fontSizes['2xl'],
+        fontWeight: typography.fontWeights.semibold,
+        color: colors.text,
+        marginBottom: 4,
     },
-    dateTextSelected: {
-        color: colors.textLight,
-        fontWeight: '500',
+    ageText: {
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.primary,
     },
-    iconContainer: {
-        width: 30,
-        height: 30,
+    editIcon: {
+        width: 44,
+        height: 44,
+        borderRadius: borderRadius.full,
+        backgroundColor: colors.primary,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    editIconText: {
+        fontSize: 20,
+        color: colors.background,
+    },
+    tipCard: {
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.lg,
+        padding: 16,
+    },
+    tipText: {
+        fontSize: typography.fontSizes.md,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textSecondary,
+        lineHeight: 20,
     },
 });
 

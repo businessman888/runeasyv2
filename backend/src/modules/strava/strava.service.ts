@@ -142,6 +142,8 @@ export class StravaService {
         const authUrl = `${this.oauthUrl}/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scopes}&approval_prompt=force`;
 
         this.logger.log(`Generated auth URL: ${authUrl}`);
+        console.log('=== URL GERADA NO BACKEND ===');
+        console.log('URL GERADA:', authUrl);
 
         return authUrl;
     }

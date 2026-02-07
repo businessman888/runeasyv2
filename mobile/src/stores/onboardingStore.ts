@@ -177,11 +177,51 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                 return null;
             }
 
+            // ==========================================
+            // DATA SANITIZATION
+            // ==========================================
+
+            // Sanitize weight: ensure it's a number
+            let sanitizedWeight: number | null = null;
+            if (data.weight !== null && data.weight !== undefined) {
+                sanitizedWeight = typeof data.weight === 'string'
+                    ? parseFloat(data.weight)
+                    : Number(data.weight);
+                if (isNaN(sanitizedWeight)) sanitizedWeight = null;
+            }
+
+            // Sanitize height: ensure it's a number
+            let sanitizedHeight: number | null = null;
+            if (data.height !== null && data.height !== undefined) {
+                sanitizedHeight = typeof data.height === 'string'
+                    ? parseFloat(data.height)
+                    : Number(data.height);
+                if (isNaN(sanitizedHeight)) sanitizedHeight = null;
+            }
+
+            // Sanitize birthDate: convert to ISO string format
+            let sanitizedBirthDate: string | null = null;
+            if (data.birthDate) {
+                const { day, month, year } = data.birthDate;
+                // Create ISO date string (YYYY-MM-DD)
+                const monthStr = String(month).padStart(2, '0');
+                const dayStr = String(day).padStart(2, '0');
+                sanitizedBirthDate = `${year}-${monthStr}-${dayStr}`;
+            }
+
+            // Sanitize startDate: ensure it's an ISO string
+            // data.startDate is already string | null in store, just validate format
+            let sanitizedStartDate: string | null = null;
+            if (data.startDate && typeof data.startDate === 'string') {
+                // Already a string, just use it
+                sanitizedStartDate = data.startDate;
+            }
+
             const requestBody = {
-                // Biometrics (New)
-                birth_date: data.birthDate,
-                weight: data.weight,
-                height: data.height,
+                // Biometrics (Sanitized)
+                birth_date: sanitizedBirthDate,
+                weight: sanitizedWeight,
+                height: sanitizedHeight,
 
                 // Original fields
                 goal: data.goal || '10k',
@@ -190,19 +230,19 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
 
                 // Availability (New)
                 available_days: data.availableDays || [],
-                intense_day_index: data.intenseDayIndex,
+                intense_day_index: data.intenseDayIndex ?? null,
 
                 // Original pace/limitations
-                current_pace_5k: data.currentPace5k,
+                current_pace_5k: data.currentPace5k ?? null,
                 target_weeks: data.targetWeeks || 8,
-                limitations: data.limitations,
+                limitations: data.limitations || null,
                 preferred_days: data.preferredDays || [],
 
                 // Performance Baseline (New)
-                recent_distance: data.recentDistance,
-                distance_time: data.distanceTime,
-                calculated_pace: data.calculatedPace,
-                start_date: data.startDate,
+                recent_distance: data.recentDistance ?? null,
+                distance_time: data.distanceTime ?? null,
+                calculated_pace: data.calculatedPace ?? null,
+                start_date: sanitizedStartDate,
             };
 
             const requestUrl = `${API_URL}/training/onboarding`;
@@ -213,6 +253,10 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
             console.log('Request URL:', requestUrl);
             console.log('User ID:', userId);
             console.log('Request Body:', JSON.stringify(requestBody, null, 2));
+            console.log('Data Types:');
+            console.log('  - weight:', typeof requestBody.weight, requestBody.weight);
+            console.log('  - height:', typeof requestBody.height, requestBody.height);
+            console.log('  - birth_date:', typeof requestBody.birth_date, requestBody.birth_date);
 
             const response = await fetch(requestUrl, {
                 method: 'POST',
@@ -226,9 +270,32 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
             console.log('Response status:', response.status);
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                console.error('API Error:', errorData);
-                throw new Error(errorData.message || 'Failed to generate training plan');
+                const errorText = await response.text();
+                let errorData: any = {};
+                try {
+                    errorData = JSON.parse(errorText);
+                } catch {
+                    errorData = { rawResponse: errorText };
+                }
+
+                console.error('=== RAILWAY API ERROR ===');
+                console.error('Status:', response.status);
+                console.error('Response:', errorText);
+
+                // Import Alert dynamically to avoid issues
+                const { Alert } = require('react-native');
+
+                // Show detailed error to user
+                const errorMessage = errorData.message || errorData.error || errorText || 'Erro desconhecido';
+                const errorDetails = JSON.stringify(errorData, null, 2);
+
+                Alert.alert(
+                    `❌ Erro do Backend (${response.status})`,
+                    `Mensagem: ${errorMessage}\n\nDetalhes:\n${errorDetails.substring(0, 500)}`,
+                    [{ text: 'OK' }]
+                );
+
+                throw new Error(errorMessage);
             }
 
             const result: GeneratedPlanResult = await response.json();
@@ -245,8 +312,9 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
             console.error('=== ONBOARDING ERROR ===');
             console.error('Error name:', error?.name);
             console.error('Error message:', error?.message);
+            console.error('Error stack:', error?.stack);
 
-            let errorMessage = 'Unknown error occurred';
+            let errorMessage = 'Erro desconhecido';
             let errorCode: typeof ONBOARDING_ERRORS[keyof typeof ONBOARDING_ERRORS] = ONBOARDING_ERRORS.API_ERROR;
 
             if (error instanceof Error) {
@@ -256,7 +324,15 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                     error.message.includes('fetch') ||
                     error.name === 'TypeError') {
                     errorCode = ONBOARDING_ERRORS.NETWORK_ERROR;
-                    errorMessage = `Erro de conexão. Verifique se o backend está acessível. URL: ${API_URL}`;
+                    errorMessage = `Erro de conexão. Verifique se o backend está acessível.\n\nURL: ${API_URL}`;
+
+                    // Show network error alert
+                    const { Alert } = require('react-native');
+                    Alert.alert(
+                        '🌐 Erro de Conexão',
+                        errorMessage,
+                        [{ text: 'OK' }]
+                    );
                 }
             }
 

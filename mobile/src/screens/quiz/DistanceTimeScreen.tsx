@@ -2,326 +2,230 @@ import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
-    TouchableOpacity,
     StyleSheet,
-    Platform,
+    TouchableOpacity,
 } from 'react-native';
+import { colors, typography, borderRadius, shadows } from '../../theme';
 import * as Haptics from 'expo-haptics';
-import { Ionicons } from '@expo/vector-icons';
-import { colors, borderRadius } from '../../theme';
 
-interface DistanceTimeScreenProps {
-    distance: number; // For pace calculation
-    value: { hours: number; minutes: number; seconds: number };
-    onChange: (time: { hours: number; minutes: number; seconds: number }) => void;
+interface DistanceTimeValue {
+    hours: number;
+    minutes: number;
+    seconds: number;
 }
 
-type TimeField = 'hours' | 'minutes' | 'seconds';
+interface DistanceTimeScreenProps {
+    value?: DistanceTimeValue | null;
+    recentDistance?: number;
+    onChange?: (value: DistanceTimeValue) => void;
+}
 
-export const DistanceTimeScreen: React.FC<DistanceTimeScreenProps> = ({
-    distance,
-    value,
-    onChange,
-}) => {
-    const [activeField, setActiveField] = useState<TimeField>('minutes');
-    const [inputBuffer, setInputBuffer] = useState('');
+const KEYPAD = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', '⌫'];
 
-    // Calculate pace in background
-    const calculatePace = () => {
-        const totalMinutes = value.hours * 60 + value.minutes + value.seconds / 60;
-        if (distance > 0 && totalMinutes > 0) {
-            const pacePerKm = totalMinutes / distance;
-            const paceMinutes = Math.floor(pacePerKm);
-            const paceSeconds = Math.round((pacePerKm - paceMinutes) * 60);
-            return `${paceMinutes}'${paceSeconds.toString().padStart(2, '0')}"`;
+export function DistanceTimeScreen({ value, recentDistance = 5, onChange }: DistanceTimeScreenProps) {
+    const [timeString, setTimeString] = useState<string>(
+        value ? `${String(value.hours).padStart(2, '0')}${String(value.minutes).padStart(2, '0')}${String(value.seconds).padStart(2, '0')}` : ''
+    );
+
+    useEffect(() => {
+        if (value) {
+            setTimeString(`${String(value.hours).padStart(2, '0')}${String(value.minutes).padStart(2, '0')}${String(value.seconds).padStart(2, '0')}`);
         }
-        return '--\'--"';
-    };
+    }, [value]);
 
-    const handleNumberPress = async (num: string) => {
+    const handleKeyPress = async (key: string) => {
         // Haptic feedback
-        if (Platform.OS !== 'web') {
+        try {
             await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        } catch (e) {
+            // Haptics not available
         }
 
-        const newBuffer = inputBuffer + num;
-        setInputBuffer(newBuffer);
+        let newTimeString = timeString;
 
-        const numValue = parseInt(newBuffer, 10);
-
-        // Update the active field based on max values
-        if (activeField === 'hours' && numValue <= 23) {
-            onChange({ ...value, hours: numValue });
-        } else if (activeField === 'minutes' && numValue <= 59) {
-            onChange({ ...value, minutes: numValue });
-        } else if (activeField === 'seconds' && numValue <= 59) {
-            onChange({ ...value, seconds: numValue });
-        }
-
-        // Auto-advance to next field after 2 digits
-        if (newBuffer.length >= 2) {
-            setInputBuffer('');
-            if (activeField === 'hours') {
-                setActiveField('minutes');
-            } else if (activeField === 'minutes') {
-                setActiveField('seconds');
+        if (key === '⌫') {
+            newTimeString = timeString.slice(0, -1);
+        } else if (key === '00') {
+            if (timeString.length <= 4) {
+                newTimeString = timeString + '00';
             }
-        }
-    };
-
-    const handleBackspace = async () => {
-        // Haptic feedback
-        if (Platform.OS !== 'web') {
-            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        }
-
-        if (inputBuffer.length > 0) {
-            const newBuffer = inputBuffer.slice(0, -1);
-            setInputBuffer(newBuffer);
-
-            const numValue = newBuffer.length > 0 ? parseInt(newBuffer, 10) : 0;
-            onChange({ ...value, [activeField]: numValue });
         } else {
-            // Clear current field and move to previous
-            onChange({ ...value, [activeField]: 0 });
-            if (activeField === 'seconds') {
-                setActiveField('minutes');
-            } else if (activeField === 'minutes') {
-                setActiveField('hours');
+            if (timeString.length < 6) {
+                newTimeString = timeString + key;
             }
         }
+
+        setTimeString(newTimeString);
+        updateValue(newTimeString);
     };
 
-    const selectField = async (field: TimeField) => {
-        if (Platform.OS !== 'web') {
-            await Haptics.selectionAsync();
+    const updateValue = (str: string) => {
+        const padded = str.padStart(6, '0');
+        const hours = parseInt(padded.slice(0, 2), 10);
+        const minutes = parseInt(padded.slice(2, 4), 10);
+        const seconds = parseInt(padded.slice(4, 6), 10);
+
+        if (onChange) {
+            onChange({ hours, minutes, seconds });
         }
-        setActiveField(field);
-        setInputBuffer('');
     };
 
-    const formatValue = (val: number) => val.toString().padStart(2, '0');
+    const formatDisplay = () => {
+        const padded = timeString.padStart(6, '0');
+        return `${padded.slice(0, 2)}:${padded.slice(2, 4)}:${padded.slice(4, 6)}`;
+    };
+
+    const calculatePace = () => {
+        const padded = timeString.padStart(6, '0');
+        const hours = parseInt(padded.slice(0, 2), 10);
+        const minutes = parseInt(padded.slice(2, 4), 10);
+        const seconds = parseInt(padded.slice(4, 6), 10);
+
+        const totalMinutes = hours * 60 + minutes + seconds / 60;
+        if (totalMinutes === 0 || recentDistance === 0) return '--:--';
+
+        const paceMinutes = totalMinutes / recentDistance;
+        const paceMins = Math.floor(paceMinutes);
+        const paceSecs = Math.round((paceMinutes - paceMins) * 60);
+
+        return `${paceMins}:${String(paceSecs).padStart(2, '0')}`;
+    };
 
     return (
-        <View style={styles.container}>
-            {/* Header */}
-            <View style={styles.header}>
+        <>
+            {/* Title Section */}
+            <View style={styles.titleContainer}>
                 <Text style={styles.title}>
-                    Em <Text style={styles.titleHighlight}>quanto tempo</Text>
-                    {'\n'}você completou essa{'\n'}distância?
+                    Em quanto tempo você{'\n'}
+                    <Text style={styles.titleHighlight}>correu {recentDistance}km?</Text>
+                </Text>
+                <Text style={styles.subtitle}>
+                    Informe o tempo aproximado da sua última corrida de {recentDistance}km.
                 </Text>
             </View>
 
-            {/* Time Input Cards */}
-            <View style={styles.timeCardsContainer}>
-                <TouchableOpacity
-                    style={[
-                        styles.timeCard,
-                        activeField === 'hours' && styles.timeCardActive,
-                    ]}
-                    onPress={() => selectField('hours')}
-                    activeOpacity={0.7}
-                >
-                    <Text style={[
-                        styles.timeValue,
-                        activeField === 'hours' && styles.timeValueActive,
-                    ]}>
-                        {formatValue(value.hours)}
-                    </Text>
-                    <Text style={styles.timeLabel}>h</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[
-                        styles.timeCard,
-                        activeField === 'minutes' && styles.timeCardActive,
-                    ]}
-                    onPress={() => selectField('minutes')}
-                    activeOpacity={0.7}
-                >
-                    <Text style={[
-                        styles.timeValue,
-                        activeField === 'minutes' && styles.timeValueActive,
-                    ]}>
-                        {formatValue(value.minutes)}
-                    </Text>
-                    <Text style={styles.timeLabel}>min</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[
-                        styles.timeCard,
-                        activeField === 'seconds' && styles.timeCardActive,
-                    ]}
-                    onPress={() => selectField('seconds')}
-                    activeOpacity={0.7}
-                >
-                    <Text style={[
-                        styles.timeValue,
-                        activeField === 'seconds' && styles.timeValueActive,
-                    ]}>
-                        {formatValue(value.seconds)}
-                    </Text>
-                    <Text style={styles.timeLabel}>seg</Text>
-                </TouchableOpacity>
+            {/* Time Display */}
+            <View style={styles.displayContainer}>
+                <Text style={styles.displayText}>{formatDisplay()}</Text>
+                <Text style={styles.displayLabel}>hh:mm:ss</Text>
             </View>
 
             {/* Pace Display */}
             <View style={styles.paceContainer}>
-                <Text style={styles.paceLabel}>Pace calculado:</Text>
-                <Text style={styles.paceValue}>{calculatePace()} /km</Text>
+                <Text style={styles.paceLabel}>Pace estimado</Text>
+                <Text style={styles.paceValue}>{calculatePace()} min/km</Text>
             </View>
 
-            {/* Number Pad */}
-            <View style={styles.numberPad}>
-                <View style={styles.numberRow}>
-                    {['1', '2', '3'].map((num) => (
-                        <TouchableOpacity
-                            key={num}
-                            style={styles.numberButton}
-                            onPress={() => handleNumberPress(num)}
-                            activeOpacity={0.7}
-                        >
-                            <Text style={styles.numberText}>{num}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-                <View style={styles.numberRow}>
-                    {['4', '5', '6'].map((num) => (
-                        <TouchableOpacity
-                            key={num}
-                            style={styles.numberButton}
-                            onPress={() => handleNumberPress(num)}
-                            activeOpacity={0.7}
-                        >
-                            <Text style={styles.numberText}>{num}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-                <View style={styles.numberRow}>
-                    {['7', '8', '9'].map((num) => (
-                        <TouchableOpacity
-                            key={num}
-                            style={styles.numberButton}
-                            onPress={() => handleNumberPress(num)}
-                            activeOpacity={0.7}
-                        >
-                            <Text style={styles.numberText}>{num}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-                <View style={styles.numberRow}>
-                    <View style={styles.numberButton} />
+            {/* Keypad */}
+            <View style={styles.keypadContainer}>
+                {KEYPAD.map((key) => (
                     <TouchableOpacity
-                        style={styles.numberButton}
-                        onPress={() => handleNumberPress('0')}
+                        key={key}
+                        style={[
+                            styles.keypadButton,
+                            key === '⌫' && styles.keypadButtonDelete
+                        ]}
+                        onPress={() => handleKeyPress(key)}
                         activeOpacity={0.7}
                     >
-                        <Text style={styles.numberText}>0</Text>
+                        <Text style={[
+                            styles.keypadText,
+                            key === '⌫' && styles.keypadTextDelete
+                        ]}>
+                            {key}
+                        </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.numberButton}
-                        onPress={handleBackspace}
-                        activeOpacity={0.7}
-                    >
-                        <Ionicons name="backspace-outline" size={24} color={colors.textLight} />
-                    </TouchableOpacity>
-                </View>
+                ))}
             </View>
-        </View>
+        </>
     );
-};
+}
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    header: {
-        paddingHorizontal: 25,
-        marginBottom: 20,
+    titleContainer: {
+        marginBottom: 24,
     },
     title: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: colors.textLight,
-        lineHeight: 32,
+        fontSize: typography.fontSizes['3xl'],
+        fontWeight: typography.fontWeights.bold,
+        color: colors.text,
+        lineHeight: 40,
+        marginBottom: 12,
     },
     titleHighlight: {
         color: colors.primary,
     },
-    timeCardsContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        paddingHorizontal: 11,
-        gap: 16,
-        marginTop: 20,
+    subtitle: {
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textSecondary,
+        lineHeight: 24,
     },
-    timeCard: {
+    displayContainer: {
         alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#1C1C2E',
-        borderRadius: 15,
-        paddingVertical: 20,
-        paddingHorizontal: 24,
-        minWidth: 90,
-    },
-    timeCardActive: {
+        marginBottom: 16,
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.xl,
+        padding: 24,
         borderWidth: 2,
         borderColor: colors.primary,
-        backgroundColor: 'rgba(0,127,153,0.2)',
+        ...shadows.neon,
     },
-    timeValue: {
-        fontSize: 32,
-        fontWeight: '700',
-        color: 'rgba(235,235,245,0.6)',
-    },
-    timeValueActive: {
+    displayText: {
+        fontSize: 48,
+        fontWeight: typography.fontWeights.bold,
         color: colors.primary,
+        fontVariant: ['tabular-nums'],
     },
-    timeLabel: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: 'rgba(235,235,245,0.4)',
+    displayLabel: {
+        fontSize: typography.fontSizes.md,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textSecondary,
         marginTop: 4,
     },
     paceContainer: {
         flexDirection: 'row',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 16,
-        gap: 8,
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.lg,
+        padding: 16,
+        marginBottom: 24,
     },
     paceLabel: {
-        fontSize: 13,
-        fontWeight: '500',
-        color: 'rgba(235,235,245,0.6)',
+        fontSize: typography.fontSizes.lg,
+        fontWeight: typography.fontWeights.normal,
+        color: colors.textSecondary,
     },
     paceValue: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: colors.primary,
+        fontSize: typography.fontSizes.xl,
+        fontWeight: typography.fontWeights.bold,
+        color: colors.success,
     },
-    numberPad: {
-        flex: 1,
-        justifyContent: 'center',
-        marginTop: 16,
-    },
-    numberRow: {
+    keypadContainer: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         justifyContent: 'center',
-        marginBottom: 8,
+        gap: 12,
     },
-    numberButton: {
-        width: 70,
-        height: 48,
+    keypadButton: {
+        width: '28%',
+        aspectRatio: 1.5,
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.lg,
         alignItems: 'center',
         justifyContent: 'center',
-        marginHorizontal: 15,
     },
-    numberText: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: colors.textLight,
+    keypadButtonDelete: {
+        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    },
+    keypadText: {
+        fontSize: typography.fontSizes['2xl'],
+        fontWeight: typography.fontWeights.semibold,
+        color: colors.text,
+    },
+    keypadTextDelete: {
+        color: colors.error,
     },
 });
 
