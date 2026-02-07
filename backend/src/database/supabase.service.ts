@@ -10,21 +10,33 @@ export class SupabaseService implements OnModuleInit {
   constructor(private configService: ConfigService) { }
 
   onModuleInit() {
-    const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
-    // Use service role key for backend operations (bypasses RLS)
-    const supabaseKey = this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY');
+    this.logger.log('[SupabaseService] onModuleInit starting...');
 
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Missing Supabase configuration (SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY)');
+    try {
+      const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
+      const supabaseKey = this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY');
+
+      this.logger.log(`[SupabaseService] SUPABASE_URL: ${supabaseUrl ? 'SET' : 'MISSING'}`);
+      this.logger.log(`[SupabaseService] SUPABASE_SERVICE_ROLE_KEY: ${supabaseKey ? 'SET (' + supabaseKey.substring(0, 10) + '...)' : 'MISSING'}`);
+
+      if (!supabaseUrl || !supabaseKey) {
+        this.logger.error('[SupabaseService] ❌ Missing Supabase configuration!');
+        throw new Error('Missing Supabase configuration (SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY)');
+      }
+
+      this.logger.log('[SupabaseService] Initializing Supabase client with service role key...');
+      this.supabase = createClient(supabaseUrl, supabaseKey, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      });
+
+      this.logger.log('[SupabaseService] ✅ Supabase client initialized successfully');
+    } catch (error: any) {
+      this.logger.error(`[SupabaseService] ❌ Initialization failed: ${error?.message}`);
+      throw error; // Re-throw to fail startup if Supabase is critical
     }
-
-    this.logger.log('Initializing Supabase with service role key');
-    this.supabase = createClient(supabaseUrl, supabaseKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
   }
 
   getClient(): SupabaseClient {

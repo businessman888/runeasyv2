@@ -40,10 +40,27 @@ export class QuestionSetsParserService implements OnModuleInit {
     ) { }
 
     async onModuleInit() {
-        // Load from file as fallback cache (legacy behavior)
-        await this.loadQuestionSets();
-        // Also preload from database
-        await this.preloadFromDatabase();
+        this.logger.log('[QuestionSetsParser] onModuleInit started - deferring heavy loading to background');
+
+        // CRITICAL: Don't block the event loop during startup
+        // Use setImmediate to allow the server to start accepting requests first
+        setImmediate(async () => {
+            try {
+                this.logger.log('[QuestionSetsParser] Background loading starting...');
+
+                // Load from file as fallback cache (legacy behavior)
+                await this.loadQuestionSets();
+
+                // Also preload from database
+                await this.preloadFromDatabase();
+
+                this.logger.log('[QuestionSetsParser] Background loading complete!');
+            } catch (error: any) {
+                this.logger.error(`[QuestionSetsParser] Background loading failed: ${error?.message}`);
+                // Use fallback sets
+                this.questionSets = this.getFallbackSets();
+            }
+        });
     }
 
     /**
