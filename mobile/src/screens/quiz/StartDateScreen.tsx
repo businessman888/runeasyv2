@@ -45,17 +45,38 @@ interface StartDateScreenProps {
 }
 
 export function StartDateScreen({ value, onChange }: StartDateScreenProps) {
+    // Helper to create a date at midnight local time
+    const createLocalDate = (year: number, month: number, day: number) => {
+        const d = new Date(year, month, day);
+        d.setHours(0, 0, 0, 0);
+        return d;
+    };
+
+    // Parse a YYYY-MM-DD string into local date (avoids timezone offset)
+    const parseLocalDate = (dateStr: string): Date => {
+        const [year, month, day] = dateStr.split('-').map(Number);
+        return createLocalDate(year, month - 1, day);
+    };
+
+    // Format date as YYYY-MM-DD for storage
+    const formatDateString = (date: Date): string => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const [selectedDate, setSelectedDate] = useState<Date | null>(
-        value ? new Date(value) : null
+        value ? parseLocalDate(value) : null
     );
     const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
 
     useEffect(() => {
         if (value) {
-            setSelectedDate(new Date(value));
+            setSelectedDate(parseLocalDate(value));
         }
     }, [value]);
 
@@ -85,9 +106,16 @@ export function StartDateScreen({ value, onChange }: StartDateScreenProps) {
     const handleDateSelect = (date: Date) => {
         if (date < today) return; // Can't select past dates
 
-        setSelectedDate(date);
+        // Normalize to midnight local time
+        const normalizedDate = createLocalDate(
+            date.getFullYear(),
+            date.getMonth(),
+            date.getDate()
+        );
+
+        setSelectedDate(normalizedDate);
         if (onChange) {
-            onChange(date.toISOString().split('T')[0]);
+            onChange(formatDateString(normalizedDate));
         }
     };
 

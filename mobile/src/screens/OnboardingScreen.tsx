@@ -28,11 +28,12 @@ import { IntenseDayScreen } from './quiz/IntenseDayScreen';
 import { RecentDistanceScreen } from './quiz/RecentDistanceScreen';
 import { DistanceTimeScreen } from './quiz/DistanceTimeScreen';
 import { StartDateScreen } from './quiz/StartDateScreen';
+import { GoalTimeframeScreen } from './quiz/GoalTimeframeScreen';
 
 // Import navigation buttons
 import { FixedNavigationButtons } from '../components/FixedNavigationButtons';
 
-const TOTAL_STEPS = 14;
+const TOTAL_STEPS = 15;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ============================================
@@ -185,7 +186,7 @@ export function OnboardingScreen({ navigation, route }: any) {
         { key: 'goal', Component: ObjectiveScreen, title: 'Qual é o seu objetivo?' },
         { key: 'experience_level', Component: LevelScreen, title: 'Qual é o seu nível?' },
         { key: 'daysPerWeek', Component: FrequencyScreen, title: 'Quantos dias por semana?' },
-        { key: 'availableDays', Component: AvailableDaysScreen, title: 'Quais dias você tem disponíveis?' },
+        { key: 'availableDays', Component: AvailableDaysScreen, title: 'Quais dias você tem disponíveis?', extraProps: { maxDays: data.daysPerWeek || 3 } },
         { key: 'intenseDayIndex', Component: IntenseDayScreen, title: 'Qual dia para treino intenso?', extraProps: { availableDays: data.availableDays || [] } },
         { keys: ['hasInjury', 'injuryDetails'], Component: PaceScreen, title: 'Limitações físicas?' },
         { key: 'recentDistance', Component: RecentDistanceScreen, title: 'Maior distância recente?' },
@@ -193,6 +194,7 @@ export function OnboardingScreen({ navigation, route }: any) {
         { keys: ['paceMinutes', 'paceSeconds', 'dontKnowPace'], Component: TimeframeScreen, title: 'Qual é o seu Pace?' },
         { key: 'startDate', Component: StartDateScreen, title: 'Quando quer começar?' },
         { key: 'limitations', Component: LimitationsScreen, title: 'Alguma limitação física?' },
+        { key: 'goalTimeframe', Component: GoalTimeframeScreen, title: 'Quando deseja atingir sua meta?' },
     ];
 
     const currentStepData = QUIZ_STEPS[currentStep];
@@ -218,7 +220,8 @@ export function OnboardingScreen({ navigation, route }: any) {
             case 10: return !!data.distanceTime && (data.distanceTime.hours > 0 || data.distanceTime.minutes > 0 || data.distanceTime.seconds > 0);
             case 11: return data.dontKnowPace === true || (data.paceMinutes && data.paceSeconds);
             case 12: return !!data.startDate;
-            case 13: return true; // optional
+            case 13: return true; // limitations is optional
+            case 14: return typeof data.goalTimeframe === 'number' && data.goalTimeframe > 0;
             default: return false;
         }
     };

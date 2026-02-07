@@ -18,12 +18,12 @@ const DAYS = [
     { id: 6, short: 'Sáb', full: 'Sábado' },
 ];
 
-// Fire Icon for intense day
+// Fire Icon for intense day - uses cyan (primary) per Figma
 const FireIcon = () => (
     <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
         <Path
             d="M12 23C7.03 23 3 18.97 3 14C3 10.61 4.61 7.55 7.25 5.65L8.66 7.06C6.61 8.54 5.25 10.96 5.25 13.75C5.25 17.89 8.86 21.25 13 21.25C17.14 21.25 20.75 17.89 20.75 13.75C20.75 10.61 19.03 7.84 16.41 6.33L17.78 4.96C20.59 7.02 22.5 10.27 22.5 14C22.5 18.97 18.47 23 12 23ZM12 3.5C12 5.98 11 9 9.5 11C9.5 11 10.5 12 12 12C14 12 15.5 10.5 15.5 8.5C15.5 6.5 14 5 12 3.5Z"
-            fill={colors.accent}
+            fill={colors.primary}
         />
     </Svg>
 );
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
         width: 64,
         height: 64,
         borderRadius: borderRadius.full,
-        backgroundColor: 'rgba(245, 158, 11, 0.15)',
+        backgroundColor: 'rgba(0, 212, 255, 0.15)',
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 8,
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     iconLabel: {
         fontSize: typography.fontSizes.lg,
         fontWeight: typography.fontWeights.semibold,
-        color: colors.accent,
+        color: colors.primary,
     },
     daysContainer: {
         gap: 12,
@@ -173,8 +173,8 @@ const styles = StyleSheet.create({
         borderColor: 'transparent',
     },
     dayCardSelected: {
-        borderColor: colors.accent,
-        backgroundColor: 'rgba(245, 158, 11, 0.08)',
+        borderColor: colors.primary,
+        backgroundColor: 'rgba(0, 212, 255, 0.08)',
     },
     dayShort: {
         fontSize: typography.fontSizes.xl,
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
         width: 50,
     },
     dayShortSelected: {
-        color: colors.accent,
+        color: colors.primary,
     },
     dayFull: {
         fontSize: typography.fontSizes.lg,

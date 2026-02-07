@@ -5,8 +5,19 @@ import {
     StyleSheet,
     TouchableOpacity,
 } from 'react-native';
-import { colors, typography, borderRadius, shadows } from '../../theme';
+import { colors, typography, borderRadius } from '../../theme';
 import Svg, { Path } from 'react-native-svg';
+
+// Design System Colors (Figma)
+const DS = {
+    bg: '#0F0F1E',
+    card: '#1C1C2E',
+    cyan: '#00D4FF',
+    cyanMuted: 'rgba(0, 127, 153, 0.3)',
+    text: '#EBEBF5',
+    textSecondary: 'rgba(235, 235, 245, 0.6)',
+    warning: '#FFC400',
+};
 
 const DAYS = [
     { id: 0, short: 'Dom', full: 'Domingo' },
@@ -18,12 +29,12 @@ const DAYS = [
     { id: 6, short: 'Sáb', full: 'Sábado' },
 ];
 
-// Warning Icon
-const WarningIcon = () => (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+// Info Icon for warning
+const InfoIcon = () => (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
         <Path
-            d="M12 2L1 21H23L12 2ZM12 16C11.45 16 11 15.55 11 15V13C11 12.45 11.45 12 12 12S13 12.45 13 13V15C13 15.55 12.55 16 12 16ZM13 18H11V20H13V18Z"
-            fill={colors.warning}
+            d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM13 17H11V11H13V17ZM13 9H11V7H13V9Z"
+            fill={DS.warning}
         />
     </Svg>
 );
@@ -31,9 +42,10 @@ const WarningIcon = () => (
 interface AvailableDaysScreenProps {
     value?: number[] | null;
     onChange?: (value: number[]) => void;
+    maxDays?: number; // From previous frequency question (daysPerWeek)
 }
 
-export function AvailableDaysScreen({ value, onChange }: AvailableDaysScreenProps) {
+export function AvailableDaysScreen({ value, onChange, maxDays = 7 }: AvailableDaysScreenProps) {
     const [selectedDays, setSelectedDays] = useState<number[]>(value || []);
 
     useEffect(() => {
@@ -44,31 +56,48 @@ export function AvailableDaysScreen({ value, onChange }: AvailableDaysScreenProp
 
     const handleDayToggle = (dayId: number) => {
         let newDays: number[];
+
         if (selectedDays.includes(dayId)) {
+            // Always allow deselection
             newDays = selectedDays.filter(d => d !== dayId);
         } else {
+            // BLOCK if already at max
+            if (selectedDays.length >= maxDays) {
+                return; // Don't add more days
+            }
             newDays = [...selectedDays, dayId].sort((a, b) => a - b);
         }
+
         setSelectedDays(newDays);
         if (onChange) {
             onChange(newDays);
         }
     };
 
-    // Check for consecutive training days (3+ in a row)
+    // Check for 3+ consecutive training days (not just 2)
     const hasConsecutiveDays = () => {
+        if (selectedDays.length < 3) return false;
         const sorted = [...selectedDays].sort((a, b) => a - b);
         let consecutive = 1;
         for (let i = 1; i < sorted.length; i++) {
-            if (sorted[i] === sorted[i - 1] + 1 || (sorted[i - 1] === 6 && sorted[i] === 0)) {
+            if (sorted[i] === sorted[i - 1] + 1) {
                 consecutive++;
                 if (consecutive >= 3) return true;
             } else {
                 consecutive = 1;
             }
         }
+        // Check wrap-around: Sab(6) -> Dom(0) -> Seg(1)
+        if (sorted.includes(6) && sorted.includes(0) && sorted.includes(1)) {
+            return true;
+        }
+        if (sorted.includes(5) && sorted.includes(6) && sorted.includes(0)) {
+            return true;
+        }
         return false;
     };
+
+    const isAtMax = selectedDays.length >= maxDays;
 
     return (
         <>
@@ -79,45 +108,54 @@ export function AvailableDaysScreen({ value, onChange }: AvailableDaysScreenProp
                     <Text style={styles.titleHighlight}>treinar?</Text>
                 </Text>
                 <Text style={styles.subtitle}>
-                    Selecione os dias disponíveis para seu treino semanal.
+                    Selecione {maxDays} dia{maxDays !== 1 ? 's' : ''} para seu treino semanal.
                 </Text>
             </View>
 
-            {/* Days Grid */}
+            {/* Days Grid - Clean circular buttons */}
             <View style={styles.daysGrid}>
-                {DAYS.map((day) => (
-                    <TouchableOpacity
-                        key={day.id}
-                        style={[
-                            styles.dayCard,
-                            selectedDays.includes(day.id) && styles.dayCardSelected
-                        ]}
-                        onPress={() => handleDayToggle(day.id)}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={[
-                            styles.dayText,
-                            selectedDays.includes(day.id) && styles.dayTextSelected
-                        ]}>
-                            {day.short}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
+                {DAYS.map((day) => {
+                    const isSelected = selectedDays.includes(day.id);
+                    const isDisabled = !isSelected && isAtMax;
+
+                    return (
+                        <TouchableOpacity
+                            key={day.id}
+                            style={[
+                                styles.dayButton,
+                                isSelected && styles.dayButtonSelected,
+                                isDisabled && styles.dayButtonDisabled,
+                            ]}
+                            onPress={() => handleDayToggle(day.id)}
+                            activeOpacity={isDisabled ? 1 : 0.7}
+                            disabled={isDisabled}
+                        >
+                            <Text style={[
+                                styles.dayText,
+                                isSelected && styles.dayTextSelected,
+                                isDisabled && styles.dayTextDisabled,
+                            ]}>
+                                {day.short}
+                            </Text>
+                        </TouchableOpacity>
+                    );
+                })}
             </View>
 
-            {/* Selected Count */}
+            {/* Selected Count Indicator */}
             <View style={styles.countContainer}>
                 <Text style={styles.countText}>
-                    <Text style={styles.countNumber}>{selectedDays.length}</Text> dias selecionados
+                    <Text style={styles.countNumber}>{selectedDays.length}</Text>
+                    <Text style={styles.countLabel}> / {maxDays} dias selecionados</Text>
                 </Text>
             </View>
 
             {/* Warning for consecutive days */}
             {hasConsecutiveDays() && (
                 <View style={styles.warningCard}>
-                    <WarningIcon />
+                    <InfoIcon />
                     <Text style={styles.warningText}>
-                        Treinar 3+ dias consecutivos pode aumentar o risco de lesões. Considere alternar dias de descanso.
+                        Recomendamos dias alternados para melhor recuperação.
                     </Text>
                 </View>
             )}
@@ -130,20 +168,20 @@ const styles = StyleSheet.create({
         marginBottom: 32,
     },
     title: {
-        fontSize: typography.fontSizes['3xl'],
-        fontWeight: typography.fontWeights.bold,
-        color: colors.text,
-        lineHeight: 40,
+        fontSize: 28,
+        fontWeight: '700',
+        color: DS.text,
+        lineHeight: 36,
         marginBottom: 12,
     },
     titleHighlight: {
-        color: colors.primary,
+        color: DS.cyan,
     },
     subtitle: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.textSecondary,
-        lineHeight: 24,
+        fontSize: 15,
+        fontWeight: '400',
+        color: DS.textSecondary,
+        lineHeight: 22,
     },
     daysGrid: {
         flexDirection: 'row',
@@ -152,59 +190,75 @@ const styles = StyleSheet.create({
         gap: 12,
         marginBottom: 24,
     },
-    dayCard: {
-        width: 70,
-        height: 70,
-        borderRadius: borderRadius.xl,
-        backgroundColor: colors.card,
+    // Clean button style - no weird background on text
+    dayButton: {
+        width: 64,
+        height: 64,
+        borderRadius: 32, // Circular
+        backgroundColor: DS.card,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 2,
         borderColor: 'transparent',
     },
-    dayCardSelected: {
-        borderColor: colors.primary,
-        backgroundColor: 'rgba(0, 212, 255, 0.08)',
-        ...shadows.neon,
+    dayButtonSelected: {
+        borderColor: DS.cyan,
+        backgroundColor: DS.cyanMuted,
+        // Subtle glow
+        shadowColor: DS.cyan,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    dayButtonDisabled: {
+        opacity: 0.4,
     },
     dayText: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.semibold,
-        color: colors.textSecondary,
+        fontSize: 16,
+        fontWeight: '600',
+        color: DS.textSecondary,
     },
     dayTextSelected: {
-        color: colors.primary,
+        color: DS.cyan,
+    },
+    dayTextDisabled: {
+        color: DS.textSecondary,
     },
     countContainer: {
         alignItems: 'center',
-        marginBottom: 24,
+        marginBottom: 20,
     },
     countText: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.textSecondary,
+        fontSize: 15,
     },
     countNumber: {
-        fontSize: typography.fontSizes['2xl'],
-        fontWeight: typography.fontWeights.bold,
-        color: colors.primary,
+        fontSize: 20,
+        fontWeight: '700',
+        color: DS.cyan,
+    },
+    countLabel: {
+        fontSize: 15,
+        fontWeight: '400',
+        color: DS.textSecondary,
     },
     warningCard: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         backgroundColor: 'rgba(255, 196, 0, 0.1)',
-        borderRadius: borderRadius.lg,
-        padding: 16,
+        borderRadius: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
         borderWidth: 1,
-        borderColor: colors.warning,
+        borderColor: 'rgba(255, 196, 0, 0.3)',
         gap: 12,
     },
     warningText: {
         flex: 1,
-        fontSize: typography.fontSizes.md,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.warning,
-        lineHeight: 20,
+        fontSize: 13,
+        fontWeight: '400',
+        color: DS.warning,
+        lineHeight: 18,
     },
 });
 

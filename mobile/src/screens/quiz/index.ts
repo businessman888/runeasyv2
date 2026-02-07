@@ -7,4 +7,4 @@ export { LimitationsScreen } from './LimitationsScreen';
 export { PlanPreviewScreen } from './PlanPreviewScreen';
 export { PlanLoadingScreen } from './PlanLoadingScreen';
 export { SmartPlanScreen } from './SmartPlanScreen';
-
+export { GoalTimeframeScreen } from './GoalTimeframeScreen';

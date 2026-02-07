@@ -38,6 +38,7 @@ interface OnboardingData {
     targetWeeks: number;
     limitations: string | null; // Limitations screen - physical limitations
     preferredDays: number[];
+    goalTimeframe: number | null; // Goal timeframe in months (1, 3, 6, 12)
 }
 
 
@@ -121,6 +122,7 @@ const initialData: Partial<OnboardingData> = {
     targetWeeks: 8,
     limitations: null,
     preferredDays: [],
+    goalTimeframe: null,
 };
 
 export const useOnboardingStore = create<OnboardingState>((set, get) => ({
