@@ -1,511 +1,382 @@
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
     View,
     Text,
     StyleSheet,
-    TouchableOpacity,
-    SafeAreaView,
     StatusBar,
-    TextInput,
     ScrollView,
-    KeyboardAvoidingView,
     Platform,
+    Dimensions,
 } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../theme';
-import { useOnboardingStore, onboardingQuestions } from '../stores/onboardingStore';
-import * as Storage from '../utils/storage';
-import { BASE_API_URL } from '../config/api.config';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useOnboardingStore } from '../stores/onboardingStore';
+import { colors, typography, borderRadius } from '../theme';
+import Svg, { Path } from 'react-native-svg';
 
-const API_URL = BASE_API_URL;
+// Import individual question components
+import { ObjectiveScreen } from './quiz/ObjectiveScreen';
+import { LevelScreen } from './quiz/LevelScreen';
+import { FrequencyScreen } from './quiz/FrequencyScreen';
+import { PaceScreen } from './quiz/PaceScreen';
+import { TimeframeScreen } from './quiz/TimeframeScreen';
+import { LimitationsScreen } from './quiz/LimitationsScreen';
+import { BirthDateScreen } from './quiz/BirthDateScreen';
+import { WeightScreen } from './quiz/WeightScreen';
+import { HeightScreen } from './quiz/HeightScreen';
+import { AvailableDaysScreen } from './quiz/AvailableDaysScreen';
+import { IntenseDayScreen } from './quiz/IntenseDayScreen';
+import { RecentDistanceScreen } from './quiz/RecentDistanceScreen';
+import { DistanceTimeScreen } from './quiz/DistanceTimeScreen';
+import { StartDateScreen } from './quiz/StartDateScreen';
+
+// Import navigation buttons
+import { FixedNavigationButtons } from '../components/FixedNavigationButtons';
+
+const TOTAL_STEPS = 14;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// ============================================
+// FORCED COLORS (Figma exact values)
+// ============================================
+const FORCED_BG = '#0F0F1E';         // Dark background - NEVER transparent
+const FORCED_CYAN = '#00D4FF';       // Accent cyan
+const FORCED_TEXT = '#EBEBF5';       // Primary text
+const FORCED_TEXT_SECONDARY = 'rgba(235, 235, 245, 0.6)'; // Secondary text
+const FORCED_GLASS_STROKE = 'rgba(235, 235, 245, 0.1)';   // Progress bar bg
+
+// ============================================
+// FLASH ICON COMPONENT
+// ============================================
+const FlashIcon = () => (
+    <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+        <Path
+            d="M13 2L4 14H11V22L20 10H13V2Z"
+            fill={FORCED_CYAN}
+        />
+    </Svg>
+);
+
+// ============================================
+// HEADER COMPONENT (Figma node 389-465)
+// ============================================
+interface ProgressHeaderProps {
+    currentStep: number;
+    totalSteps: number;
+}
+
+const ProgressHeader: React.FC<ProgressHeaderProps> = ({ currentStep, totalSteps }) => {
+    const progressPercent = Math.round((currentStep / totalSteps) * 100);
+    const progressWidth = (currentStep / totalSteps) * (SCREEN_WIDTH - 48);
+
+    return (
+        <View style={headerStyles.container}>
+            {/* Top row: Pontuação + XP Badge */}
+            <View style={headerStyles.topRow}>
+                <Text style={headerStyles.pontuacaoText}>Pontuação</Text>
+                <View style={headerStyles.xpBadge}>
+                    <FlashIcon />
+                    <Text style={headerStyles.xpText}>50XP</Text>
+                </View>
+            </View>
+
+            {/* Progress bar */}
+            <View style={headerStyles.progressBarContainer}>
+                <View style={[headerStyles.progressBarFill, { width: progressWidth }]} />
+            </View>
+
+            {/* Progress percentage */}
+            <View style={headerStyles.progressTextRow}>
+                <Text style={headerStyles.progressLabel}>Progresso:</Text>
+                <Text style={headerStyles.progressPercent}>{progressPercent}%</Text>
+            </View>
+        </View>
+    );
+};
+
+const headerStyles = StyleSheet.create({
+    container: {
+        width: '100%',
+        alignItems: 'center',
+        gap: 9,
+        paddingHorizontal: 12,
+    },
+    topRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        width: '100%',
+        height: 43,
+    },
+    pontuacaoText: {
+        fontFamily: 'Poppins-Regular',
+        fontSize: 14,
+        color: FORCED_TEXT,
+    },
+    xpBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#0A0A14',
+        borderWidth: 2,
+        borderColor: FORCED_CYAN,
+        borderRadius: 20,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        gap: 6,
+        // Subtle glow
+        shadowColor: FORCED_CYAN,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    xpText: {
+        fontFamily: 'Inter-SemiBold',
+        fontSize: 14,
+        fontWeight: '600',
+        color: FORCED_CYAN,
+    },
+    progressBarContainer: {
+        width: SCREEN_WIDTH - 48,
+        height: 4,
+        backgroundColor: FORCED_GLASS_STROKE,
+        borderRadius: 20,
+        overflow: 'hidden',
+    },
+    progressBarFill: {
+        height: 4,
+        backgroundColor: FORCED_CYAN,
+        borderRadius: 20,
+    },
+    progressTextRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        width: SCREEN_WIDTH - 48,
+        height: 28,
+        gap: 4,
+    },
+    progressLabel: {
+        fontFamily: 'Poppins-Regular',
+        fontSize: 11,
+        color: FORCED_TEXT_SECONDARY,
+    },
+    progressPercent: {
+        fontFamily: 'Inter-Bold',
+        fontSize: 11,
+        fontWeight: '700',
+        color: FORCED_CYAN,
+    },
+});
+
+// ============================================
+// MAIN ONBOARDING SCREEN
+// ============================================
 
 export function OnboardingScreen({ navigation, route }: any) {
-    const { userId } = route.params || {};
-    const { currentStep, data, updateData, nextStep, prevStep, reset } = useOnboardingStore();
-    const [isSubmitting, setIsSubmitting] = React.useState(false);
+    const userId = route?.params?.userId;
+    const { data, updateData } = useOnboardingStore();
+    const [currentStep, setCurrentStep] = useState(0);
+    const scrollViewRef = useRef<ScrollView>(null);
 
-    const currentQuestion = onboardingQuestions[currentStep];
-    const isLastStep = currentStep === onboardingQuestions.length - 1;
-    const progress = (currentStep + 1) / onboardingQuestions.length;
+    // Define all quiz steps with their component and data key(s)
+    const QUIZ_STEPS = [
+        { key: 'birthDate', Component: BirthDateScreen, title: 'Qual a sua data de nascimento?' },
+        { key: 'weight', Component: WeightScreen, title: 'Qual é o seu peso atual?' },
+        { key: 'height', Component: HeightScreen, title: 'Qual é a sua altura?' },
+        { key: 'goal', Component: ObjectiveScreen, title: 'Qual é o seu objetivo?' },
+        { key: 'experience_level', Component: LevelScreen, title: 'Qual é o seu nível?' },
+        { key: 'daysPerWeek', Component: FrequencyScreen, title: 'Quantos dias por semana?' },
+        { key: 'availableDays', Component: AvailableDaysScreen, title: 'Quais dias você tem disponíveis?' },
+        { key: 'intenseDayIndex', Component: IntenseDayScreen, title: 'Qual dia para treino intenso?', extraProps: { availableDays: data.availableDays || [] } },
+        { keys: ['hasInjury', 'injuryDetails'], Component: PaceScreen, title: 'Limitações físicas?' },
+        { key: 'recentDistance', Component: RecentDistanceScreen, title: 'Maior distância recente?' },
+        { key: 'distanceTime', Component: DistanceTimeScreen, title: 'Em quanto tempo?', extraProps: { distance: data.recentDistance || 5 } },
+        { keys: ['paceMinutes', 'paceSeconds', 'dontKnowPace'], Component: TimeframeScreen, title: 'Qual é o seu Pace?' },
+        { key: 'startDate', Component: StartDateScreen, title: 'Quando quer começar?' },
+        { key: 'limitations', Component: LimitationsScreen, title: 'Alguma limitação física?' },
+    ];
 
-    const handleNext = async () => {
-        if (isLastStep) {
-            await submitOnboarding();
+    const currentStepData = QUIZ_STEPS[currentStep];
+
+    // Scroll to top when step changes
+    useEffect(() => {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    }, [currentStep]);
+
+    // Check if current step has valid data
+    const canContinue = () => {
+        switch (currentStep) {
+            case 0: return !!data.birthDate;
+            case 1: return !!data.weight && data.weight > 0;
+            case 2: return !!data.height && data.height > 0;
+            case 3: return !!data.goal;
+            case 4: return !!data.experience_level;
+            case 5: return typeof data.daysPerWeek === 'number' && data.daysPerWeek >= 2 && data.daysPerWeek <= 7;
+            case 6: return Array.isArray(data.availableDays) && data.availableDays.length > 0;
+            case 7: return data.intenseDayIndex !== null && data.intenseDayIndex !== undefined;
+            case 8: return true; // optional
+            case 9: return !!data.recentDistance;
+            case 10: return !!data.distanceTime && (data.distanceTime.hours > 0 || data.distanceTime.minutes > 0 || data.distanceTime.seconds > 0);
+            case 11: return data.dontKnowPace === true || (data.paceMinutes && data.paceSeconds);
+            case 12: return !!data.startDate;
+            case 13: return true; // optional
+            default: return false;
+        }
+    };
+
+    const handleContinue = () => {
+        // Calculate pace before continuing from distance time screen
+        if (currentStep === 10 && data.distanceTime && data.recentDistance) {
+            const { hours, minutes, seconds } = data.distanceTime;
+            const totalMinutes = hours * 60 + minutes + seconds / 60;
+            const pacePerKm = totalMinutes / data.recentDistance;
+            updateData({ calculatedPace: pacePerKm });
+        }
+
+        // If on last step, navigate to PlanLoadingScreen
+        if (currentStep === TOTAL_STEPS - 1) {
+            navigation.navigate('Quiz_PlanLoading', { userId });
+            return;
+        }
+
+        // Otherwise, move to next step
+        setCurrentStep(currentStep + 1);
+    };
+
+    const handleBack = () => {
+        if (currentStep > 0) {
+            setCurrentStep(currentStep - 1);
         } else {
-            nextStep();
+            navigation.goBack();
         }
     };
 
-    const submitOnboarding = async () => {
-        try {
-            setIsSubmitting(true);
-
-            const response = await fetch(`${API_URL}/training/onboarding`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-user-id': userId,
-                },
-                body: JSON.stringify({
-                    goal: data.goal,
-                    level: data.experience_level,
-                    days_per_week: data.daysPerWeek || 3,
-                    current_pace_5k: data.currentPace5k,
-                    target_weeks: data.targetWeeks || 8,
-                    limitations: data.limitations,
-                    preferred_days: data.preferredDays || [],
-                }),
-            });
-
-            if (response.ok) {
-                const result = await response.json();
-
-                // Store userId
-                await Storage.setItemAsync('user_id', userId);
-
-                // Reset onboarding state
-                reset();
-
-                // Navigate to main app
-                navigation.replace('Main', {
-                    planId: result.plan_id,
-                    workoutsCount: result.workouts_count,
-                });
+    // Handle onChange - supports both single key and multiple keys
+    const handleChange = (value: any) => {
+        if (currentStepData.keys) {
+            updateData(value);
+        } else if (currentStepData.key) {
+            if (currentStepData.key === 'startDate' && value instanceof Date) {
+                updateData({ [currentStepData.key]: value.toISOString() });
             } else {
-                console.error('Onboarding failed');
+                updateData({ [currentStepData.key]: value });
             }
-        } catch (error) {
-            console.error('Submit error:', error);
-        } finally {
-            setIsSubmitting(false);
         }
     };
 
-    const canProceed = () => {
-        const { id } = currentQuestion;
-        const value = data[id as keyof typeof data];
-
-        if (currentQuestion.optional) return true;
-
-        return value !== undefined && value !== '' && value !== null;
+    // Get value(s) for current step
+    const getValue = () => {
+        if (currentStepData.keys) {
+            return currentStepData.keys.reduce((acc: any, key: string) => ({
+                ...acc,
+                [key]: data[key as keyof typeof data],
+            }), {});
+        } else if (currentStepData.key) {
+            const value = data[currentStepData.key as keyof typeof data];
+            if (currentStepData.key === 'startDate' && typeof value === 'string') {
+                return new Date(value);
+            }
+            return value;
+        }
+        return undefined;
     };
+
+    // Determine button states
+    const showBackButton = currentStep > 0;
+    const continueDisabled = !canContinue();
+    const isLastStep = currentStep === TOTAL_STEPS - 1;
+
+    // Render the current step's component
+    const StepComponent = currentStepData.Component;
+    const extraProps = (currentStepData as any).extraProps || {};
+
+    // Calculate Android status bar padding
+    const androidStatusBarHeight = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 16 : 0;
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" />
-            <KeyboardAvoidingView
-                style={styles.keyboardView}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            >
-                {/* Progress Bar */}
-                <View style={styles.progressContainer}>
-                    <View style={styles.progressBar}>
-                        <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-                    </View>
-                    <Text style={styles.progressText}>
-                        {currentStep + 1} de {onboardingQuestions.length}
-                    </Text>
+        <View style={styles.container}>
+            {/* Force light-content status bar with dark background */}
+            <StatusBar
+                barStyle="light-content"
+                translucent
+                backgroundColor="transparent"
+            />
+
+            <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+                {/* HEADER with XP and Progress Bar (Figma node 389-465) */}
+                <View style={[
+                    styles.headerContainer,
+                    Platform.OS === 'android' && { paddingTop: androidStatusBarHeight }
+                ]}>
+                    <ProgressHeader
+                        currentStep={currentStep + 1}
+                        totalSteps={TOTAL_STEPS}
+                    />
                 </View>
 
-                {/* Question Content */}
+                {/* Scrollable Content Area */}
                 <ScrollView
-                    style={styles.content}
-                    contentContainerStyle={styles.contentContainer}
+                    ref={scrollViewRef}
+                    style={styles.scrollView}
+                    contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
                 >
-                    <Text style={styles.title}>{currentQuestion.title}</Text>
-                    <Text style={styles.subtitle}>{currentQuestion.subtitle}</Text>
-
-                    {/* Render question based on type */}
-                    {currentQuestion.type === 'select' && (
-                        <SelectOptions
-                            options={currentQuestion.options || []}
-                            value={data[currentQuestion.id as keyof typeof data]}
-                            onChange={(value) => updateData({ [currentQuestion.id]: value })}
-                        />
-                    )}
-
-                    {currentQuestion.type === 'slider' && (
-                        <SliderInput
-                            value={data[currentQuestion.id as keyof typeof data] as number || currentQuestion.min}
-                            min={currentQuestion.min!}
-                            max={currentQuestion.max!}
-                            unit={currentQuestion.unit!}
-                            onChange={(value) => updateData({ [currentQuestion.id]: value })}
-                        />
-                    )}
-
-                    {currentQuestion.type === 'pace' && (
-                        <PaceInput
-                            value={data[currentQuestion.id as keyof typeof data] as number | null}
-                            onChange={(value) => updateData({ [currentQuestion.id]: value })}
-                        />
-                    )}
-
-                    {currentQuestion.type === 'text' && (
-                        <TextInput
-                            style={styles.textInput}
-                            placeholder={currentQuestion.placeholder}
-                            placeholderTextColor={colors.textMuted}
-                            value={data[currentQuestion.id as keyof typeof data] as string || ''}
-                            onChangeText={(value) => updateData({ [currentQuestion.id]: value || null })}
-                            multiline
-                            numberOfLines={3}
-                        />
-                    )}
+                    <StepComponent
+                        value={getValue()}
+                        onChange={handleChange}
+                        {...(currentStepData.keys ? getValue() : {})}
+                        {...extraProps}
+                    />
                 </ScrollView>
 
-                {/* Navigation Buttons */}
-                <View style={styles.footer}>
-                    {currentStep > 0 && (
-                        <TouchableOpacity style={styles.backButton} onPress={prevStep}>
-                            <Text style={styles.backButtonText}>Voltar</Text>
-                        </TouchableOpacity>
-                    )}
-
-                    <TouchableOpacity
-                        style={[
-                            styles.nextButton,
-                            !canProceed() && styles.buttonDisabled
-                        ]}
-                        onPress={handleNext}
-                        disabled={!canProceed() || isSubmitting}
-                    >
-                        <Text style={styles.nextButtonText}>
-                            {isSubmitting ? 'Criando plano...' : isLastStep ? 'Criar meu plano' : 'Continuar'}
-                        </Text>
-                    </TouchableOpacity>
+                {/* Fixed Navigation Buttons (Figma node 428-464) */}
+                <View style={styles.buttonContainer}>
+                    <FixedNavigationButtons
+                        onBack={handleBack}
+                        onContinue={handleContinue}
+                        showBack={showBackButton}
+                        continueDisabled={continueDisabled}
+                        isLastStep={isLastStep}
+                    />
                 </View>
-            </KeyboardAvoidingView>
-        </SafeAreaView>
-    );
-}
-
-// Select Options Component
-function SelectOptions({ options, value, onChange }: {
-    options: Array<{ value: any; label: string; description?: string; icon?: string }>;
-    value: any;
-    onChange: (value: any) => void;
-}) {
-    return (
-        <View style={styles.optionsContainer}>
-            {options.map((option) => (
-                <TouchableOpacity
-                    key={option.value}
-                    style={[
-                        styles.optionCard,
-                        value === option.value && styles.optionCardSelected,
-                    ]}
-                    onPress={() => onChange(option.value)}
-                >
-                    {option.icon && <Text style={styles.optionIcon}>{option.icon}</Text>}
-                    <View style={styles.optionTextContainer}>
-                        <Text style={[
-                            styles.optionLabel,
-                            value === option.value && styles.optionLabelSelected,
-                        ]}>
-                            {option.label}
-                        </Text>
-                        {option.description && (
-                            <Text style={styles.optionDescription}>{option.description}</Text>
-                        )}
-                    </View>
-                </TouchableOpacity>
-            ))}
+            </SafeAreaView>
         </View>
     );
 }
 
-// Slider Input Component
-function SliderInput({ value, min, max, unit, onChange }: {
-    value: number;
-    min: number;
-    max: number;
-    unit: string;
-    onChange: (value: number) => void;
-}) {
-    return (
-        <View style={styles.sliderContainer}>
-            <Text style={styles.sliderValue}>{value} {unit}</Text>
-            <View style={styles.sliderButtons}>
-                {Array.from({ length: max - min + 1 }, (_, i) => min + i).map((num) => (
-                    <TouchableOpacity
-                        key={num}
-                        style={[
-                            styles.sliderButton,
-                            value === num && styles.sliderButtonSelected,
-                        ]}
-                        onPress={() => onChange(num)}
-                    >
-                        <Text style={[
-                            styles.sliderButtonText,
-                            value === num && styles.sliderButtonTextSelected,
-                        ]}>
-                            {num}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
-        </View>
-    );
-}
-
-// Pace Input Component
-function PaceInput({ value, onChange }: {
-    value: number | null;
-    onChange: (value: number | null) => void;
-}) {
-    const [minutes, setMinutes] = React.useState(value ? Math.floor(value) : 6);
-    const [seconds, setSeconds] = React.useState(value ? Math.round((value % 1) * 60) : 0);
-
-    React.useEffect(() => {
-        if (minutes && seconds !== undefined) {
-            onChange(minutes + seconds / 60);
-        }
-    }, [minutes, seconds]);
-
-    return (
-        <View style={styles.paceContainer}>
-            <View style={styles.paceInputGroup}>
-                <TextInput
-                    style={styles.paceInput}
-                    keyboardType="number-pad"
-                    maxLength={2}
-                    value={String(minutes)}
-                    onChangeText={(text) => setMinutes(parseInt(text) || 0)}
-                />
-                <Text style={styles.paceLabel}>min</Text>
-            </View>
-            <Text style={styles.paceSeparator}>:</Text>
-            <View style={styles.paceInputGroup}>
-                <TextInput
-                    style={styles.paceInput}
-                    keyboardType="number-pad"
-                    maxLength={2}
-                    value={String(seconds).padStart(2, '0')}
-                    onChangeText={(text) => setSeconds(Math.min(59, parseInt(text) || 0))}
-                />
-                <Text style={styles.paceLabel}>seg</Text>
-            </View>
-            <Text style={styles.paceUnit}>/km</Text>
-
-            <TouchableOpacity
-                style={styles.skipButton}
-                onPress={() => onChange(null)}
-            >
-                <Text style={styles.skipButtonText}>Não sei meu pace</Text>
-            </TouchableOpacity>
-        </View>
-    );
-}
-
+// ============================================
+// STYLES
+// ============================================
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.white,
+        // FORCED DARK BACKGROUND - Never transparent!
+        backgroundColor: FORCED_BG,
     },
-    keyboardView: {
+    safeArea: {
         flex: 1,
+        backgroundColor: FORCED_BG,
     },
-    progressContainer: {
-        paddingHorizontal: spacing.lg,
-        paddingTop: spacing.md,
+    headerContainer: {
+        paddingHorizontal: 12,
+        paddingTop: Platform.OS === 'ios' ? 8 : 0,
+        paddingBottom: 16,
+        backgroundColor: FORCED_BG,
     },
-    progressBar: {
-        height: 4,
-        backgroundColor: colors.border,
-        borderRadius: 2,
-        overflow: 'hidden',
-    },
-    progressFill: {
-        height: '100%',
-        backgroundColor: colors.primary,
-        borderRadius: 2,
-    },
-    progressText: {
-        fontSize: typography.fontSizes.sm,
-        color: colors.textSecondary,
-        marginTop: spacing.xs,
-        textAlign: 'right',
-    },
-    content: {
+    scrollView: {
         flex: 1,
+        backgroundColor: FORCED_BG,
     },
-    contentContainer: {
-        padding: spacing.lg,
-        paddingTop: spacing.xl,
+    scrollContent: {
+        paddingHorizontal: 20,
+        paddingBottom: 120, // Space for fixed buttons
     },
-    title: {
-        fontSize: typography.fontSizes['2xl'],
-        fontWeight: typography.fontWeights.bold,
-        color: colors.text,
-        marginBottom: spacing.xs,
-    },
-    subtitle: {
-        fontSize: typography.fontSizes.md,
-        color: colors.textSecondary,
-        marginBottom: spacing.xl,
-    },
-    optionsContainer: {
-        gap: spacing.md,
-    },
-    optionCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: colors.background,
-        padding: spacing.md,
-        borderRadius: borderRadius.lg,
-        borderWidth: 2,
-        borderColor: 'transparent',
-    },
-    optionCardSelected: {
-        borderColor: colors.primary,
-        backgroundColor: `${colors.primary}10`,
-    },
-    optionIcon: {
-        fontSize: 32,
-        marginRight: spacing.md,
-    },
-    optionTextContainer: {
-        flex: 1,
-    },
-    optionLabel: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.medium,
-        color: colors.text,
-    },
-    optionLabelSelected: {
-        color: colors.primary,
-    },
-    optionDescription: {
-        fontSize: typography.fontSizes.sm,
-        color: colors.textSecondary,
-        marginTop: 2,
-    },
-    sliderContainer: {
-        alignItems: 'center',
-        paddingVertical: spacing.xl,
-    },
-    sliderValue: {
-        fontSize: typography.fontSizes['3xl'],
-        fontWeight: typography.fontWeights.bold,
-        color: colors.primary,
-        marginBottom: spacing.lg,
-    },
-    sliderButtons: {
-        flexDirection: 'row',
-        gap: spacing.sm,
-    },
-    sliderButton: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: colors.background,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    sliderButtonSelected: {
-        backgroundColor: colors.primary,
-    },
-    sliderButtonText: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.medium,
-        color: colors.text,
-    },
-    sliderButtonTextSelected: {
-        color: colors.white,
-    },
-    paceContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexWrap: 'wrap',
-        paddingVertical: spacing.xl,
-        gap: spacing.sm,
-    },
-    paceInputGroup: {
-        alignItems: 'center',
-    },
-    paceInput: {
-        width: 60,
-        height: 60,
-        fontSize: typography.fontSizes['2xl'],
-        fontWeight: typography.fontWeights.bold,
-        textAlign: 'center',
-        backgroundColor: colors.background,
-        borderRadius: borderRadius.md,
-        color: colors.text,
-    },
-    paceLabel: {
-        fontSize: typography.fontSizes.sm,
-        color: colors.textSecondary,
-        marginTop: spacing.xs,
-    },
-    paceSeparator: {
-        fontSize: typography.fontSizes['3xl'],
-        fontWeight: typography.fontWeights.bold,
-        color: colors.text,
-        marginBottom: spacing.lg,
-    },
-    paceUnit: {
-        fontSize: typography.fontSizes.xl,
-        color: colors.textSecondary,
-        marginBottom: spacing.lg,
-        marginLeft: spacing.sm,
-    },
-    skipButton: {
-        width: '100%',
-        marginTop: spacing.md,
-        paddingVertical: spacing.sm,
-    },
-    skipButtonText: {
-        fontSize: typography.fontSizes.md,
-        color: colors.primary,
-        textAlign: 'center',
-    },
-    textInput: {
-        backgroundColor: colors.background,
-        borderRadius: borderRadius.lg,
-        padding: spacing.md,
-        fontSize: typography.fontSizes.md,
-        color: colors.text,
-        minHeight: 100,
-        textAlignVertical: 'top',
-    },
-    footer: {
-        flexDirection: 'row',
-        padding: spacing.lg,
-        gap: spacing.md,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-    },
-    backButton: {
-        flex: 1,
-        paddingVertical: spacing.md,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: borderRadius.lg,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    backButtonText: {
-        fontSize: typography.fontSizes.md,
-        fontWeight: typography.fontWeights.medium,
-        color: colors.text,
-    },
-    nextButton: {
-        flex: 2,
-        paddingVertical: spacing.md,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: borderRadius.lg,
-        backgroundColor: colors.primary,
-    },
-    buttonDisabled: {
-        backgroundColor: colors.border,
-    },
-    nextButtonText: {
-        fontSize: typography.fontSizes.md,
-        fontWeight: typography.fontWeights.semibold,
-        color: colors.white,
+    buttonContainer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: FORCED_BG,
+        paddingBottom: Platform.OS === 'ios' ? 0 : 16,
+        paddingHorizontal: 12,
     },
 });
