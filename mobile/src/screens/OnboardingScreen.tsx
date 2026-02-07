@@ -47,7 +47,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                 },
                 body: JSON.stringify({
                     goal: data.goal,
-                    level: data.level,
+                    level: data.experience_level,
                     days_per_week: data.daysPerWeek || 3,
                     current_pace_5k: data.currentPace5k,
                     target_weeks: data.targetWeeks || 8,

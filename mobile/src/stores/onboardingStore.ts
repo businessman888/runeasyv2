@@ -6,11 +6,31 @@ import { BASE_API_URL } from '../config/api.config';
 const API_URL = BASE_API_URL;
 
 interface OnboardingData {
+    // Biometrics Block (New)
+    birthDate: { day: number; month: number; year: number } | null;
+    weight: number | null;
+    height: number | null;
+
+    // Original fields
     goal: string;
     experience_level: string; // Level: beginner, intermediate, advanced
     daysPerWeek: number;
+
+    // Availability Block (New)
+    availableDays: number[]; // 0=DOM, 1=SEG, ..., 6=SAB
+    intenseDayIndex: number | null; // Which day for intense workout
+
+    // Original injury/pace fields
     hasInjury: boolean; // Pace screen - injury question
     injuryDetails: string; // Pace screen - injury details
+
+    // Performance Block (New)
+    recentDistance: number | null; // 3, 5, 10, or 15 km
+    distanceTime: { hours: number; minutes: number; seconds: number } | null;
+    calculatedPace: number | null; // min/km calculated from distance and time
+    startDate: string | null; // ISO string for start date
+
+    // Original remaining fields
     paceMinutes: string; // Timeframe screen - pace minutes
     paceSeconds: string; // Timeframe screen - pace seconds
     dontKnowPace: boolean; // Timeframe screen - don't know pace option
@@ -69,11 +89,31 @@ interface OnboardingState {
 }
 
 const initialData: Partial<OnboardingData> = {
+    // Biometrics Block (New)
+    birthDate: null,
+    weight: null,
+    height: null,
+
+    // Original fields
     goal: '',
     experience_level: '',
     daysPerWeek: 3,
+
+    // Availability Block (New)
+    availableDays: [],
+    intenseDayIndex: null,
+
+    // Original injury fields
     hasInjury: false,
     injuryDetails: '',
+
+    // Performance Block (New)
+    recentDistance: null,
+    distanceTime: null,
+    calculatedPace: null,
+    startDate: null,
+
+    // Original remaining fields
     paceMinutes: '',
     paceSeconds: '',
     dontKnowPace: false,
@@ -138,13 +178,31 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
             }
 
             const requestBody = {
+                // Biometrics (New)
+                birth_date: data.birthDate,
+                weight: data.weight,
+                height: data.height,
+
+                // Original fields
                 goal: data.goal || '10k',
                 level: data.experience_level || 'beginner',
                 days_per_week: data.daysPerWeek || 3,
+
+                // Availability (New)
+                available_days: data.availableDays || [],
+                intense_day_index: data.intenseDayIndex,
+
+                // Original pace/limitations
                 current_pace_5k: data.currentPace5k,
                 target_weeks: data.targetWeeks || 8,
                 limitations: data.limitations,
                 preferred_days: data.preferredDays || [],
+
+                // Performance Baseline (New)
+                recent_distance: data.recentDistance,
+                distance_time: data.distanceTime,
+                calculated_pace: data.calculatedPace,
+                start_date: data.startDate,
             };
 
             const requestUrl = `${API_URL}/training/onboarding`;

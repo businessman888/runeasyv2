@@ -20,13 +20,31 @@ import { SupabaseService } from '../../database';
 import { SupabaseAuthGuard } from '../../common/guards/supabase-auth.guard';
 
 interface CreatePlanDto {
+    // Biometrics (New)
+    birth_date: { day: number; month: number; year: number } | null;
+    weight: number | null;
+    height: number | null;
+
+    // Original fields
     goal: string;
     level: string;
     days_per_week: number;
+
+    // Availability (New)
+    available_days: number[]; // 0=DOM, 1=SEG, ..., 6=SAB
+    intense_day_index: number | null; // Which day for intense workout
+
+    // Original pace/limitations
     current_pace_5k: number | null;
     target_weeks: number;
     limitations: string | null;
     preferred_days: number[];
+
+    // Performance Baseline (New)
+    recent_distance: number | null; // 3, 5, 10, or 15 km
+    distance_time: { hours: number; minutes: number; seconds: number } | null;
+    calculated_pace: number | null; // min/km
+    start_date: string | null; // ISO string
 }
 
 interface SkipWorkoutDto {
@@ -58,17 +76,32 @@ export class TrainingController {
         }
 
         try {
-            // Save onboarding data
+            // Save onboarding data with new biometric and performance fields
             await this.supabaseService.from('user_onboarding').upsert({
                 user_id: userId,
+                // Biometrics (New)
+                birth_date: dto.birth_date,
+                weight: dto.weight,
+                height: dto.height,
+                // Original fields
                 goal: dto.goal,
                 level: dto.level,
                 days_per_week: dto.days_per_week,
+                // Availability (New)
+                available_days: dto.available_days,
+                intense_day_index: dto.intense_day_index,
+                // Original pace/limitations
                 current_pace_5k: dto.current_pace_5k,
                 target_weeks: dto.target_weeks,
                 has_limitations: !!dto.limitations,
                 limitations: dto.limitations,
                 preferred_days: dto.preferred_days,
+                // Performance Baseline (New)
+                recent_distance: dto.recent_distance,
+                distance_time: dto.distance_time,
+                calculated_pace: dto.calculated_pace,
+                start_date: dto.start_date,
+                // Meta
                 completed_at: new Date().toISOString(),
                 responses_json: dto,
             });
