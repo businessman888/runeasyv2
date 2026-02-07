@@ -1,8 +1,8 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text, View, StyleSheet } from 'react-native';
+import { Text, View, StyleSheet, Linking } from 'react-native';
 import { CustomTabBar } from '../components/CustomTabBar';
 import { SplashScreen } from '../components/SplashScreen';
 import { navigationRef, setNavigationReady } from './navigationRef';
@@ -43,6 +43,26 @@ import { useAuthStore } from '../stores';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
+
+// CRITICAL: Dark background color for entire Navigator
+const FORCED_DARK_BG = '#0F0F1E';
+
+// Deep Linking Configuration
+// Maps runeasy://--/callback/onboarding?user_id=xxx to Onboarding screen
+const linking: LinkingOptions<any> = {
+    prefixes: [
+        'runeasy://',
+        'exp://',
+        'exp://192.168.0.0:8081', // Expo Go dev
+    ],
+    config: {
+        screens: {
+            // Map the callback path to Onboarding screen
+            Onboarding: '--/callback/onboarding',
+            Login: 'login',
+        },
+    },
+};
 
 // Placeholder screens
 function WorkoutDetailScreen({ route }: any) {
@@ -135,11 +155,57 @@ function MainTabs({ route, navigation }: any) {
 
 // Root Navigator
 export function AppNavigator() {
-    const { isAuthenticated, isLoading, checkAuth, user } = useAuthStore();
+    const { isAuthenticated, isLoading, checkAuth, user, login } = useAuthStore();
 
     React.useEffect(() => {
         checkAuth();
     }, []);
+
+    // CRITICAL: Deep Link listener - extracts user_id from callback URL
+    React.useEffect(() => {
+        const handleDeepLink = async (url: string | null) => {
+            if (!url) return;
+            console.log('[DeepLink] Received URL:', url);
+
+            try {
+                // Extract user_id from URL query params
+                // URL format: runeasy://--/callback/onboarding?user_id=xxx
+                const urlObj = new URL(url.replace('runeasy://', 'https://app.runeasy.com/'));
+                const userId = urlObj.searchParams.get('user_id');
+
+                if (userId) {
+                    console.log('[DeepLink] Extracted user_id:', userId);
+                    await login(userId);
+                    console.log('[DeepLink] Login triggered for user:', userId);
+
+                    // FORCE navigation to Onboarding immediately
+                    // Even if state update is delayed, push user to correct screen
+                    if (navigationRef.isReady()) {
+                        navigationRef.navigate('Onboarding' as never);
+                        console.log('[DeepLink] Navigated to Onboarding');
+                    }
+                } else {
+                    console.warn('[DeepLink] No user_id found in URL');
+                }
+            } catch (error) {
+                console.error('[DeepLink] Error parsing URL:', error);
+            }
+        };
+
+        // Handle initial URL (cold start - app was closed)
+        Linking.getInitialURL().then((url) => {
+            console.log('[DeepLink] Initial URL:', url);
+            handleDeepLink(url);
+        });
+
+        // Handle URL while app is running (warm start)
+        const subscription = Linking.addEventListener('url', (event) => {
+            console.log('[DeepLink] URL Event:', event.url);
+            handleDeepLink(event.url);
+        });
+
+        return () => subscription.remove();
+    }, [login]);
 
     // Set navigation as not ready when unmounting
     React.useEffect(() => {
@@ -163,6 +229,7 @@ export function AppNavigator() {
     return (
         <NavigationContainer
             ref={navigationRef}
+            linking={linking}
             onReady={() => {
                 setNavigationReady(true);
                 console.log('[Navigation] NavigationContainer is ready');
@@ -171,8 +238,10 @@ export function AppNavigator() {
             <Stack.Navigator
                 id="RootStack"
                 screenOptions={{
+                    // CRITICAL: Force dark background on ALL screens
+                    contentStyle: { backgroundColor: FORCED_DARK_BG },
                     headerStyle: {
-                        backgroundColor: colors.background,
+                        backgroundColor: FORCED_DARK_BG,
                     },
                     headerTintColor: colors.text,
                     headerTitleStyle: {
@@ -336,7 +405,7 @@ export function AppNavigator() {
                     </>
                 )}
             </Stack.Navigator>
-        </NavigationContainer>
+        </NavigationContainer >
     );
 }
 
