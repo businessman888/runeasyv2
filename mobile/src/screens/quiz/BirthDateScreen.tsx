@@ -3,10 +3,17 @@ import {
     View,
     Text,
     StyleSheet,
-    TouchableOpacity,
 } from 'react-native';
-import { colors, typography, borderRadius, shadows } from '../../theme';
-import { WheelPickerModal } from '../../components/WheelPickerModal';
+import { DateWheelPicker } from '../../components/DateWheelPicker';
+
+// Design System
+const DS = {
+    bg: '#0F0F1E',
+    card: '#1C1C2E',
+    cyan: '#00D4FF',
+    text: '#EBEBF5',
+    textSecondary: 'rgba(235, 235, 245, 0.6)',
+};
 
 interface BirthDateValue {
     day: number;
@@ -23,7 +30,6 @@ export function BirthDateScreen({ value, onChange }: BirthDateScreenProps) {
     const [selectedDate, setSelectedDate] = useState<BirthDateValue>(
         value || { day: 15, month: 6, year: 1990 }
     );
-    const [isModalVisible, setIsModalVisible] = useState(false);
 
     useEffect(() => {
         if (value) {
@@ -31,22 +37,28 @@ export function BirthDateScreen({ value, onChange }: BirthDateScreenProps) {
         }
     }, [value]);
 
-    const handleConfirm = (selection: { day: number; month: number; year: number }) => {
-        // Modal returns 0-indexed month, we store 1-indexed
-        const newDate = { day: selection.day, month: selection.month + 1, year: selection.year };
+    const handleDayChange = (day: number) => {
+        const newDate = { ...selectedDate, day };
         setSelectedDate(newDate);
-        setIsModalVisible(false);
         if (onChange) {
             onChange(newDate);
         }
     };
 
-    const formatDate = () => {
-        const months = [
-            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-        ];
-        return `${selectedDate.day} de ${months[selectedDate.month - 1]} de ${selectedDate.year}`;
+    const handleMonthChange = (month: number) => {
+        const newDate = { ...selectedDate, month };
+        setSelectedDate(newDate);
+        if (onChange) {
+            onChange(newDate);
+        }
+    };
+
+    const handleYearChange = (year: number) => {
+        const newDate = { ...selectedDate, year };
+        setSelectedDate(newDate);
+        if (onChange) {
+            onChange(newDate);
+        }
     };
 
     const calculateAge = () => {
@@ -72,20 +84,23 @@ export function BirthDateScreen({ value, onChange }: BirthDateScreenProps) {
                 </Text>
             </View>
 
-            {/* Date Display Card */}
-            <TouchableOpacity
-                style={styles.dateCard}
-                onPress={() => setIsModalVisible(true)}
-                activeOpacity={0.7}
-            >
-                <View style={styles.dateContent}>
-                    <Text style={styles.dateText}>{formatDate()}</Text>
-                    <Text style={styles.ageText}>{calculateAge()} anos</Text>
-                </View>
-                <View style={styles.editIcon}>
-                    <Text style={styles.editIconText}>✎</Text>
-                </View>
-            </TouchableOpacity>
+            {/* Age Display */}
+            <View style={styles.ageCard}>
+                <Text style={styles.ageValue}>{calculateAge()}</Text>
+                <Text style={styles.ageLabel}>anos</Text>
+            </View>
+
+            {/* Custom FlatList-based Wheel Picker - INLINE */}
+            <View style={styles.pickerContainer}>
+                <DateWheelPicker
+                    day={selectedDate.day}
+                    month={selectedDate.month}
+                    year={selectedDate.year}
+                    onDayChange={handleDayChange}
+                    onMonthChange={handleMonthChange}
+                    onYearChange={handleYearChange}
+                />
+            </View>
 
             {/* Info Tip */}
             <View style={styles.tipCard}>
@@ -93,85 +108,69 @@ export function BirthDateScreen({ value, onChange }: BirthDateScreenProps) {
                     💡 Sua idade nos ajuda a calcular zonas de frequência cardíaca e adaptar a progressão do treino.
                 </Text>
             </View>
-
-            {/* Wheel Picker Modal */}
-            <WheelPickerModal
-                visible={isModalVisible}
-                onCancel={() => setIsModalVisible(false)}
-                onConfirm={handleConfirm}
-                initialValue={{ day: selectedDate.day, month: selectedDate.month - 1, year: selectedDate.year }}
-            />
         </>
     );
 }
 
 const styles = StyleSheet.create({
     titleContainer: {
-        marginBottom: 32,
+        marginBottom: 24,
     },
     title: {
-        fontSize: typography.fontSizes['3xl'],
-        fontWeight: typography.fontWeights.bold,
-        color: colors.text,
-        lineHeight: 40,
+        fontSize: 24,
+        fontWeight: '700',
+        color: DS.text,
+        lineHeight: 32,
         marginBottom: 12,
     },
     titleHighlight: {
-        color: colors.primary,
+        color: DS.cyan,
     },
     subtitle: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.textSecondary,
-        lineHeight: 24,
+        fontSize: 15,
+        fontWeight: '400',
+        color: DS.textSecondary,
+        lineHeight: 22,
     },
-    dateCard: {
+    ageCard: {
         flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: colors.card,
-        borderRadius: borderRadius.xl,
+        alignItems: 'baseline',
+        justifyContent: 'center',
+        backgroundColor: DS.card,
+        borderRadius: 16,
         padding: 20,
         marginBottom: 24,
         borderWidth: 2,
-        borderColor: colors.primary,
-        ...shadows.neon,
+        borderColor: DS.cyan,
+        shadowColor: DS.cyan,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        elevation: 4,
     },
-    dateContent: {
-        flex: 1,
+    ageValue: {
+        fontSize: 48,
+        fontWeight: '700',
+        color: DS.cyan,
     },
-    dateText: {
-        fontSize: typography.fontSizes['2xl'],
-        fontWeight: typography.fontWeights.semibold,
-        color: colors.text,
-        marginBottom: 4,
-    },
-    ageText: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.primary,
-    },
-    editIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: borderRadius.full,
-        backgroundColor: colors.primary,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    editIconText: {
+    ageLabel: {
         fontSize: 20,
-        color: colors.background,
+        fontWeight: '500',
+        color: DS.textSecondary,
+        marginLeft: 8,
+    },
+    pickerContainer: {
+        marginBottom: 24,
     },
     tipCard: {
-        backgroundColor: colors.card,
-        borderRadius: borderRadius.lg,
+        backgroundColor: DS.card,
+        borderRadius: 12,
         padding: 16,
     },
     tipText: {
-        fontSize: typography.fontSizes.md,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.textSecondary,
+        fontSize: 14,
+        fontWeight: '400',
+        color: DS.textSecondary,
         lineHeight: 20,
     },
 });

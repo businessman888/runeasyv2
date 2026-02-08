@@ -18,7 +18,6 @@ import { ObjectiveScreen } from './quiz/ObjectiveScreen';
 import { LevelScreen } from './quiz/LevelScreen';
 import { FrequencyScreen } from './quiz/FrequencyScreen';
 import { PaceScreen } from './quiz/PaceScreen';
-import { TimeframeScreen } from './quiz/TimeframeScreen';
 import { LimitationsScreen } from './quiz/LimitationsScreen';
 import { BirthDateScreen } from './quiz/BirthDateScreen';
 import { WeightScreen } from './quiz/WeightScreen';
@@ -33,7 +32,7 @@ import { GoalTimeframeScreen } from './quiz/GoalTimeframeScreen';
 // Import navigation buttons
 import { FixedNavigationButtons } from '../components/FixedNavigationButtons';
 
-const TOTAL_STEPS = 15;
+const TOTAL_STEPS = 14;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ============================================
@@ -179,22 +178,22 @@ export function OnboardingScreen({ navigation, route }: any) {
     const scrollViewRef = useRef<ScrollView>(null);
 
     // Define all quiz steps with their component and data key(s)
+    // 14 total steps (0-13)
     const QUIZ_STEPS = [
-        { key: 'birthDate', Component: BirthDateScreen, title: 'Qual a sua data de nascimento?' },
-        { key: 'weight', Component: WeightScreen, title: 'Qual é o seu peso atual?' },
-        { key: 'height', Component: HeightScreen, title: 'Qual é a sua altura?' },
-        { key: 'goal', Component: ObjectiveScreen, title: 'Qual é o seu objetivo?' },
-        { key: 'experience_level', Component: LevelScreen, title: 'Qual é o seu nível?' },
-        { key: 'daysPerWeek', Component: FrequencyScreen, title: 'Quantos dias por semana?' },
-        { key: 'availableDays', Component: AvailableDaysScreen, title: 'Quais dias você tem disponíveis?', extraProps: { maxDays: data.daysPerWeek || 3 } },
-        { key: 'intenseDayIndex', Component: IntenseDayScreen, title: 'Qual dia para treino intenso?', extraProps: { availableDays: data.availableDays || [] } },
-        { keys: ['hasInjury', 'injuryDetails'], Component: PaceScreen, title: 'Limitações físicas?' },
-        { key: 'recentDistance', Component: RecentDistanceScreen, title: 'Maior distância recente?' },
-        { key: 'distanceTime', Component: DistanceTimeScreen, title: 'Em quanto tempo?', extraProps: { distance: data.recentDistance || 5 } },
-        { keys: ['paceMinutes', 'paceSeconds', 'dontKnowPace'], Component: TimeframeScreen, title: 'Qual é o seu Pace?' },
-        { key: 'startDate', Component: StartDateScreen, title: 'Quando quer começar?' },
-        { key: 'limitations', Component: LimitationsScreen, title: 'Alguma limitação física?' },
-        { key: 'goalTimeframe', Component: GoalTimeframeScreen, title: 'Quando deseja atingir sua meta?' },
+        { key: 'birthDate', Component: BirthDateScreen, title: 'Qual a sua data de nascimento?' },           // 0
+        { key: 'weight', Component: WeightScreen, title: 'Qual é o seu peso atual?' },                        // 1
+        { key: 'height', Component: HeightScreen, title: 'Qual é a sua altura?' },                            // 2
+        { key: 'goal', Component: ObjectiveScreen, title: 'Qual é o seu objetivo?' },                         // 3
+        { key: 'experience_level', Component: LevelScreen, title: 'Qual é o seu nível?' },                    // 4
+        { key: 'daysPerWeek', Component: FrequencyScreen, title: 'Quantos dias por semana?' },                // 5
+        { key: 'availableDays', Component: AvailableDaysScreen, title: 'Quais dias você tem disponíveis?', extraProps: { maxDays: data.daysPerWeek || 3 } }, // 6
+        { key: 'intenseDayIndex', Component: IntenseDayScreen, title: 'Qual dia para treino intenso?', extraProps: { availableDays: data.availableDays || [] } }, // 7
+        { key: 'recentDistance', Component: RecentDistanceScreen, title: 'Maior distância recente?' },        // 8
+        { key: 'distanceTime', Component: DistanceTimeScreen, title: 'Em quanto tempo?', extraProps: { distance: data.recentDistance || 5 } }, // 9
+        { keys: ['paceMinutes', 'paceSeconds', 'dontKnowPace'], Component: PaceScreen, title: 'Qual é o seu Pace?' }, // 10
+        { key: 'startDate', Component: StartDateScreen, title: 'Quando quer começar?' },                      // 11
+        { key: 'limitations', Component: LimitationsScreen, title: 'Alguma limitação física?' },              // 12
+        { key: 'goalTimeframe', Component: GoalTimeframeScreen, title: 'Quando deseja atingir sua meta?' },   // 13
     ];
 
     const currentStepData = QUIZ_STEPS[currentStep];
@@ -207,28 +206,27 @@ export function OnboardingScreen({ navigation, route }: any) {
     // Check if current step has valid data
     const canContinue = () => {
         switch (currentStep) {
-            case 0: return !!data.birthDate;
-            case 1: return !!data.weight && data.weight > 0;
-            case 2: return !!data.height && data.height > 0;
-            case 3: return !!data.goal;
-            case 4: return !!data.experience_level;
-            case 5: return typeof data.daysPerWeek === 'number' && data.daysPerWeek >= 2 && data.daysPerWeek <= 7;
-            case 6: return Array.isArray(data.availableDays) && data.availableDays.length > 0;
-            case 7: return data.intenseDayIndex !== null && data.intenseDayIndex !== undefined;
-            case 8: return true; // optional
-            case 9: return !!data.recentDistance;
-            case 10: return !!data.distanceTime && (data.distanceTime.hours > 0 || data.distanceTime.minutes > 0 || data.distanceTime.seconds > 0);
-            case 11: return data.dontKnowPace === true || (data.paceMinutes && data.paceSeconds);
-            case 12: return !!data.startDate;
-            case 13: return true; // limitations is optional
-            case 14: return typeof data.goalTimeframe === 'number' && data.goalTimeframe > 0;
+            case 0: return !!data.birthDate;                                                                    // birthDate
+            case 1: return !!data.weight && data.weight > 0;                                                    // weight
+            case 2: return !!data.height && data.height > 0;                                                    // height
+            case 3: return !!data.goal;                                                                         // goal
+            case 4: return !!data.experience_level;                                                             // level
+            case 5: return typeof data.daysPerWeek === 'number' && data.daysPerWeek >= 2 && data.daysPerWeek <= 7; // frequency
+            case 6: return Array.isArray(data.availableDays) && data.availableDays.length > 0;                  // availableDays
+            case 7: return data.intenseDayIndex !== null && data.intenseDayIndex !== undefined;                 // intenseDayIndex
+            case 8: return !!data.recentDistance;                                                               // recentDistance
+            case 9: return !!data.distanceTime && (data.distanceTime.hours > 0 || data.distanceTime.minutes > 0 || data.distanceTime.seconds > 0); // distanceTime
+            case 10: return data.dontKnowPace === true || (data.paceMinutes && data.paceSeconds);               // pace
+            case 11: return !!data.startDate;                                                                   // startDate
+            case 12: return true;                                                                               // limitations (optional)
+            case 13: return typeof data.goalTimeframe === 'number' && data.goalTimeframe > 0;                   // goalTimeframe
             default: return false;
         }
     };
 
     const handleContinue = () => {
-        // Calculate pace before continuing from distance time screen
-        if (currentStep === 10 && data.distanceTime && data.recentDistance) {
+        // Calculate pace before continuing from distance time screen (step 9)
+        if (currentStep === 9 && data.distanceTime && data.recentDistance) {
             const { hours, minutes, seconds } = data.distanceTime;
             const totalMinutes = hours * 60 + minutes + seconds / 60;
             const pacePerKm = totalMinutes / data.recentDistance;

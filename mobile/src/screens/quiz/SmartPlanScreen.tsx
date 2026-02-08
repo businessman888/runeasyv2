@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
     View,
     Text,
@@ -7,6 +7,7 @@ import {
     StatusBar,
     Platform,
     ScrollView,
+    BackHandler,
 } from 'react-native';
 import { CommonActions } from '@react-navigation/native';
 import { colors } from '../../theme';
@@ -131,6 +132,22 @@ export function SmartPlanScreen({ navigation, route }: any) {
     const { setAuthenticated } = useAuthStore();
     const userId = route?.params?.userId;
     const timeframe = route?.params?.timeframe;
+
+    // DUPLICATE PLAN PROTECTION: Disable Android hardware back button
+    useEffect(() => {
+        const backAction = () => {
+            // Return true to prevent default back behavior
+            // User must use the "Unlock All" button to proceed
+            return true;
+        };
+
+        const backHandler = BackHandler.addEventListener(
+            'hardwareBackPress',
+            backAction
+        );
+
+        return () => backHandler.remove();
+    }, []);
 
     // Get plan data from route params (preferred) or from store
     const planData = route?.params?.planData || storePlan;

@@ -1,327 +1,253 @@
-import React, { useState, useRef } from 'react';
+import React, { useRef, useCallback, useEffect } from 'react';
 import {
     View,
     Text,
     StyleSheet,
-    Modal,
-    TouchableOpacity,
-    ScrollView,
-    Animated,
+    FlatList,
     Dimensions,
+    ViewToken,
 } from 'react-native';
 
-// Design System Colors (Figma)
+// Design System
 const DS = {
     bg: '#0F0F1E',
-    surface: '#15152A',
     card: '#1C1C2E',
     cyan: '#00D4FF',
-    cyanMuted: 'rgba(0, 127, 153, 0.3)',
     text: '#EBEBF5',
     textSecondary: 'rgba(235, 235, 245, 0.6)',
-    glassBorder: 'rgba(235, 235, 245, 0.1)',
 };
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const ITEM_HEIGHT = 49;
+const ITEM_HEIGHT = 50;
 const VISIBLE_ITEMS = 5;
 const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
+
+interface WheelColumnProps {
+    data: { label: string; value: number }[];
+    selectedValue: number;
+    onValueChange: (value: number) => void;
+    label?: string;
+}
+
+// Individual wheel column with FlatList + snapToInterval
+function WheelColumn({ data, selectedValue, onValueChange, label }: WheelColumnProps) {
+    const flatListRef = useRef<FlatList>(null);
+    const initialIndex = data.findIndex(item => item.value === selectedValue);
+
+    useEffect(() => {
+        // Scroll to initial selection
+        if (flatListRef.current && initialIndex >= 0) {
+            setTimeout(() => {
+                flatListRef.current?.scrollToIndex({
+                    index: initialIndex,
+                    animated: false,
+                    viewOffset: 0,
+                });
+            }, 100);
+        }
+    }, []);
+
+    const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+        // Find the center item
+        if (viewableItems.length > 0) {
+            const centerIndex = Math.floor(viewableItems.length / 2);
+            const centerItem = viewableItems[centerIndex];
+            if (centerItem?.item) {
+                onValueChange(centerItem.item.value);
+            }
+        }
+    }, [onValueChange]);
+
+    const viewabilityConfig = useRef({
+        itemVisiblePercentThreshold: 50,
+        minimumViewTime: 50,
+    }).current;
+
+    const getItemLayout = useCallback((data: any, index: number) => ({
+        length: ITEM_HEIGHT,
+        offset: ITEM_HEIGHT * index,
+        index,
+    }), []);
+
+    const renderItem = useCallback(({ item, index }: { item: { label: string; value: number }; index: number }) => {
+        const isSelected = item.value === selectedValue;
+        return (
+            <View style={styles.itemContainer}>
+                <Text style={[
+                    styles.itemText,
+                    isSelected && styles.itemTextSelected,
+                ]}>
+                    {item.label}
+                </Text>
+            </View>
+        );
+    }, [selectedValue]);
+
+    return (
+        <View style={styles.columnContainer}>
+            {label && <Text style={styles.columnLabel}>{label}</Text>}
+            <View style={styles.wheelContainer}>
+                {/* Selection indicator */}
+                <View style={styles.selectionIndicator} pointerEvents="none" />
+
+                <FlatList
+                    ref={flatListRef}
+                    data={data}
+                    renderItem={renderItem}
+                    keyExtractor={(item) => String(item.value)}
+                    showsVerticalScrollIndicator={false}
+                    snapToInterval={ITEM_HEIGHT}
+                    decelerationRate="fast"
+                    onViewableItemsChanged={onViewableItemsChanged}
+                    viewabilityConfig={viewabilityConfig}
+                    getItemLayout={getItemLayout}
+                    initialScrollIndex={Math.max(0, initialIndex)}
+                    contentContainerStyle={{
+                        paddingVertical: ITEM_HEIGHT * 2, // Center first/last items
+                    }}
+                    onScrollToIndexFailed={(info) => {
+                        // Retry scroll after layout
+                        setTimeout(() => {
+                            flatListRef.current?.scrollToIndex({
+                                index: info.index,
+                                animated: false,
+                            });
+                        }, 100);
+                    }}
+                />
+            </View>
+        </View>
+    );
+}
+
+interface DateWheelPickerProps {
+    day: number;
+    month: number; // 1-indexed (1 = Janeiro)
+    year: number;
+    onDayChange: (day: number) => void;
+    onMonthChange: (month: number) => void;
+    onYearChange: (year: number) => void;
+}
 
 const MONTHS = [
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
 ];
 
-// Generate arrays
-const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
-const YEARS = Array.from({ length: 80 }, (_, i) => 2010 - i); // 2010 down to 1931
+// Get days in a specific month
+const getDaysInMonth = (month: number, year: number) => {
+    return new Date(year, month, 0).getDate();
+};
 
-interface DateWheelPickerProps {
-    visible: boolean;
-    onClose: () => void;
-    onConfirm: (date: { day: number; month: number; year: number }) => void;
-    initialDate?: { day: number; month: number; year: number };
-}
+export function DateWheelPicker({
+    day,
+    month,
+    year,
+    onDayChange,
+    onMonthChange,
+    onYearChange,
+}: DateWheelPickerProps) {
+    const currentYear = new Date().getFullYear();
 
-// Individual wheel column component
-interface WheelColumnProps {
-    items: (string | number)[];
-    selectedIndex: number;
-    onSelect: (index: number) => void;
-    label: string;
-    width: number;
-}
+    // Generate data arrays
+    const daysInMonth = getDaysInMonth(month, year);
+    const daysData = Array.from({ length: daysInMonth }, (_, i) => ({
+        label: String(i + 1).padStart(2, '0'),
+        value: i + 1,
+    }));
 
-const WheelColumn: React.FC<WheelColumnProps> = ({ items, selectedIndex, onSelect, label, width }) => {
-    const scrollViewRef = useRef<ScrollView>(null);
-    const [currentIndex, setCurrentIndex] = useState(selectedIndex);
+    const monthsData = MONTHS.map((name, index) => ({
+        label: name.slice(0, 3).toUpperCase(), // JAN, FEV, etc.
+        value: index + 1, // 1-indexed
+    }));
 
-    React.useEffect(() => {
-        // Scroll to initial position
-        setTimeout(() => {
-            scrollViewRef.current?.scrollTo({
-                y: selectedIndex * ITEM_HEIGHT,
-                animated: false,
-            });
-        }, 100);
-    }, []);
+    const yearsData = Array.from({ length: 80 }, (_, i) => ({
+        label: String(currentYear - 10 - i),
+        value: currentYear - 10 - i,
+    }));
 
-    const handleScroll = (event: any) => {
-        const y = event.nativeEvent.contentOffset.y;
-        const index = Math.round(y / ITEM_HEIGHT);
-        const clampedIndex = Math.max(0, Math.min(items.length - 1, index));
-        if (clampedIndex !== currentIndex) {
-            setCurrentIndex(clampedIndex);
-            onSelect(clampedIndex);
+    // Adjust day if exceeds days in new month
+    useEffect(() => {
+        if (day > daysInMonth) {
+            onDayChange(daysInMonth);
         }
-    };
-
-    const handleMomentumEnd = (event: any) => {
-        const y = event.nativeEvent.contentOffset.y;
-        const index = Math.round(y / ITEM_HEIGHT);
-        const clampedIndex = Math.max(0, Math.min(items.length - 1, index));
-        // Snap to nearest item
-        scrollViewRef.current?.scrollTo({
-            y: clampedIndex * ITEM_HEIGHT,
-            animated: true,
-        });
-    };
+    }, [month, year, daysInMonth, day, onDayChange]);
 
     return (
-        <View style={[styles.columnContainer, { width }]}>
-            {/* Label */}
-            <Text style={styles.columnLabel}>{label}</Text>
-
-            {/* Picker area */}
-            <View style={styles.pickerArea}>
-                {/* Lens effect highlight - center selection box */}
-                <View style={styles.lensHighlight} pointerEvents="none" />
-
-                <ScrollView
-                    ref={scrollViewRef}
-                    showsVerticalScrollIndicator={false}
-                    snapToInterval={ITEM_HEIGHT}
-                    decelerationRate="fast"
-                    onScroll={handleScroll}
-                    onMomentumScrollEnd={handleMomentumEnd}
-                    scrollEventThrottle={16}
-                    contentContainerStyle={{
-                        paddingVertical: ITEM_HEIGHT * 2, // Center items
-                    }}
-                >
-                    {items.map((item, index) => {
-                        const isSelected = index === currentIndex;
-                        const distance = Math.abs(index - currentIndex);
-
-                        // Lens effect: scale and opacity based on distance from center
-                        const scale = isSelected ? 1.1 : Math.max(0.8, 1 - distance * 0.1);
-                        const opacity = isSelected ? 1 : Math.max(0.4, 1 - distance * 0.2);
-
-                        return (
-                            <TouchableOpacity
-                                key={index}
-                                style={[
-                                    styles.item,
-                                    isSelected && styles.itemSelected,
-                                ]}
-                                onPress={() => {
-                                    setCurrentIndex(index);
-                                    onSelect(index);
-                                    scrollViewRef.current?.scrollTo({
-                                        y: index * ITEM_HEIGHT,
-                                        animated: true,
-                                    });
-                                }}
-                                activeOpacity={0.7}
-                            >
-                                <Text
-                                    style={[
-                                        styles.itemText,
-                                        isSelected && styles.itemTextSelected,
-                                        {
-                                            opacity,
-                                            transform: [{ scale }],
-                                        },
-                                    ]}
-                                >
-                                    {typeof item === 'number' ? String(item).padStart(2, '0') : item}
-                                </Text>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </ScrollView>
-            </View>
+        <View style={styles.container}>
+            <WheelColumn
+                data={daysData}
+                selectedValue={day}
+                onValueChange={onDayChange}
+                label="DIA"
+            />
+            <WheelColumn
+                data={monthsData}
+                selectedValue={month}
+                onValueChange={onMonthChange}
+                label="MÊS"
+            />
+            <WheelColumn
+                data={yearsData}
+                selectedValue={year}
+                onValueChange={onYearChange}
+                label="ANO"
+            />
         </View>
     );
-};
-
-export const DateWheelPicker: React.FC<DateWheelPickerProps> = ({
-    visible,
-    onClose,
-    onConfirm,
-    initialDate,
-}) => {
-    const defaultDate = initialDate || { day: 1, month: 0, year: 2000 };
-    const [selectedDay, setSelectedDay] = useState(defaultDate.day - 1);
-    const [selectedMonth, setSelectedMonth] = useState(defaultDate.month);
-    const [selectedYear, setSelectedYear] = useState(
-        YEARS.findIndex(y => y === defaultDate.year) || 10
-    );
-
-    const handleConfirm = () => {
-        onConfirm({
-            day: DAYS[selectedDay],
-            month: selectedMonth,
-            year: YEARS[selectedYear],
-        });
-        onClose();
-    };
-
-    return (
-        <Modal
-            visible={visible}
-            transparent
-            animationType="slide"
-            onRequestClose={onClose}
-        >
-            <View style={styles.overlay}>
-                <View style={styles.container}>
-                    {/* Header with Cancel/Confirm */}
-                    <View style={styles.header}>
-                        <TouchableOpacity style={styles.headerButton} onPress={onClose}>
-                            <Text style={styles.cancelText}>Cancelar</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.headerButton} onPress={handleConfirm}>
-                            <Text style={styles.confirmText}>Confirmar</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Wheel Pickers */}
-                    <View style={styles.pickersRow}>
-                        <WheelColumn
-                            items={DAYS}
-                            selectedIndex={selectedDay}
-                            onSelect={setSelectedDay}
-                            label="Dia"
-                            width={99}
-                        />
-                        <WheelColumn
-                            items={MONTHS}
-                            selectedIndex={selectedMonth}
-                            onSelect={setSelectedMonth}
-                            label="Mês"
-                            width={99}
-                        />
-                        <WheelColumn
-                            items={YEARS}
-                            selectedIndex={selectedYear}
-                            onSelect={setSelectedYear}
-                            label="Ano"
-                            width={99}
-                        />
-                    </View>
-                </View>
-            </View>
-        </Modal>
-    );
-};
+}
 
 const styles = StyleSheet.create({
-    overlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
-        justifyContent: 'flex-end',
-    },
     container: {
-        backgroundColor: DS.surface,
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        paddingHorizontal: 19,
-        paddingVertical: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -1 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 8,
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: DS.glassBorder,
-    },
-    headerButton: {
-        width: 123,
-        height: 67,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    cancelText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 15,
-        color: DS.textSecondary,
-    },
-    confirmText: {
-        fontFamily: 'Poppins-Bold',
-        fontSize: 15,
-        fontWeight: '700',
-        color: DS.cyan,
-    },
-    pickersRow: {
         flexDirection: 'row',
         justifyContent: 'center',
-        gap: 6,
-        paddingVertical: 5,
-        paddingHorizontal: 2,
+        alignItems: 'center',
+        gap: 8,
     },
     columnContainer: {
+        flex: 1,
         alignItems: 'center',
     },
     columnLabel: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 15,
-        color: DS.text,
+        fontSize: 12,
+        fontWeight: '600',
+        color: DS.textSecondary,
         marginBottom: 8,
-        height: 43,
-        lineHeight: 43,
+        letterSpacing: 1,
     },
-    pickerArea: {
-        height: 271,
+    wheelContainer: {
+        height: PICKER_HEIGHT,
+        width: '100%',
         backgroundColor: DS.card,
-        borderRadius: 15,
+        borderRadius: 16,
         overflow: 'hidden',
         position: 'relative',
     },
-    lensHighlight: {
+    selectionIndicator: {
         position: 'absolute',
-        top: ITEM_HEIGHT * 2, // Center position
-        left: 7,
-        right: 7,
+        top: ITEM_HEIGHT * 2,
+        left: 4,
+        right: 4,
         height: ITEM_HEIGHT,
-        backgroundColor: DS.cyanMuted,
-        borderRadius: 10,
+        backgroundColor: 'rgba(0, 212, 255, 0.15)',
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: DS.cyan,
         zIndex: 1,
     },
-    item: {
+    itemContainer: {
         height: ITEM_HEIGHT,
         justifyContent: 'center',
         alignItems: 'center',
-        marginHorizontal: 7,
-        borderRadius: 10,
-    },
-    itemSelected: {
-        // Selected state handled by lens highlight
     },
     itemText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 16,
+        fontSize: 18,
+        fontWeight: '500',
         color: DS.textSecondary,
     },
     itemTextSelected: {
+        fontSize: 22,
+        fontWeight: '700',
         color: DS.cyan,
-        fontWeight: '600',
     },
 });
 
