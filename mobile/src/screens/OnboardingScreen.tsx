@@ -218,7 +218,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             case 9: return !!data.distanceTime && (data.distanceTime.hours > 0 || data.distanceTime.minutes > 0 || data.distanceTime.seconds > 0); // distanceTime
             case 10: return data.dontKnowPace === true || (data.paceMinutes && data.paceSeconds);               // pace
             case 11: return !!data.startDate;                                                                   // startDate
-            case 12: return true;                                                                               // limitations (optional)
+            case 12: return data.limitations && typeof data.limitations.hasLimitation === 'boolean';            // limitations (required Sim/Não)
             case 13: return typeof data.goalTimeframe === 'number' && data.goalTimeframe > 0;                   // goalTimeframe
             default: return false;
         }

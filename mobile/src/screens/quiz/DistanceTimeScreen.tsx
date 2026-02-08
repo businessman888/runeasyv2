@@ -4,9 +4,23 @@ import {
     Text,
     StyleSheet,
     TouchableOpacity,
+    Platform,
 } from 'react-native';
-import { colors, typography, borderRadius, shadows } from '../../theme';
-import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { CustomKeypad } from '../../components/CustomKeypad';
+
+// Design System
+const DS = {
+    bg: '#0F0F1E',
+    card: '#1C1C2E',
+    cyan: '#00D4FF',
+    text: '#EBEBF5',
+    textSecondary: 'rgba(235, 235, 245, 0.6)',
+    glassBorder: 'rgba(235, 235, 245, 0.1)',
+    glassBg: 'rgba(28, 28, 46, 0.7)',
+    activeBorder: '#00D4FF',
+};
 
 interface DistanceTimeValue {
     hours: number;
@@ -16,216 +30,237 @@ interface DistanceTimeValue {
 
 interface DistanceTimeScreenProps {
     value?: DistanceTimeValue | null;
-    recentDistance?: number;
+    recentDistance?: number; // km
     onChange?: (value: DistanceTimeValue) => void;
 }
 
-const KEYPAD = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', '⌫'];
+type FieldType = 'hours' | 'minutes' | 'seconds';
 
 export function DistanceTimeScreen({ value, recentDistance = 5, onChange }: DistanceTimeScreenProps) {
-    const [timeString, setTimeString] = useState<string>(
-        value ? `${String(value.hours).padStart(2, '0')}${String(value.minutes).padStart(2, '0')}${String(value.seconds).padStart(2, '0')}` : ''
-    );
+    const [hours, setHours] = useState('');
+    const [minutes, setMinutes] = useState('');
+    const [seconds, setSeconds] = useState('');
+    const [activeField, setActiveField] = useState<FieldType>('minutes'); // Default focus on minutes? Or hours?
 
+    // Load initial values
     useEffect(() => {
         if (value) {
-            setTimeString(`${String(value.hours).padStart(2, '0')}${String(value.minutes).padStart(2, '0')}${String(value.seconds).padStart(2, '0')}`);
+            setHours(value.hours > 0 ? String(value.hours).padStart(2, '0') : '');
+            setMinutes(value.minutes > 0 ? String(value.minutes).padStart(2, '0') : '');
+            setSeconds(value.seconds > 0 ? String(value.seconds).padStart(2, '0') : '');
+        } else {
+            // Focus on start
+            setActiveField('hours');
         }
     }, [value]);
 
-    const handleKeyPress = async (key: string) => {
-        // Haptic feedback
-        try {
-            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        } catch (e) {
-            // Haptics not available
-        }
-
-        let newTimeString = timeString;
-
-        if (key === '⌫') {
-            newTimeString = timeString.slice(0, -1);
-        } else if (key === '00') {
-            if (timeString.length <= 4) {
-                newTimeString = timeString + '00';
-            }
-        } else {
-            if (timeString.length < 6) {
-                newTimeString = timeString + key;
-            }
-        }
-
-        setTimeString(newTimeString);
-        updateValue(newTimeString);
-    };
-
-    const updateValue = (str: string) => {
-        const padded = str.padStart(6, '0');
-        const hours = parseInt(padded.slice(0, 2), 10);
-        const minutes = parseInt(padded.slice(2, 4), 10);
-        const seconds = parseInt(padded.slice(4, 6), 10);
+    // Handle updates and persistence
+    useEffect(() => {
+        const h = parseInt(hours || '0', 10);
+        const m = parseInt(minutes || '0', 10);
+        const s = parseInt(seconds || '0', 10);
 
         if (onChange) {
-            onChange({ hours, minutes, seconds });
+            onChange({ hours: h, minutes: m, seconds: s });
+        }
+    }, [hours, minutes, seconds]);
+
+    const handlePressKey = (key: string) => {
+        let currentVal = '';
+        let setter: React.Dispatch<React.SetStateAction<string>> | null = null;
+        let nextField: FieldType | null = null;
+
+        if (activeField === 'hours') {
+            currentVal = hours;
+            setter = setHours;
+            nextField = 'minutes';
+        } else if (activeField === 'minutes') {
+            currentVal = minutes;
+            setter = setMinutes;
+            nextField = 'seconds';
+        } else {
+            currentVal = seconds;
+            setter = setSeconds;
+            nextField = null;
+        }
+
+        if (currentVal.length < 2 && setter) {
+            const newVal = currentVal + key;
+
+            // Validation for minutes/seconds overflow > 59
+            if (activeField !== 'hours') {
+                if (parseInt(newVal, 10) > 59) {
+                    // Option 1: auto-correct to 59? Option 2: reject?
+                    // User says: "Minutos e Segundos não podem ultrapassar 59."
+                    // Let's cap at 59 for better UX than silent reject
+                    setter('59');
+                    // Auto-advance if we hit max length (2)
+                    if (nextField) setActiveField(nextField);
+                    return;
+                }
+            }
+
+            setter(newVal);
+
+            // Auto-advance if filled 2 digits
+            if (newVal.length === 2 && nextField) {
+                setActiveField(nextField);
+            }
         }
     };
 
-    const formatDisplay = () => {
-        const padded = timeString.padStart(6, '0');
-        return `${padded.slice(0, 2)}:${padded.slice(2, 4)}:${padded.slice(4, 6)}`;
+    const handleDelete = () => {
+        if (activeField === 'hours') {
+            if (hours.length > 0) setHours(prev => prev.slice(0, -1));
+        } else if (activeField === 'minutes') {
+            if (minutes.length > 0) {
+                setMinutes(prev => prev.slice(0, -1));
+            } else {
+                // Backtrack to hours
+                setActiveField('hours');
+            }
+        } else if (activeField === 'seconds') {
+            if (seconds.length > 0) {
+                setSeconds(prev => prev.slice(0, -1));
+            } else {
+                // Backtrack to minutes
+                setActiveField('minutes');
+            }
+        }
     };
 
-    const calculatePace = () => {
-        const padded = timeString.padStart(6, '0');
-        const hours = parseInt(padded.slice(0, 2), 10);
-        const minutes = parseInt(padded.slice(2, 4), 10);
-        const seconds = parseInt(padded.slice(4, 6), 10);
+    const TimeInputBlock = ({
+        label,
+        value,
+        field,
+        placeholder = '00'
+    }: { label: string, value: string, field: FieldType, placeholder?: string }) => {
+        const isActive = activeField === field;
+        const displayValue = value.length > 0 ? value.padStart(2, '0') : placeholder;
 
-        const totalMinutes = hours * 60 + minutes + seconds / 60;
-        if (totalMinutes === 0 || recentDistance === 0) return '--:--';
+        // Highlight logic if empty: show 00 dimmed. If typing, show what is typed.
+        // Actually, user wants "00" placeholder.
+        const showPlaceholder = value.length === 0;
 
-        const paceMinutes = totalMinutes / recentDistance;
-        const paceMins = Math.floor(paceMinutes);
-        const paceSecs = Math.round((paceMinutes - paceMins) * 60);
-
-        return `${paceMins}:${String(paceSecs).padStart(2, '0')}`;
+        return (
+            <TouchableOpacity
+                style={[
+                    styles.inputBlock,
+                    isActive && styles.inputBlockActive
+                ]}
+                onPress={() => setActiveField(field)}
+                activeOpacity={0.8}
+            >
+                <Text style={[
+                    styles.inputValue,
+                    showPlaceholder && styles.inputValuePlaceholder,
+                    (field !== 'hours' && parseInt(value || '0') > 59) && styles.inputValueError // Just in case
+                ]}>
+                    {value ? value.padStart(2, '0') : '00'}
+                </Text>
+                <Text style={[styles.inputLabel, isActive && styles.inputLabelActive]}>
+                    {label}
+                </Text>
+            </TouchableOpacity>
+        );
     };
 
     return (
-        <>
+        <View style={styles.container}>
             {/* Title Section */}
             <View style={styles.titleContainer}>
                 <Text style={styles.title}>
-                    Em quanto tempo você{'\n'}
-                    <Text style={styles.titleHighlight}>correu {recentDistance}km?</Text>
-                </Text>
-                <Text style={styles.subtitle}>
-                    Informe o tempo aproximado da sua última corrida de {recentDistance}km.
+                    Em <Text style={styles.titleHighlight}>quanto tempo</Text> você{'\n'}
+                    completou essa{'\n'}
+                    distância?
                 </Text>
             </View>
 
-            {/* Time Display */}
-            <View style={styles.displayContainer}>
-                <Text style={styles.displayText}>{formatDisplay()}</Text>
-                <Text style={styles.displayLabel}>hh:mm:ss</Text>
+            {/* Segmented Inputs */}
+            <View style={styles.inputsContainer}>
+                <TimeInputBlock label="h" value={hours} field="hours" />
+                <TimeInputBlock label="min" value={minutes} field="minutes" />
+                <TimeInputBlock label="seg" value={seconds} field="seconds" />
             </View>
 
-            {/* Pace Display */}
-            <View style={styles.paceContainer}>
-                <Text style={styles.paceLabel}>Pace estimado</Text>
-                <Text style={styles.paceValue}>{calculatePace()} min/km</Text>
-            </View>
+            <View style={{ flex: 1 }} />
 
-            {/* Keypad */}
-            <View style={styles.keypadContainer}>
-                {KEYPAD.map((key) => (
-                    <TouchableOpacity
-                        key={key}
-                        style={[
-                            styles.keypadButton,
-                            key === '⌫' && styles.keypadButtonDelete
-                        ]}
-                        onPress={() => handleKeyPress(key)}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={[
-                            styles.keypadText,
-                            key === '⌫' && styles.keypadTextDelete
-                        ]}>
-                            {key}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
-        </>
+            {/* Custom Keypad */}
+            <CustomKeypad
+                onPress={handlePressKey}
+                onDelete={handleDelete}
+            />
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+    },
     titleContainer: {
-        marginBottom: 24,
+        marginTop: 20,
+        marginBottom: 40,
+        paddingHorizontal: 0,
     },
     title: {
-        fontSize: typography.fontSizes['3xl'],
-        fontWeight: typography.fontWeights.bold,
-        color: colors.text,
-        lineHeight: 40,
-        marginBottom: 12,
+        fontSize: 28,
+        fontWeight: '700',
+        color: DS.text,
+        lineHeight: 36,
+        fontFamily: 'Inter-Bold', // Ensure font matches
     },
     titleHighlight: {
-        color: colors.primary,
+        color: DS.cyan,
     },
-    subtitle: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.textSecondary,
-        lineHeight: 24,
-    },
-    displayContainer: {
-        alignItems: 'center',
-        marginBottom: 16,
-        backgroundColor: colors.card,
-        borderRadius: borderRadius.xl,
-        padding: 24,
-        borderWidth: 2,
-        borderColor: colors.primary,
-        ...shadows.neon,
-    },
-    displayText: {
-        fontSize: 48,
-        fontWeight: typography.fontWeights.bold,
-        color: colors.primary,
-        fontVariant: ['tabular-nums'],
-    },
-    displayLabel: {
-        fontSize: typography.fontSizes.md,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.textSecondary,
-        marginTop: 4,
-    },
-    paceContainer: {
+    inputsContainer: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        backgroundColor: colors.card,
-        borderRadius: borderRadius.lg,
-        padding: 16,
-        marginBottom: 24,
-    },
-    paceLabel: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.textSecondary,
-    },
-    paceValue: {
-        fontSize: typography.fontSizes.xl,
-        fontWeight: typography.fontWeights.bold,
-        color: colors.success,
-    },
-    keypadContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
         justifyContent: 'center',
         gap: 12,
+        marginBottom: 24,
     },
-    keypadButton: {
-        width: '28%',
-        aspectRatio: 1.5,
-        backgroundColor: colors.card,
-        borderRadius: borderRadius.lg,
+    inputBlock: {
+        width: 100,
+        height: 120,
+        borderRadius: 20,
+        backgroundColor: DS.card, // Fallback
+        borderWidth: 1,
+        borderColor: DS.glassBorder,
         alignItems: 'center',
         justifyContent: 'center',
+        // Glassmorphism effect simulation
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+        elevation: 5,
     },
-    keypadButtonDelete: {
-        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    inputBlockActive: {
+        borderColor: DS.activeBorder,
+        borderWidth: 1, // Can make it 1.5 or 2 for stronger focus
+        backgroundColor: 'rgba(28, 28, 46, 0.9)', // Slightly lighter/solid on focus
     },
-    keypadText: {
-        fontSize: typography.fontSizes['2xl'],
-        fontWeight: typography.fontWeights.semibold,
-        color: colors.text,
+    inputValue: {
+        fontSize: 32,
+        fontWeight: '700',
+        color: DS.text,
+        fontFamily: 'Inter-Bold',
+        marginBottom: 4,
     },
-    keypadTextDelete: {
-        color: colors.error,
+    inputValuePlaceholder: {
+        color: DS.textSecondary,
+    },
+    inputValueError: {
+        color: '#FF453A',
+    },
+    inputLabel: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: DS.textSecondary,
+    },
+    inputLabelActive: {
+        color: DS.cyan,
+        fontWeight: '600',
     },
 });
 

@@ -36,7 +36,7 @@ interface OnboardingData {
     dontKnowPace: boolean; // Timeframe screen - don't know pace option
     currentPace5k: number | null;
     targetWeeks: number;
-    limitations: string | null; // Limitations screen - physical limitations
+    limitations: { hasLimitation: boolean; details: string } | null; // Limitations screen - physical limitations
     preferredDays: number[];
     goalTimeframe: number | null; // Goal timeframe in months (1, 3, 6, 12)
 }
@@ -237,7 +237,8 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                 // Original pace/limitations
                 current_pace_5k: data.currentPace5k ?? null,
                 target_weeks: data.targetWeeks || 8,
-                limitations: data.limitations || null,
+                // Map object { hasLimitation, details } to string or null for API
+                limitations: data.limitations?.hasLimitation ? data.limitations.details : null,
                 preferred_days: data.preferredDays || [],
 
                 // Performance Baseline (New)

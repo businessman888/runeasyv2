@@ -7,6 +7,7 @@ import {
     Dimensions,
     ViewToken,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 
 // Design System
 const DS = {
@@ -51,11 +52,12 @@ function WheelColumn({ data, selectedValue, onValueChange, label }: WheelColumnP
         if (viewableItems.length > 0) {
             const centerIndex = Math.floor(viewableItems.length / 2);
             const centerItem = viewableItems[centerIndex];
-            if (centerItem?.item) {
+            if (centerItem?.item && centerItem.item.value !== selectedValue) {
                 onValueChange(centerItem.item.value);
+                Haptics.selectionAsync();
             }
         }
-    }, [onValueChange]);
+    }, [onValueChange, selectedValue]);
 
     const viewabilityConfig = useRef({
         itemVisiblePercentThreshold: 50,
@@ -97,6 +99,7 @@ function WheelColumn({ data, selectedValue, onValueChange, label }: WheelColumnP
                     showsVerticalScrollIndicator={false}
                     snapToInterval={ITEM_HEIGHT}
                     decelerationRate="fast"
+                    nestedScrollEnabled={true}
                     onViewableItemsChanged={onViewableItemsChanged}
                     viewabilityConfig={viewabilityConfig}
                     getItemLayout={getItemLayout}
@@ -246,6 +249,7 @@ const styles = StyleSheet.create({
     },
     itemTextSelected: {
         fontSize: 22,
+        fontFamily: 'Inter-Bold',
         fontWeight: '700',
         color: DS.cyan,
     },

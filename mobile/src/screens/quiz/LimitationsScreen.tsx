@@ -6,15 +6,17 @@ import {
     StyleSheet,
     TouchableOpacity,
     Animated,
+    Keyboard,
+    TouchableWithoutFeedback
 } from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // Design System Colors (Figma)
 const DS = {
     bg: '#0F0F1E',
     card: '#1C1C2E',
     cyan: '#00D4FF',
-    cyanMuted: 'rgba(0, 127, 153, 0.3)',
     text: '#EBEBF5',
     textSecondary: 'rgba(235, 235, 245, 0.6)',
     glassBorder: 'rgba(235, 235, 245, 0.1)',
@@ -40,51 +42,26 @@ interface LimitationsScreenProps {
 }
 
 export function LimitationsScreen({ value, onChange }: LimitationsScreenProps) {
-    const [hasLimitation, setHasLimitation] = useState(value?.hasLimitation || false);
+    const [hasLimitation, setHasLimitation] = useState<boolean | null>(value?.hasLimitation ?? null); // Null initially to force selection
     const [details, setDetails] = useState(value?.details || '');
 
     // Animation for details input
     const fadeAnim = useRef(new Animated.Value(0)).current;
-    const slideAnim = useRef(new Animated.Value(-20)).current;
 
     useEffect(() => {
-        if (value) {
+        if (value && typeof value.hasLimitation === 'boolean') {
             setHasLimitation(value.hasLimitation);
             setDetails(value.details);
         }
     }, [value]);
 
-    // Animate details field when hasLimitation changes
+    // Animate details field when hasLimitation is TRUE
     useEffect(() => {
-        if (hasLimitation) {
-            // Fade in + slide down
-            Animated.parallel([
-                Animated.timing(fadeAnim, {
-                    toValue: 1,
-                    duration: 300,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(slideAnim, {
-                    toValue: 0,
-                    duration: 300,
-                    useNativeDriver: true,
-                }),
-            ]).start();
-        } else {
-            // Fade out + slide up
-            Animated.parallel([
-                Animated.timing(fadeAnim, {
-                    toValue: 0,
-                    duration: 200,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(slideAnim, {
-                    toValue: -20,
-                    duration: 200,
-                    useNativeDriver: true,
-                }),
-            ]).start();
-        }
+        Animated.timing(fadeAnim, {
+            toValue: hasLimitation === true ? 1 : 0,
+            duration: 300,
+            useNativeDriver: true,
+        }).start();
     }, [hasLimitation]);
 
     const handleOptionSelect = (option: boolean) => {
@@ -92,6 +69,8 @@ export function LimitationsScreen({ value, onChange }: LimitationsScreenProps) {
         if (!option) {
             setDetails(''); // Clear details when selecting NO
         }
+
+        // Immediate update to enable parent button
         if (onChange) {
             onChange({
                 hasLimitation: option,
@@ -102,7 +81,7 @@ export function LimitationsScreen({ value, onChange }: LimitationsScreenProps) {
 
     const handleDetailsChange = (text: string) => {
         setDetails(text);
-        if (onChange) {
+        if (onChange && hasLimitation !== null) {
             onChange({
                 hasLimitation,
                 details: text,
@@ -111,102 +90,110 @@ export function LimitationsScreen({ value, onChange }: LimitationsScreenProps) {
     };
 
     return (
-        <View style={styles.container}>
-            {/* Title Section - with proper padding-top */}
-            <View style={styles.titleContainer}>
-                <Text style={styles.title}>
-                    Você possui alguma{'\n'}
-                    <Text style={styles.titleHighlight}>lesão ou limitação</Text>?
-                </Text>
-                <Text style={styles.subtitle}>
-                    Lesões anteriores, problemas de saúde ou restrições físicas.
-                </Text>
-            </View>
-
-            {/* SIM/NÃO Options */}
-            <View style={styles.optionsContainer}>
-                {/* SIM Option */}
-                <TouchableOpacity
-                    style={[
-                        styles.optionCard,
-                        hasLimitation && styles.optionCardSelected,
-                    ]}
-                    onPress={() => handleOptionSelect(true)}
-                    activeOpacity={0.7}
-                >
-                    <CircularCheckbox selected={hasLimitation} />
-                    <View style={styles.optionContent}>
-                        <Text style={[
-                            styles.optionTitle,
-                            hasLimitation && styles.optionTitleSelected,
-                        ]}>
-                            Sim
-                        </Text>
-                        <Text style={styles.optionSubtitle}>
-                            Tenho uma lesão ou limitação física
-                        </Text>
-                    </View>
-                </TouchableOpacity>
-
-                {/* NÃO Option */}
-                <TouchableOpacity
-                    style={[
-                        styles.optionCard,
-                        !hasLimitation && styles.optionCardSelected,
-                    ]}
-                    onPress={() => handleOptionSelect(false)}
-                    activeOpacity={0.7}
-                >
-                    <CircularCheckbox selected={!hasLimitation} />
-                    <View style={styles.optionContent}>
-                        <Text style={[
-                            styles.optionTitle,
-                            !hasLimitation && styles.optionTitleSelected,
-                        ]}>
-                            Não
-                        </Text>
-                        <Text style={styles.optionSubtitle}>
-                            Não possuo limitações físicas
-                        </Text>
-                    </View>
-                </TouchableOpacity>
-            </View>
-
-            {/* Details Input - CONDITIONALLY RENDERED only when SIM */}
-            {hasLimitation && (
-                <Animated.View
-                    style={[
-                        styles.detailsContainer,
-                        {
-                            opacity: fadeAnim,
-                            transform: [{ translateY: slideAnim }],
-                        },
-                    ]}
-                >
-                    <Text style={styles.detailsLabel}>Descreva sua limitação:</Text>
-                    <TextInput
-                        style={styles.textInput}
-                        placeholder="Ex: dor no joelho direito, tendinite no tornozelo..."
-                        placeholderTextColor={DS.textSecondary}
-                        value={details}
-                        onChangeText={handleDetailsChange}
-                        multiline
-                        numberOfLines={4}
-                        textAlignVertical="top"
-                    />
-                    <Text style={styles.helperText}>
-                        💡 Esta informação ajuda a IA a criar um plano mais seguro para você
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.container}>
+                {/* Title Section */}
+                <View style={styles.titleContainer}>
+                    <Text style={styles.title}>
+                        Você possui alguma{'\n'}
+                        <Text style={styles.titleHighlight}>lesão ou limitação</Text>?
                     </Text>
-                </Animated.View>
-            )}
-        </View>
+                    <Text style={styles.subtitle}>
+                        Lesões anteriores, problemas de saúde ou restrições físicas.
+                    </Text>
+                </View>
+
+                {/* SIM/NÃO Options */}
+                <View style={styles.optionsContainer}>
+                    {/* SIM Option */}
+                    <TouchableOpacity
+                        style={styles.cardWrapper}
+                        onPress={() => handleOptionSelect(true)}
+                        activeOpacity={0.8}
+                    >
+                        {hasLimitation === true ? (
+                            <LinearGradient
+                                colors={['rgba(0, 212, 255, 0.15)', 'rgba(0, 212, 255, 0.05)']}
+                                style={styles.cardGradient}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                            >
+                                <CircularCheckbox selected={true} />
+                                <View style={styles.optionContent}>
+                                    <Text style={[styles.optionTitle, styles.optionTitleSelected]}>Sim</Text>
+                                    <Text style={styles.optionSubtitle}>Tenho uma lesão ou limitação física</Text>
+                                </View>
+                            </LinearGradient>
+                        ) : (
+                            <View style={styles.cardDefault}>
+                                <CircularCheckbox selected={false} />
+                                <View style={styles.optionContent}>
+                                    <Text style={styles.optionTitle}>Sim</Text>
+                                    <Text style={styles.optionSubtitle}>Tenho uma lesão ou limitação física</Text>
+                                </View>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+
+                    {/* NÃO Option */}
+                    <TouchableOpacity
+                        style={styles.cardWrapper}
+                        onPress={() => handleOptionSelect(false)}
+                        activeOpacity={0.8}
+                    >
+                        {hasLimitation === false ? (
+                            <LinearGradient
+                                colors={['rgba(0, 212, 255, 0.15)', 'rgba(0, 212, 255, 0.05)']}
+                                style={styles.cardGradient}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                            >
+                                <CircularCheckbox selected={true} />
+                                <View style={styles.optionContent}>
+                                    <Text style={[styles.optionTitle, styles.optionTitleSelected]}>Não</Text>
+                                    <Text style={styles.optionSubtitle}>Não possuo limitações físicas</Text>
+                                </View>
+                            </LinearGradient>
+                        ) : (
+                            <View style={styles.cardDefault}>
+                                <CircularCheckbox selected={false} />
+                                <View style={styles.optionContent}>
+                                    <Text style={styles.optionTitle}>Não</Text>
+                                    <Text style={styles.optionSubtitle}>Não possuo limitações físicas</Text>
+                                </View>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                </View>
+
+                {/* Details Input - CONDITIONALLY RENDERED only when SIM */}
+                {hasLimitation === true && (
+                    <Animated.View style={[styles.detailsContainer, { opacity: fadeAnim }]}>
+                        <Text style={styles.detailsLabel}>Descreva sua limitação:</Text>
+                        <TextInput
+                            style={styles.textInput}
+                            placeholder="Ex: dor no joelho direito, tendinite no tornozelo..."
+                            placeholderTextColor={DS.textSecondary}
+                            value={details}
+                            onChangeText={handleDetailsChange}
+                            multiline
+                            numberOfLines={4}
+                            textAlignVertical="top"
+                        />
+                        <Text style={styles.helperText}>
+                            💡 Esta informação ajuda a IA a criar um plano mais seguro para você
+                        </Text>
+                    </Animated.View>
+                )}
+            </View>
+        </TouchableWithoutFeedback>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        paddingTop: 8, // Ensures no overlap with progress bar
+        paddingTop: 8,
     },
     titleContainer: {
         marginBottom: 32,
@@ -217,6 +204,7 @@ const styles = StyleSheet.create({
         color: DS.text,
         lineHeight: 32,
         marginBottom: 12,
+        fontFamily: 'Inter-Bold',
     },
     titleHighlight: {
         color: DS.cyan,
@@ -228,28 +216,31 @@ const styles = StyleSheet.create({
         lineHeight: 22,
     },
     optionsContainer: {
-        gap: 12,
+        gap: 16,
         marginBottom: 24,
     },
-    optionCard: {
+    cardWrapper: {
+        borderRadius: 16,
+        overflow: 'hidden',
+    },
+    cardDefault: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: DS.card,
-        borderRadius: 16,
         padding: 16,
-        borderWidth: 2,
-        borderColor: 'transparent',
         gap: 14,
+        borderWidth: 1,
+        borderColor: DS.glassBorder,
+        borderRadius: 16,
     },
-    optionCardSelected: {
+    cardGradient: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        gap: 14,
+        borderRadius: 16,
+        borderWidth: 1,
         borderColor: DS.cyan,
-        backgroundColor: DS.cyanMuted,
-        // Glow effect
-        shadowColor: DS.cyan,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-        elevation: 4,
     },
     checkbox: {
         width: 24,
@@ -299,7 +290,7 @@ const styles = StyleSheet.create({
         paddingVertical: 14,
         fontSize: 15,
         color: DS.text,
-        minHeight: 100,
+        minHeight: 120,
     },
     helperText: {
         fontSize: 12,
@@ -310,3 +301,4 @@ const styles = StyleSheet.create({
 });
 
 export default LimitationsScreen;
+
