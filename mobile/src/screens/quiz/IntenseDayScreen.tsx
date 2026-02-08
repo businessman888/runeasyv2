@@ -5,28 +5,28 @@ import {
     StyleSheet,
     TouchableOpacity,
 } from 'react-native';
-import { colors, typography, borderRadius, shadows } from '../../theme';
-import Svg, { Path } from 'react-native-svg';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+// Design System Colors (Figma)
+const DS = {
+    bg: '#0F0F1E',
+    card: '#1C1C2E',
+    cyan: '#00D4FF',
+    cyanMuted: 'rgba(0, 127, 153, 0.3)',
+    text: '#EBEBF5',
+    textSecondary: 'rgba(235, 235, 245, 0.6)',
+};
+
+// Days of week - SHORT names only
 const DAYS = [
-    { id: 0, short: 'Dom', full: 'Domingo' },
-    { id: 1, short: 'Seg', full: 'Segunda' },
-    { id: 2, short: 'Ter', full: 'Terça' },
-    { id: 3, short: 'Qua', full: 'Quarta' },
-    { id: 4, short: 'Qui', full: 'Quinta' },
-    { id: 5, short: 'Sex', full: 'Sexta' },
-    { id: 6, short: 'Sáb', full: 'Sábado' },
+    { id: 0, short: 'DOM' },
+    { id: 1, short: 'SEG' },
+    { id: 2, short: 'TER' },
+    { id: 3, short: 'QUA' },
+    { id: 4, short: 'QUI' },
+    { id: 5, short: 'SEX' },
+    { id: 6, short: 'SÁB' },
 ];
-
-// Fire Icon for intense day - uses cyan (primary) per Figma
-const FireIcon = () => (
-    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-        <Path
-            d="M12 23C7.03 23 3 18.97 3 14C3 10.61 4.61 7.55 7.25 5.65L8.66 7.06C6.61 8.54 5.25 10.96 5.25 13.75C5.25 17.89 8.86 21.25 13 21.25C17.14 21.25 20.75 17.89 20.75 13.75C20.75 10.61 19.03 7.84 16.41 6.33L17.78 4.96C20.59 7.02 22.5 10.27 22.5 14C22.5 18.97 18.47 23 12 23ZM12 3.5C12 5.98 11 9 9.5 11C9.5 11 10.5 12 12 12C14 12 15.5 10.5 15.5 8.5C15.5 6.5 14 5 12 3.5Z"
-            fill={colors.primary}
-        />
-    </Svg>
-);
 
 interface IntenseDayScreenProps {
     value?: number | null;
@@ -75,15 +75,15 @@ export function IntenseDayScreen({ value, availableDays = [], onChange }: Intens
                 </Text>
             </View>
 
-            {/* Icon */}
+            {/* Fire Icon with MaterialCommunityIcons */}
             <View style={styles.iconContainer}>
                 <View style={styles.iconWrapper}>
-                    <FireIcon />
+                    <MaterialCommunityIcons name="fire" size={32} color={DS.cyan} />
                 </View>
                 <Text style={styles.iconLabel}>Treino Intenso</Text>
             </View>
 
-            {/* Days Selection */}
+            {/* Days Selection - SIGLAS ONLY */}
             <View style={styles.daysContainer}>
                 {filteredDays.map((day) => (
                     <TouchableOpacity
@@ -96,16 +96,10 @@ export function IntenseDayScreen({ value, availableDays = [], onChange }: Intens
                         activeOpacity={0.7}
                     >
                         <Text style={[
-                            styles.dayShort,
-                            selectedDay === day.id && styles.dayShortSelected
+                            styles.dayText,
+                            selectedDay === day.id && styles.dayTextSelected
                         ]}>
                             {day.short}
-                        </Text>
-                        <Text style={[
-                            styles.dayFull,
-                            selectedDay === day.id && styles.dayFullSelected
-                        ]}>
-                            {day.full}
                         </Text>
                     </TouchableOpacity>
                 ))}
@@ -123,23 +117,23 @@ export function IntenseDayScreen({ value, availableDays = [], onChange }: Intens
 
 const styles = StyleSheet.create({
     titleContainer: {
-        marginBottom: 32,
+        marginBottom: 24,
     },
     title: {
-        fontSize: typography.fontSizes['3xl'],
-        fontWeight: typography.fontWeights.bold,
-        color: colors.text,
-        lineHeight: 40,
+        fontSize: 24,
+        fontWeight: '700',
+        color: DS.text,
+        lineHeight: 32,
         marginBottom: 12,
     },
     titleHighlight: {
-        color: colors.primary,
+        color: DS.cyan,
     },
     subtitle: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.textSecondary,
-        lineHeight: 24,
+        fontSize: 15,
+        fontWeight: '400',
+        color: DS.textSecondary,
+        lineHeight: 22,
     },
     iconContainer: {
         alignItems: 'center',
@@ -148,61 +142,60 @@ const styles = StyleSheet.create({
     iconWrapper: {
         width: 64,
         height: 64,
-        borderRadius: borderRadius.full,
+        borderRadius: 32,
         backgroundColor: 'rgba(0, 212, 255, 0.15)',
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 8,
     },
     iconLabel: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.semibold,
-        color: colors.primary,
+        fontSize: 16,
+        fontWeight: '600',
+        color: DS.cyan,
     },
     daysContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
         gap: 12,
         marginBottom: 24,
+        justifyContent: 'center',
     },
     dayCard: {
-        flexDirection: 'row',
+        width: 70,
+        height: 50,
+        backgroundColor: DS.card,
+        borderRadius: 12,
         alignItems: 'center',
-        backgroundColor: colors.card,
-        borderRadius: borderRadius.xl,
-        padding: 16,
+        justifyContent: 'center',
         borderWidth: 2,
         borderColor: 'transparent',
     },
     dayCardSelected: {
-        borderColor: colors.primary,
-        backgroundColor: 'rgba(0, 212, 255, 0.08)',
+        borderColor: DS.cyan,
+        backgroundColor: DS.cyanMuted,
+        shadowColor: DS.cyan,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+        elevation: 4,
     },
-    dayShort: {
-        fontSize: typography.fontSizes.xl,
-        fontWeight: typography.fontWeights.bold,
-        color: colors.textSecondary,
-        width: 50,
+    dayText: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: DS.textSecondary,
     },
-    dayShortSelected: {
-        color: colors.primary,
-    },
-    dayFull: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.textSecondary,
-        flex: 1,
-    },
-    dayFullSelected: {
-        color: colors.text,
+    dayTextSelected: {
+        color: DS.cyan,
     },
     tipCard: {
-        backgroundColor: colors.card,
-        borderRadius: borderRadius.lg,
+        backgroundColor: DS.card,
+        borderRadius: 12,
         padding: 16,
     },
     tipText: {
-        fontSize: typography.fontSizes.md,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.textSecondary,
+        fontSize: 14,
+        fontWeight: '400',
+        color: DS.textSecondary,
         lineHeight: 20,
     },
     emptyContainer: {
@@ -212,9 +205,9 @@ const styles = StyleSheet.create({
         padding: 32,
     },
     emptyText: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.textSecondary,
+        fontSize: 16,
+        fontWeight: '400',
+        color: DS.textSecondary,
         textAlign: 'center',
     },
 });

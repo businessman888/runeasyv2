@@ -5,11 +5,11 @@ import {
     StyleSheet,
     Animated,
     PanResponder,
-    Dimensions,
     TextInput,
     TouchableOpacity,
 } from 'react-native';
-import Svg, { Path, Circle, Line, G } from 'react-native-svg';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Svg, { Line } from 'react-native-svg';
 
 // Design System Colors (Figma)
 const DS = {
@@ -21,15 +21,14 @@ const DS = {
     textSecondary: 'rgba(235, 235, 245, 0.6)',
 };
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const RULER_HEIGHT = 380;
+const RULER_HEIGHT = 320;
 const MIN_HEIGHT = 140;
 const MAX_HEIGHT = 210;
 const HEIGHT_RANGE = MAX_HEIGHT - MIN_HEIGHT; // 70 cm
-const TICK_SPACING = RULER_HEIGHT / HEIGHT_RANGE; // pixels per cm
+const TICK_SPACING = RULER_HEIGHT / HEIGHT_RANGE;
 
 // Height markers to show on ruler
-const RULER_MARKS = [195, 185, 180, 175, 170, 165, 160];
+const RULER_MARKS = [200, 190, 180, 170, 160, 150];
 
 interface HeightScreenProps {
     value?: number | null;
@@ -47,19 +46,16 @@ export function HeightScreen({ value, onChange }: HeightScreenProps) {
     useEffect(() => {
         if (value) {
             setSelectedHeight(value);
-            // Set initial position based on value
             const yPos = (MAX_HEIGHT - value) * TICK_SPACING;
             panY.setValue(yPos);
             lastOffset.current = yPos;
         }
     }, [value]);
 
-    // Calculate Y position from height value
     const heightToY = (height: number) => {
         return (MAX_HEIGHT - height) * TICK_SPACING;
     };
 
-    // Calculate height from Y position
     const yToHeight = (y: number) => {
         const height = MAX_HEIGHT - (y / TICK_SPACING);
         return Math.round(Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, height)));
@@ -74,9 +70,6 @@ export function HeightScreen({ value, onChange }: HeightScreenProps) {
                 panY.setValue(0);
             },
             onPanResponderMove: (_, gesture) => {
-                // Limit movement within bounds
-                const newY = lastOffset.current + gesture.dy;
-                const clampedY = Math.max(0, Math.min(RULER_HEIGHT, newY));
                 panY.setValue(gesture.dy);
             },
             onPanResponderRelease: (_, gesture) => {
@@ -93,7 +86,6 @@ export function HeightScreen({ value, onChange }: HeightScreenProps) {
         })
     ).current;
 
-    // Handle marker tap
     const handleMarkerPress = (height: number) => {
         const y = heightToY(height);
         Animated.spring(panY, {
@@ -108,7 +100,6 @@ export function HeightScreen({ value, onChange }: HeightScreenProps) {
         }
     };
 
-    // Handle custom input
     const handleCustomSubmit = () => {
         const num = parseInt(customValue, 10);
         if (num >= MIN_HEIGHT && num <= MAX_HEIGHT) {
@@ -118,8 +109,8 @@ export function HeightScreen({ value, onChange }: HeightScreenProps) {
         }
     };
 
-    // Calculate avatar scale based on height (0.7 to 1.1)
-    const avatarScale = 0.7 + ((selectedHeight - MIN_HEIGHT) / HEIGHT_RANGE) * 0.4;
+    // Avatar scale based on height (0.8 to 1.2)
+    const avatarScale = 0.8 + ((selectedHeight - MIN_HEIGHT) / HEIGHT_RANGE) * 0.4;
 
     return (
         <>
@@ -130,26 +121,26 @@ export function HeightScreen({ value, onChange }: HeightScreenProps) {
                     <Text style={styles.titleHighlight}>altura</Text>?
                 </Text>
                 <Text style={styles.subtitle}>
-                    Escolha a opção exata ou a mais próxima.
+                    Arraste a régua ou toque em um valor.
                 </Text>
             </View>
 
-            {/* Main Content: Ruler + Human Figure */}
+            {/* Main Content: Ruler + Avatar */}
             <View style={styles.contentContainer}>
                 {/* Left: Vertical Ruler */}
                 <View style={styles.rulerContainer} {...panResponder.panHandlers}>
-                    {/* Ruler ticks SVG */}
-                    <Svg width={13} height={RULER_HEIGHT} style={styles.rulerTicks}>
+                    {/* Ruler ticks */}
+                    <Svg width={12} height={RULER_HEIGHT} style={styles.rulerTicks}>
                         {Array.from({ length: HEIGHT_RANGE + 1 }, (_, i) => {
                             const y = i * TICK_SPACING;
                             const height = MAX_HEIGHT - i;
-                            const isMajor = height % 5 === 0;
+                            const isMajor = height % 10 === 0;
                             return (
                                 <Line
                                     key={i}
                                     x1={0}
                                     y1={y}
-                                    x2={isMajor ? 13 : 8}
+                                    x2={isMajor ? 12 : 6}
                                     y2={y}
                                     stroke={DS.textSecondary}
                                     strokeWidth={isMajor ? 2 : 1}
@@ -168,7 +159,7 @@ export function HeightScreen({ value, onChange }: HeightScreenProps) {
                                     key={height}
                                     style={[
                                         styles.marker,
-                                        { top: y - 10 },
+                                        { top: y - 12 },
                                         isSelected && styles.markerSelected,
                                     ]}
                                     onPress={() => handleMarkerPress(height)}
@@ -177,7 +168,7 @@ export function HeightScreen({ value, onChange }: HeightScreenProps) {
                                         styles.markerText,
                                         isSelected && styles.markerTextSelected,
                                     ]}>
-                                        {height} cm
+                                        {height}
                                     </Text>
                                 </TouchableOpacity>
                             );
@@ -188,9 +179,7 @@ export function HeightScreen({ value, onChange }: HeightScreenProps) {
                     <Animated.View
                         style={[
                             styles.indicator,
-                            {
-                                transform: [{ translateY: panY }],
-                            },
+                            { transform: [{ translateY: panY }] },
                         ]}
                     >
                         <View style={styles.indicatorLine} />
@@ -200,33 +189,15 @@ export function HeightScreen({ value, onChange }: HeightScreenProps) {
                     </Animated.View>
                 </View>
 
-                {/* Right: Human Figure */}
+                {/* Right: Simple Person Icon (scales with height) */}
                 <View style={styles.figureContainer}>
-                    <View style={[styles.figure, { transform: [{ scale: avatarScale }] }]}>
-                        <Svg width={120} height={250} viewBox="0 0 120 250">
-                            {/* Head */}
-                            <Circle cx={60} cy={35} r={30} fill={DS.cyan} opacity={0.8} />
-                            {/* Body */}
-                            <Path
-                                d="M60 70 C80 70 95 90 95 120 L95 180 C95 195 85 200 75 200 L75 245 C75 248 72 250 69 250 L51 250 C48 250 45 248 45 245 L45 200 C35 200 25 195 25 180 L25 120 C25 90 40 70 60 70"
-                                fill={DS.cyan}
-                                opacity={0.8}
-                            />
-                            {/* Arms */}
-                            <Path
-                                d="M25 95 L5 140 C3 145 5 150 10 150 L15 150 L35 115"
-                                fill={DS.cyan}
-                                opacity={0.6}
-                            />
-                            <Path
-                                d="M95 95 L115 140 C117 145 115 150 110 150 L105 150 L85 115"
-                                fill={DS.cyan}
-                                opacity={0.6}
-                            />
-                        </Svg>
+                    <View style={[styles.avatarWrapper, { transform: [{ scale: avatarScale }] }]}>
+                        <MaterialCommunityIcons
+                            name="human"
+                            size={120}
+                            color={DS.cyan}
+                        />
                     </View>
-
-                    {/* Height display below figure */}
                     <View style={styles.heightDisplay}>
                         <Text style={styles.heightValue}>{selectedHeight}</Text>
                         <Text style={styles.heightUnit}>cm</Text>
@@ -234,43 +205,43 @@ export function HeightScreen({ value, onChange }: HeightScreenProps) {
                 </View>
             </View>
 
-            {/* Bottom: Custom input option */}
+            {/* Custom Input Toggle */}
             <TouchableOpacity
-                style={styles.customInputButton}
+                style={styles.customToggle}
                 onPress={() => setShowCustomInput(!showCustomInput)}
             >
-                <Text style={styles.customInputLabel}>Outro valor</Text>
-                {showCustomInput ? (
-                    <View style={styles.customInputRow}>
-                        <TextInput
-                            style={styles.customInput}
-                            value={customValue}
-                            onChangeText={setCustomValue}
-                            keyboardType="number-pad"
-                            placeholder="Ex: 173"
-                            placeholderTextColor={DS.textSecondary}
-                            maxLength={3}
-                        />
-                        <TouchableOpacity
-                            style={styles.customSubmitButton}
-                            onPress={handleCustomSubmit}
-                        >
-                            <Text style={styles.customSubmitText}>OK</Text>
-                        </TouchableOpacity>
-                    </View>
-                ) : (
-                    <View style={styles.customValueBox}>
-                        <Text style={styles.customValueText}>{selectedHeight} cm</Text>
-                    </View>
-                )}
+                <Text style={styles.customToggleText}>
+                    {showCustomInput ? 'Fechar' : 'Inserir valor exato'}
+                </Text>
             </TouchableOpacity>
+
+            {/* Custom Input */}
+            {showCustomInput && (
+                <View style={styles.customInputContainer}>
+                    <TextInput
+                        style={styles.customInput}
+                        value={customValue}
+                        onChangeText={setCustomValue}
+                        keyboardType="number-pad"
+                        placeholder="Ex: 173"
+                        placeholderTextColor={DS.textSecondary}
+                        maxLength={3}
+                    />
+                    <TouchableOpacity
+                        style={styles.customSubmitButton}
+                        onPress={handleCustomSubmit}
+                    >
+                        <Text style={styles.customSubmitText}>OK</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
         </>
     );
 }
 
 const styles = StyleSheet.create({
     titleContainer: {
-        marginBottom: 20,
+        marginBottom: 16,
     },
     title: {
         fontSize: 24,
@@ -290,64 +261,65 @@ const styles = StyleSheet.create({
     },
     contentContainer: {
         flexDirection: 'row',
-        gap: 12,
+        height: RULER_HEIGHT,
         marginBottom: 16,
-        paddingHorizontal: 11,
     },
     rulerContainer: {
-        width: 72,
-        height: RULER_HEIGHT + 60,
+        width: 90,
+        height: RULER_HEIGHT,
         position: 'relative',
     },
     rulerTicks: {
         position: 'absolute',
-        left: 5,
-        top: 11,
+        left: 0,
+        top: 0,
     },
     markersContainer: {
         position: 'absolute',
-        left: 19,
-        top: 11,
-        width: 50,
+        left: 16,
+        top: 0,
+        width: 60,
         height: RULER_HEIGHT,
     },
     marker: {
         position: 'absolute',
-        left: 0,
-        paddingVertical: 2,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
     },
-    markerSelected: {},
+    markerSelected: {
+        backgroundColor: DS.cyanMuted,
+    },
     markerText: {
-        fontSize: 10,
-        fontWeight: '700',
+        fontSize: 14,
+        fontWeight: '500',
         color: DS.textSecondary,
     },
     markerTextSelected: {
         color: DS.cyan,
+        fontWeight: '700',
     },
     indicator: {
         position: 'absolute',
         left: 0,
-        width: 72,
-        height: 4,
+        right: 0,
         flexDirection: 'row',
         alignItems: 'center',
     },
     indicatorLine: {
-        flex: 1,
-        height: 3,
+        height: 2,
         backgroundColor: DS.cyan,
-        borderRadius: 2,
+        width: 50,
     },
     indicatorBadge: {
         backgroundColor: DS.cyan,
-        borderRadius: 8,
         paddingHorizontal: 8,
         paddingVertical: 4,
+        borderRadius: 6,
         marginLeft: 4,
     },
     indicatorText: {
-        fontSize: 12,
+        fontSize: 14,
         fontWeight: '700',
         color: DS.bg,
     },
@@ -356,13 +328,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    figure: {
+    avatarWrapper: {
         alignItems: 'center',
+        justifyContent: 'center',
     },
     heightDisplay: {
         flexDirection: 'row',
         alignItems: 'baseline',
-        marginTop: 20,
+        marginTop: 12,
     },
     heightValue: {
         fontSize: 48,
@@ -375,57 +348,44 @@ const styles = StyleSheet.create({
         color: DS.textSecondary,
         marginLeft: 4,
     },
-    customInputButton: {
+    customToggle: {
+        alignSelf: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+    },
+    customToggleText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: DS.cyan,
+        textDecorationLine: 'underline',
+    },
+    customInputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
         backgroundColor: DS.card,
         borderRadius: 12,
-        padding: 12,
-        marginTop: 8,
-    },
-    customInputLabel: {
-        fontSize: 11,
-        fontWeight: '600',
-        color: DS.cyanMuted,
-        marginBottom: 6,
-    },
-    customInputRow: {
-        flexDirection: 'row',
-        gap: 8,
+        borderWidth: 2,
+        borderColor: DS.cyan,
+        paddingHorizontal: 16,
+        marginTop: 12,
     },
     customInput: {
         flex: 1,
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: DS.cyanMuted,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        fontSize: 14,
+        fontSize: 20,
+        fontWeight: '700',
         color: DS.text,
+        paddingVertical: 12,
     },
     customSubmitButton: {
         backgroundColor: DS.cyan,
-        borderRadius: 8,
         paddingHorizontal: 16,
         paddingVertical: 8,
-        justifyContent: 'center',
+        borderRadius: 8,
     },
     customSubmitText: {
         fontSize: 14,
         fontWeight: '700',
         color: DS.bg,
-    },
-    customValueBox: {
-        borderWidth: 1,
-        borderColor: DS.cyanMuted,
-        borderRadius: 5,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        alignSelf: 'flex-start',
-    },
-    customValueText: {
-        fontSize: 12,
-        fontWeight: '400',
-        color: DS.cyanMuted,
     },
 });
 

@@ -172,32 +172,33 @@ export function LimitationsScreen({ value, onChange }: LimitationsScreenProps) {
                 </TouchableOpacity>
             </View>
 
-            {/* Animated Details Input - only visible when SIM */}
-            <Animated.View
-                style={[
-                    styles.detailsContainer,
-                    {
-                        opacity: fadeAnim,
-                        transform: [{ translateY: slideAnim }],
-                    },
-                ]}
-                pointerEvents={hasLimitation ? 'auto' : 'none'}
-            >
-                <Text style={styles.detailsLabel}>Descreva sua limitação:</Text>
-                <TextInput
-                    style={styles.textInput}
-                    placeholder="Ex: dor no joelho direito, tendinite no tornozelo..."
-                    placeholderTextColor={DS.textSecondary}
-                    value={details}
-                    onChangeText={handleDetailsChange}
-                    multiline
-                    numberOfLines={4}
-                    textAlignVertical="top"
-                />
-                <Text style={styles.helperText}>
-                    💡 Esta informação ajuda a IA a criar um plano mais seguro para você
-                </Text>
-            </Animated.View>
+            {/* Details Input - CONDITIONALLY RENDERED only when SIM */}
+            {hasLimitation && (
+                <Animated.View
+                    style={[
+                        styles.detailsContainer,
+                        {
+                            opacity: fadeAnim,
+                            transform: [{ translateY: slideAnim }],
+                        },
+                    ]}
+                >
+                    <Text style={styles.detailsLabel}>Descreva sua limitação:</Text>
+                    <TextInput
+                        style={styles.textInput}
+                        placeholder="Ex: dor no joelho direito, tendinite no tornozelo..."
+                        placeholderTextColor={DS.textSecondary}
+                        value={details}
+                        onChangeText={handleDetailsChange}
+                        multiline
+                        numberOfLines={4}
+                        textAlignVertical="top"
+                    />
+                    <Text style={styles.helperText}>
+                        💡 Esta informação ajuda a IA a criar um plano mais seguro para você
+                    </Text>
+                </Animated.View>
+            )}
         </View>
     );
 }

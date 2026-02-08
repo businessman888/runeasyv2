@@ -258,11 +258,8 @@ export function OnboardingScreen({ navigation, route }: any) {
         if (currentStepData.keys) {
             updateData(value);
         } else if (currentStepData.key) {
-            if (currentStepData.key === 'startDate' && value instanceof Date) {
-                updateData({ [currentStepData.key]: value.toISOString() });
-            } else {
-                updateData({ [currentStepData.key]: value });
-            }
+            // startDate is already a string (YYYY-MM-DD), no conversion needed
+            updateData({ [currentStepData.key]: value });
         }
     };
 
@@ -274,11 +271,8 @@ export function OnboardingScreen({ navigation, route }: any) {
                 [key]: data[key as keyof typeof data],
             }), {});
         } else if (currentStepData.key) {
-            const value = data[currentStepData.key as keyof typeof data];
-            if (currentStepData.key === 'startDate' && typeof value === 'string') {
-                return new Date(value);
-            }
-            return value;
+            // Return value as-is, startDate is already a string (YYYY-MM-DD)
+            return data[currentStepData.key as keyof typeof data];
         }
         return undefined;
     };
