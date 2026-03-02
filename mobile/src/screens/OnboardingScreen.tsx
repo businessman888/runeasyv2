@@ -17,7 +17,7 @@ import Svg, { Path } from 'react-native-svg';
 import { ObjectiveScreen } from './quiz/ObjectiveScreen';
 import { LevelScreen } from './quiz/LevelScreen';
 import { FrequencyScreen } from './quiz/FrequencyScreen';
-import { PaceScreen } from './quiz/PaceScreen';
+
 import { LimitationsScreen } from './quiz/LimitationsScreen';
 import { BirthDateScreen } from './quiz/BirthDateScreen';
 import { WeightScreen } from './quiz/WeightScreen';
@@ -32,7 +32,7 @@ import { GoalTimeframeScreen } from './quiz/GoalTimeframeScreen';
 // Import navigation buttons
 import { FixedNavigationButtons } from '../components/FixedNavigationButtons';
 
-const TOTAL_STEPS = 14;
+const TOTAL_STEPS = 13;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ============================================
@@ -190,10 +190,9 @@ export function OnboardingScreen({ navigation, route }: any) {
         { key: 'intenseDayIndex', Component: IntenseDayScreen, title: 'Qual dia para treino intenso?', extraProps: { availableDays: data.availableDays || [] } }, // 7
         { key: 'recentDistance', Component: RecentDistanceScreen, title: 'Maior distância recente?' },        // 8
         { key: 'distanceTime', Component: DistanceTimeScreen, title: 'Em quanto tempo?', extraProps: { distance: data.recentDistance || 5 } }, // 9
-        { keys: ['paceMinutes', 'paceSeconds', 'dontKnowPace'], Component: PaceScreen, title: 'Qual é o seu Pace?' }, // 10
-        { key: 'startDate', Component: StartDateScreen, title: 'Quando quer começar?' },                      // 11
-        { key: 'limitations', Component: LimitationsScreen, title: 'Alguma limitação física?' },              // 12
-        { key: 'goalTimeframe', Component: GoalTimeframeScreen, title: 'Quando deseja atingir sua meta?' },   // 13
+        { key: 'startDate', Component: StartDateScreen, title: 'Quando quer começar?' },                      // 10
+        { key: 'limitations', Component: LimitationsScreen, title: 'Alguma limitação física?' },              // 11
+        { key: 'goalTimeframe', Component: GoalTimeframeScreen, title: 'Quando deseja atingir sua meta?' },   // 12
     ];
 
     const currentStepData = QUIZ_STEPS[currentStep];
@@ -216,10 +215,9 @@ export function OnboardingScreen({ navigation, route }: any) {
             case 7: return data.intenseDayIndex !== null && data.intenseDayIndex !== undefined;                 // intenseDayIndex
             case 8: return !!data.recentDistance;                                                               // recentDistance
             case 9: return !!data.distanceTime && (data.distanceTime.hours > 0 || data.distanceTime.minutes > 0 || data.distanceTime.seconds > 0); // distanceTime
-            case 10: return data.dontKnowPace === true || (data.paceMinutes && data.paceSeconds);               // pace
-            case 11: return !!data.startDate;                                                                   // startDate
-            case 12: return data.limitations && typeof data.limitations.hasLimitation === 'boolean';            // limitations (required Sim/Não)
-            case 13: return typeof data.goalTimeframe === 'number' && data.goalTimeframe > 0;                   // goalTimeframe
+            case 10: return !!data.startDate;                                                                   // startDate
+            case 11: return data.limitations && typeof data.limitations.hasLimitation === 'boolean';            // limitations
+            case 12: return typeof data.goalTimeframe === 'number' && data.goalTimeframe > 0;                   // goalTimeframe
             default: return false;
         }
     };
@@ -251,25 +249,16 @@ export function OnboardingScreen({ navigation, route }: any) {
         }
     };
 
-    // Handle onChange - supports both single key and multiple keys
+    // Handle onChange - single key per step
     const handleChange = (value: any) => {
-        if (currentStepData.keys) {
-            updateData(value);
-        } else if (currentStepData.key) {
-            // startDate is already a string (YYYY-MM-DD), no conversion needed
+        if (currentStepData.key) {
             updateData({ [currentStepData.key]: value });
         }
     };
 
-    // Get value(s) for current step
+    // Get value for current step
     const getValue = () => {
-        if (currentStepData.keys) {
-            return currentStepData.keys.reduce((acc: any, key: string) => ({
-                ...acc,
-                [key]: data[key as keyof typeof data],
-            }), {});
-        } else if (currentStepData.key) {
-            // Return value as-is, startDate is already a string (YYYY-MM-DD)
+        if (currentStepData.key) {
             return data[currentStepData.key as keyof typeof data];
         }
         return undefined;
@@ -318,7 +307,6 @@ export function OnboardingScreen({ navigation, route }: any) {
                     <StepComponent
                         value={getValue()}
                         onChange={handleChange}
-                        {...(currentStepData.keys ? getValue() : {})}
                         {...extraProps}
                     />
                 </ScrollView>

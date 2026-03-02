@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -37,57 +37,57 @@ const CircularCheckbox = ({ selected }: { selected: boolean }) => (
 );
 
 interface LimitationsScreenProps {
-    value?: { hasLimitation: boolean; details: string };
+    value?: { hasLimitation: boolean; details: string } | null;
     onChange?: (value: { hasLimitation: boolean; details: string }) => void;
 }
 
 export function LimitationsScreen({ value, onChange }: LimitationsScreenProps) {
-    const [hasLimitation, setHasLimitation] = useState<boolean | null>(value?.hasLimitation ?? null); // Null initially to force selection
+    // Initialize state from props ONCE — no useEffect syncing to avoid infinite loops
+    const [hasLimitation, setHasLimitation] = useState<boolean | null>(
+        value && typeof value.hasLimitation === 'boolean' ? value.hasLimitation : null
+    );
     const [details, setDetails] = useState(value?.details || '');
 
     // Animation for details input
-    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const fadeAnim = useRef(new Animated.Value(
+        value?.hasLimitation === true ? 1 : 0
+    )).current;
 
-    useEffect(() => {
-        if (value && typeof value.hasLimitation === 'boolean') {
-            setHasLimitation(value.hasLimitation);
-            setDetails(value.details);
-        }
-    }, [value]);
+    // Stable onChange ref to avoid stale closures
+    const onChangeRef = useRef(onChange);
+    onChangeRef.current = onChange;
 
-    // Animate details field when hasLimitation is TRUE
-    useEffect(() => {
+    const handleOptionSelect = useCallback((option: boolean) => {
+        setHasLimitation(option);
+
+        // Animate details field
         Animated.timing(fadeAnim, {
-            toValue: hasLimitation === true ? 1 : 0,
+            toValue: option ? 1 : 0,
             duration: 300,
             useNativeDriver: true,
         }).start();
-    }, [hasLimitation]);
 
-    const handleOptionSelect = (option: boolean) => {
-        setHasLimitation(option);
+        const newDetails = option ? details : '';
         if (!option) {
-            setDetails(''); // Clear details when selecting NO
+            setDetails('');
         }
 
-        // Immediate update to enable parent button
-        if (onChange) {
-            onChange({
-                hasLimitation: option,
-                details: option ? details : '',
-            });
-        }
-    };
+        // Notify parent — only on user interaction, never during render
+        onChangeRef.current?.({
+            hasLimitation: option,
+            details: newDetails,
+        });
+    }, [details, fadeAnim]);
 
-    const handleDetailsChange = (text: string) => {
+    const handleDetailsChange = useCallback((text: string) => {
         setDetails(text);
-        if (onChange && hasLimitation !== null) {
-            onChange({
-                hasLimitation,
+        if (hasLimitation !== null) {
+            onChangeRef.current?.({
+                hasLimitation: hasLimitation!,
                 details: text,
             });
         }
-    };
+    }, [hasLimitation]);
 
     return (
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -105,36 +105,6 @@ export function LimitationsScreen({ value, onChange }: LimitationsScreenProps) {
 
                 {/* SIM/NÃO Options */}
                 <View style={styles.optionsContainer}>
-                    {/* SIM Option */}
-                    <TouchableOpacity
-                        style={styles.cardWrapper}
-                        onPress={() => handleOptionSelect(true)}
-                        activeOpacity={0.8}
-                    >
-                        {hasLimitation === true ? (
-                            <LinearGradient
-                                colors={['rgba(0, 212, 255, 0.15)', 'rgba(0, 212, 255, 0.05)']}
-                                style={styles.cardGradient}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 1 }}
-                            >
-                                <CircularCheckbox selected={true} />
-                                <View style={styles.optionContent}>
-                                    <Text style={[styles.optionTitle, styles.optionTitleSelected]}>Sim</Text>
-                                    <Text style={styles.optionSubtitle}>Tenho uma lesão ou limitação física</Text>
-                                </View>
-                            </LinearGradient>
-                        ) : (
-                            <View style={styles.cardDefault}>
-                                <CircularCheckbox selected={false} />
-                                <View style={styles.optionContent}>
-                                    <Text style={styles.optionTitle}>Sim</Text>
-                                    <Text style={styles.optionSubtitle}>Tenho uma lesão ou limitação física</Text>
-                                </View>
-                            </View>
-                        )}
-                    </TouchableOpacity>
-
                     {/* NÃO Option */}
                     <TouchableOpacity
                         style={styles.cardWrapper}
@@ -160,6 +130,36 @@ export function LimitationsScreen({ value, onChange }: LimitationsScreenProps) {
                                 <View style={styles.optionContent}>
                                     <Text style={styles.optionTitle}>Não</Text>
                                     <Text style={styles.optionSubtitle}>Não possuo limitações físicas</Text>
+                                </View>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+
+                    {/* SIM Option */}
+                    <TouchableOpacity
+                        style={styles.cardWrapper}
+                        onPress={() => handleOptionSelect(true)}
+                        activeOpacity={0.8}
+                    >
+                        {hasLimitation === true ? (
+                            <LinearGradient
+                                colors={['rgba(0, 212, 255, 0.15)', 'rgba(0, 212, 255, 0.05)']}
+                                style={styles.cardGradient}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                            >
+                                <CircularCheckbox selected={true} />
+                                <View style={styles.optionContent}>
+                                    <Text style={[styles.optionTitle, styles.optionTitleSelected]}>Sim</Text>
+                                    <Text style={styles.optionSubtitle}>Tenho uma lesão ou limitação física</Text>
+                                </View>
+                            </LinearGradient>
+                        ) : (
+                            <View style={styles.cardDefault}>
+                                <CircularCheckbox selected={false} />
+                                <View style={styles.optionContent}>
+                                    <Text style={styles.optionTitle}>Sim</Text>
+                                    <Text style={styles.optionSubtitle}>Tenho uma lesão ou limitação física</Text>
                                 </View>
                             </View>
                         )}
@@ -301,4 +301,3 @@ const styles = StyleSheet.create({
 });
 
 export default LimitationsScreen;
-
