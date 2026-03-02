@@ -17,7 +17,7 @@ import Svg, { Path } from 'react-native-svg';
 import { ObjectiveScreen } from './quiz/ObjectiveScreen';
 import { LevelScreen } from './quiz/LevelScreen';
 import { FrequencyScreen } from './quiz/FrequencyScreen';
-
+import { PaceConfirmScreen } from './quiz/PaceConfirmScreen';
 import { LimitationsScreen } from './quiz/LimitationsScreen';
 import { BirthDateScreen } from './quiz/BirthDateScreen';
 import { WeightScreen } from './quiz/WeightScreen';
@@ -32,7 +32,7 @@ import { GoalTimeframeScreen } from './quiz/GoalTimeframeScreen';
 // Import navigation buttons
 import { FixedNavigationButtons } from '../components/FixedNavigationButtons';
 
-const TOTAL_STEPS = 13;
+const TOTAL_STEPS = 14;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ============================================
@@ -177,9 +177,8 @@ export function OnboardingScreen({ navigation, route }: any) {
     const [currentStep, setCurrentStep] = useState(0);
     const scrollViewRef = useRef<ScrollView>(null);
 
-    // Define all quiz steps with their component and data key(s)
-    // 14 total steps (0-13)
-    const QUIZ_STEPS = [
+    // Define all quiz steps — 14 total (0-13)
+    const QUIZ_STEPS: any[] = [
         { key: 'birthDate', Component: BirthDateScreen, title: 'Qual a sua data de nascimento?' },           // 0
         { key: 'weight', Component: WeightScreen, title: 'Qual é o seu peso atual?' },                        // 1
         { key: 'height', Component: HeightScreen, title: 'Qual é a sua altura?' },                            // 2
@@ -190,9 +189,10 @@ export function OnboardingScreen({ navigation, route }: any) {
         { key: 'intenseDayIndex', Component: IntenseDayScreen, title: 'Qual dia para treino intenso?', extraProps: { availableDays: data.availableDays || [] } }, // 7
         { key: 'recentDistance', Component: RecentDistanceScreen, title: 'Maior distância recente?' },        // 8
         { key: 'distanceTime', Component: DistanceTimeScreen, title: 'Em quanto tempo?', extraProps: { distance: data.recentDistance || 5 } }, // 9
-        { key: 'startDate', Component: StartDateScreen, title: 'Quando quer começar?' },                      // 10
-        { key: 'limitations', Component: LimitationsScreen, title: 'Alguma limitação física?' },              // 11
-        { key: 'goalTimeframe', Component: GoalTimeframeScreen, title: 'Quando deseja atingir sua meta?' },   // 12
+        { keys: ['paceMinutes', 'paceSeconds', 'dontKnowPace'], Component: PaceConfirmScreen, title: 'Qual é o seu Pace?' }, // 10
+        { key: 'startDate', Component: StartDateScreen, title: 'Quando quer começar?' },                      // 11
+        { key: 'limitations', Component: LimitationsScreen, title: 'Alguma limitação física?' },              // 12
+        { key: 'goalTimeframe', Component: GoalTimeframeScreen, title: 'Quando deseja atingir sua meta?' },   // 13
     ];
 
     const currentStepData = QUIZ_STEPS[currentStep];
@@ -215,9 +215,10 @@ export function OnboardingScreen({ navigation, route }: any) {
             case 7: return data.intenseDayIndex !== null && data.intenseDayIndex !== undefined;                 // intenseDayIndex
             case 8: return !!data.recentDistance;                                                               // recentDistance
             case 9: return !!data.distanceTime && (data.distanceTime.hours > 0 || data.distanceTime.minutes > 0 || data.distanceTime.seconds > 0); // distanceTime
-            case 10: return !!data.startDate;                                                                   // startDate
-            case 11: return data.limitations && typeof data.limitations.hasLimitation === 'boolean';            // limitations
-            case 12: return typeof data.goalTimeframe === 'number' && data.goalTimeframe > 0;                   // goalTimeframe
+            case 10: return data.dontKnowPace === true || (!!data.paceMinutes && !!data.paceSeconds);           // pace
+            case 11: return !!data.startDate;                                                                   // startDate
+            case 12: return data.limitations && typeof data.limitations.hasLimitation === 'boolean';            // limitations
+            case 13: return typeof data.goalTimeframe === 'number' && data.goalTimeframe > 0;                   // goalTimeframe
             default: return false;
         }
     };
@@ -249,16 +250,25 @@ export function OnboardingScreen({ navigation, route }: any) {
         }
     };
 
-    // Handle onChange - single key per step
+    // Handle onChange — multi-key steps spread directly, single-key wraps in object
     const handleChange = (value: any) => {
-        if (currentStepData.key) {
+        if (currentStepData.keys) {
+            // Multi-key step (e.g. PaceConfirmScreen): value is { paceMinutes, paceSeconds, dontKnowPace }
+            updateData(value);
+        } else if (currentStepData.key) {
             updateData({ [currentStepData.key]: value });
         }
     };
 
-    // Get value for current step
+    // Get value(s) for current step — multi-key returns individual props
     const getValue = () => {
-        if (currentStepData.key) {
+        if (currentStepData.keys) {
+            const result: any = {};
+            for (const k of currentStepData.keys) {
+                result[k] = data[k as keyof typeof data];
+            }
+            return result;
+        } else if (currentStepData.key) {
             return data[currentStepData.key as keyof typeof data];
         }
         return undefined;
@@ -305,7 +315,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                     showsVerticalScrollIndicator={false}
                 >
                     <StepComponent
-                        value={getValue()}
+                        {...(currentStepData.keys ? getValue() : { value: getValue() })}
                         onChange={handleChange}
                         {...extraProps}
                     />

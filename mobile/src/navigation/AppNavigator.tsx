@@ -21,8 +21,6 @@ import {
     ObjectiveScreen,
     LevelScreen,
     FrequencyScreen,
-    PaceScreen,
-    TimeframeScreen,
     LimitationsScreen,
     ReadinessQuizScreen,
     ReadinessResultScreen,

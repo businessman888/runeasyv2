@@ -1,8 +1,7 @@
 export { ObjectiveScreen } from './ObjectiveScreen';
 export { LevelScreen } from './LevelScreen';
 export { FrequencyScreen } from './FrequencyScreen';
-export { PaceScreen } from './PaceScreen';
-export { TimeframeScreen } from './TimeframeScreen';
+export { PaceConfirmScreen } from './PaceConfirmScreen';
 export { LimitationsScreen } from './LimitationsScreen';
 export { PlanPreviewScreen } from './PlanPreviewScreen';
 export { PlanLoadingScreen } from './PlanLoadingScreen';

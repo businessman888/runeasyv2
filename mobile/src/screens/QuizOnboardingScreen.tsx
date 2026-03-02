@@ -17,8 +17,7 @@ import Svg, { Path } from 'react-native-svg';
 import { ObjectiveScreen } from './quiz/ObjectiveScreen';
 import { LevelScreen } from './quiz/LevelScreen';
 import { FrequencyScreen } from './quiz/FrequencyScreen';
-import { PaceScreen } from './quiz/PaceScreen';
-import { TimeframeScreen } from './quiz/TimeframeScreen';
+import { PaceConfirmScreen } from './quiz/PaceConfirmScreen';
 import { LimitationsScreen } from './quiz/LimitationsScreen';
 
 // Import new quiz components
@@ -232,11 +231,11 @@ export function QuizOnboardingScreen({ navigation, route }: any) {
             title: 'Qual dia para treino intenso?',
             extraProps: { availableDays: data.availableDays || [] },
         },
-        // Step 9: Injury/Pace
+        // Step 9: Pace
         {
-            keys: ['hasInjury', 'injuryDetails'],
-            Component: PaceScreen,
-            title: 'Limitações físicas?',
+            keys: ['paceMinutes', 'paceSeconds', 'dontKnowPace'],
+            Component: PaceConfirmScreen,
+            title: 'Qual é o seu Pace?',
         },
         // Step 10: Recent Distance
         {
@@ -251,10 +250,10 @@ export function QuizOnboardingScreen({ navigation, route }: any) {
             title: 'Em quanto tempo?',
             extraProps: { distance: data.recentDistance || 5 },
         },
-        // Step 12: Timeframe (Pace Input)
+        // Step 12: Pace Confirm
         {
             keys: ['paceMinutes', 'paceSeconds', 'dontKnowPace'],
-            Component: TimeframeScreen,
+            Component: PaceConfirmScreen,
             title: 'Qual é o seu Pace?',
         },
         // Step 13: Start Date
