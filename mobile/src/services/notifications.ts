@@ -7,6 +7,7 @@
 
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { BASE_API_URL } from '../config/api.config';
 
@@ -50,6 +51,12 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 
         if (finalStatus !== 'granted') {
             console.log('[Notifications] Permission denied for push notifications');
+            return null;
+        }
+
+        // Guard: Expo Go não suporta tokens nativos (FCM/APNs)
+        if (Constants.appOwnership === 'expo') {
+            console.log('[Push] Ignorando token nativo no Expo Go');
             return null;
         }
 
