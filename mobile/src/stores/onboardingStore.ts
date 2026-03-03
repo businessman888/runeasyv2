@@ -234,9 +234,16 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                 available_days: data.availableDays || [],
                 intense_day_index: data.intenseDayIndex ?? null,
 
-                // Original pace/limitations
+                // Pace data
                 current_pace_5k: data.currentPace5k ?? null,
-                target_weeks: data.targetWeeks || 8,
+                pace_minutes: data.paceMinutes || null,
+                pace_seconds: data.paceSeconds || null,
+                dont_know_pace: data.dontKnowPace || false,
+
+                // Goal duration: convert months → weeks (1 month = 4 weeks)
+                goal_timeframe: data.goalTimeframe ?? null,
+                target_weeks: data.goalTimeframe ? data.goalTimeframe * 4 : (data.targetWeeks || 8),
+
                 // Map object { hasLimitation, details } to string or null for API
                 limitations: data.limitations?.hasLimitation ? data.limitations.details : null,
                 preferred_days: data.preferredDays || [],

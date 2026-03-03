@@ -10,6 +10,7 @@ export interface TrainingPlanRequest {
   targetWeeks: number;
   limitations: string | null;
   preferredDays: number[];
+  startDate?: string | null; // ISO date string (YYYY-MM-DD)
   // Manual overrides from Customize Screen
   targetTime?: string; // e.g., "01:55:00"
   targetPace?: string; // e.g., "5:30"

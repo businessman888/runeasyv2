@@ -170,23 +170,9 @@ export function SmartPlanScreen({ navigation, route }: any) {
 
     const handleUnlockAll = async () => {
         try {
-            // Save onboarding completion to backend
+            // The backend already marked onboarding as complete during /training/onboarding
+            // Just ensure the user is authenticated in the local store
             if (userId) {
-                const API_URL = BASE_API_URL; // Using centralized config
-
-                // Save quiz data to user_onboarding table
-                await fetch(`${API_URL}/onboarding/complete`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-user-id': userId,
-                    },
-                    body: JSON.stringify({
-                        quiz_data: data, // Save all quiz answers
-                    }),
-                });
-
-                // Authenticate user properly using authStore login
                 const { login } = useAuthStore.getState();
                 await login(userId);
             }
@@ -211,7 +197,7 @@ export function SmartPlanScreen({ navigation, route }: any) {
             );
         } catch (error) {
             console.error('Error completing onboarding:', error);
-            // Still navigate even if save fails
+            // Still navigate even if login fails
             navigation.dispatch(
                 CommonActions.reset({
                     index: 0,

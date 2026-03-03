@@ -82,12 +82,15 @@ export class TrainingService {
 
             if (planError) throw planError;
 
+            // Use user's selected start date, fallback to today
+            const planStartDate = onboardingData.startDate ? new Date(onboardingData.startDate) : new Date();
+
             // Create workouts for week 1 only
             const workoutsToInsert = this.createWorkoutsForWeek(
                 plan.id,
                 userId,
                 quickResult.firstWeek,
-                new Date(),
+                planStartDate,
             );
 
             const { error: workoutsError } = await this.supabaseService
@@ -195,12 +198,12 @@ export class TrainingService {
 
             if (updateError) throw updateError;
 
-            // Create workouts for weeks 2-N
-            const today = new Date();
+            // Use user's selected start date, fallback to today
+            const planStartDate = onboardingData.startDate ? new Date(onboardingData.startDate) : new Date();
             const allWorkoutsToInsert = [];
 
             for (const week of fullSchedule.weeks) {
-                const weekWorkouts = this.createWorkoutsForWeek(planId, userId, week, today);
+                const weekWorkouts = this.createWorkoutsForWeek(planId, userId, week, planStartDate);
                 allWorkoutsToInsert.push(...weekWorkouts);
             }
 

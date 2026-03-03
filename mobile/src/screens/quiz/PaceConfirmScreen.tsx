@@ -223,22 +223,22 @@ export function PaceConfirmScreen({
 // ============================================
 // STYLES — Figma faithful
 // ============================================
-const INPUT_BLOCK_SIZE = (SCREEN_WIDTH - 40 - 24 - 60 - 32) / 2; // Account for padding, gap, separator, unit
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        paddingTop: 16,
+        paddingTop: 32,
     },
 
     // — Glass Card —
     glassCard: {
         borderWidth: 1.5,
         borderColor: DS.glassBorder,
-        borderRadius: 20,
-        paddingVertical: 24,
-        paddingHorizontal: 20,
+        borderRadius: 24,
+        paddingVertical: 28,
+        paddingHorizontal: 24,
         alignItems: 'center',
+        marginHorizontal: 4,
         // Glassmorphism shadow
         shadowColor: DS.cyan,
         shadowOffset: { width: 0, height: 0 },
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '700',
         color: DS.cyan,
-        marginBottom: 20,
+        marginBottom: 24,
         letterSpacing: 0.5,
     },
 
@@ -260,12 +260,12 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 10,
+        gap: 12,
     },
     inputBlock: {
-        width: INPUT_BLOCK_SIZE,
-        height: 80,
-        borderRadius: 14,
+        width: 110,
+        height: 90,
+        borderRadius: 16,
         backgroundColor: DS.inputBg,
         borderWidth: 1.5,
         borderColor: DS.inputBorder,
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
     },
     inputValue: {
         fontFamily: 'Inter-Bold',
-        fontSize: 36,
+        fontSize: 40,
         fontWeight: '700',
         color: DS.text,
     },
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     },
     separator: {
         fontFamily: 'Inter-Bold',
-        fontSize: 32,
+        fontSize: 36,
         fontWeight: '700',
         color: DS.text,
     },
@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         color: DS.textSecondary,
-        marginLeft: 4,
+        marginLeft: 6,
     },
 
     // — Checkbox Row —

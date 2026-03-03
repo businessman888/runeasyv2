@@ -35,8 +35,14 @@ interface CreatePlanDto {
     available_days: number[]; // 0=DOM, 1=SEG, ..., 6=SAB
     intense_day_index: number | null; // Which day for intense workout
 
-    // Original pace/limitations
+    // Pace data
     current_pace_5k: number | null;
+    pace_minutes: string | null;
+    pace_seconds: string | null;
+    dont_know_pace: boolean;
+
+    // Goal duration
+    goal_timeframe: number | null; // months (1, 3, 6, 12)
     target_weeks: number;
     limitations: string | null;
     preferred_days: number[];
@@ -81,24 +87,29 @@ export class TrainingController {
             // Save onboarding data with new biometric and performance fields
             await this.supabaseService.from('user_onboarding').upsert({
                 user_id: userId,
-                // Biometrics (New)
+                // Biometrics
                 birth_date: dto.birth_date,
                 weight: dto.weight,
                 height: dto.height,
-                // Original fields
+                // Core fields
                 goal: dto.goal,
                 level: dto.level,
                 days_per_week: dto.days_per_week,
-                // Availability (New)
+                // Availability
                 available_days: dto.available_days,
                 intense_day_index: dto.intense_day_index,
-                // Original pace/limitations
+                // Pace data
                 current_pace_5k: dto.current_pace_5k,
+                pace_minutes: dto.pace_minutes,
+                pace_seconds: dto.pace_seconds,
+                dont_know_pace: dto.dont_know_pace,
+                // Goal duration
+                goal_timeframe: dto.goal_timeframe,
                 target_weeks: dto.target_weeks,
                 has_limitations: !!dto.limitations,
                 limitations: dto.limitations,
                 preferred_days: dto.preferred_days,
-                // Performance Baseline (New)
+                // Performance Baseline
                 recent_distance: dto.recent_distance,
                 distance_time: dto.distance_time,
                 calculated_pace: dto.calculated_pace,
@@ -123,6 +134,7 @@ export class TrainingController {
                 targetWeeks: dto.target_weeks,
                 limitations: dto.limitations,
                 preferredDays: dto.preferred_days,
+                startDate: dto.start_date,
             });
 
             // Return immediately with first workout data
