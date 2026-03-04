@@ -72,23 +72,11 @@ export function LoginScreen({ navigation }: any) {
                 // Save userId to storage
                 await Storage.setItemAsync('user_id', userId);
 
-                // Check the path to determine if user is new or existing
-                const pathname = url.pathname;
-
-                if (pathname.includes('/onboarding')) {
-                    // New user - navigate to quiz
-                    console.log('New user detected - navigating to Quiz');
-                    navigation.replace('Quiz_Objective', { userId });
-                } else if (pathname.includes('/home')) {
-                    // Existing user - log in directly
-                    console.log('Existing user detected - logging in and going to home');
-                    await login(userId);
-                    // Login sets isAuthenticated = true, AppNavigator will show Main tabs
-                } else {
-                    // Fallback - check if quiz was completed by fetching user data
-                    console.log('Unknown path, checking user status...');
-                    await login(userId);
-                }
+                // Always use login() — AppNavigator decides the screen based on:
+                // - onboarding_completed = false → State 2 (Onboarding)
+                // - onboarding_completed = true  → State 3 (Main tabs)
+                console.log('User authenticated — AppNavigator will auto-navigate');
+                await login(userId);
             }
         } catch (err) {
             console.error('Web callback error:', err);
@@ -158,21 +146,9 @@ export function LoginScreen({ navigation }: any) {
                         if (userId) {
                             await Storage.setItemAsync('user_id', userId);
 
-                            // Check path param from backend (for Expo URLs)
-                            const pathParam = url.searchParams.get('path');
-                            const pathname = pathParam || url.pathname || '';
-                            console.log('Path param:', pathParam);
-                            console.log('Pathname:', pathname);
-
-                            if (pathname.includes('onboarding')) {
-                                console.log('New user - navigating to Quiz');
-                                navigation.replace('Quiz_Objective', { userId });
-                            } else {
-                                console.log('Existing user - logging in');
-                                await login(userId);
-                                // AppNavigator will automatically switch to Main when isAuthenticated becomes true
-                                console.log('Login complete - auth state updated, AppNavigator will switch routes');
-                            }
+                            // Always use login() — AppNavigator decides the screen
+                            console.log('User authenticated — AppNavigator will auto-navigate');
+                            await login(userId);
                         }
                     } catch (parseError) {
                         console.error('Error parsing deep link:', parseError);

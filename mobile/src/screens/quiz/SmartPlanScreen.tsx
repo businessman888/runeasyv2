@@ -169,17 +169,22 @@ export function SmartPlanScreen({ navigation, route }: any) {
     const handleUnlockAll = async () => {
         try {
             if (userId) {
-                // Re-fetch user data from backend
-                // Backend already marked onboarding_completed = true during /training/onboarding
-                // This will update authStore.user.onboarding_completed to true
-                // which automatically triggers AppNavigator to switch from
-                // State 2 (onboarding screens) → State 3 (Main tabs)
-                const { login } = useAuthStore.getState();
+                // Re-fetch user data from backend.
+                // Backend already marked onboarding_completed = true during /training/onboarding.
+                // login() updates authStore with fresh user data → AppNavigator auto-transitions.
+                const { login, user, setUser } = useAuthStore.getState();
                 await login(userId);
 
-                // No need to manually navigate — AppNavigator re-renders
-                // automatically when user.onboarding_completed changes to true,
-                // unmounting the onboarding stack and mounting the Main tabs.
+                // Belt-and-suspenders: if login() returned but onboarding_completed is still false
+                // (e.g., stale cache, race condition), force it locally.
+                const updatedUser = useAuthStore.getState().user;
+                if (updatedUser && !updatedUser.onboarding_completed) {
+                    console.log('[SmartPlan] Force-setting onboarding_completed = true');
+                    useAuthStore.getState().setUser({
+                        ...updatedUser,
+                        onboarding_completed: true,
+                    });
+                }
             }
         } catch (error) {
             console.error('Error completing onboarding:', error);

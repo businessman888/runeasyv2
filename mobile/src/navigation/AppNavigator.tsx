@@ -174,14 +174,10 @@ export function AppNavigator() {
                 if (userId) {
                     console.log('[DeepLink] Extracted user_id:', userId);
                     await login(userId);
-                    console.log('[DeepLink] Login triggered for user:', userId);
-
-                    // FORCE navigation to Onboarding immediately
-                    // Even if state update is delayed, push user to correct screen
-                    if (navigationRef.isReady()) {
-                        navigationRef.navigate('Onboarding' as never);
-                        console.log('[DeepLink] Navigated to Onboarding');
-                    }
+                    console.log('[DeepLink] Login complete — AppNavigator will auto-navigate based on onboarding_completed state');
+                    // No manual navigation needed:
+                    // - If onboarding_completed = false → AppNavigator renders State 2 (Onboarding)
+                    // - If onboarding_completed = true  → AppNavigator renders State 3 (Main tabs)
                 } else {
                     console.warn('[DeepLink] No user_id found in URL');
                 }
