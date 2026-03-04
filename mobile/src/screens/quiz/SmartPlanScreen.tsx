@@ -9,12 +9,10 @@ import {
     ScrollView,
     BackHandler,
 } from 'react-native';
-import { CommonActions } from '@react-navigation/native';
 import { colors } from '../../theme';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useAuthStore } from '../../stores/authStore';
 import Svg, { Path, Rect, G, Defs, Filter, FeFlood, FeColorMatrix, FeOffset, FeGaussianBlur, FeComposite, FeBlend, ClipPath, Circle } from 'react-native-svg';
-import { BASE_API_URL } from '../../config/api.config';
 
 // Badge de Conquista Icon (Yellow Trophy)
 const BadgeIcon = () => (
@@ -170,40 +168,29 @@ export function SmartPlanScreen({ navigation, route }: any) {
 
     const handleUnlockAll = async () => {
         try {
-            // The backend already marked onboarding as complete during /training/onboarding
-            // Just ensure the user is authenticated in the local store
             if (userId) {
+                // Re-fetch user data from backend
+                // Backend already marked onboarding_completed = true during /training/onboarding
+                // This will update authStore.user.onboarding_completed to true
+                // which automatically triggers AppNavigator to switch from
+                // State 2 (onboarding screens) → State 3 (Main tabs)
                 const { login } = useAuthStore.getState();
                 await login(userId);
-            }
 
-            // Navigate to Main with Calendar tab selected
-            navigation.dispatch(
-                CommonActions.reset({
-                    index: 0,
-                    routes: [{
-                        name: 'Main',
-                        state: {
-                            index: 1, // Calendar is the second tab
-                            routes: [
-                                { name: 'Home' },
-                                { name: 'Calendar' },
-                                { name: 'Evolution' },
-                                { name: 'Settings' },
-                            ],
-                        },
-                    }],
-                })
-            );
+                // No need to manually navigate — AppNavigator re-renders
+                // automatically when user.onboarding_completed changes to true,
+                // unmounting the onboarding stack and mounting the Main tabs.
+            }
         } catch (error) {
             console.error('Error completing onboarding:', error);
-            // Still navigate even if login fails
-            navigation.dispatch(
-                CommonActions.reset({
-                    index: 0,
-                    routes: [{ name: 'Main' }],
-                })
-            );
+            // Fallback: force set onboarding_completed locally so navigation works
+            const currentUser = useAuthStore.getState().user;
+            if (currentUser) {
+                useAuthStore.getState().setUser({
+                    ...currentUser,
+                    onboarding_completed: true,
+                });
+            }
         }
     };
 

@@ -85,7 +85,7 @@ export class TrainingController {
 
         try {
             // Save onboarding data with new biometric and performance fields
-            await this.supabaseService.from('user_onboarding').upsert({
+            const { error: upsertError } = await this.supabaseService.from('user_onboarding').upsert({
                 user_id: userId,
                 // Biometrics
                 birth_date: dto.birth_date,
@@ -118,6 +118,16 @@ export class TrainingController {
                 completed_at: new Date().toISOString(),
                 responses_json: dto,
             });
+
+            if (upsertError) {
+                this.logger.error(`Failed to save onboarding data: ${upsertError.message}`, upsertError);
+                throw new HttpException(
+                    `Failed to save onboarding data: ${upsertError.message}`,
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                );
+            }
+
+            this.logger.log(`Onboarding data saved for user ${userId}`);
 
             // CRITICAL: Mark onboarding as complete in users table
             // This unlocks the user from the Onboarding screen
