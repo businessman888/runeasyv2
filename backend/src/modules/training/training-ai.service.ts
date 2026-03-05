@@ -149,6 +149,18 @@ export class TrainingAIService {
    * Target response time: ~3-5 seconds
    */
   async generateFirstWorkout(request: TrainingPlanRequest): Promise<QuickPlanResult> {
+    // GUARD: Clamp unrealistic pace values before sending to AI
+    let safePace = request.currentPace5k;
+    if (safePace !== null && safePace !== undefined) {
+      if (safePace > 15.0) {
+        this.logger.warn(`[Pace Guard] Pace ${safePace.toFixed(2)} min/km is unrealistic (>15), defaulting to 7.0`);
+        safePace = 7.0;
+      } else if (safePace < 2.0) {
+        this.logger.warn(`[Pace Guard] Pace ${safePace.toFixed(2)} min/km is impossibly fast (<2), clamping to 3.0`);
+        safePace = 3.0;
+      }
+    }
+
     const systemPrompt = `Você é um treinador de corrida de elite da RunEasy. Sua tarefa é analisar o perfil do atleta e gerar APENAS o primeiro treino inicial.
 
 REGRA CRÍTICA: Sua resposta deve ser APENAS um objeto JSON válido, sem nenhum texto antes ou depois.
@@ -203,7 +215,7 @@ PERFIL DO CORREDOR (Quiz Responses):
 P1. Objetivo: ${this.goalDescriptions[request.goal] || request.goal}
 P2. Nível: ${this.levelDescriptions[request.level] || request.level}
 P3. Frequência disponível: ${request.daysPerWeek} dias/semana
-P4. Pace atual 5K: ${request.currentPace5k ? `${request.currentPace5k.toFixed(2)} min/km` : 'Não sei (iniciante)'}
+P4. Pace atual 5K: ${safePace ? `${safePace.toFixed(2)} min/km` : 'Não sei (iniciante)'}
 P5. Prazo para objetivo: ${request.targetWeeks} semanas
 P6. Limitações/Lesões: ${request.limitations || 'Nenhuma'}
 

@@ -335,9 +335,30 @@ export function QuizOnboardingScreen({ navigation, route }: any) {
         // Calculate pace before continuing from distance time screen
         if (currentStep === 10 && data.distanceTime && data.recentDistance) {
             const { hours, minutes, seconds } = data.distanceTime;
-            const totalMinutes = hours * 60 + minutes + seconds / 60;
-            const pacePerKm = totalMinutes / data.recentDistance;
+            const totalMinutes = (hours * 60) + minutes + (seconds / 60);
+            let pacePerKm = totalMinutes / data.recentDistance;
+
+            // Validate: clamp unrealistic pace values
+            if (pacePerKm > 15) {
+                console.warn(`[Pace] Calculated ${pacePerKm.toFixed(2)} min/km is unrealistic, defaulting to 7.0`);
+                pacePerKm = 7.0;
+            } else if (pacePerKm < 2) {
+                console.warn(`[Pace] Calculated ${pacePerKm.toFixed(2)} min/km is impossibly fast, clamping to 3.0`);
+                pacePerKm = 3.0;
+            }
+
+            console.log(`[Pace] Time: ${hours}h ${minutes}m ${seconds}s = ${totalMinutes.toFixed(2)} min total`);
+            console.log(`[Pace] Distance: ${data.recentDistance} km → Pace: ${pacePerKm.toFixed(2)} min/km`);
             updateData({ calculatedPace: pacePerKm });
+
+            // Pre-fill PaceConfirmScreen with formatted MM:SS
+            const wholeMinutes = Math.floor(pacePerKm);
+            const remainderSeconds = Math.round((pacePerKm - wholeMinutes) * 60);
+            updateData({
+                paceMinutes: String(wholeMinutes).padStart(2, '0'),
+                paceSeconds: String(remainderSeconds).padStart(2, '0'),
+                dontKnowPace: false,
+            });
         }
 
         // If on last step, navigate to PlanLoadingScreen

@@ -40,7 +40,7 @@ export function DistanceTimeScreen({ value, recentDistance = 5, onChange }: Dist
     const [hours, setHours] = useState('');
     const [minutes, setMinutes] = useState('');
     const [seconds, setSeconds] = useState('');
-    const [activeField, setActiveField] = useState<FieldType>('minutes'); // Default focus on minutes? Or hours?
+    const [activeField, setActiveField] = useState<FieldType>('minutes'); // Start on minutes — most runners don't need hours
 
     // Load initial values
     useEffect(() => {
@@ -48,10 +48,8 @@ export function DistanceTimeScreen({ value, recentDistance = 5, onChange }: Dist
             setHours(value.hours > 0 ? String(value.hours).padStart(2, '0') : '');
             setMinutes(value.minutes > 0 ? String(value.minutes).padStart(2, '0') : '');
             setSeconds(value.seconds > 0 ? String(value.seconds).padStart(2, '0') : '');
-        } else {
-            // Focus on start
-            setActiveField('hours');
         }
+        // Always default to minutes field — prevents user from accidentally typing into hours
     }, [value]);
 
     // Handle updates and persistence
