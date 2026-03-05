@@ -9,6 +9,7 @@ import {
     ScrollView,
     BackHandler,
 } from 'react-native';
+import { CommonActions } from '@react-navigation/native';
 import { colors } from '../../theme';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -166,36 +167,43 @@ export function SmartPlanScreen({ navigation, route }: any) {
     const workoutDuration = nextWorkout?.duration || '35 min';
     const workoutPace = nextWorkout?.paceEstimate || 'Pace 5:30';
 
-    const handleUnlockAll = async () => {
-        try {
-            if (userId) {
-                // Re-fetch user data from backend.
-                // Backend already marked onboarding_completed = true during /training/onboarding.
-                // login() updates authStore with fresh user data → AppNavigator auto-transitions.
-                const { login, user, setUser } = useAuthStore.getState();
-                await login(userId);
+    const handleUnlockAll = () => {
+        console.log('[SmartPlan] Desbloquear tudo pressed');
 
-                // Belt-and-suspenders: if login() returned but onboarding_completed is still false
-                // (e.g., stale cache, race condition), force it locally.
-                const updatedUser = useAuthStore.getState().user;
-                if (updatedUser && !updatedUser.onboarding_completed) {
-                    console.log('[SmartPlan] Force-setting onboarding_completed = true');
-                    useAuthStore.getState().setUser({
-                        ...updatedUser,
-                        onboarding_completed: true,
-                    });
-                }
+        // 1. INSTANT: Force onboarding_completed = true in authStore
+        //    This triggers AppNavigator to swap from State 2 → State 3 immediately
+        const currentUser = useAuthStore.getState().user;
+        if (currentUser) {
+            useAuthStore.getState().setUser({
+                ...currentUser,
+                onboarding_completed: true,
+            });
+            console.log('[SmartPlan] authStore.user.onboarding_completed forced to true');
+        }
+
+        // 2. EXPLICIT NAVIGATION FALLBACK: If auto-transition doesn't fire,
+        //    force navigate to Main after a brief delay
+        setTimeout(() => {
+            try {
+                navigation.dispatch(
+                    CommonActions.reset({
+                        index: 0,
+                        routes: [{ name: 'Main' }],
+                    })
+                );
+                console.log('[SmartPlan] Explicit navigation to Main dispatched');
+            } catch (navError) {
+                // Auto-transition already happened, this is fine
+                console.log('[SmartPlan] Navigation already handled by AppNavigator');
             }
-        } catch (error) {
-            console.error('Error completing onboarding:', error);
-            // Fallback: force set onboarding_completed locally so navigation works
-            const currentUser = useAuthStore.getState().user;
-            if (currentUser) {
-                useAuthStore.getState().setUser({
-                    ...currentUser,
-                    onboarding_completed: true,
-                });
-            }
+        }, 300);
+
+        // 3. BACKGROUND SYNC: Re-fetch user data from backend (fire-and-forget)
+        //    This ensures authStore has the real server state
+        if (userId) {
+            useAuthStore.getState().login(userId).catch((err: any) => {
+                console.warn('[SmartPlan] Background login sync failed:', err);
+            });
         }
     };
 
