@@ -1,11 +1,11 @@
-import React, { useRef, useCallback, useEffect } from 'react';
+import React, { useRef, useCallback, useEffect, useState } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     FlatList,
-    Dimensions,
-    ViewToken,
+    NativeSyntheticEvent,
+    NativeScrollEvent,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
@@ -13,7 +13,7 @@ import * as Haptics from 'expo-haptics';
 const DS = {
     bg: '#0F0F1E',
     card: '#1C1C2E',
-    cyan: '#00D4FF',
+    cyan: '#00E5FF',
     text: '#EBEBF5',
     textSecondary: 'rgba(235, 235, 245, 0.6)',
 };
@@ -21,6 +21,8 @@ const DS = {
 const ITEM_HEIGHT = 50;
 const VISIBLE_ITEMS = 5;
 const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
+// Padding so first/last items can align to center
+const PADDING_VERTICAL = ITEM_HEIGHT * Math.floor(VISIBLE_ITEMS / 2);
 
 interface WheelColumnProps {
     data: { label: string; value: number }[];
@@ -32,63 +34,118 @@ interface WheelColumnProps {
 // Individual wheel column with FlatList + snapToInterval
 function WheelColumn({ data, selectedValue, onValueChange, label }: WheelColumnProps) {
     const flatListRef = useRef<FlatList>(null);
-    const initialIndex = data.findIndex(item => item.value === selectedValue);
+    const lastReportedValue = useRef<number>(selectedValue);
+    // Track the centered index via scroll offset for per-item styling
+    const [centeredIndex, setCenteredIndex] = useState(() => {
+        const idx = data.findIndex(item => item.value === selectedValue);
+        return idx >= 0 ? idx : 0;
+    });
 
+    // Scroll to initial position on mount
     useEffect(() => {
-        // Scroll to initial selection
-        if (flatListRef.current && initialIndex >= 0) {
+        const targetIndex = data.findIndex(item => item.value === selectedValue);
+        if (flatListRef.current && targetIndex >= 0) {
             setTimeout(() => {
-                flatListRef.current?.scrollToIndex({
-                    index: initialIndex,
+                flatListRef.current?.scrollToOffset({
+                    offset: targetIndex * ITEM_HEIGHT,
                     animated: false,
-                    viewOffset: 0,
                 });
-            }, 100);
+                setCenteredIndex(targetIndex);
+            }, 50);
         }
-    }, []);
+    }, []); // Only on mount
 
-    const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-        // Find the center item
-        if (viewableItems.length > 0) {
-            const centerIndex = Math.floor(viewableItems.length / 2);
-            const centerItem = viewableItems[centerIndex];
-            if (centerItem?.item && centerItem.item.value !== selectedValue) {
-                onValueChange(centerItem.item.value);
-                Haptics.selectionAsync();
-            }
+    // If selectedValue changes externally (e.g. day clamped), scroll to it
+    useEffect(() => {
+        const targetIndex = data.findIndex(item => item.value === selectedValue);
+        if (targetIndex >= 0 && targetIndex !== centeredIndex) {
+            flatListRef.current?.scrollToOffset({
+                offset: targetIndex * ITEM_HEIGHT,
+                animated: true,
+            });
+            setCenteredIndex(targetIndex);
+            lastReportedValue.current = selectedValue;
         }
-    }, [onValueChange, selectedValue]);
+    }, [selectedValue, data]);
 
-    const viewabilityConfig = useRef({
-        itemVisiblePercentThreshold: 50,
-        minimumViewTime: 50,
-    }).current;
+    // Calculate selected index from scroll offset
+    const getIndexFromOffset = useCallback((offset: number): number => {
+        const rawIndex = Math.round(offset / ITEM_HEIGHT);
+        return Math.max(0, Math.min(rawIndex, data.length - 1));
+    }, [data.length]);
 
-    const getItemLayout = useCallback((data: any, index: number) => ({
+    // Report value change from scroll
+    const reportValue = useCallback((index: number) => {
+        const item = data[index];
+        if (item && item.value !== lastReportedValue.current) {
+            lastReportedValue.current = item.value;
+            onValueChange(item.value);
+            Haptics.selectionAsync();
+        }
+        setCenteredIndex(index);
+    }, [data, onValueChange]);
+
+    // Track scroll position for live centered index (visual feedback)
+    const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+        const offsetY = event.nativeEvent.contentOffset.y;
+        const index = getIndexFromOffset(offsetY);
+        if (index !== centeredIndex) {
+            setCenteredIndex(index);
+        }
+    }, [getIndexFromOffset, centeredIndex]);
+
+    // Snap-confirmed selection: fires when momentum ends
+    const handleMomentumScrollEnd = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+        const offsetY = event.nativeEvent.contentOffset.y;
+        const index = getIndexFromOffset(offsetY);
+        reportValue(index);
+    }, [getIndexFromOffset, reportValue]);
+
+    // Also handle direct drag end (no momentum)
+    const handleScrollEndDrag = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+        const offsetY = event.nativeEvent.contentOffset.y;
+        const index = getIndexFromOffset(offsetY);
+        // Defer slightly to let snap settle
+        setTimeout(() => reportValue(index), 50);
+    }, [getIndexFromOffset, reportValue]);
+
+    const getItemLayout = useCallback((_: any, index: number) => ({
         length: ITEM_HEIGHT,
         offset: ITEM_HEIGHT * index,
         index,
     }), []);
 
     const renderItem = useCallback(({ item, index }: { item: { label: string; value: number }; index: number }) => {
-        const isSelected = item.value === selectedValue;
+        const isActive = index === centeredIndex;
+        const distance = Math.abs(index - centeredIndex);
+
+        // Opacity fading: center=1.0, ±1=0.4, ±2+=0.2
+        let opacity = 0.2;
+        if (isActive) opacity = 1.0;
+        else if (distance === 1) opacity = 0.4;
+
         return (
             <View style={styles.itemContainer}>
                 <Text style={[
                     styles.itemText,
-                    isSelected && styles.itemTextSelected,
+                    {
+                        color: isActive ? DS.cyan : '#666',
+                        fontSize: isActive ? 22 : 18,
+                        fontWeight: isActive ? '700' : '400',
+                        opacity,
+                    },
                 ]}>
                     {item.label}
                 </Text>
             </View>
         );
-    }, [selectedValue]);
+    }, [centeredIndex]);
 
     return (
         <View style={styles.columnContainer}>
             {label && <Text style={styles.columnLabel}>{label}</Text>}
             <View style={styles.wheelContainer}>
-                {/* Selection indicator */}
+                {/* Selection indicator — fixed cyan rectangle in center */}
                 <View style={styles.selectionIndicator} pointerEvents="none" />
 
                 <FlatList
@@ -98,20 +155,21 @@ function WheelColumn({ data, selectedValue, onValueChange, label }: WheelColumnP
                     keyExtractor={(item) => String(item.value)}
                     showsVerticalScrollIndicator={false}
                     snapToInterval={ITEM_HEIGHT}
+                    snapToAlignment="start"
                     decelerationRate="fast"
                     nestedScrollEnabled={true}
-                    onViewableItemsChanged={onViewableItemsChanged}
-                    viewabilityConfig={viewabilityConfig}
                     getItemLayout={getItemLayout}
-                    initialScrollIndex={Math.max(0, initialIndex)}
+                    onScroll={handleScroll}
+                    onMomentumScrollEnd={handleMomentumScrollEnd}
+                    onScrollEndDrag={handleScrollEndDrag}
+                    scrollEventThrottle={16}
                     contentContainerStyle={{
-                        paddingVertical: ITEM_HEIGHT * 2, // Center first/last items
+                        paddingVertical: PADDING_VERTICAL,
                     }}
                     onScrollToIndexFailed={(info) => {
-                        // Retry scroll after layout
                         setTimeout(() => {
-                            flatListRef.current?.scrollToIndex({
-                                index: info.index,
+                            flatListRef.current?.scrollToOffset({
+                                offset: info.index * ITEM_HEIGHT,
                                 animated: false,
                             });
                         }, 100);
@@ -227,11 +285,11 @@ const styles = StyleSheet.create({
     },
     selectionIndicator: {
         position: 'absolute',
-        top: ITEM_HEIGHT * 2,
+        top: PADDING_VERTICAL,
         left: 4,
         right: 4,
         height: ITEM_HEIGHT,
-        backgroundColor: 'rgba(0, 212, 255, 0.15)',
+        backgroundColor: 'rgba(0, 229, 255, 0.12)',
         borderRadius: 12,
         borderWidth: 2,
         borderColor: DS.cyan,
@@ -245,13 +303,7 @@ const styles = StyleSheet.create({
     itemText: {
         fontSize: 18,
         fontWeight: '500',
-        color: DS.textSecondary,
-    },
-    itemTextSelected: {
-        fontSize: 22,
         fontFamily: 'Inter-Bold',
-        fontWeight: '700',
-        color: DS.cyan,
     },
 });
 

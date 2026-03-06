@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     View,
     Text,
@@ -14,7 +14,7 @@ import { DateWheelPicker } from '../../components/DateWheelPicker';
 const DS = {
     bg: '#0F0F1E',
     card: '#1C1C2E',
-    cyan: '#00D4FF',
+    cyan: '#00E5FF',
     text: '#EBEBF5',
     textSecondary: 'rgba(235, 235, 245, 0.6)',
     glassBorder: 'rgba(235, 235, 245, 0.1)',
@@ -50,6 +50,7 @@ export function BirthDateScreen({ value, onChange }: BirthDateScreenProps) {
     };
 
     const handleConfirm = () => {
+        // TWO-WAY SYNC: Update local state + parent simultaneously
         setDate(tempDate);
         if (onChange) {
             onChange(tempDate);
@@ -61,17 +62,28 @@ export function BirthDateScreen({ value, onChange }: BirthDateScreenProps) {
         setModalVisible(false);
     };
 
-    // wheel picker handlers updating tempDate
+    // Wheel picker handlers updating tempDate (local state during scroll)
     const handleDayChange = (day: number) => setTempDate(prev => ({ ...prev, day }));
     const handleMonthChange = (month: number) => setTempDate(prev => ({ ...prev, month }));
     const handleYearChange = (year: number) => setTempDate(prev => ({ ...prev, year }));
 
     const formatDate = (d: BirthDateValue) => {
-        // DD/MM/YYYY
         return `${String(d.day).padStart(2, '0')}/${String(d.month).padStart(2, '0')}/${d.year}`;
     };
 
-    const calculateAge = () => {
+    // DYNAMIC AGE: computed from tempDate (live during scroll), not from confirmed date
+    const liveAge = useMemo(() => {
+        const today = new Date();
+        let age = today.getFullYear() - tempDate.year;
+        const monthDiff = today.getMonth() + 1 - tempDate.month;
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < tempDate.day)) {
+            age--;
+        }
+        return age;
+    }, [tempDate.day, tempDate.month, tempDate.year]);
+
+    // Confirmed age for main screen subtitle
+    const confirmedAge = useMemo(() => {
         if (!date) return null;
         const today = new Date();
         let age = today.getFullYear() - date.year;
@@ -80,9 +92,7 @@ export function BirthDateScreen({ value, onChange }: BirthDateScreenProps) {
             age--;
         }
         return age;
-    };
-
-    const age = calculateAge();
+    }, [date]);
 
     return (
         <View style={styles.container}>
@@ -93,8 +103,8 @@ export function BirthDateScreen({ value, onChange }: BirthDateScreenProps) {
                     <Text style={styles.titleHighlight}>nascimento?</Text>
                 </Text>
                 <Text style={styles.subtitle}>
-                    {age !== null
-                        ? `Usamos sua idade (${age} anos) para personalizar a intensidade dos treinos.`
+                    {confirmedAge !== null
+                        ? `Usamos sua idade (${confirmedAge} anos) para personalizar a intensidade dos treinos.`
                         : 'Usamos sua idade para personalizar a intensidade dos treinos.'}
                 </Text>
             </View>
@@ -134,7 +144,11 @@ export function BirthDateScreen({ value, onChange }: BirthDateScreenProps) {
                 statusBarTranslucent
             >
                 <View style={styles.modalOverlay}>
-                    {/* Backdrop tap to close could be added here if desired */}
+                    <TouchableOpacity
+                        style={styles.backdrop}
+                        activeOpacity={1}
+                        onPress={handleCancel}
+                    />
                     <View style={styles.modalSheet}>
                         {/* Header */}
                         <View style={styles.modalHeader}>
@@ -144,6 +158,15 @@ export function BirthDateScreen({ value, onChange }: BirthDateScreenProps) {
                             <TouchableOpacity onPress={handleConfirm} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                                 <Text style={styles.confirmText}>Confirmar</Text>
                             </TouchableOpacity>
+                        </View>
+
+                        {/* Live Age Preview — updates as user scrolls */}
+                        <View style={styles.liveAgeContainer}>
+                            <Text style={styles.liveAgeText}>
+                                {liveAge > 0 && liveAge < 120
+                                    ? `${liveAge} anos`
+                                    : '—'}
+                            </Text>
                         </View>
 
                         {/* Picker Content */}
@@ -205,7 +228,7 @@ const styles = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 12,
-        backgroundColor: 'rgba(0, 212, 255, 0.1)',
+        backgroundColor: 'rgba(0, 229, 255, 0.1)',
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
@@ -239,11 +262,14 @@ const styles = StyleSheet.create({
         backgroundColor: DS.modalOverlay,
         justifyContent: 'flex-end',
     },
+    backdrop: {
+        flex: 1,
+    },
     modalSheet: {
         backgroundColor: DS.card,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
-        paddingBottom: 40, // Space for home indicator
+        paddingBottom: Platform.OS === 'ios' ? 40 : 24,
         width: '100%',
     },
     modalHeader: {
@@ -266,8 +292,19 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         fontFamily: 'Inter-Bold',
     },
+    liveAgeContainer: {
+        alignItems: 'center',
+        paddingTop: 12,
+        paddingBottom: 4,
+    },
+    liveAgeText: {
+        fontSize: 20,
+        fontWeight: '700',
+        fontFamily: 'Inter-Bold',
+        color: DS.cyan,
+    },
     pickerWrapper: {
-        paddingVertical: 20,
+        paddingVertical: 12,
     },
 });
 
