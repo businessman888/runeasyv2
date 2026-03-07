@@ -4,40 +4,34 @@ import {
     Text,
     StyleSheet,
     TouchableOpacity,
-    ScrollView,
+    Dimensions,
 } from 'react-native';
-import { colors, typography, borderRadius, shadows } from '../../theme';
-import Svg, { Path } from 'react-native-svg';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const MONTHS = [
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
 ];
 
-const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const WEEKDAYS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
 
-// Calendar Icon
-const CalendarIcon = () => (
-    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-        <Path
-            d="M19 4H18V2H16V4H8V2H6V4H5C3.89 4 3 4.9 3 6V20C3 21.1 3.89 22 5 22H19C20.1 22 21 21.1 21 20V6C21 4.9 20.1 4 19 4ZM19 20H5V9H19V20ZM9 11H7V13H9V11ZM13 11H11V13H13V11ZM17 11H15V13H17V11ZM9 15H7V17H9V15ZM13 15H11V17H13V15ZM17 15H15V17H17V15Z"
-            fill={colors.primary}
-        />
-    </Svg>
-);
+// Design System — Figma node 414:663 exact tokens
+const DS = {
+    bg: '#0F0F1E',
+    cardBg: '#1C1C2E',
+    cyan: '#00D4FF',
+    text: '#EBEBF5',
+    textSecondary: 'rgba(235, 235, 245, 0.6)',
+    glassBorder: 'rgba(235, 235, 245, 0.1)',
+    pastDay: 'rgba(235, 235, 245, 0.1)',      // Figma: neutral/glass-stroke for past days
+};
 
-// Arrow Icons
-const ChevronLeft = () => (
-    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-        <Path d="M15.41 7.41L14 6L8 12L14 18L15.41 16.59L10.83 12L15.41 7.41Z" fill={colors.textSecondary} />
-    </Svg>
-);
-
-const ChevronRight = () => (
-    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-        <Path d="M8.59 16.59L10 18L16 12L10 6L8.59 7.41L13.17 12L8.59 16.59Z" fill={colors.textSecondary} />
-    </Svg>
-);
+// Card internal padding
+const CARD_PADDING_H = 12;
+// 7 columns, each cell is 41×41px in Figma within a 309px row
+const CELL_SIZE = 41;
 
 interface StartDateScreenProps {
     value?: string | null;
@@ -52,7 +46,7 @@ export function StartDateScreen({ value, onChange }: StartDateScreenProps) {
         return d;
     };
 
-    // Parse a YYYY-MM-DD string into local date (avoids timezone offset)
+    // Parse a YYYY-MM-DD string into local date
     const parseLocalDate = (dateStr: string): Date => {
         const [year, month, day] = dateStr.split('-').map(Number);
         return createLocalDate(year, month - 1, day);
@@ -90,12 +84,13 @@ export function StartDateScreen({ value, onChange }: StartDateScreenProps) {
 
         const days: (Date | null)[] = [];
 
-        // Add empty slots for days before the first of the month
-        for (let i = 0; i < startingDay; i++) {
-            days.push(null);
+        // Previous month trailing days (shown dimmed)
+        const prevMonthLastDay = new Date(year, month, 0).getDate();
+        for (let i = startingDay - 1; i >= 0; i--) {
+            days.push(null); // null = empty/previous month
         }
 
-        // Add all days of the month
+        // Current month days
         for (let i = 1; i <= daysInMonth; i++) {
             days.push(new Date(year, month, i));
         }
@@ -104,9 +99,8 @@ export function StartDateScreen({ value, onChange }: StartDateScreenProps) {
     };
 
     const handleDateSelect = (date: Date) => {
-        if (date < today) return; // Can't select past dates
+        if (date < today) return;
 
-        // Normalize to midnight local time
         const normalizedDate = createLocalDate(
             date.getFullYear(),
             date.getMonth(),
@@ -145,187 +139,212 @@ export function StartDateScreen({ value, onChange }: StartDateScreenProps) {
     const days = getDaysInMonth(currentMonth);
 
     return (
-        <>
+        <View style={styles.wrapper}>
             {/* Title Section */}
             <View style={styles.titleContainer}>
                 <Text style={styles.title}>
-                    Quando você quer{'\n'}
-                    <Text style={styles.titleHighlight}>começar?</Text>
+                    Quando você quer{'\n'}iniciar os <Text style={styles.titleHighlight}>treinamentos</Text>?
                 </Text>
                 <Text style={styles.subtitle}>
                     Escolha a data de início do seu plano de treinamento.
                 </Text>
             </View>
 
-            {/* Calendar Header */}
-            <View style={styles.calendarHeader}>
-                <TouchableOpacity onPress={handlePrevMonth} style={styles.navButton}>
-                    <ChevronLeft />
-                </TouchableOpacity>
-                <Text style={styles.monthYear}>
-                    {MONTHS[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-                </Text>
-                <TouchableOpacity onPress={handleNextMonth} style={styles.navButton}>
-                    <ChevronRight />
-                </TouchableOpacity>
-            </View>
-
-            {/* Weekday Headers */}
-            <View style={styles.weekdaysRow}>
-                {WEEKDAYS.map((day) => (
-                    <Text key={day} style={styles.weekdayText}>{day}</Text>
-                ))}
-            </View>
-
-            {/* Calendar Grid */}
-            <View style={styles.calendarGrid}>
-                {days.map((date, index) => (
+            {/* =========================================
+                DARK CARD CONTAINER — Figma: #1C1C2E, 20px radius
+                ========================================= */}
+            <View style={styles.card}>
+                {/* —— CALENDAR HEADER —— */}
+                <View style={styles.header}>
                     <TouchableOpacity
-                        key={index}
-                        style={[
-                            styles.dayCell,
-                            date && isDateSelected(date) && styles.dayCellSelected,
-                            date && isToday(date) && !isDateSelected(date) && styles.dayCellToday,
-                            date && isPast(date) && styles.dayCellDisabled
-                        ]}
-                        onPress={() => date && handleDateSelect(date)}
-                        disabled={!date || isPast(date)}
+                        onPress={handlePrevMonth}
+                        style={styles.navButton}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
-                        {date && (
-                            <Text style={[
-                                styles.dayText,
-                                isDateSelected(date) && styles.dayTextSelected,
-                                isToday(date) && !isDateSelected(date) && styles.dayTextToday,
-                                isPast(date) && styles.dayTextDisabled
-                            ]}>
-                                {date.getDate()}
-                            </Text>
-                        )}
+                        <MaterialCommunityIcons name="arrow-left" size={22} color={DS.cyan} />
                     </TouchableOpacity>
-                ))}
-            </View>
 
-            {/* Selected Date Display */}
-            {selectedDate && (
-                <View style={styles.selectedCard}>
-                    <CalendarIcon />
-                    <View style={styles.selectedTextContainer}>
-                        <Text style={styles.selectedLabel}>Data selecionada</Text>
-                        <Text style={styles.selectedValue}>
-                            {selectedDate.getDate()} de {MONTHS[selectedDate.getMonth()]} de {selectedDate.getFullYear()}
-                        </Text>
-                    </View>
+                    <Text style={styles.monthYear}>
+                        {MONTHS[currentMonth.getMonth()]} de {currentMonth.getFullYear()}
+                    </Text>
+
+                    <TouchableOpacity
+                        onPress={handleNextMonth}
+                        style={styles.navButton}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <MaterialCommunityIcons name="arrow-right" size={22} color={DS.cyan} />
+                    </TouchableOpacity>
                 </View>
-            )}
-        </>
+
+                {/* —— WEEKDAY HEADERS — Cyan, uppercase —— */}
+                <View style={styles.weekdaysRow}>
+                    {WEEKDAYS.map((day) => (
+                        <View key={day} style={styles.weekdayCell}>
+                            <Text style={styles.weekdayText}>{day}</Text>
+                        </View>
+                    ))}
+                </View>
+
+                {/* —— CALENDAR GRID — 41×41px cells —— */}
+                <View style={styles.dayGrid}>
+                    {days.map((date, index) => {
+                        const selected = date && isDateSelected(date);
+                        const pastDay = date && isPast(date);
+                        const todayDay = date && isToday(date) && !selected;
+
+                        return (
+                            <TouchableOpacity
+                                key={index}
+                                style={[
+                                    styles.dayCell,
+                                    selected && styles.dayCellSelected,
+                                ]}
+                                onPress={() => date && handleDateSelect(date)}
+                                disabled={!date || isPast(date)}
+                                activeOpacity={0.7}
+                            >
+                                {date && (
+                                    <Text style={[
+                                        styles.dayText,
+                                        pastDay && styles.dayTextPast,
+                                        todayDay && styles.dayTextToday,
+                                        selected && styles.dayTextSelected,
+                                    ]}>
+                                        {date.getDate()}
+                                    </Text>
+                                )}
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+            </View>
+        </View>
     );
 }
 
+// ============================================
+// STYLES — Figma node 414:663 faithful
+// ============================================
+
 const styles = StyleSheet.create({
+    wrapper: {
+        flex: 1,
+        paddingTop: 8,
+    },
+
+    // — Title Section —
     titleContainer: {
         marginBottom: 24,
     },
     title: {
-        fontSize: typography.fontSizes['3xl'],
-        fontWeight: typography.fontWeights.bold,
-        color: colors.text,
-        lineHeight: 40,
-        marginBottom: 12,
+        fontSize: 26,
+        fontWeight: '700',
+        color: DS.text,
+        lineHeight: 34,
+        marginBottom: 8,
     },
     titleHighlight: {
-        color: colors.primary,
+        color: DS.cyan,
     },
     subtitle: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.textSecondary,
-        lineHeight: 24,
+        fontSize: 15,
+        fontWeight: '400',
+        color: DS.textSecondary,
+        lineHeight: 22,
     },
-    calendarHeader: {
+
+    // — Dark Card Container —
+    card: {
+        backgroundColor: DS.cardBg,
+        borderRadius: 20,
+        paddingHorizontal: CARD_PADDING_H,
+        paddingTop: 14,
+        paddingBottom: 16,
+        // Figma shadow
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.25,
+        shadowRadius: 6,
+        elevation: 3,
+    },
+
+    // — Month/Year Header —
+    header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 16,
+        height: 48,
+        marginBottom: 12,
     },
     navButton: {
-        padding: 8,
-    },
-    monthYear: {
-        fontSize: typography.fontSizes.xl,
-        fontWeight: typography.fontWeights.semibold,
-        color: colors.text,
-    },
-    weekdaysRow: {
-        flexDirection: 'row',
-        marginBottom: 8,
-    },
-    weekdayText: {
-        flex: 1,
-        textAlign: 'center',
-        fontSize: typography.fontSizes.sm,
-        fontWeight: typography.fontWeights.medium,
-        color: colors.textSecondary,
-    },
-    calendarGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        marginBottom: 24,
-    },
-    dayCell: {
-        width: '14.28%',
-        aspectRatio: 1,
+        width: 40,
+        height: 40,
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: borderRadius.lg,
+    },
+    monthYear: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: DS.textSecondary,
+        textAlign: 'center',
+    },
+
+    // — Weekday Headers (DOM, SEG...) —
+    weekdaysRow: {
+        flexDirection: 'row',
+        marginBottom: 6,
+    },
+    weekdayCell: {
+        flex: 1,
+        height: CELL_SIZE,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    weekdayText: {
+        fontSize: 13,
+        fontWeight: '500',
+        color: DS.cyan,
+        letterSpacing: 0.3,
+    },
+
+    // — Day Grid —
+    dayGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+    },
+
+    // — Individual Day Cell (Figma: 41×41px, flex 1/7) —
+    dayCell: {
+        width: `${100 / 7}%` as any,
+        height: CELL_SIZE,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     dayCellSelected: {
-        backgroundColor: colors.primary,
-        ...shadows.neon,
+        // Figma: border 1px solid cyan, radius 15px
+        borderWidth: 1,
+        borderColor: DS.cyan,
+        borderRadius: 15,
     },
-    dayCellToday: {
-        borderWidth: 2,
-        borderColor: colors.primary,
-    },
-    dayCellDisabled: {
-        opacity: 0.3,
-    },
+
+    // — Day Text —
     dayText: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.medium,
-        color: colors.text,
+        fontSize: 13,
+        fontWeight: '500',
+        color: DS.text,
     },
-    dayTextSelected: {
-        color: colors.background,
-        fontWeight: typography.fontWeights.bold,
+    dayTextPast: {
+        // Figma: neutral/glass-stroke rgba(235,235,245,0.1) — very faded
+        color: DS.pastDay,
     },
     dayTextToday: {
-        color: colors.primary,
+        color: DS.cyan,
+        fontWeight: '700',
     },
-    dayTextDisabled: {
-        color: colors.textMuted,
-    },
-    selectedCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: colors.card,
-        borderRadius: borderRadius.xl,
-        padding: 16,
-        borderWidth: 2,
-        borderColor: colors.primary,
-        ...shadows.neon,
-    },
-    selectedTextContainer: {
-        marginLeft: 12,
-    },
-    selectedLabel: {
-        fontSize: typography.fontSizes.md,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.textSecondary,
-    },
-    selectedValue: {
-        fontSize: typography.fontSizes.xl,
-        fontWeight: typography.fontWeights.semibold,
-        color: colors.primary,
+    dayTextSelected: {
+        color: DS.cyan,
+        fontWeight: '600',
     },
 });
 
