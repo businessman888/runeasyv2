@@ -12,7 +12,7 @@ const DS = {
     bg: '#0F0F1E',
     card: '#1C1C2E',
     cyan: '#00D4FF',
-    cyanMuted: 'rgba(0, 127, 153, 0.3)',
+    cyanSelected: 'rgba(0, 212, 255, 0.1)',
     text: '#EBEBF5',
     textSecondary: 'rgba(235, 235, 245, 0.6)',
 };
@@ -24,7 +24,7 @@ const CircularCheckbox = ({ selected }: { selected: boolean }) => (
             <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
                 <Path
                     d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"
-                    fill={DS.bg}
+                    fill="#FFFFFF"
                 />
             </Svg>
         )}
@@ -156,21 +156,15 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: DS.card,
-        borderRadius: 16,
+        borderRadius: 15,
         padding: 16,
-        borderWidth: 2,
+        borderWidth: 1.5,
         borderColor: 'transparent',
         gap: 14,
     },
     optionCardSelected: {
         borderColor: DS.cyan,
-        backgroundColor: DS.cyanMuted,
-        // Glow effect
-        shadowColor: DS.cyan,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-        elevation: 4,
+        backgroundColor: DS.cyanSelected,
     },
     checkbox: {
         width: 24,

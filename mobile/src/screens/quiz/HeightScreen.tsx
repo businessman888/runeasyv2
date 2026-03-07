@@ -16,7 +16,7 @@ const DS = {
     bg: '#0F0F1E',
     card: '#1C1C2E',
     cyan: '#00D4FF',
-    cyanMuted: 'rgba(0, 127, 153, 0.3)',
+    cyanSelected: 'rgba(0, 212, 255, 0.1)',
     text: '#EBEBF5',
     textSecondary: 'rgba(235, 235, 245, 0.6)',
 };
@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
         borderRadius: 8,
     },
     markerSelected: {
-        backgroundColor: DS.cyanMuted,
+        backgroundColor: DS.cyanSelected,
     },
     markerText: {
         fontSize: 14,
