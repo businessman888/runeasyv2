@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useRef } from 'react';
 import {
     View,
     Text,
@@ -36,123 +36,131 @@ interface DistanceTimeScreenProps {
 
 type FieldType = 'hours' | 'minutes' | 'seconds';
 
+// Helper: convert value prop to display string (once, on mount)
+function initFromProp(val: DistanceTimeValue | null | undefined, field: 'hours' | 'minutes' | 'seconds'): string {
+    if (!val) return '';
+    const n = val[field];
+    return n > 0 ? String(n).padStart(2, '0') : '';
+}
+
 export function DistanceTimeScreen({ value, recentDistance = 5, onChange }: DistanceTimeScreenProps) {
-    const [hours, setHours] = useState('');
-    const [minutes, setMinutes] = useState('');
-    const [seconds, setSeconds] = useState('');
+    // ===== ISOLATED LOCAL STATE =====
+    // Initialized from props ONCE on mount. No useEffect, no sync loop.
+    const [hours, setHours] = useState(() => initFromProp(value, 'hours'));
+    const [minutes, setMinutes] = useState(() => initFromProp(value, 'minutes'));
+    const [seconds, setSeconds] = useState(() => initFromProp(value, 'seconds'));
     const [activeField, setActiveField] = useState<FieldType>('minutes');
 
-    // Use ref for onChange to avoid it being a dependency that triggers re-renders
+    // Stable ref to onChange — never triggers re-renders
     const onChangeRef = useRef(onChange);
     onChangeRef.current = onChange;
 
-    // Track if initial load has happened to prevent onChange firing on mount
-    const isInitialized = useRef(false);
+    // ===== REPORT TO PARENT — only called by user actions =====
+    // This is the ONLY place onChange fires. No useEffect involved.
+    const reportToParent = (h: string, m: string, s: string) => {
+        onChangeRef.current?.({
+            hours: parseInt(h || '0', 10),
+            minutes: parseInt(m || '0', 10),
+            seconds: parseInt(s || '0', 10),
+        });
+    };
 
-    // Load initial values — only when value actually changes (compare by content, not reference)
-    useEffect(() => {
-        if (value) {
-            const newH = value.hours > 0 ? String(value.hours).padStart(2, '0') : '';
-            const newM = value.minutes > 0 ? String(value.minutes).padStart(2, '0') : '';
-            const newS = value.seconds > 0 ? String(value.seconds).padStart(2, '0') : '';
-
-            // Guard: only update state if values actually differ
-            if (newH !== hours || newM !== minutes || newS !== seconds) {
-                setHours(newH);
-                setMinutes(newM);
-                setSeconds(newS);
-            }
-        }
-        isInitialized.current = true;
-    }, [value?.hours, value?.minutes, value?.seconds]); // Compare by primitive values, not object reference
-
-    // Persist changes to parent — only after user interaction (not on initial load)
-    useEffect(() => {
-        if (!isInitialized.current) return;
-
-        const h = parseInt(hours || '0', 10);
-        const m = parseInt(minutes || '0', 10);
-        const s = parseInt(seconds || '0', 10);
-
-        onChangeRef.current?.({ hours: h, minutes: m, seconds: s });
-    }, [hours, minutes, seconds]);
-
+    // ===== KEY PRESS HANDLER =====
     const handlePressKey = (key: string) => {
         let currentVal = '';
-        let setter: React.Dispatch<React.SetStateAction<string>> | null = null;
         let nextField: FieldType | null = null;
+        let fieldName: FieldType = activeField;
 
         if (activeField === 'hours') {
             currentVal = hours;
-            setter = setHours;
             nextField = 'minutes';
         } else if (activeField === 'minutes') {
             currentVal = minutes;
-            setter = setMinutes;
             nextField = 'seconds';
         } else {
             currentVal = seconds;
-            setter = setSeconds;
             nextField = null;
         }
 
-        if (currentVal.length < 2 && setter) {
-            const newVal = currentVal + key;
+        if (currentVal.length >= 2) return; // Already full
 
-            // Validation for minutes/seconds overflow > 59
-            if (activeField !== 'hours') {
-                if (parseInt(newVal, 10) > 59) {
-                    // Option 1: auto-correct to 59? Option 2: reject?
-                    // User says: "Minutos e Segundos não podem ultrapassar 59."
-                    // Let's cap at 59 for better UX than silent reject
-                    setter('59');
-                    // Auto-advance if we hit max length (2)
-                    if (nextField) setActiveField(nextField);
-                    return;
-                }
-            }
+        const newVal = currentVal + key;
 
-            setter(newVal);
+        // Validation: minutes/seconds cannot exceed 59
+        if (activeField !== 'hours' && parseInt(newVal, 10) > 59) {
+            // Cap at 59
+            const cappedVal = '59';
+            const newH = hours;
+            const newM = activeField === 'minutes' ? cappedVal : minutes;
+            const newS = activeField === 'seconds' ? cappedVal : seconds;
 
-            // Auto-advance if filled 2 digits
-            if (newVal.length === 2 && nextField) {
-                setActiveField(nextField);
-            }
+            if (activeField === 'minutes') setMinutes(cappedVal);
+            else setSeconds(cappedVal);
+
+            if (nextField) setActiveField(nextField);
+            reportToParent(newH, newM, newS);
+            return;
         }
+
+        // Set the value
+        const newH = activeField === 'hours' ? newVal : hours;
+        const newM = activeField === 'minutes' ? newVal : minutes;
+        const newS = activeField === 'seconds' ? newVal : seconds;
+
+        if (activeField === 'hours') setHours(newVal);
+        else if (activeField === 'minutes') setMinutes(newVal);
+        else setSeconds(newVal);
+
+        // Auto-advance if filled 2 digits
+        if (newVal.length === 2 && nextField) {
+            setActiveField(nextField);
+        }
+
+        // Report to parent on every keypress
+        reportToParent(newH, newM, newS);
     };
 
+    // ===== DELETE HANDLER =====
     const handleDelete = () => {
+        let newH = hours;
+        let newM = minutes;
+        let newS = seconds;
+
         if (activeField === 'hours') {
-            if (hours.length > 0) setHours(prev => prev.slice(0, -1));
+            if (hours.length > 0) {
+                newH = hours.slice(0, -1);
+                setHours(newH);
+            }
         } else if (activeField === 'minutes') {
             if (minutes.length > 0) {
-                setMinutes(prev => prev.slice(0, -1));
+                newM = minutes.slice(0, -1);
+                setMinutes(newM);
             } else {
-                // Backtrack to hours
                 setActiveField('hours');
+                return; // Just moving focus, no value change
             }
         } else if (activeField === 'seconds') {
             if (seconds.length > 0) {
-                setSeconds(prev => prev.slice(0, -1));
+                newS = seconds.slice(0, -1);
+                setSeconds(newS);
             } else {
-                // Backtrack to minutes
                 setActiveField('minutes');
+                return; // Just moving focus, no value change
             }
         }
+
+        reportToParent(newH, newM, newS);
     };
 
+    // ===== UI COMPONENTS =====
     const TimeInputBlock = ({
         label,
-        value,
+        blockValue,
         field,
         placeholder = '00'
-    }: { label: string, value: string, field: FieldType, placeholder?: string }) => {
+    }: { label: string, blockValue: string, field: FieldType, placeholder?: string }) => {
         const isActive = activeField === field;
-        const displayValue = value.length > 0 ? value.padStart(2, '0') : placeholder;
-
-        // Highlight logic if empty: show 00 dimmed. If typing, show what is typed.
-        // Actually, user wants "00" placeholder.
-        const showPlaceholder = value.length === 0;
+        const showPlaceholder = blockValue.length === 0;
 
         return (
             <TouchableOpacity
@@ -166,9 +174,8 @@ export function DistanceTimeScreen({ value, recentDistance = 5, onChange }: Dist
                 <Text style={[
                     styles.inputValue,
                     showPlaceholder && styles.inputValuePlaceholder,
-                    (field !== 'hours' && parseInt(value || '0') > 59) && styles.inputValueError // Just in case
                 ]}>
-                    {value ? value.padStart(2, '0') : '00'}
+                    {blockValue ? blockValue.padStart(2, '0') : '00'}
                 </Text>
                 <Text style={[styles.inputLabel, isActive && styles.inputLabelActive]}>
                     {label}
@@ -190,9 +197,9 @@ export function DistanceTimeScreen({ value, recentDistance = 5, onChange }: Dist
 
             {/* Segmented Inputs */}
             <View style={styles.inputsContainer}>
-                <TimeInputBlock label="h" value={hours} field="hours" />
-                <TimeInputBlock label="min" value={minutes} field="minutes" />
-                <TimeInputBlock label="seg" value={seconds} field="seconds" />
+                <TimeInputBlock label="h" blockValue={hours} field="hours" />
+                <TimeInputBlock label="min" blockValue={minutes} field="minutes" />
+                <TimeInputBlock label="seg" blockValue={seconds} field="seconds" />
             </View>
 
             <View style={{ flex: 1 }} />
@@ -220,7 +227,7 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: DS.text,
         lineHeight: 36,
-        fontFamily: 'Inter-Bold', // Ensure font matches
+        fontFamily: 'Inter-Bold',
     },
     titleHighlight: {
         color: DS.cyan,
@@ -235,12 +242,11 @@ const styles = StyleSheet.create({
         width: 100,
         height: 120,
         borderRadius: 20,
-        backgroundColor: DS.card, // Fallback
+        backgroundColor: DS.card,
         borderWidth: 1,
         borderColor: DS.glassBorder,
         alignItems: 'center',
         justifyContent: 'center',
-        // Glassmorphism effect simulation
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.3,
@@ -249,8 +255,8 @@ const styles = StyleSheet.create({
     },
     inputBlockActive: {
         borderColor: DS.activeBorder,
-        borderWidth: 1, // Can make it 1.5 or 2 for stronger focus
-        backgroundColor: 'rgba(28, 28, 46, 0.9)', // Slightly lighter/solid on focus
+        borderWidth: 1,
+        backgroundColor: 'rgba(28, 28, 46, 0.9)',
     },
     inputValue: {
         fontSize: 32,
@@ -261,9 +267,6 @@ const styles = StyleSheet.create({
     },
     inputValuePlaceholder: {
         color: DS.textSecondary,
-    },
-    inputValueError: {
-        color: '#FF453A',
     },
     inputLabel: {
         fontSize: 16,

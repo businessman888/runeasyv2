@@ -7,22 +7,20 @@ import {
     Dimensions,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { LinearGradient } from 'expo-linear-gradient';
 import { CustomKeypad } from '../../components/CustomKeypad';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Design System Colors (Figma exact)
+// Design System — Figma exact tokens (node 565:481)
 const DS = {
     bg: '#0F0F1E',
-    cardBg: '#111126',
-    inputBg: '#0D0D1F',
+    cardBg: '#1C1C2E',
+    inputBgActive: 'rgba(0, 127, 153, 0.3)',  // Figma: accent/surface-muted
+    inputBgInactive: 'transparent',
     cyan: '#00D4FF',
-    cyanDim: 'rgba(0, 212, 255, 0.35)',
     text: '#EBEBF5',
     textSecondary: 'rgba(235, 235, 245, 0.6)',
-    glassBorder: 'rgba(0, 212, 255, 0.5)',
-    inputBorder: 'rgba(235, 235, 245, 0.12)',
+    glassBorder: 'rgba(235, 235, 245, 0.1)',
 };
 
 interface PaceConfirmScreenProps {
@@ -45,7 +43,7 @@ export function PaceConfirmScreen({
     const [dontKnow, setDontKnow] = useState(initialDontKnow || false);
     const [activeField, setActiveField] = useState<PaceField>('minutes');
 
-    // Stable ref for onChange to avoid stale closures
+    // Stable ref for onChange
     const onChangeRef = useRef(onChange);
     onChangeRef.current = onChange;
 
@@ -117,29 +115,34 @@ export function PaceConfirmScreen({
     const displaySec = seconds.length > 0 ? seconds.padStart(2, '0') : '00';
     const isMinActive = activeField === 'minutes' && !dontKnow;
     const isSecActive = activeField === 'seconds' && !dontKnow;
+    const hasMinValue = minutes.length > 0;
+    const hasSecValue = seconds.length > 0;
 
     return (
         <View style={styles.container}>
             {/* =========================================
-                GLASSMORPHISM CARD — Figma main container
+                SINGLE CARD — Figma container (128px height)
                 ========================================= */}
-            <LinearGradient
-                colors={['rgba(0, 212, 255, 0.08)', 'rgba(0, 212, 255, 0.02)']}
-                style={styles.glassCard}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-            >
-                {/* Title inside card */}
-                <Text style={styles.cardTitle}>Ritmo Médio</Text>
+            <View style={[
+                styles.card,
+                (isMinActive || isSecActive) && styles.cardActive,
+                dontKnow && styles.cardDisabled,
+            ]}>
+                {/* Title: "Ritmo Médio" — centered top */}
+                <Text style={[
+                    styles.cardTitle,
+                    (isMinActive || isSecActive) && styles.cardTitleActive,
+                ]}>
+                    Ritmo Médio
+                </Text>
 
                 {/* Input row: [MM] : [SS]  min/km */}
                 <View style={styles.inputRow}>
-                    {/* Minutes block */}
+                    {/* Minutes input */}
                     <TouchableOpacity
                         style={[
                             styles.inputBlock,
                             isMinActive && styles.inputBlockActive,
-                            dontKnow && styles.inputBlockDisabled,
                         ]}
                         onPress={() => !dontKnow && setActiveField('minutes')}
                         activeOpacity={0.8}
@@ -147,22 +150,25 @@ export function PaceConfirmScreen({
                     >
                         <Text style={[
                             styles.inputValue,
-                            minutes.length === 0 && !dontKnow && styles.inputValuePlaceholder,
-                            dontKnow && styles.inputValueDisabled,
+                            !hasMinValue && !dontKnow && styles.inputValueDim,
+                            hasMinValue && styles.inputValueFilled,
+                            dontKnow && styles.inputValueDim,
                         ]}>
                             {displayMin}
                         </Text>
                     </TouchableOpacity>
 
-                    {/* Separator */}
-                    <Text style={styles.separator}>:</Text>
+                    {/* Separator : */}
+                    <Text style={[
+                        styles.separator,
+                        (hasMinValue || hasSecValue) && styles.separatorFilled,
+                    ]}>:</Text>
 
-                    {/* Seconds block */}
+                    {/* Seconds input */}
                     <TouchableOpacity
                         style={[
                             styles.inputBlock,
                             isSecActive && styles.inputBlockActive,
-                            dontKnow && styles.inputBlockDisabled,
                         ]}
                         onPress={() => !dontKnow && setActiveField('seconds')}
                         activeOpacity={0.8}
@@ -170,17 +176,18 @@ export function PaceConfirmScreen({
                     >
                         <Text style={[
                             styles.inputValue,
-                            seconds.length === 0 && !dontKnow && styles.inputValuePlaceholder,
-                            dontKnow && styles.inputValueDisabled,
+                            !hasSecValue && !dontKnow && styles.inputValueDim,
+                            hasSecValue && styles.inputValueFilled,
+                            dontKnow && styles.inputValueDim,
                         ]}>
                             {displaySec}
                         </Text>
                     </TouchableOpacity>
 
-                    {/* Unit label */}
+                    {/* Unit label — right aligned */}
                     <Text style={styles.unitLabel}>min/km</Text>
                 </View>
-            </LinearGradient>
+            </View>
 
             {/* =========================================
                 CHECKBOX — "Não sei meu pace atual"
@@ -190,9 +197,9 @@ export function PaceConfirmScreen({
                 onPress={handleToggleDontKnow}
                 activeOpacity={0.7}
             >
-                <View style={[styles.circleCheck, dontKnow && styles.circleCheckActive]}>
+                <View style={[styles.checkbox, dontKnow && styles.checkboxActive]}>
                     {dontKnow && (
-                        <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                        <Svg width={10} height={10} viewBox="0 0 24 24" fill="none">
                             <Path
                                 d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"
                                 fill={DS.bg}
@@ -221,38 +228,51 @@ export function PaceConfirmScreen({
 }
 
 // ============================================
-// STYLES — Figma faithful
+// STYLES — Figma node 565:481 faithful
 // ============================================
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        paddingTop: 32,
+        paddingTop: 24,
     },
 
-    // — Glass Card —
-    glassCard: {
-        borderWidth: 1.5,
+    // — Single Card Container (Figma: 339×128px, border-radius 15) —
+    card: {
+        backgroundColor: DS.cardBg,
+        borderRadius: 15,
+        borderWidth: 1,
         borderColor: DS.glassBorder,
-        borderRadius: 24,
-        paddingVertical: 28,
-        paddingHorizontal: 24,
+        paddingTop: 14,
+        paddingBottom: 20,
+        paddingHorizontal: 20,
         alignItems: 'center',
         marginHorizontal: 4,
-        // Glassmorphism shadow
-        shadowColor: DS.cyan,
+        // Figma shadow
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.15,
-        shadowRadius: 20,
-        elevation: 4,
+        shadowOpacity: 0.25,
+        shadowRadius: 6,
+        elevation: 3,
     },
+    cardActive: {
+        borderColor: DS.cyan,
+    },
+    cardDisabled: {
+        opacity: 0.45,
+    },
+
+    // — Title: "Ritmo Médio" —
     cardTitle: {
-        fontFamily: 'Inter-Bold',
-        fontSize: 18,
-        fontWeight: '700',
+        fontSize: 15,
+        fontWeight: '600',
+        color: DS.textSecondary,
+        marginBottom: 16,
+        letterSpacing: 0.3,
+        textAlign: 'center',
+    },
+    cardTitleActive: {
         color: DS.cyan,
-        marginBottom: 24,
-        letterSpacing: 0.5,
     },
 
     // — Input Row —
@@ -260,54 +280,54 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 12,
     },
+
+    // — Individual Input Block (Figma: 98×65px, radius 15) —
     inputBlock: {
-        width: 110,
-        height: 90,
-        borderRadius: 16,
-        backgroundColor: DS.inputBg,
-        borderWidth: 1.5,
-        borderColor: DS.inputBorder,
+        width: 98,
+        height: 65,
+        borderRadius: 15,
+        borderWidth: 1,
+        borderColor: DS.glassBorder,
         alignItems: 'center',
         justifyContent: 'center',
+        backgroundColor: 'transparent',
     },
     inputBlockActive: {
+        backgroundColor: DS.inputBgActive,
         borderColor: DS.cyan,
-        // Cyan glow on active
-        shadowColor: DS.cyan,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.4,
-        shadowRadius: 12,
-        elevation: 6,
     },
-    inputBlockDisabled: {
-        opacity: 0.35,
-    },
+
+    // — Number Text (Figma: 32px SemiBold) —
     inputValue: {
-        fontFamily: 'Inter-Bold',
-        fontSize: 40,
-        fontWeight: '700',
-        color: DS.text,
-    },
-    inputValuePlaceholder: {
-        color: DS.textSecondary,
-    },
-    inputValueDisabled: {
-        color: DS.textSecondary,
-    },
-    separator: {
-        fontFamily: 'Inter-Bold',
-        fontSize: 36,
-        fontWeight: '700',
-        color: DS.text,
-    },
-    unitLabel: {
-        fontFamily: 'Inter-SemiBold',
-        fontSize: 16,
+        fontSize: 32,
         fontWeight: '600',
         color: DS.textSecondary,
-        marginLeft: 6,
+    },
+    inputValueDim: {
+        color: DS.textSecondary,
+    },
+    inputValueFilled: {
+        color: DS.text,
+    },
+
+    // — Separator ":" —
+    separator: {
+        fontSize: 32,
+        fontWeight: '600',
+        color: DS.textSecondary,
+        marginHorizontal: 6,
+    },
+    separatorFilled: {
+        color: DS.text,
+    },
+
+    // — Unit "min/km" —
+    unitLabel: {
+        fontSize: 12,
+        fontWeight: '400',
+        color: DS.textSecondary,
+        marginLeft: 14,
     },
 
     // — Checkbox Row —
@@ -315,27 +335,26 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 10,
-        marginTop: 24,
+        gap: 8,
+        marginTop: 16,
         paddingVertical: 8,
     },
-    circleCheck: {
-        width: 22,
-        height: 22,
-        borderRadius: 4,
-        borderWidth: 1.5,
-        borderColor: DS.textSecondary,
+    checkbox: {
+        width: 15,
+        height: 15,
+        borderRadius: 5,
+        borderWidth: 1,
+        borderColor: DS.glassBorder,
+        backgroundColor: DS.glassBorder,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'transparent',
     },
-    circleCheckActive: {
+    checkboxActive: {
         backgroundColor: DS.cyan,
         borderColor: DS.cyan,
     },
     checkboxText: {
-        fontFamily: 'Inter-Regular',
-        fontSize: 15,
+        fontSize: 12,
         fontWeight: '400',
         color: DS.textSecondary,
     },

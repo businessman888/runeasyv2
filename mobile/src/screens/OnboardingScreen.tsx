@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -273,15 +273,14 @@ export function OnboardingScreen({ navigation, route }: any) {
         }
     };
 
-    // Handle onChange — multi-key steps spread directly, single-key wraps in object
-    const handleChange = (value: any) => {
+    // Handle onChange — memoized to prevent reference instability
+    const handleChange = useCallback((value: any) => {
         if (currentStepData.keys) {
-            // Multi-key step (e.g. PaceConfirmScreen): value is { paceMinutes, paceSeconds, dontKnowPace }
             updateData(value);
         } else if (currentStepData.key) {
             updateData({ [currentStepData.key]: value });
         }
-    };
+    }, [currentStepData]);
 
     // Get value(s) for current step — multi-key returns individual props
     const getValue = () => {
