@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -40,27 +40,41 @@ export function DistanceTimeScreen({ value, recentDistance = 5, onChange }: Dist
     const [hours, setHours] = useState('');
     const [minutes, setMinutes] = useState('');
     const [seconds, setSeconds] = useState('');
-    const [activeField, setActiveField] = useState<FieldType>('minutes'); // Start on minutes — most runners don't need hours
+    const [activeField, setActiveField] = useState<FieldType>('minutes');
 
-    // Load initial values
+    // Use ref for onChange to avoid it being a dependency that triggers re-renders
+    const onChangeRef = useRef(onChange);
+    onChangeRef.current = onChange;
+
+    // Track if initial load has happened to prevent onChange firing on mount
+    const isInitialized = useRef(false);
+
+    // Load initial values — only when value actually changes (compare by content, not reference)
     useEffect(() => {
         if (value) {
-            setHours(value.hours > 0 ? String(value.hours).padStart(2, '0') : '');
-            setMinutes(value.minutes > 0 ? String(value.minutes).padStart(2, '0') : '');
-            setSeconds(value.seconds > 0 ? String(value.seconds).padStart(2, '0') : '');
-        }
-        // Always default to minutes field — prevents user from accidentally typing into hours
-    }, [value]);
+            const newH = value.hours > 0 ? String(value.hours).padStart(2, '0') : '';
+            const newM = value.minutes > 0 ? String(value.minutes).padStart(2, '0') : '';
+            const newS = value.seconds > 0 ? String(value.seconds).padStart(2, '0') : '';
 
-    // Handle updates and persistence
+            // Guard: only update state if values actually differ
+            if (newH !== hours || newM !== minutes || newS !== seconds) {
+                setHours(newH);
+                setMinutes(newM);
+                setSeconds(newS);
+            }
+        }
+        isInitialized.current = true;
+    }, [value?.hours, value?.minutes, value?.seconds]); // Compare by primitive values, not object reference
+
+    // Persist changes to parent — only after user interaction (not on initial load)
     useEffect(() => {
+        if (!isInitialized.current) return;
+
         const h = parseInt(hours || '0', 10);
         const m = parseInt(minutes || '0', 10);
         const s = parseInt(seconds || '0', 10);
 
-        if (onChange) {
-            onChange({ hours: h, minutes: m, seconds: s });
-        }
+        onChangeRef.current?.({ hours: h, minutes: m, seconds: s });
     }, [hours, minutes, seconds]);
 
     const handlePressKey = (key: string) => {
