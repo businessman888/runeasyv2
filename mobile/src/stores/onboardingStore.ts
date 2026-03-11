@@ -166,7 +166,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
         set({ isGenerating: true, error: null, errorCode: null });
 
         try {
-            // Get the user ID from local storage (set during Strava login)
+            // Get the user ID from local storage (set during Google login)
             const userId = await Storage.getItemAsync('user_id');
 
             // If user is not authenticated, stop and require login

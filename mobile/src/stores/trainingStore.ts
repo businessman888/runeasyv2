@@ -12,7 +12,7 @@ interface Workout {
     objective: string;
     tips: string[];
     status: 'pending' | 'completed' | 'skipped' | 'missed';
-    strava_activity_id?: number;
+    activity_id?: number;
     instructions_json: Array<{
         type: 'warmup' | 'main' | 'cooldown';
         distance_km: number;

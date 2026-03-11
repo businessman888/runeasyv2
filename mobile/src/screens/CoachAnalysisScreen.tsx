@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
 import { useFeedbackStore } from '../stores/feedbackStore';
-import { PoweredByStrava } from '../components/PoweredByStrava';
+
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -289,7 +289,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
     }, [feedbackId]);
 
     // Determine data source: from currentFeedback (if feedbackId provided) or latestActivity
-    const activity = currentFeedback?.strava_activities || latestActivity?.activity;
+    const activity = currentFeedback?.activities || latestActivity?.activity;
     const feedback = currentFeedback || (latestActivity?.feedback ? {
         strengths: latestActivity.feedback.strengths,
         improvements: latestActivity.feedback.improvements,
@@ -441,13 +441,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                         </View>
                     ))}
 
-                    {/* Strava compliance branding - only when activity exists */}
-                    {activity && (
-                        <PoweredByStrava
-                            width={76}
-                            style={{ marginTop: 16 }}
-                        />
-                    )}
+
                 </View>
 
                 {/* Análise Inteligente */}
@@ -572,10 +566,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                             <Text style={styles.vo2Message}>Dados insuficientes para cálculo</Text>
                         )}
 
-                        {/* Strava compliance branding - only when activity exists */}
-                        {latestActivity && (
-                            <PoweredByStrava width={76} style={{ marginTop: 12 }} />
-                        )}
+
                     </View>
                 </View>
 

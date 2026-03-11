@@ -20,7 +20,7 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
 import { useTrainingStore, useStatsStore, ScheduleDay } from '../stores';
 import { ScreenContainer } from '../components/ScreenContainer';
-import { PoweredByStrava } from '../components/PoweredByStrava';
+
 
 // Icon components using @expo/vector-icons
 function BackIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -614,10 +614,7 @@ export function CalendarScreen({ navigation }: any) {
                             </View>
                         </View>
                     </View>
-                    {/* Strava Badge Row */}
-                    <View style={styles.stravaBadgeRow}>
-                        <PoweredByStrava width={55} />
-                    </View>
+
                 </View>
 
                 {/* Month Selector */}
@@ -1143,11 +1140,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
     },
-    stravaBadgeRow: {
-        alignItems: 'flex-end',
-        marginTop: 8,
-        paddingRight: 4,
-    },
+
     statItem: {
         flex: 1,
         alignItems: 'center',

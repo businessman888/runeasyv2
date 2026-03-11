@@ -72,8 +72,8 @@ const faqs: FAQ[] = [
     },
     {
         id: '2',
-        question: 'Meu treino do Strava não apareceu',
-        answer: 'Verifique se sua conta do Strava está conectada corretamente. Pode haver um atraso de alguns minutos na sincronização. Tente atualizar a página ou reconectar sua conta.',
+        question: 'Meu treino não apareceu no app',
+        answer: 'Pode haver um atraso de alguns minutos na sincronização dos dados. Tente atualizar a página ou verificar sua conexão com a internet.',
     },
     {
         id: '3',

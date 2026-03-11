@@ -16,7 +16,7 @@ import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native';
 import { colors, typography, spacing } from '../theme';
 import { useReadinessStore, ReadinessAnswers } from '../stores/readinessStore';
-import { PoweredByStrava } from '../components/PoweredByStrava';
+
 import { BASE_API_URL, API_URL, API_ENDPOINTS } from '../config/api.config';
 import * as Storage from '../utils/storage';
 
@@ -83,7 +83,7 @@ const SleepIcon = () => (
     </Svg>
 );
 
-const StravaLoadIcon = () => (
+const TrainingLoadIcon = () => (
     <Svg width="17" height="15" viewBox="0 0 17 15" fill="none">
         <Path d="M14.25 8.8125C14.25 8.66332 14.1907 8.52024 14.0852 8.41475C13.9798 8.30926 13.8367 8.25 13.6875 8.25H11.4375C11.2883 8.25 11.1452 8.30926 11.0398 8.41475C10.9343 8.52024 10.875 8.66332 10.875 8.8125V13.875H9.75V1.6875C9.75 1.1415 9.7485 0.7875 9.714 0.528C9.681 0.28425 9.62775 0.20775 9.585 0.165C9.54225 0.12225 9.46575 0.0690001 9.222 0.0360001C8.96175 0.00150007 8.6085 0 8.0625 0C7.5165 0 7.1625 0.00150007 6.903 0.0360001C6.65925 0.0690001 6.58275 0.12225 6.54 0.165C6.49725 0.20775 6.444 0.28425 6.411 0.528C6.3765 0.78825 6.375 1.1415 6.375 1.6875V13.875H5.25V5.0625C5.25 4.91332 5.19074 4.77024 5.08525 4.66475C4.97976 4.55926 4.83668 4.5 4.6875 4.5H2.4375C2.28832 4.5 2.14524 4.55926 2.03975 4.66475C1.93426 4.77024 1.875 4.91332 1.875 5.0625V13.875H0.5625C0.413316 13.875 0.270242 13.9343 0.164752 14.0398C0.0592632 14.1452 0 14.2883 0 14.4375C0 14.5867 0.0592632 14.7298 0.164752 14.8352C0.270242 14.9407 0.413316 15 0.5625 15H15.5625C15.7117 15 15.8548 14.9407 15.9602 14.8352C16.0657 14.7298 16.125 14.5867 16.125 14.4375C16.125 14.2883 16.0657 14.1452 15.9602 14.0398C15.8548 13.9343 15.7117 13.875 15.5625 13.875H14.25V8.8125Z" fill="#00D4FF" />
     </Svg>
@@ -133,11 +133,11 @@ const ReadinessGaugeInline: React.FC<{ score: number; color: 'green' | 'yellow' 
 };
 
 // Metric Card for Result Screen
-const MetricCardInline: React.FC<{ label: string; value: string; sublabel?: string; icon: 'sleep' | 'strava' | 'energy' | 'stress' }> = ({ label, value, sublabel, icon }) => {
+const MetricCardInline: React.FC<{ label: string; value: string; sublabel?: string; icon: 'sleep' | 'load' | 'energy' | 'stress' }> = ({ label, value, sublabel, icon }) => {
     const renderIcon = () => {
         switch (icon) {
             case 'sleep': return <SleepIcon />;
-            case 'strava': return <StravaLoadIcon />;
+            case 'load': return <TrainingLoadIcon />;
             case 'energy': return <EnergyIcon />;
             case 'stress': return <StressIcon />;
         }
@@ -198,7 +198,7 @@ const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> 
             <ScrollView style={resultStyles.content} contentContainerStyle={{ paddingBottom: insets.bottom + 120 }} showsVerticalScrollIndicator={false}>
                 <View style={resultStyles.timeBadge}>
                     <Text style={resultStyles.timeText}>Análise gerada às {generatedTime}</Text>
-                    <Text style={resultStyles.timeSubtext}>Baseada em Check-in + Strava</Text>
+                    <Text style={resultStyles.timeSubtext}>Baseada em Check-in + Atividades</Text>
                 </View>
 
                 <ReadinessGaugeInline score={verdict.readiness_score} color={verdict.status_color} />
@@ -217,13 +217,12 @@ const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> 
 
                 <View style={resultStyles.metricsGrid}>
                     <MetricCardInline icon="sleep" label="Sono" value={verdict.metrics_summary?.[0]?.value || "7h 30m"} sublabel={verdict.metrics_summary?.[0]?.sublabel} />
-                    <MetricCardInline icon="strava" label="Carga Strava" value={verdict.metrics_summary?.[1]?.value || "Moderada"} sublabel={verdict.metrics_summary?.[1]?.sublabel} />
+                    <MetricCardInline icon="load" label="Carga de Treino" value={verdict.metrics_summary?.[1]?.value || "Moderada"} sublabel={verdict.metrics_summary?.[1]?.sublabel} />
                     <MetricCardInline icon="energy" label="Energia" value={verdict.metrics_summary?.[2]?.value || "8/10"} sublabel={verdict.metrics_summary?.[2]?.sublabel} />
                     <MetricCardInline icon="stress" label="Estresse" value={verdict.metrics_summary?.[3]?.value || "Baixo"} sublabel={verdict.metrics_summary?.[3]?.sublabel} />
                 </View>
 
-                {/* Strava compliance branding */}
-                <PoweredByStrava width={76} style={{ marginTop: 8, marginRight: 4 }} />
+
 
 
                 {/* Natural Flow Button */}

@@ -108,7 +108,7 @@ export function NotificationSettingsScreen({ navigation }: any) {
                 {
                     id: 'sync_enabled',
                     title: 'Sincronização',
-                    description: 'Confirmar upload do Strava/Garmin',
+                    description: 'Confirmar registro de atividade',
                     enabled: true,
                 },
             ],

@@ -27,18 +27,7 @@ function HistoryIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: 
     return <MaterialCommunityIcons name="history" size={size} color={color} />;
 }
 
-// Official Strava icon image
-const STRAVA_ICON = require('../assets/images/strava/bi_strava.png');
 
-function StravaIconImage({ size = 36 }: { size?: number }) {
-    return (
-        <Image
-            source={STRAVA_ICON}
-            style={{ width: size, height: size }}
-            resizeMode="contain"
-        />
-    );
-}
 
 function NotificationIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
     return <Ionicons name="notifications" size={size} color={color} />;
@@ -62,8 +51,7 @@ function EditIcon({ size = 16, color = '#0A0A18' }: { size?: number; color?: str
 
 export function SettingsScreen({ navigation }: any) {
     const { user, logout } = useAuthStore();
-    // Use real Strava connection status from user data
-    const isStravaConnected = Boolean(user?.strava_athlete_id);
+
 
     const handleLogout = async () => {
         await logout();
@@ -151,24 +139,6 @@ export function SettingsScreen({ navigation }: any) {
                     </View>
                 </View>
 
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Integrações</Text>
-                    <View style={styles.menuCard}>
-                        <View style={[styles.menuItem, { paddingVertical: 16 }]}>
-                            <View style={styles.menuItemLeft}>
-                                <View style={styles.stravaIconContainer}>
-                                    <StravaIconImage size={36} />
-                                </View>
-                                <View style={styles.stravaTextContainer}>
-                                    <Text style={styles.menuItemText}>Strava</Text>
-                                    <Text style={styles.stravaConnectedText}>
-                                        {isStravaConnected ? `Conectado como ${userName}` : 'Não conectado'}
-                                    </Text>
-                                </View>
-                            </View>
-                        </View>
-                    </View>
-                </View>
 
                 {/* PREFERÊNCIAS Section */}
                 <View style={styles.section}>
@@ -351,21 +321,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.08)',
         marginLeft: 60,
     },
-    stravaIconContainer: {
-        width: 40,
-        height: 40,
-        marginRight: spacing.md,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    stravaTextContainer: {
-        flex: 1,
-    },
-    stravaConnectedText: {
-        fontSize: 12,
-        color: '#00D4FF',
-        marginTop: 2,
-    },
+
     logoutButton: {
         flexDirection: 'row',
         alignItems: 'center',

@@ -19,7 +19,7 @@ import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore,
 import { CircularProgress } from '../components/CircularProgress';
 import { Skeleton, SkeletonCircle, SkeletonText } from '../components/Skeleton';
 import { ScreenContainer } from '../components/ScreenContainer';
-import { PoweredByStrava } from '../components/PoweredByStrava';
+
 import { BASE_API_URL } from '../config/api.config';
 
 // Icon components using @expo/vector-icons
@@ -206,33 +206,12 @@ export function HomeScreen({ navigation }: any) {
     };
 
     const handleStartWorkout = async () => {
-        try {
-            const stravaURL = 'strava://record';
-            const canOpen = await Linking.canOpenURL(stravaURL);
-
-            if (canOpen) {
-                await Linking.openURL(stravaURL);
-            } else {
-                const storeURL = Platform.OS === 'ios'
-                    ? 'https://apps.apple.com/app/strava/id426826309'
-                    : 'https://play.google.com/store/apps/details?id=com.strava';
-
-                Alert.alert(
-                    'Strava não instalado',
-                    'Você precisa ter o Strava instalado para gravar treinos.',
-                    [
-                        { text: 'Cancelar', style: 'cancel' },
-                        {
-                            text: 'Instalar',
-                            onPress: () => Linking.openURL(storeURL)
-                        }
-                    ]
-                );
-            }
-        } catch (error) {
-            console.error('Error opening Strava:', error);
-            Alert.alert('Erro', 'Não foi possível abrir o Strava');
-        }
+        // TODO: Implement native workout tracking or GPS recording
+        Alert.alert(
+            'Iniciar Treino',
+            'A funcionalidade de gravação de treinos será implementada em breve.',
+            [{ text: 'OK' }]
+        );
     };
 
     const userName = user?.profile?.firstname
@@ -614,8 +593,7 @@ export function HomeScreen({ navigation }: any) {
                                 <ArrowRightIcon size={18} color="#00D4FF" />
                             </TouchableOpacity>
 
-                            {/* Strava compliance branding */}
-                            <PoweredByStrava width={76} style={{ marginTop: 12 }} />
+
                         </>
                     ) : hasCompletedWorkouts ? (
                         <>

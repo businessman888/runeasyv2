@@ -55,8 +55,7 @@ const linking: LinkingOptions<any> = {
     ],
     config: {
         screens: {
-            // Map the callback path to Onboarding screen
-            Onboarding: '--/callback/onboarding',
+            Onboarding: 'google-auth',
             Login: 'login',
         },
     },
@@ -159,47 +158,36 @@ export function AppNavigator() {
         checkAuth();
     }, []);
 
-    // CRITICAL: Deep Link listener - extracts user_id from callback URL
+    // Deep Link listener — handles OAuth redirects and app links
     React.useEffect(() => {
         const handleDeepLink = async (url: string | null) => {
             if (!url) return;
             console.log('[DeepLink] Received URL:', url);
 
             try {
-                // Extract user_id from URL query params
-                // URL format: runeasy://--/callback/onboarding?user_id=xxx
+                // Parse URL to check for auth callback
                 const urlObj = new URL(url.replace('runeasy://', 'https://app.runeasy.com/'));
-                const userId = urlObj.searchParams.get('user_id');
+                const path = urlObj.pathname;
+                console.log('[DeepLink] Path:', path);
 
-                if (userId) {
-                    console.log('[DeepLink] Extracted user_id:', userId);
-                    await login(userId);
-                    console.log('[DeepLink] Login complete — AppNavigator will auto-navigate based on onboarding_completed state');
-                    // No manual navigation needed:
-                    // - If onboarding_completed = false → AppNavigator renders State 2 (Onboarding)
-                    // - If onboarding_completed = true  → AppNavigator renders State 3 (Main tabs)
-                } else {
-                    console.warn('[DeepLink] No user_id found in URL');
+                // Google Auth callback is handled natively by GoogleSignin SDK
+                // No manual parsing needed — the LoginScreen handles the flow
+                if (path.includes('google-auth')) {
+                    console.log('[DeepLink] Google auth callback detected');
                 }
             } catch (error) {
                 console.error('[DeepLink] Error parsing URL:', error);
             }
         };
 
-        // Handle initial URL (cold start - app was closed)
-        Linking.getInitialURL().then((url) => {
-            console.log('[DeepLink] Initial URL:', url);
-            handleDeepLink(url);
-        });
+        Linking.getInitialURL().then(handleDeepLink);
 
-        // Handle URL while app is running (warm start)
         const subscription = Linking.addEventListener('url', (event) => {
-            console.log('[DeepLink] URL Event:', event.url);
             handleDeepLink(event.url);
         });
 
         return () => subscription.remove();
-    }, [login]);
+    }, []);
 
     // Set navigation as not ready when unmounting
     React.useEffect(() => {

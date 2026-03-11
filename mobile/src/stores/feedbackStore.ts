@@ -26,7 +26,7 @@ export interface Feedback {
     id: string;
     user_id: string;
     workout_id: string;
-    strava_activity_id: string;
+    activity_id: string;
     hero_message: string;
     hero_tone: 'celebration' | 'encouragement' | 'improvement' | 'caution';
     metrics_comparison: MetricsComparison;
@@ -40,7 +40,7 @@ export interface Feedback {
         scheduled_date: string;
         distance_km: number;
     };
-    strava_activities?: {
+    activities?: {
         id: string;
         name: string;
         distance: number;

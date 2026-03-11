@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { ScreenContainer } from '../components/ScreenContainer';
-import { PoweredByStrava } from '../components/PoweredByStrava';
+
 import { BASE_API_URL } from '../config/api.config';
 import * as Storage from '../utils/storage';
 
@@ -217,7 +217,7 @@ export function RetrospectiveScreen() {
                                 ({distanceDiff >= 0 ? '+' : ''}{distanceDiff}%)
                             </Text>
                         </Text>
-                        <PoweredByStrava width={60} align="left" style={styles.stravaLogo} />
+
                     </View>
 
                     {/* Pace Card */}
@@ -240,7 +240,7 @@ export function RetrospectiveScreen() {
                                 ({paceDiff >= 0 ? '+' : ''}{paceDiff}%)
                             </Text>
                         </Text>
-                        <PoweredByStrava width={60} align="left" style={styles.stravaLogo} />
+
                     </View>
                 </View>
 
@@ -481,9 +481,7 @@ const styles = StyleSheet.create({
     negative: {
         color: COLORS.warning,
     },
-    stravaLogo: {
-        marginTop: 8,
-    },
+
     frequencyCard: {
         backgroundColor: COLORS.cardBg,
         borderRadius: 16,

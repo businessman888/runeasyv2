@@ -12,10 +12,6 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
 import { useFeedbackStore } from '../stores/feedbackStore';
 import { ScreenContainer } from '../components/ScreenContainer';
-import { PoweredByStrava } from '../components/PoweredByStrava';
-
-// Official Strava icons
-const STRAVA_ICON = require('../assets/images/strava/bi_strava.png');
 
 // Icon components using @expo/vector-icons
 function BackIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
@@ -55,16 +51,7 @@ function BolinhaIcon({ color = '#00D4FF' }: { color?: string }) {
     );
 }
 
-// Strava icon using official image
-function StravaIconImage({ size = 20 }: { size?: number }) {
-    return (
-        <Image
-            source={STRAVA_ICON}
-            style={{ width: size, height: size }}
-            resizeMode="contain"
-        />
-    );
-}
+
 
 const getWorkoutDotColor = (type: string): string => {
     if (type.includes('Long') || type.toLowerCase().includes('longa')) {
@@ -171,8 +158,7 @@ export function TrainingHistoryScreen({ navigation }: any) {
                             </View>
                         </View>
 
-                        {/* Strava compliance branding */}
-                        <PoweredByStrava width={76} style={{ marginTop: 16 }} />
+
                     </View>
                 )}
 
@@ -238,7 +224,7 @@ export function TrainingHistoryScreen({ navigation }: any) {
                                 <View style={styles.workoutContent}>
                                     <View style={styles.workoutTitleRow}>
                                         <View style={styles.workoutTitleWithIcon}>
-                                            <StravaIconImage size={16} />
+                                            <MaterialCommunityIcons name="run" size={16} color="#00D4FF" />
                                             <Text style={styles.workoutTitle}>{workout.name}</Text>
                                         </View>
                                         <BolinhaIcon color={getWorkoutDotColor(workout.type)} />

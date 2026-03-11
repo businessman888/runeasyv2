@@ -5,20 +5,26 @@ import {
     StyleSheet,
     TouchableOpacity,
     StatusBar,
-    Dimensions,
     Platform,
     ImageBackground,
-    Image,
     ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, spacing } from '../theme';
-import * as Storage from '../utils/storage';
 import { useAuthStore } from '../stores';
+import { supabase } from '../services/supabase';
 import Svg, { Path } from 'react-native-svg';
-import { API_URL } from '../config/api.config';
+import {
+    GoogleSignin,
+    statusCodes,
+} from '@react-native-google-signin/google-signin';
 
-const { width, height } = Dimensions.get('window');
+// Configure Google Sign-In
+GoogleSignin.configure({
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS,
+    offlineAccess: true,
+});
 
 // RunEasy Logo Component (exact from Figma SVG) - 355x116
 const RunEasyLogo = () => (
@@ -36,155 +42,97 @@ const RunEasyLogo = () => (
     </Svg>
 );
 
-// Official Strava "Connect with Strava" button image
-const STRAVA_CONNECT_BUTTON = require('../assets/images/strava/btn_strava_connect_with_orange_x2.png');
+// Google "G" icon SVG
+const GoogleIcon = () => (
+    <Svg width={20} height={20} viewBox="0 0 48 48">
+        <Path d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z" fill="#FFC107" />
+        <Path d="M5.3 14.7l7 5.1C14.2 15.7 18.7 13 24 13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 15.4 2 8.1 7.3 5.3 14.7z" fill="#FF3D00" />
+        <Path d="M24 46c5.2 0 10-1.8 13.7-4.9l-6.7-5.5C29.1 37.1 26.7 38 24 38c-6 0-11.1-4-12.8-9.5l-7 5.4C7 41 14.7 46 24 46z" fill="#4CAF50" />
+        <Path d="M44.5 20H24v8.5h11.8c-1 3.2-3.1 5.8-5.8 7.6l6.7 5.5C40.5 38.2 46 32 46 24c0-1.3-.2-2.7-.5-4z" fill="#1976D2" />
+    </Svg>
+);
 
-export function LoginScreen({ navigation }: any) {
+export function LoginScreen({ navigation }: { navigation: unknown }) {
     const [isLoading, setIsLoading] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
     const { login } = useAuthStore();
 
-    // Check for auth callback params on web
-    React.useEffect(() => {
-        if (Platform.OS === 'web') {
-            handleWebCallback();
-        }
-    }, []);
-
-    const handleWebCallback = async () => {
-        try {
-            const currentUrl = window.location.href;
-            const url = new URL(currentUrl);
-            const userId = url.searchParams.get('user_id');
-            const errorParam = url.searchParams.get('error');
-
-            if (errorParam) {
-                setError(getErrorMessage(errorParam));
-                // Clean URL
-                window.history.replaceState({}, '', '/');
-                return;
-            }
-
-            if (userId) {
-                // Clean URL first
-                window.history.replaceState({}, '', '/');
-
-                // Save userId to storage
-                await Storage.setItemAsync('user_id', userId);
-
-                // Always use login() — AppNavigator decides the screen based on:
-                // - onboarding_completed = false → State 2 (Onboarding)
-                // - onboarding_completed = true  → State 3 (Main tabs)
-                console.log('User authenticated — AppNavigator will auto-navigate');
-                await login(userId);
-            }
-        } catch (err) {
-            console.error('Web callback error:', err);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
     const getErrorMessage = (errorCode: string): string => {
         const messages: Record<string, string> = {
             'auth_failed': 'Falha na autenticação. Tente novamente.',
-            'missing_code': 'Código de autorização não recebido.',
-            'access_denied': 'Acesso negado pelo Strava.',
+            'sign_in_cancelled': 'Login cancelado.',
+            'in_progress': 'Login já em andamento.',
+            'play_services': 'Google Play Services indisponível.',
         };
         return messages[errorCode] || 'Erro desconhecido. Tente novamente.';
     };
 
-    const handleStravaLogin = async () => {
+    const handleGoogleLogin = async () => {
         setError(null);
+        setIsLoading(true);
 
-        // DEBUG: Log the URL being used
-        // Backend uses /api prefix (set in main.ts), so route is /api/auth/strava/login
-        const loginUrl = `${API_URL}/api/auth/strava/login`;
-        console.log('=== STRAVA LOGIN DEBUG ===');
-        console.log('API_URL:', API_URL);
-        console.log('Full login URL:', loginUrl);
-        console.log('Platform:', Platform.OS);
+        try {
+            console.log('[LOGIN] Starting Google Sign-In...');
 
-        if (Platform.OS === 'web') {
-            // On web, redirect directly to Strava login
-            console.log('Redirecting to:', loginUrl);
-            window.location.href = loginUrl;
-        } else {
-            // On native (Expo Go), use simple browser opening
-            // The deep link callback will be handled by Linking listener
-            try {
-                setIsLoading(true);
-                const WebBrowser = require('expo-web-browser');
-                const Linking = require('expo-linking');
+            // Check Google Play Services availability
+            await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 
-                // Get the callback URL that Expo Go can handle
-                const callbackUrl = Linking.createURL('callback');
-                console.log('=== EXPO GO OAUTH FLOW ===');
-                console.log('Callback URL (for backend FRONTEND_URL):', callbackUrl);
-                console.log('Login URL:', loginUrl);
-                console.log('=== URL RECEBIDA NO APP ===');
-                console.log('URL RECEBIDA NO APP:', loginUrl);
+            // Sign in with Google natively
+            const signInResult = await GoogleSignin.signIn();
+            console.log('[LOGIN] Google Sign-In successful');
 
-                // Set up a listener for deep link callback BEFORE opening browser
-                const handleDeepLink = async (event: { url: string }) => {
-                    console.log('=== DEEP LINK RECEIVED ===');
-                    console.log('URL:', event.url);
-
-                    try {
-                        const url = new URL(event.url);
-                        const userId = url.searchParams.get('user_id');
-                        const errorParam = url.searchParams.get('error');
-
-                        console.log('Parsed - userId:', userId, 'error:', errorParam);
-
-                        if (errorParam) {
-                            setError(getErrorMessage(errorParam));
-                            setIsLoading(false);
-                            return;
-                        }
-
-                        if (userId) {
-                            await Storage.setItemAsync('user_id', userId);
-
-                            // Always use login() — AppNavigator decides the screen
-                            console.log('User authenticated — AppNavigator will auto-navigate');
-                            await login(userId);
-                        }
-                    } catch (parseError) {
-                        console.error('Error parsing deep link:', parseError);
-                    } finally {
-                        setIsLoading(false);
-                    }
-                };
-
-                // Add listener
-                const subscription = Linking.addEventListener('url', handleDeepLink);
-
-                console.log('Opening browser with openBrowserAsync...');
-
-                // Open browser - user will be redirected back via deep link
-                await WebBrowser.openBrowserAsync(loginUrl, {
-                    showInRecents: true,
-                    dismissButtonStyle: 'close',
-                });
-
-                console.log('Browser closed');
-
-                // Note: The deep link handler above will process the callback
-                // If browser was closed without completing auth, remove listener after delay
-                setTimeout(() => {
-                    subscription.remove();
-                    setIsLoading(false);
-                }, 30000); // 30 second timeout
-
-            } catch (err: any) {
-                console.error('=== STRAVA LOGIN ERROR ===');
-                console.error('Error name:', err?.name);
-                console.error('Error message:', err?.message);
-                console.error('Full error:', JSON.stringify(err, null, 2));
-                setError('Erro ao conectar com Strava: ' + (err?.message || 'Erro desconhecido'));
-                setIsLoading(false);
+            const idToken = signInResult.data?.idToken;
+            if (!idToken) {
+                throw new Error('No idToken returned from Google Sign-In');
             }
+
+            // Exchange Google token with Supabase
+            console.log('[LOGIN] Exchanging token with Supabase...');
+            const { data, error: supabaseError } = await supabase.auth.signInWithIdToken({
+                provider: 'google',
+                token: idToken,
+            });
+
+            if (supabaseError) {
+                console.error('[LOGIN] Supabase auth error:', supabaseError.message);
+                throw new Error(supabaseError.message);
+            }
+
+            if (!data.session || !data.user) {
+                throw new Error('No session returned from Supabase');
+            }
+
+            console.log('[LOGIN] Supabase auth successful, userId:', data.user.id);
+
+            // Login to our backend (fetch/create user data)
+            await login(data.user.id);
+            console.log('[LOGIN] Backend login complete — AppNavigator will auto-navigate');
+
+        } catch (err: unknown) {
+            console.error('[LOGIN] Error:', err);
+
+            if (err !== null && typeof err === 'object' && 'code' in err) {
+                const googleError = err as { code: string; message?: string };
+                switch (googleError.code) {
+                    case statusCodes.SIGN_IN_CANCELLED:
+                        setError(getErrorMessage('sign_in_cancelled'));
+                        break;
+                    case statusCodes.IN_PROGRESS:
+                        setError(getErrorMessage('in_progress'));
+                        break;
+                    case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
+                        setError(getErrorMessage('play_services'));
+                        break;
+                    default:
+                        setError(googleError.message || getErrorMessage('auth_failed'));
+                }
+            } else if (err instanceof Error) {
+                setError(err.message);
+            } else {
+                setError(getErrorMessage('auth_failed'));
+            }
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -194,13 +142,11 @@ export function LoginScreen({ navigation }: any) {
         <View style={styles.container}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-            {/* Background with overlay */}
             <ImageBackground
                 source={require('../assets/images/login-background.avif')}
                 style={styles.backgroundImage}
                 resizeMode="cover"
             >
-                {/* Overlay with #0E0E1F at 80% opacity */}
                 <View style={styles.overlay} />
 
                 <View style={[
@@ -210,12 +156,12 @@ export function LoginScreen({ navigation }: any) {
                         paddingBottom: insets.bottom + 20
                     }
                 ]}>
-                    {/* Logo Section - Top */}
+                    {/* Logo Section */}
                     <View style={styles.logoContainer}>
                         <RunEasyLogo />
                     </View>
 
-                    {/* Central Text Section */}
+                    {/* Central Text */}
                     <View style={styles.centerSection}>
                         <View style={styles.textContainer}>
                             <Text style={styles.headline}>Sua corrida</Text>
@@ -237,24 +183,25 @@ export function LoginScreen({ navigation }: any) {
                             </View>
                         )}
 
-                        {/* Official Strava Connect Button */}
+                        {/* Google Sign-In Button */}
                         <TouchableOpacity
-                            onPress={handleStravaLogin}
+                            onPress={handleGoogleLogin}
                             disabled={isLoading}
                             activeOpacity={0.8}
-                            style={styles.stravaButtonContainer}
+                            style={styles.googleButton}
+                            accessibilityRole="button"
+                            accessibilityLabel="Continuar com Google"
                         >
                             {isLoading ? (
-                                <View style={styles.stravaLoadingContainer}>
-                                    <ActivityIndicator size="small" color="#FC4C02" />
-                                    <Text style={styles.stravaLoadingText}>Conectando...</Text>
+                                <View style={styles.googleLoadingContainer}>
+                                    <ActivityIndicator size="small" color="#00D4FF" />
+                                    <Text style={styles.googleLoadingText}>Conectando...</Text>
                                 </View>
                             ) : (
-                                <Image
-                                    source={STRAVA_CONNECT_BUTTON}
-                                    style={styles.stravaButtonImage}
-                                    resizeMode="contain"
-                                />
+                                <View style={styles.googleButtonContent}>
+                                    <GoogleIcon />
+                                    <Text style={styles.googleButtonText}>Continuar com Google</Text>
+                                </View>
                             )}
                         </TouchableOpacity>
 
@@ -282,7 +229,7 @@ const styles = StyleSheet.create({
     },
     overlay: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(14, 14, 31, 0.8)', // #0E0E1F with 80% opacity
+        backgroundColor: 'rgba(14, 14, 31, 0.8)',
     },
     content: {
         flex: 1,
@@ -305,19 +252,19 @@ const styles = StyleSheet.create({
     headline: {
         fontSize: 36,
         fontFamily: Platform.OS === 'web' ? '"Roboto Condensed", sans-serif' : 'RobotoCondensed-ExtraBold',
-        fontWeight: '800', // Extra Bold
+        fontWeight: '800',
         color: colors.white,
         textAlign: 'center',
         lineHeight: 44,
     },
     headlineBlue: {
-        color: '#00D4FF', // Same blue as logo
+        color: '#00D4FF',
         fontWeight: '800',
     },
     subheadline: {
         fontSize: 20,
         fontFamily: Platform.OS === 'web' ? '"Roboto Condensed", sans-serif' : 'RobotoCondensed-Regular',
-        fontWeight: '400', // Regular
+        fontWeight: '400',
         color: 'rgba(255, 255, 255, 0.6)',
         textAlign: 'center',
         lineHeight: 26,
@@ -340,29 +287,40 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         fontSize: typography.fontSizes.sm,
     },
-    stravaButtonContainer: {
+    googleButton: {
         width: '100%',
         maxWidth: 340,
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: 48,
+        minHeight: 52,
+        borderRadius: 16,
+        overflow: 'hidden',
     },
-    stravaButtonImage: {
-        width: 280,
-        height: 48,
-    },
-    stravaLoadingContainer: {
+    googleButtonContent: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(252, 76, 2, 0.1)',
-        paddingVertical: 16,
-        paddingHorizontal: 32,
+        backgroundColor: '#FFFFFF',
+        paddingVertical: 14,
+        paddingHorizontal: 24,
         borderRadius: 16,
         gap: 12,
     },
-    stravaLoadingText: {
-        color: '#FC4C02',
+    googleButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1F1F1F',
+    },
+    googleLoadingContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0, 212, 255, 0.1)',
+        paddingVertical: 14,
+        paddingHorizontal: 24,
+        borderRadius: 16,
+        gap: 12,
+    },
+    googleLoadingText: {
+        color: '#00D4FF',
         fontSize: 16,
         fontWeight: '600',
     },
