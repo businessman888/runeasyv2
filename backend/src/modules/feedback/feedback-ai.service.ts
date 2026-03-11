@@ -125,7 +125,7 @@ export class FeedbackAIService {
             .insert({
                 user_id: userId,
                 workout_id: workoutId,
-                strava_activity_id: activityId,
+                activity_id: activityId,
                 hero_message: feedback.hero_message,
                 hero_tone: feedback.hero_tone,
                 metrics_comparison: feedback.metrics_comparison,
@@ -311,14 +311,14 @@ Regras:
         const { data: feedback } = await this.supabaseService
             .from('ai_feedbacks')
             .select('id, hero_message, hero_tone, strengths, improvements, metrics_comparison, workout_id')
-            .eq('strava_activity_id', latestActivity.id)
+            .eq('activity_id', latestActivity.id)
             .single();
 
         // 3. Get linked workout to check goal
         const { data: linkedWorkout } = await this.supabaseService
             .from('workouts')
             .select('id, distance_km, type')
-            .eq('strava_activity_id', latestActivity.id)
+            .eq('activity_id', latestActivity.id)
             .single();
 
         // 4. Calculate if goal was met (distance comparison)
@@ -586,14 +586,14 @@ Regras:
             const activityIds = activities.map(a => a.id);
             const { data: feedbacks } = await this.supabaseService
                 .from('ai_feedbacks')
-                .select('id, strava_activity_id, hero_message, hero_tone, created_at')
-                .in('strava_activity_id', activityIds);
+                .select('id, activity_id, hero_message, hero_tone, created_at')
+                .in('activity_id', activityIds);
 
             // Create a map of activity_id -> feedback
             const feedbackMap = new Map();
             if (feedbacks) {
                 feedbacks.forEach(f => {
-                    feedbackMap.set(f.strava_activity_id, {
+                    feedbackMap.set(f.activity_id, {
                         id: f.id,
                         hero_message: f.hero_message,
                         hero_tone: f.hero_tone,

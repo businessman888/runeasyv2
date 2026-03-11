@@ -1,35 +1,39 @@
 /**
  * API Configuration for RunEasy Mobile App
  * 
- * FORCED PRODUCTION MODE: Always connects to Railway server
- * To switch back to dev mode, uncomment the __DEV__ logic below
+ * Reads from EXPO_PUBLIC_API_URL environment variable.
+ * Falls back to localhost for development.
  * 
- * IMPORTANT: All stores should import BASE_API_URL from this file
+ * IMPORTANT: All stores should import BASE_API_URL from this file.
  */
 
-// Production API URL (Railway deployment) - includes /api suffix
-const PRODUCTION_BASE = 'https://runeasy-production.up.railway.app/api';
-
-// Development API URL (currently unused - production forced)
-// const DEVELOPMENT_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
+import { Platform } from 'react-native';
 
 /**
- * Get the API base URL
- * Currently FORCED to production - ignores __DEV__
+ * Get the base URL from environment, with platform-aware fallback.
  */
 const getBaseUrl = (): string => {
-    // FORCED PRODUCTION MODE
-    return PRODUCTION_BASE;
+    const envUrl = process.env.EXPO_PUBLIC_API_URL;
 
-    // To restore dev mode, uncomment below and comment the line above:
-    // return __DEV__ ? DEVELOPMENT_BASE : PRODUCTION_BASE;
+    if (envUrl) {
+        // Ensure /api suffix
+        return envUrl.endsWith('/api') ? envUrl : `${envUrl}/api`;
+    }
+
+    // Dev fallback: Android Emulator uses 10.0.2.2 to reach host machine
+    if (__DEV__) {
+        const host = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
+        return `http://${host}:3000/api`;
+    }
+
+    // Absolute fallback (should never reach here in production)
+    return 'https://runeasyv2-production.up.railway.app/api';
 };
 
 /**
  * API base URL WITHOUT /api suffix (for special routes like auth)
- * Note: Since PRODUCTION_BASE already includes /api, we strip it here
  */
-export const API_URL = PRODUCTION_BASE.replace('/api', '');
+export const API_URL = getBaseUrl().replace(/\/api$/, '');
 
 /**
  * API base URL WITH /api suffix (for most API calls)

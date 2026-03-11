@@ -10,7 +10,7 @@ export interface ReadinessInput {
         stress: number;     // 1-5
         motivation: number; // 1-5
     };
-    stravaData: string;     // Formatted text description
+    trainingLoadData: string;     // Formatted text description
     todayWorkout?: {
         type: string;
         title: string;
@@ -59,7 +59,7 @@ export class ReadinessAIService {
 
 INPUTS RECEBIDOS:
 1. Check-in (1-5): Sono, Pernas, Clima Mental, Estresse, Motivação
-2. Strava (Objetivo): Carga Aguda (7d) vs Crônica (28d) e ACWR
+2. Carga de Treino (Objetivo): Carga Aguda (7d) vs Crônica (28d) e ACWR
 3. Plano (Futuro): Detalhes do treino de hoje e amanhã
 
 LÓGICA DE ANÁLISE (PRIORIDADE MÁXIMA):
@@ -92,7 +92,7 @@ OUTPUT: Retorne APENAS um objeto JSON válido seguindo o schema abaixo, sem expl
   },
   "metrics_summary": [
     { "label": "Sono", "value": "Xh XXm ou X/5", "sublabel": "Estado", "icon": "bed" },
-    { "label": "Carga Strava", "value": "Baixa/Moderada/Alta", "sublabel": "Relative Effort: XX", "icon": "trending-up" },
+    { "label": "Carga de Treino", "value": "Baixa/Moderada/Alta", "sublabel": "Relative Effort: XX", "icon": "trending-up" },
     { "label": "Energia", "value": "X/10", "sublabel": "Estado atual", "icon": "zap" },
     { "label": "Estresse", "value": "Baixo/Moderado/Alto", "sublabel": "Estado mental", "icon": "brain" }
   ]
@@ -118,8 +118,8 @@ CHECK-IN DIÁRIO (1-5):
 - Motivação: ${input.checkIn.motivation}/5 (${checkInLabels.motivation[input.checkIn.motivation - 1]})
 - Média: ${checkInAvg.toFixed(1)}/5
 
-DADOS DO STRAVA:
-${input.stravaData}
+DADOS DE TREINO:
+${input.trainingLoadData}
 
 TREINO DE HOJE:
 ${input.todayWorkout ? `Tipo: ${input.todayWorkout.type}, Título: ${input.todayWorkout.title}, Distância: ${input.todayWorkout.distance_km || 'N/A'}km` : 'Nenhum treino planejado'}

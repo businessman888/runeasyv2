@@ -48,7 +48,7 @@ export class ReadinessService {
         // 3. Prepare input for AI analysis
         const input: ReadinessInput = {
             checkIn: dto.answers,
-            stravaData: loadDescription,
+            trainingLoadData: loadDescription,
             todayWorkout,
             tomorrowWorkout,
         };
@@ -549,7 +549,6 @@ export class ReadinessService {
 
     /**
      * Get activity load data from the activities table.
-     * Replaces MockStravaService.getLoadData() with real database queries.
      * Calculates ACWR (Acute:Chronic Workload Ratio) from recent activities.
      */
     private async getActivityLoadData(userId: string): Promise<{ acwr: number; weeklyDistanceKm: number; weeklyDurationMin: number; totalActivities7d: number }> {
@@ -595,7 +594,6 @@ export class ReadinessService {
 
     /**
      * Get human-readable description of workout load for AI analysis.
-     * Replaces MockStravaService.getLoadDescription().
      */
     private getLoadDescription(data: { acwr: number; weeklyDistanceKm: number; weeklyDurationMin: number; totalActivities7d: number }): string {
         let loadLevel: string;
