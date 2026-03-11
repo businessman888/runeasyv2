@@ -71,7 +71,7 @@ export class TrainingController {
 
     /**
      * Save onboarding data and create training plan (FAST - uses Prompt Chaining)
-     * Note: Auth via x-user-id header (set during Strava OAuth callback)
+     * Note: Auth via x-user-id header
      * Response time: ~3-5 seconds (background process generates remaining weeks)
      */
     @Post('onboarding')

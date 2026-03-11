@@ -64,51 +64,16 @@ describe('GamificationService', () => {
         });
     });
 
-    describe('calculateXPForLevel', () => {
-        it('should return 0 for level 1', () => {
-            const xp = service.calculateXPForLevel(1);
-            expect(xp).toBe(0);
-        });
-
-        it('should return correct XP for level 5', () => {
-            const xp = service.calculateXPForLevel(5);
-            expect(xp).toBeGreaterThan(0);
-        });
-    });
-
-    describe('getLevelName', () => {
-        it('should return Iniciante for level 1', () => {
-            const name = service.getLevelName(1);
-            expect(name).toBe('Iniciante');
-        });
-
-        it('should return Corredor Regular for level 4', () => {
-            const name = service.getLevelName(4);
-            expect(name).toBe('Corredor Regular');
-        });
-
-        it('should return Ultra Runner for level 10', () => {
-            const name = service.getLevelName(10);
-            expect(name).toBe('Ultra Runner');
-        });
-    });
-
-    describe('calculateWorkoutPoints', () => {
-        it('should calculate base points for easy run', () => {
-            const points = service.calculateWorkoutPoints('easy_run', 5, 30);
+    describe('getPointsForNextLevel', () => {
+        it('should return points needed for level 2 when at level 1', () => {
+            const points = service.getPointsForNextLevel(1, 0);
             expect(points).toBeGreaterThan(0);
         });
 
-        it('should give more points for longer distances', () => {
-            const shortRun = service.calculateWorkoutPoints('easy_run', 3, 20);
-            const longRun = service.calculateWorkoutPoints('long_run', 15, 90);
-            expect(longRun).toBeGreaterThan(shortRun);
-        });
-
-        it('should give bonus for intervals', () => {
-            const easyRun = service.calculateWorkoutPoints('easy_run', 5, 30);
-            const intervals = service.calculateWorkoutPoints('intervals', 5, 30);
-            expect(intervals).toBeGreaterThan(easyRun);
+        it('should return fewer points needed when closer to level up', () => {
+            const pointsAtStart = service.getPointsForNextLevel(1, 0);
+            const pointsNearLevelUp = service.getPointsForNextLevel(1, 50);
+            expect(pointsNearLevelUp).toBeLessThan(pointsAtStart);
         });
     });
 });

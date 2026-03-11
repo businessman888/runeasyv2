@@ -50,7 +50,8 @@
           "defaultChannel": "default",
           "sounds": []
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "notification": {
       "icon": "./assets/notification-icon.png",

@@ -39,7 +39,7 @@ export class StatsService {
         startDate.setDate(startDate.getDate() - (weeks * 7));
 
         const { data, error } = await this.supabaseService
-            .from('strava_activities')
+            .from('activities')
             .select('start_date, distance, moving_time, average_pace, elevation_gain')
             .eq('user_id', userId)
             .gte('start_date', startDate.toISOString())
@@ -98,7 +98,7 @@ export class StatsService {
         startDate.setMonth(startDate.getMonth() - months);
 
         const { data: activities, error: actError } = await this.supabaseService
-            .from('strava_activities')
+            .from('activities')
             .select('start_date, distance, average_pace')
             .eq('user_id', userId)
             .gte('start_date', startDate.toISOString())
@@ -168,7 +168,7 @@ export class StatsService {
      */
     async getPaceProgression(userId: string, limit = 20): Promise<PaceProgression[]> {
         const { data, error } = await this.supabaseService
-            .from('strava_activities')
+            .from('activities')
             .select('start_date, average_pace, distance, name')
             .eq('user_id', userId)
             .not('average_pace', 'is', null)
@@ -190,7 +190,7 @@ export class StatsService {
      */
     async getSummaryStats(userId: string) {
         const { data: activities, error } = await this.supabaseService
-            .from('strava_activities')
+            .from('activities')
             .select('distance, moving_time, elevation_gain')
             .eq('user_id', userId);
 
@@ -203,7 +203,7 @@ export class StatsService {
 
         // Get best pace
         const { data: bestPace } = await this.supabaseService
-            .from('strava_activities')
+            .from('activities')
             .select('average_pace')
             .eq('user_id', userId)
             .not('average_pace', 'is', null)
@@ -212,7 +212,7 @@ export class StatsService {
 
         // Get longest run
         const { data: longestRun } = await this.supabaseService
-            .from('strava_activities')
+            .from('activities')
             .select('distance')
             .eq('user_id', userId)
             .order('distance', { ascending: false })

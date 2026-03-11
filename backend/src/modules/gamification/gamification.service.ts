@@ -222,7 +222,7 @@ export class GamificationService {
 
         // Get user's activity count and data
         const { count: activityCount } = await this.supabaseService
-            .from('strava_activities')
+            .from('activities')
             .select('*', { count: 'exact', head: true })
             .eq('user_id', userId);
 
@@ -266,7 +266,7 @@ export class GamificationService {
                         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
                         const { data: oldActivities } = await this.supabaseService
-                            .from('strava_activities')
+                            .from('activities')
                             .select('average_speed, distance')
                             .eq('user_id', userId)
                             .gte('distance', 5000)
@@ -291,7 +291,7 @@ export class GamificationService {
                         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
                         const { count: recentWorkouts } = await this.supabaseService
-                            .from('strava_activities')
+                            .from('activities')
                             .select('*', { count: 'exact', head: true })
                             .eq('user_id', userId)
                             .gte('start_date', thirtyDaysAgo.toISOString());
@@ -327,15 +327,15 @@ export class GamificationService {
                         // This would require weather data from activities
                         // For now, we'll check if user has activities in different times of day
                         const { data: activities } = await this.supabaseService
-                            .from('strava_activities')
+                            .from('activities')
                             .select('start_date')
                             .eq('user_id', userId);
 
                         if (activities) {
-                            const hours = new Set(activities.map(a => new Date(a.start_date).getHours()));
+                            const hours = new Set<number>(activities.map((a: any) => new Date(a.start_date).getHours()));
                             // Consider different time ranges as "different conditions"
                             const conditions = new Set<string>();
-                            hours.forEach(h => {
+                            hours.forEach((h: number) => {
                                 if (h >= 5 && h < 9) conditions.add('morning');
                                 if (h >= 12 && h < 15) conditions.add('noon');
                                 if (h >= 17 && h < 20) conditions.add('evening');

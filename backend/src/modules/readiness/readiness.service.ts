@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MockStravaService } from './mock-strava.service';
+
 import { ReadinessAIService, ReadinessVerdict, ReadinessInput } from './readiness-ai.service';
 import { SupabaseService } from '../../database/supabase.service';
 import { NotificationService } from '../notifications/notification.service';
@@ -21,7 +21,6 @@ export class ReadinessService {
     private readonly logger = new Logger(ReadinessService.name);
 
     constructor(
-        private readonly mockStravaService: MockStravaService,
         private readonly readinessAIService: ReadinessAIService,
         private readonly supabaseService: SupabaseService,
         private readonly notificationService: NotificationService,
@@ -38,9 +37,9 @@ export class ReadinessService {
             return existingCheckIn;
         }
 
-        // 1. Get Strava load data (mock for now)
-        const stravaData = await this.mockStravaService.getLoadData(dto.userId);
-        const stravaDescription = this.mockStravaService.getLoadDescription(stravaData);
+        // 1. Get recent activity load data from activities table
+        const loadData = await this.getActivityLoadData(dto.userId);
+        const loadDescription = this.getLoadDescription(loadData);
 
         // 2. Get today's planned workout from database (if exists)
         const todayWorkout = await this.getTodayWorkout(dto.userId);
@@ -49,7 +48,7 @@ export class ReadinessService {
         // 3. Prepare input for AI analysis
         const input: ReadinessInput = {
             checkIn: dto.answers,
-            stravaData: stravaDescription,
+            stravaData: loadDescription,
             todayWorkout,
             tomorrowWorkout,
         };
@@ -59,7 +58,7 @@ export class ReadinessService {
 
         // 5. ACWR Balancing Logic: Override red to yellow for borderline cases with positive check-in
         const checkInAvg = (dto.answers.sleep + dto.answers.legs + dto.answers.mood + dto.answers.stress + dto.answers.motivation) / 5;
-        const acwr = stravaData.acwr || 1.0;
+        const acwr = loadData.acwr || 1.0;
 
         if (verdict.status_color === 'red' && acwr >= 1.4 && acwr <= 1.6 && checkInAvg >= 4) {
             this.logger.log(`ACWR balancing: Overriding red to yellow (ACWR=${acwr}, check-in avg=${checkInAvg})`);
@@ -404,7 +403,7 @@ export class ReadinessService {
 
         // 1. Check if user has completed at least one workout
         const { count: workoutCount } = await supabase
-            .from('strava_activities')
+            .from('activities')
             .select('*', { count: 'exact', head: true })
             .eq('user_id', userId)
             .eq('type', 'Run');
@@ -546,5 +545,65 @@ export class ReadinessService {
             this.logger.warn(`ensureUserProfile error: ${error?.message || error}`);
             // Don't throw - continue to try the insert
         }
+    }
+
+    /**
+     * Get activity load data from the activities table.
+     * Replaces MockStravaService.getLoadData() with real database queries.
+     * Calculates ACWR (Acute:Chronic Workload Ratio) from recent activities.
+     */
+    private async getActivityLoadData(userId: string): Promise<{ acwr: number; weeklyDistanceKm: number; weeklyDurationMin: number; totalActivities7d: number }> {
+        const supabase = this.supabaseService;
+        const now = new Date();
+
+        // Last 7 days (acute load)
+        const sevenDaysAgo = new Date(now);
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+        // Last 28 days (chronic load)
+        const twentyEightDaysAgo = new Date(now);
+        twentyEightDaysAgo.setDate(twentyEightDaysAgo.getDate() - 28);
+
+        const { data: recentActivities } = await supabase
+            .from('activities')
+            .select('distance, moving_time, start_date')
+            .eq('user_id', userId)
+            .eq('type', 'Run')
+            .gte('start_date', twentyEightDaysAgo.toISOString())
+            .order('start_date', { ascending: false });
+
+        const activities = recentActivities || [];
+
+        // Calculate acute load (last 7 days)
+        const acuteActivities = activities.filter(a => new Date(a.start_date) >= sevenDaysAgo);
+        const acuteDistance = acuteActivities.reduce((sum: number, a: any) => sum + (a.distance || 0), 0);
+        const acuteDuration = acuteActivities.reduce((sum: number, a: any) => sum + (a.moving_time || 0), 0);
+
+        // Calculate chronic load (weekly average over 28 days)
+        const chronicDistance = activities.reduce((sum: number, a: any) => sum + (a.distance || 0), 0) / 4;
+
+        // ACWR = acute / chronic (avoid division by zero)
+        const acwr = chronicDistance > 0 ? acuteDistance / chronicDistance : 1.0;
+
+        return {
+            acwr: Math.round(acwr * 100) / 100,
+            weeklyDistanceKm: Math.round((acuteDistance / 1000) * 100) / 100,
+            weeklyDurationMin: Math.round(acuteDuration / 60),
+            totalActivities7d: acuteActivities.length,
+        };
+    }
+
+    /**
+     * Get human-readable description of workout load for AI analysis.
+     * Replaces MockStravaService.getLoadDescription().
+     */
+    private getLoadDescription(data: { acwr: number; weeklyDistanceKm: number; weeklyDurationMin: number; totalActivities7d: number }): string {
+        let loadLevel: string;
+        if (data.acwr < 0.8) loadLevel = 'baixa (destreinamento)';
+        else if (data.acwr <= 1.3) loadLevel = 'adequada';
+        else if (data.acwr <= 1.5) loadLevel = 'moderada-alta';
+        else loadLevel = 'alta (risco de lesão)';
+
+        return `Carga semanal: ${data.weeklyDistanceKm}km em ${data.totalActivities7d} atividades (${data.weeklyDurationMin}min total). ACWR: ${data.acwr} - Carga ${loadLevel}.`;
     }
 }

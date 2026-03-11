@@ -79,7 +79,7 @@ async function bootstrap() {
     console.log('[Bootstrap] ========================================');
 
     logger.log(`🚀 RunEasy Backend running on ${appUrl}`);
-    logger.log(`📚 Strava OAuth: ${appUrl}/api/auth/strava/login`);
+    logger.log(`📚 API Docs: ${appUrl}/api`);
     logger.log(`🌐 CORS enabled for all origins`);
   } catch (error: any) {
     console.error('[Bootstrap] ❌ ERRO FATAL NA INICIALIZAÇÃO:');

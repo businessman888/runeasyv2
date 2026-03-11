@@ -88,7 +88,7 @@ export class FeedbackAIService {
             .single();
 
         const { data: activity } = await this.supabaseService
-            .from('strava_activities')
+            .from('activities')
             .select('*')
             .eq('id', activityId)
             .single();
@@ -266,7 +266,7 @@ Regras:
     async getFeedbackHistory(userId: string, limit = 10) {
         const { data, error } = await this.supabaseService
             .from('ai_feedbacks')
-            .select('*, workouts(*), strava_activities(*)')
+            .select('*, workouts(*), activities(*)')
             .eq('user_id', userId)
             .order('created_at', { ascending: false })
             .limit(limit);
@@ -281,7 +281,7 @@ Regras:
     async getFeedback(userId: string, feedbackId: string) {
         const { data, error } = await this.supabaseService
             .from('ai_feedbacks')
-            .select('*, workouts(*), strava_activities(*)')
+            .select('*, workouts(*), activities(*)')
             .eq('id', feedbackId)
             .eq('user_id', userId)
             .single();
@@ -294,9 +294,9 @@ Regras:
      * Get latest activity with feedback for home screen AI card
      */
     async getLatestActivityWithFeedback(userId: string) {
-        // 1. Get latest Strava activity
+        // 1. Get latest activity
         const { data: latestActivity, error: activityError } = await this.supabaseService
-            .from('strava_activities')
+            .from('activities')
             .select('*')
             .eq('user_id', userId)
             .order('start_date', { ascending: false })
@@ -517,7 +517,7 @@ Regras:
     async getVO2MaxTrend(userId: string, currentVO2: number): Promise<{ trend_percent: number; previous_value: number | null }> {
         // Get previous activities with HR data to estimate trend
         const { data: previousActivities } = await this.supabaseService
-            .from('strava_activities')
+            .from('activities')
             .select('average_pace, average_heartrate, distance, moving_time, start_date')
             .eq('user_id', userId)
             .not('average_heartrate', 'is', null)
@@ -556,9 +556,9 @@ Regras:
      */
     async getWorkoutHistory(userId: string, limit = 20, offset = 0) {
         try {
-            // 1. Fetch Strava activities for the user
+            // 1. Fetch activities for the user
             const { data: activities, error: activitiesError } = await this.supabaseService
-                .from('strava_activities')
+                .from('activities')
                 .select('*')
                 .eq('user_id', userId)
                 .eq('type', 'Run')

@@ -13,7 +13,7 @@ export class UsersService {
     async getUser(userId: string) {
         const { data, error } = await this.supabaseService
             .from('users')
-            .select('id, email, strava_athlete_id, profile, subscription_status, created_at, onboarding_completed')
+            .select('id, email, profile, subscription_status, created_at, onboarding_completed')
             .eq('id', userId)
             .single();
 
@@ -97,7 +97,7 @@ export class UsersService {
     async deleteUser(userId: string) {
         // Delete related data first
         await this.supabaseService.from('ai_feedbacks').delete().eq('user_id', userId);
-        await this.supabaseService.from('strava_activities').delete().eq('user_id', userId);
+        await this.supabaseService.from('activities').delete().eq('user_id', userId);
         await this.supabaseService.from('workouts').delete().eq('user_id', userId);
         await this.supabaseService.from('training_plans').delete().eq('user_id', userId);
         await this.supabaseService.from('points_history').delete().eq('user_id', userId);

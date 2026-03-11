@@ -33,7 +33,7 @@ export class ReadinessScheduler {
 
             // 1. Find all users who completed a workout YESTERDAY
             const { data: usersWithWorkouts } = await supabase
-                .from('strava_activities')
+                .from('activities')
                 .select('user_id')
                 .eq('type', 'Run')
                 .gte('start_date', `${yesterdayStr}T00:00:00Z`)
@@ -45,7 +45,7 @@ export class ReadinessScheduler {
             }
 
             // Get unique user IDs
-            const uniqueUserIds = [...new Set(usersWithWorkouts.map(a => a.user_id))];
+            const uniqueUserIds: string[] = [...new Set(usersWithWorkouts.map((a: any) => a.user_id as string))];
             this.logger.log(`Found ${uniqueUserIds.length} users eligible for check-in`);
 
             let unlockedCount = 0;

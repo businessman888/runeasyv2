@@ -259,7 +259,7 @@ export class RetrospectiveService {
     }
 
     /**
-     * Calculate metrics by comparing planned workouts with Strava activities
+     * Calculate metrics by comparing planned workouts with recorded activities
      */
     private async calculateMetrics(userId: string, planId: string): Promise<RetrospectiveMetrics> {
         const supabase = this.supabaseService.getClient();
@@ -288,19 +288,19 @@ export class RetrospectiveService {
         // Calculate planned distance
         const totalDistancePlannedKm = workouts?.reduce((sum, w) => sum + (w.distance_km || 0), 0) || 0;
 
-        // Get Strava activities for this period
+        // Get activities for this period
         const { data: activities } = await supabase
-            .from('strava_activities')
+            .from('activities')
             .select('*')
             .eq('user_id', userId)
             .gte('start_date', planStart.toISOString())
             .lte('start_date', planEnd.toISOString())
             .eq('type', 'Run');
 
-        // Calculate actual distance from Strava
+        // Calculate actual distance from activities
         const totalDistanceKm = activities?.reduce((sum, a) => sum + ((a.distance || 0) / 1000), 0) || 0;
 
-        // Calculate average pace from Strava (seconds per km)
+        // Calculate average pace from activities (seconds per km)
         let avgPaceSeconds = 0;
         if (activities && activities.length > 0) {
             const totalTime = activities.reduce((sum, a) => sum + (a.moving_time || 0), 0);

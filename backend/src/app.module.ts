@@ -7,7 +7,7 @@ import { AppService } from './app.service';
 import { DatabaseModule } from './database';
 
 // Feature Modules
-import { StravaModule } from './modules/strava';
+
 import { TrainingModule } from './modules/training';
 import { GamificationModule } from './modules/gamification';
 import { FeedbackModule } from './modules/feedback';
@@ -29,8 +29,7 @@ import { HealthModule } from './modules/health/health.module';
     // Database
     DatabaseModule,
 
-    // Feature Modules (Redis/BullMQ loads conditionally in StravaModule)
-    StravaModule,
+    // Feature Modules
     TrainingModule,
     GamificationModule,
     FeedbackModule,
