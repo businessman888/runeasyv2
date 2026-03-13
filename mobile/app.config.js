@@ -16,6 +16,7 @@ export default {
   ios: {
     supportsTablet: false,
     bundleIdentifier: "com.runeasy.app",
+    newArchEnabled: true,
     infoPlist: {
       NSMotionUsageDescription: "RunEasy usa sensores de movimento para melhorar a precisão do treino",
       NSLocationWhenInUseUsageDescription: "RunEasy precisa de acesso à sua localização para rastrear sua corrida.",
@@ -24,6 +25,7 @@ export default {
     }
   },
   android: {
+    newArchEnabled: true,
     adaptiveIcon: {
       foregroundImage: "./assets/adaptive-icon.png",
       backgroundColor: "#FF6B35"
@@ -71,7 +73,7 @@ export default {
       "@rnmapbox/maps",
       {
         RNMapboxMapsImpl: "mapbox",
-        RNMapboxMapsDownloadToken: process.env.RNMAPBOX_MAPS_DOWNLOAD_TOKEN
+        RNMAPBOX_MAPS_DOWNLOAD_TOKEN: process.env.RNMAPBOX_MAPS_DOWNLOAD_TOKEN
       }
     ]
   ],
