@@ -1,13 +1,14 @@
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
-import { MMKV } from 'react-native-mmkv';
 import haversine from 'haversine';
+import type { MMKV as MMKVType } from 'react-native-mmkv';
+
+const { MMKV } = require('react-native-mmkv');
 
 export const LOCATION_TRACKING_TASK = 'BACKGROUND_LOCATION_TASK';
 
 // Instância MMKV unificada para persistência do Tracking rápida (síncrona)
-// @ts-ignore - Contornando erro de tipagem local onde MMKV é lido apenas como tipo
-export const trackingStorage = new MMKV({ id: 'running-tracking-storage' });
+export const trackingStorage: MMKVType = new MMKV({ id: 'running-tracking-storage' });
 
 TaskManager.defineTask(LOCATION_TRACKING_TASK, async ({ data, error }) => {
   if (error) {

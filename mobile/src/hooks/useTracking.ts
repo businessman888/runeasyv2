@@ -169,10 +169,10 @@ export function useTracking() {
     const finalTime = timeMs;
 
     // Limpar storage após finalizar
-    trackingStorage.delete('route_points');
-    trackingStorage.delete('current_distance');
-    trackingStorage.delete('accumulated_time_ms');
-    trackingStorage.delete('last_update_ts');
+    trackingStorage.remove('route_points');
+    trackingStorage.remove('current_distance');
+    trackingStorage.remove('accumulated_time_ms');
+    trackingStorage.remove('last_update_ts');
 
     setRouteCoordinates([]);
     setDistance(0);

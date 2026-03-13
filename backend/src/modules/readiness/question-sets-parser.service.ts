@@ -48,11 +48,16 @@ export class QuestionSetsParserService implements OnModuleInit {
             try {
                 this.logger.log('[QuestionSetsParser] Background loading starting...');
 
-                // Load from file as fallback cache (legacy behavior)
-                await this.loadQuestionSets();
+                // Skip file loading on boot to save memory (SIGTERM causes on Railway)
+                // -> await this.loadQuestionSets();
 
-                // Also preload from database
+                // Load from database directly
                 await this.preloadFromDatabase();
+
+                // If DB preload got nothing, set fallbacks natively
+                if (this.questionSets.length === 0) {
+                    this.questionSets = this.getFallbackSets();
+                }
 
                 this.logger.log('[QuestionSetsParser] Background loading complete!');
             } catch (error: any) {
