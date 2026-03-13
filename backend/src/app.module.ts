@@ -29,11 +29,34 @@ import { HealthModule } from './modules/health/health.module';
     // Redis / BullMQ Setup global
     BullModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        connection: {
-          url: configService.get<string>('REDIS_URL') || 'redis://localhost:6379',
-        },
-      }),
+      useFactory: (configService: ConfigService) => {
+        const redisUrl = configService.get<string>('REDIS_URL');
+        
+        if (redisUrl) {
+          try {
+            const url = new URL(redisUrl);
+            return {
+              connection: {
+                host: url.hostname,
+                port: parseInt(url.port, 10) || 6379,
+                username: url.username || undefined,
+                password: url.password || undefined,
+                tls: redisUrl.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
+              },
+            };
+          } catch (error) {
+            console.error('[BullMQ] Failed to parse REDIS_URL:', error);
+          }
+        }
+        
+        // Fallback for local development
+        return {
+          connection: {
+            host: '127.0.0.1',
+            port: 6379,
+          },
+        };
+      },
       inject: [ConfigService],
     }),
 
