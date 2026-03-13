@@ -7,14 +7,8 @@ import { useNavigation } from '@react-navigation/native';
 import { colors, typography } from '../../theme';
 import { useTracking } from '../../hooks/useTracking';
 
-// O token está configurado no .env. Inicializa o pacote.
-const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '';
-if (mapboxToken) {
-  Mapbox.setAccessToken(mapboxToken);
-}
-
 // Em devices que precisam de inicialização prévia
-Mapbox.setTelemetryEnabled(false);
+// Mapbox.setTelemetryEnabled(false);
 
 const COLORS = {
   background: colors.background, // Usa do design system base

@@ -72,8 +72,7 @@ export default {
     [
       "@rnmapbox/maps",
       {
-        RNMapboxMapsImpl: "mapbox",
-        RNMAPBOX_MAPS_DOWNLOAD_TOKEN: process.env.RNMAPBOX_MAPS_DOWNLOAD_TOKEN
+        RNMapboxMapsDownloadToken: process.env.RNMAPBOX_DOWNLOAD_TOKEN || process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN
       }
     ]
   ],
