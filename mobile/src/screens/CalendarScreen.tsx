@@ -1068,7 +1068,10 @@ export function CalendarScreen({ navigation }: any) {
                                 <View style={[styles.startWorkoutContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
                                     <TouchableOpacity
                                         style={styles.startWorkoutButton}
-                                        onPress={closeModal}
+                                        onPress={() => {
+                                            closeModal();
+                                            navigation.navigate('Running');
+                                        }}
                                         activeOpacity={0.8}
                                     >
                                         <RunFastIcon size={24} color="#0E0E1F" />

@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { SupabaseService } from '../../database';
 import { TrainingAIService, TrainingPlanRequest, GeneratedPlan, QuickPlanResult, GeneratedWeek } from './training-ai.service';
 
@@ -24,6 +26,7 @@ export class TrainingService {
     constructor(
         private readonly supabaseService: SupabaseService,
         private readonly trainingAIService: TrainingAIService,
+        @InjectQueue('feedback-queue') private feedbackQueue: Queue,
     ) { }
 
     /**
@@ -426,6 +429,101 @@ export class TrainingService {
 
         if (error) throw error;
         return data;
+    }
+
+    /**
+     * Complete Workout and Save Route GeoSpatial Data
+     */
+    async completeWorkout(userId: string, workoutId: string, payload: import('./dto/workout-tracking.dto').CreateWorkoutTrackingDto) {
+        const turf = await import('@turf/turf'); // Dynamic import to prevent initial load overhead
+
+        // Validate workout
+        const { data: workout, error: workoutError } = await this.supabaseService
+            .from('workouts')
+            .select('*')
+            .eq('id', workoutId)
+            .eq('user_id', userId)
+            .single();
+
+        if (workoutError || !workout) {
+            throw new Error('Workout not found');
+        }
+
+        // Compute distance and geojson using Turf JS
+        let turfDistanceLimit = 0;
+        let routeWKT = null;
+
+        if (payload.route_points && payload.route_points.length > 1) {
+            const coordinates = payload.route_points.map(p => [p.longitude, p.latitude]);
+            // Filter duplicated coordinates for cleaner geometry
+            const uniqueCoords = coordinates.filter((c, i, a) => i === 0 || c[0] !== a[i-1][0] || c[1] !== a[i-1][1]);
+            
+            if (uniqueCoords.length > 1) {
+                const line = turf.lineString(uniqueCoords);
+                
+                // Re-validate tracking distance via Turf (kilometers)
+                turfDistanceLimit = turf.length(line, { units: 'kilometers' });
+                
+                // Build WKT (SRID=4326 for standard GPS)
+                const coordsStr = uniqueCoords.map(c => `${c[0]} ${c[1]}`).join(', ');
+                routeWKT = `SRID=4326;LINESTRING(${coordsStr})`;
+            }
+        }
+
+        // Final Distance from App, or Turf calculation fallback
+        const finalDistanceKm = payload.total_distance_meters 
+            ? payload.total_distance_meters / 1000 
+            : turfDistanceLimit;
+
+        // Pace: mins per km (standard format for runners)
+        const paceSeconds = payload.duration_seconds && finalDistanceKm > 0 
+           ? payload.duration_seconds / finalDistanceKm 
+           : 0;
+
+        // 1. Update Workout Status
+        const { error: updateError, data: updatedWorkout } = await this.supabaseService
+            .from('workouts')
+            .update({
+                status: 'completed',
+                distance_run: finalDistanceKm, // using existing or new column fallback
+                time_run_seconds: payload.duration_seconds, // Note: You may need migrations if these columns differ
+                pace_seconds_per_km: paceSeconds,
+                completed_at: new Date().toISOString()
+            })
+            .eq('id', workoutId)
+            .select()
+            .single();
+
+        if (updateError) {
+             this.logger.error('Error updating workout completion', updateError);
+             throw updateError;
+        }
+
+        // 2. Insert Route
+        if (routeWKT) {
+            const { error: routeError } = await this.supabaseService
+                .from('workout_routes')
+                .insert({
+                    workout_id: workoutId,
+                    route: routeWKT,
+                    raw_data: payload.route_points
+                });
+
+            if (routeError) {
+                this.logger.error(`Failed to save route for workout ${workoutId}`, routeError);
+                // Non-blocking error, we still completed the workout
+            }
+        }
+
+        // 3. Queue AI Feedback processing
+        this.logger.log(`Enqueueing AI Feedback for Workout ${workoutId}`);
+        await this.feedbackQueue.add(
+            'generate', 
+            { userId, workoutId, activityId: workoutId }, // Activity ID falls back to Workout ID as native DB
+            { delay: 1000 }
+        );
+
+        return updatedWorkout;
     }
 
     /**

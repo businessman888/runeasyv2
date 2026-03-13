@@ -16,7 +16,10 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.runeasy.app",
       "infoPlist": {
-        "NSMotionUsageDescription": "RunEasy usa sensores de movimento para melhorar a precisão do treino"
+        "NSMotionUsageDescription": "RunEasy usa sensores de movimento para melhorar a precisão do treino",
+        "NSLocationWhenInUseUsageDescription": "RunEasy precisa de acesso à sua localização para rastrear sua corrida.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "RunEasy rastreia sua corrida mesmo com a tela desligada.",
+        "NSLocationAlwaysUsageDescription": "RunEasy rastreia sua corrida mesmo em background."
       }
     },
     "android": {
@@ -27,6 +30,14 @@
       "package": "com.runeasy.app",
       "googleServicesFile": "./google-services.json",
       "permissions": [
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.VIBRATE",
         "android.permission.SCHEDULE_EXACT_ALARM"
@@ -56,6 +67,13 @@
         "@react-native-google-signin/google-signin",
         {
           "iosUrlScheme": "com.googleusercontent.apps.74528549958-hf64h4138o6dr40d59q96bpl1pjk8qh4"
+        }
+      ],
+      [
+        "@rnmapbox/maps",
+        {
+          "RNMapboxMapsImpl": "mapbox",
+          "RNMapboxMapsDownloadToken": "sk.eyJ1Ijoib3l0b3RlYyIsImEiOiJjbW1ueXFyMmswOGJ3MnBxNTBpdTd2M2dvIn0.-mS36QV9ID15zEmyvTUImQ"
         }
       ]
     ],

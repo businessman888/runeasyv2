@@ -206,12 +206,7 @@ export function HomeScreen({ navigation }: any) {
     };
 
     const handleStartWorkout = async () => {
-        // TODO: Implement native workout tracking or GPS recording
-        Alert.alert(
-            'Iniciar Treino',
-            'A funcionalidade de gravação de treinos será implementada em breve.',
-            [{ text: 'OK' }]
-        );
+        navigation.navigate('Running');
     };
 
     const userName = user?.profile?.firstname

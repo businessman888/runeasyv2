@@ -28,6 +28,8 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/schedule": "^4.1.0",
     "@supabase/supabase-js": "^2.47.0",
+    "@turf/turf": "^7.3.4",
+    "@types/geojson": "^7946.0.16",
     "axios": "^1.7.0",
     "bullmq": "^5.66.0",
     "class-transformer": "^0.5.1",

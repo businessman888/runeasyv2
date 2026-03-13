@@ -6,6 +6,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppNavigator } from './src/navigation';
 import { useNotifications } from './src/hooks/useNotifications';
 
+// Registra Task de Rastreamento (Background GPS)
+import './src/tasks/locationTask';
+
+
 // Error Boundary to catch rendering errors
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },

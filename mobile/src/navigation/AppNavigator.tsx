@@ -31,6 +31,7 @@ import {
     HelpScreen,
     RetrospectiveScreen,
     CustomizeGoalScreen,
+    RunningScreen,
 } from '../screens';
 import { PlanPreviewScreen as QuizPlanPreviewScreen } from '../screens/quiz/PlanPreviewScreen';
 import { PlanLoadingScreen } from '../screens/quiz/PlanLoadingScreen';
@@ -382,6 +383,14 @@ export function AppNavigator() {
                             options={{
                                 headerShown: false,
                                 presentation: 'modal',
+                            }}
+                        />
+                        <Stack.Screen
+                            name="Running"
+                            component={RunningScreen}
+                            options={{
+                                headerShown: false,
+                                gestureEnabled: false, // Bloquear swipe down para não cancelar o rastreio
                             }}
                         />
                     </>

@@ -21,3 +21,6 @@ export * from './quiz';
 
 // Readiness Screens
 export * from './readiness';
+
+// Running (Tracking Nativo)
+export * from './running/RunningScreen';

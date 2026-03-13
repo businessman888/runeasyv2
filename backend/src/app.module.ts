@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { BullModule } from '@nestjs/bullmq';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -7,7 +8,6 @@ import { AppService } from './app.service';
 import { DatabaseModule } from './database';
 
 // Feature Modules
-
 import { TrainingModule } from './modules/training';
 import { GamificationModule } from './modules/gamification';
 import { FeedbackModule } from './modules/feedback';
@@ -24,6 +24,17 @@ import { HealthModule } from './modules/health/health.module';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+    }),
+
+    // Redis / BullMQ Setup global
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        connection: {
+          url: configService.get<string>('REDIS_URL') || 'redis://localhost:6379',
+        },
+      }),
+      inject: [ConfigService],
     }),
 
     // Database
@@ -44,4 +55,3 @@ import { HealthModule } from './modules/health/health.module';
   providers: [AppService],
 })
 export class AppModule { }
-

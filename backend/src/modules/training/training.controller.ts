@@ -280,6 +280,31 @@ export class TrainingController {
     }
 
     /**
+     * Complete workout from Native Tracking
+     */
+    @Post('workouts/:id/complete')
+    async completeWorkout(
+        @Headers('x-user-id') userId: string,
+        @Param('id') workoutId: string,
+        @Body() dto: import('./dto/workout-tracking.dto').CreateWorkoutTrackingDto,
+    ) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        try {
+            const workout = await this.trainingService.completeWorkout(userId, workoutId, dto);
+            return { success: true, workout };
+        } catch (error) {
+            this.logger.error(`Failed to complete workout ${workoutId}`, error);
+            throw new HttpException(
+                error.message || 'Failed to complete workout',
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    /**
      * Get schedule with type and status for each day
      * Returns: type ('workout' | 'recovery'), status ('completed' | 'missed' | 'pending')
      * Use this endpoint to render calendar icons and conditional UI
