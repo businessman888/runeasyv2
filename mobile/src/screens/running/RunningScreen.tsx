@@ -65,9 +65,9 @@ export function RunningScreen() {
           <Ionicons name="chevron-back" size={28} color={COLORS.text} />
         </Pressable>
 
-        <Mapbox.MapView 
-            style={styles.map} 
-            styleURL={process.env.EXPO_PUBLIC_MAPBOX_STYLE_URL}
+        <Mapbox.MapView
+            style={styles.map}
+            styleURL={process.env.EXPO_PUBLIC_MAPBOX_STYLE_URL || 'mapbox://styles/mapbox/dark-v11'}
             logoEnabled={false}
             compassEnabled={false}
             attributionEnabled={false}

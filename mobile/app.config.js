@@ -52,6 +52,7 @@ export default {
     }
   },
   plugins: [
+    "./plugins/withMapboxAndroid",
     "expo-secure-store",
     [
       "expo-notifications",
