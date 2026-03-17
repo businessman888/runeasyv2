@@ -6,9 +6,21 @@ import { MMKV } from 'react-native-mmkv';
 
 export const LOCATION_TRACKING_TASK = 'BACKGROUND_LOCATION_TASK';
 
-// Instância MMKV unificada para persistência do Tracking rápida (síncrona)
-// @ts-ignore - MMKV exported as value
-export const trackingStorage = new MMKV({ id: 'running-tracking-storage' });
+// Lazy initialization: defers new MMKV() until first use, avoiding crash during
+// Metro module loading (native bridge not ready yet at import time).
+let _storage: MMKV | null = null;
+function getStorage(): MMKV {
+  if (!_storage) {
+    // @ts-ignore - MMKV exported as value
+    _storage = new MMKV({ id: 'running-tracking-storage' });
+  }
+  return _storage;
+}
+export const trackingStorage = new Proxy({} as MMKV, {
+  get(_target, prop) {
+    return (getStorage() as any)[prop];
+  },
+});
 
 TaskManager.defineTask(LOCATION_TRACKING_TASK, async ({ data, error }) => {
   if (error) {
