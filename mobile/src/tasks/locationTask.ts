@@ -1,26 +1,14 @@
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
 import haversine from 'haversine';
-// @ts-ignore - TS thinks MMKV is only a type, but it's exported as a class value in RN
-import { MMKV } from 'react-native-mmkv';
+import { createMMKV } from 'react-native-mmkv';
 
 export const LOCATION_TRACKING_TASK = 'BACKGROUND_LOCATION_TASK';
 
-// Lazy initialization: defers new MMKV() until first use, avoiding crash during
-// Metro module loading (native bridge not ready yet at import time).
-let _storage: MMKV | null = null;
-function getStorage(): MMKV {
-  if (!_storage) {
-    // @ts-ignore - MMKV exported as value
-    _storage = new MMKV({ id: 'running-tracking-storage' });
-  }
-  return _storage;
-}
-export const trackingStorage = new Proxy({} as MMKV, {
-  get(_target, prop) {
-    return (getStorage() as any)[prop];
-  },
-});
+// createMMKV() handles its own lazy NitroModules initialization internally.
+// No Proxy needed — the returned HybridObject must be used directly to preserve
+// the native 'this' context required by NitroModules HybridMMKVSpec methods.
+export const trackingStorage = createMMKV({ id: 'running-tracking-storage' });
 
 TaskManager.defineTask(LOCATION_TRACKING_TASK, async ({ data, error }) => {
   if (error) {

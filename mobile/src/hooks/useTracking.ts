@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as Location from 'expo-location';
-import { Accelerometer } from 'expo-sensors';
-import { AppState, AppStateStatus } from 'react-native';
 import { trackingStorage, LOCATION_TRACKING_TASK } from '../tasks/locationTask';
 
 export type SessionState = 'calculating' | 'training' | 'paused';
@@ -22,38 +20,44 @@ export function useTracking() {
   // Carrega estado anterior se houver (recuperação de crash)
   useEffect(() => {
     const initializeTracker = async () => {
-      let { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
-      if (fgStatus !== 'granted') {
+      try {
+        let { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+        if (fgStatus !== 'granted') {
           console.warn('Permissão foreground negada');
+          // setIsReady(true) ainda é chamado — a tela não pode ficar bloqueada
+          setIsReady(true);
           return;
-      }
-      
-      let { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
-      if (bgStatus !== 'granted') {
-          console.warn('Permissão background negada');
-          return;
-      }
-
-      // Tenta recuperar estado local se o app foi fechado no meio de uma corrida
-      const savedRouteStr = trackingStorage.getString('route_points');
-      if (savedRouteStr) {
-        try {
-          const parsedPoints = JSON.parse(savedRouteStr);
-          if (parsedPoints.length > 0) {
-            setRouteCoordinates(parsedPoints.map((p: any) => [p.longitude, p.latitude]));
-            setDistance(trackingStorage.getNumber('current_distance') || 0);
-            accumulatedTimeRef.current = trackingStorage.getNumber('accumulated_time_ms') || 0;
-            setTimeMs(accumulatedTimeRef.current);
-            setSessionState('paused'); // Sugere "Retomar" no invés de iniciar do zero
-            setIsReady(true);
-            return;
-          }
-        } catch (e) {
-            console.error('Erro ao fazer parse da rota recuperada');
         }
-      }
 
-      setIsReady(true);
+        // No Android 14+, requestBackgroundPermissionsAsync abre as Configurações do sistema
+        // e pode retornar 'denied' sem nenhum diálogo. Não bloquear o isReady por isso.
+        let { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+        if (bgStatus !== 'granted') {
+          console.warn('Permissão background negada — tracking só funcionará em foreground');
+        }
+
+        // Tenta recuperar estado local se o app foi fechado no meio de uma corrida
+        const savedRouteStr = trackingStorage.getString('route_points');
+        if (savedRouteStr) {
+          try {
+            const parsedPoints = JSON.parse(savedRouteStr);
+            if (parsedPoints.length > 0) {
+              setRouteCoordinates(parsedPoints.map((p: any) => [p.longitude, p.latitude]));
+              setDistance(trackingStorage.getNumber('current_distance') || 0);
+              accumulatedTimeRef.current = trackingStorage.getNumber('accumulated_time_ms') || 0;
+              setTimeMs(accumulatedTimeRef.current);
+              setSessionState('paused'); // Sugere "Retomar" no invés de iniciar do zero
+            }
+          } catch (e) {
+            console.error('Erro ao fazer parse da rota recuperada');
+          }
+        }
+      } catch (e) {
+        console.error('[useTracking] Erro na inicialização:', e);
+      } finally {
+        // Garante que isReady seja true em qualquer cenário (permissão negada, erro, sucesso)
+        setIsReady(true);
+      }
     };
 
     initializeTracker();

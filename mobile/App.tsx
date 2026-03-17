@@ -5,9 +5,14 @@ import { StyleSheet, View, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppNavigator } from './src/navigation';
 import { useNotifications } from './src/hooks/useNotifications';
+import Mapbox from '@rnmapbox/maps';
 
 // Registra Task de Rastreamento (Background GPS)
 import './src/tasks/locationTask';
+
+// Inicializa o token de acesso runtime do Mapbox.
+// Deve ser chamado antes de qualquer componente MapView ser renderizado.
+Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? '');
 
 
 // Error Boundary to catch rendering errors
