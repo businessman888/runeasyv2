@@ -206,7 +206,17 @@ export function HomeScreen({ navigation }: any) {
     };
 
     const handleStartWorkout = async () => {
-        navigation.navigate('Running');
+        const now = new Date();
+        const dayLabel = `Hoje ${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+        const title = todayWorkout
+            ? `${getWorkoutTypeName(todayWorkout.type)} - ${todayWorkout.distance_km.toFixed(1)}Km`
+            : 'Meu Treino';
+
+        navigation.navigate('Running', {
+            workoutId: todayWorkout?.id,
+            dayLabel,
+            title,
+        });
     };
 
     const userName = user?.profile?.firstname

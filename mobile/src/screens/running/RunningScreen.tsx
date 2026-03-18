@@ -1,25 +1,48 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { colors, typography } from '../../theme';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useTracking } from '../../hooks/useTracking';
 
-const COLORS = {
-  background: colors.background,
-  surface: colors.card,
-  text: colors.text,
-  textMuted: colors.textSecondary,
-  routeOrange: colors.primary,
-  btnTraining: '#00D1FF',
-  btnPaused: '#FFC107',
+// ─── Tipos de rota ────────────────────────────────────────────────────────────
+type RunningRouteParams = {
+  Running: {
+    workoutId?: string;
+    dayLabel?: string;
+    title?: string;
+  };
 };
 
+// ─── Design Tokens (Figma) ────────────────────────────────────────────────────
+const T = {
+  // Backgrounds
+  bgPrimary: '#0E0E1F',
+  cardSurface: '#1C1C2E',
+  // Accent
+  cyan: '#00D4FF',
+  warning: '#FFC400',
+  // Text
+  textPrimary: '#EBEBF5',
+  textSecondary: 'rgba(235, 235, 245, 0.60)',
+  // Route
+  routeColor: '#00D4FF',
+};
+
+
+
+// ─── Component ────────────────────────────────────────────────────────────────
 export function RunningScreen() {
   const navigation = useNavigation();
+  const route = useRoute<RouteProp<RunningRouteParams, 'Running'>>();
   const [hasGPSFix, setHasGPSFix] = useState(false);
+
   const {
     isReady,
     sessionState,
@@ -32,14 +55,16 @@ export function RunningScreen() {
     finishTracking,
   } = useTracking();
 
+  // ── Loading ──────────────────────────────────────────────────────────────
   if (!isReady) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ color: 'white' }}>Carregando módulo GPS...</Text>
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Carregando módulo GPS...</Text>
       </View>
     );
   }
 
+  // ── GeoJSON da rota ───────────────────────────────────────────────────────
   const geoJsonSource = {
     type: 'FeatureCollection',
     features: [
@@ -54,26 +79,42 @@ export function RunningScreen() {
     ],
   };
 
-  const statusBannerColor =
-    sessionState === 'training'
-      ? COLORS.btnTraining
-      : sessionState === 'paused'
-      ? COLORS.btnPaused
-      : COLORS.surface;
+  // ── Status derivados ──────────────────────────────────────────────────────
+  const isCalculating = sessionState === 'calculating';
+  const isTraining    = sessionState === 'training';
+  const isPaused      = sessionState === 'paused';
+
+  const statusBannerBg =
+    isTraining  ? T.cyan :
+    isPaused    ? T.warning :
+    T.cardSurface;
 
   const statusText =
-    sessionState === 'calculating'
-      ? hasGPSFix ? 'GPS Pronto' : 'Calculando GPS'
-      : sessionState === 'training'
-      ? 'Treinando'
-      : 'Parado';
+    isCalculating ? (hasGPSFix ? 'GPS Pronto' : 'Calculando GPS') :
+    isTraining    ? 'Treinando' :
+    'Parado';
 
-  const statusTextColor = sessionState === 'calculating' ? COLORS.btnTraining : '#0B0D17';
+  const statusTextColor =
+    isCalculating ? T.cyan :
+    T.bgPrimary;
 
+  // Valores numéricos coloridos apenas quando treinando
+  const metricColor = isTraining ? T.cyan : T.textPrimary;
+
+  // Label de distância formatada (km com 2 casas)
+  const distanceFormatted = (distance / 1000).toFixed(2);
+
+  // Data/treino extraídos dos params de rota (passados pelo HomeScreen)
+  const now = new Date();
+  const dayLabel = route.params?.dayLabel
+    ?? `Hoje ${now.getDate().toString().padStart(2,'0')}/${(now.getMonth()+1).toString().padStart(2,'0')}`;
+  const workoutTitle = route.params?.title ?? 'Meu Treino';
+
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
 
-      {/* Mapa full-screen em background */}
+      {/* ── MAP FULL SCREEN ─────────────────────────────────────────────── */}
       <Mapbox.MapView
         style={StyleSheet.absoluteFillObject}
         styleURL={process.env.EXPO_PUBLIC_MAPBOX_STYLE_URL || 'mapbox://styles/mapbox/dark-v11'}
@@ -84,21 +125,23 @@ export function RunningScreen() {
       >
         <Mapbox.Camera
           pitch={0}
-          zoomLevel={16}
+          zoomLevel={18.5}
+          animationDuration={1000}
           followUserLocation={true}
           followUserMode={Mapbox.UserTrackingMode.FollowWithHeading}
+          defaultSettings={{ zoomLevel: 18.5, animationDuration: 0 }}
         />
         <Mapbox.UserLocation
           visible={true}
           showsUserHeadingIndicator
           onUpdate={() => { if (!hasGPSFix) setHasGPSFix(true); }}
         />
-        {routeCoordinates.length > 0 && (
+        {routeCoordinates.length > 1 && (
           <Mapbox.ShapeSource id="routeSource" shape={geoJsonSource as any}>
             <Mapbox.LineLayer
               id="routeFill"
               style={{
-                lineColor: COLORS.routeOrange,
+                lineColor: T.routeColor,
                 lineWidth: 5,
                 lineJoin: 'round',
                 lineCap: 'round',
@@ -108,81 +151,164 @@ export function RunningScreen() {
         )}
       </Mapbox.MapView>
 
-      {/* Botão voltar — overlay no topo */}
+      {/* ── HEADER OVERLAY ──────────────────────────────────────────────── */}
       <SafeAreaView style={styles.topOverlay} edges={['top']}>
-        <Pressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back" size={28} color={COLORS.text} />
-        </Pressable>
+        <View style={styles.headerRow}>
+
+          {/* Botão voltar */}
+          <Pressable
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Voltar"
+          >
+            <Ionicons name="chevron-back" size={22} color={T.textPrimary} />
+          </Pressable>
+
+          {/* Card de info do treino */}
+          <View style={styles.workoutCard}>
+            <Text style={styles.workoutDay}>{dayLabel}</Text>
+            <Text style={styles.workoutTitle} numberOfLines={1}>{workoutTitle}</Text>
+          </View>
+
+          {/* Botão de Metas */}
+          <Pressable
+            style={styles.goalsBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Ver metas do treino"
+          >
+            <Ionicons name="cellular" size={22} color={T.cyan} />
+          </Pressable>
+
+        </View>
       </SafeAreaView>
 
-      {/* Painel flutuante inferior */}
+      {/* ── BOTTOM PANEL ────────────────────────────────────────────────── */}
       <SafeAreaView style={styles.bottomPanel} edges={['bottom']}>
 
-        {/* Banner de status */}
-        <View style={[styles.statusBanner, { backgroundColor: statusBannerColor }]}>
-          <Text style={[styles.statusText, { color: statusTextColor }]}>{statusText}</Text>
+        {/* Card de telemetria flutuante */}
+        <View style={styles.telemetryCard}>
+
+          {/* Banner de status */}
+          <View style={[styles.statusBanner, { backgroundColor: statusBannerBg }]}>
+            {isCalculating && (
+              <Ionicons
+                name="locate"
+                size={14}
+                color={T.cyan}
+                style={{ marginRight: 6 }}
+              />
+            )}
+            <Text style={[styles.statusText, { color: statusTextColor }]}>
+              {statusText}
+            </Text>
+            {/* Ícone de expandir */}
+            <Pressable style={styles.expandBtn} accessibilityLabel="Expandir">
+              <Ionicons
+                name="expand-outline"
+                size={16}
+                color={isCalculating ? T.textSecondary : T.bgPrimary}
+              />
+            </Pressable>
+          </View>
+
+          {/* Métricas */}
+          <View style={styles.metricsRow}>
+            <View style={styles.metricBox}>
+              <Text style={[styles.metricValue, { color: metricColor }]}>{formattedTime}</Text>
+              <Text style={styles.metricLabel}>Tempo</Text>
+            </View>
+            <View style={styles.metricDivider} />
+            <View style={styles.metricBox}>
+              <Text style={[styles.metricValue, { color: metricColor }]}>{currentPace}</Text>
+              <Text style={styles.metricLabel}>Pace</Text>
+            </View>
+            <View style={styles.metricDivider} />
+            <View style={styles.metricBox}>
+              <Text style={[styles.metricValue, { color: metricColor }]}>{distanceFormatted}</Text>
+              <Text style={styles.metricLabel}>Distância</Text>
+            </View>
+          </View>
         </View>
 
-        {/* Métricas */}
-        <View style={styles.rowSpecs}>
-          <View style={styles.specBox}>
-            <Text style={styles.specVal}>{formattedTime}</Text>
-            <Text style={styles.specLabel}>Tempo</Text>
-          </View>
-          <View style={styles.specBox}>
-            <Text style={styles.specVal}>{currentPace}</Text>
-            <Text style={styles.specLabel}>Pace</Text>
-          </View>
-          <View style={styles.specBox}>
-            <Text style={styles.specVal}>{(distance / 1000).toFixed(2)}</Text>
-            <Text style={styles.specLabel}>Distância</Text>
-          </View>
-        </View>
+        {/* Área de botões */}
+        <View style={styles.btnArea}>
 
-        {/* Botões de controle */}
-        <View style={styles.btnRow}>
-          {sessionState === 'calculating' && (
+          {/* Estado: Calculando → Iniciar */}
+          {isCalculating && (
             <Pressable
-              style={[styles.controlBtn, { borderColor: COLORS.text, borderWidth: 1 }]}
+              style={[styles.ctaBtn, styles.ctaBtnOutline]}
               onPress={startResumeTracking}
+              accessibilityRole="button"
+              accessibilityLabel="Iniciar treino"
             >
-              <Ionicons name="play" color="white" size={20} />
-              <Text style={styles.controlBtnText}>Iniciar</Text>
+              <Ionicons name="play" size={20} color={T.textPrimary} style={{ marginRight: 8 }} />
+              <Text style={[styles.ctaBtnText, { color: T.textPrimary }]}>Iniciar</Text>
             </Pressable>
           )}
-          {sessionState === 'training' && (
+
+          {/* Estado: Treinando → Parar */}
+          {isTraining && (
             <Pressable
-              style={[styles.controlBtn, { borderColor: COLORS.btnTraining, borderWidth: 1 }]}
+              style={[styles.ctaBtn, styles.ctaBtnOutlineCyan]}
               onPress={pauseTracking}
+              accessibilityRole="button"
+              accessibilityLabel="Parar treino"
             >
-              <Ionicons name="pause" color={COLORS.btnTraining} size={20} />
-              <Text style={[styles.controlBtnText, { color: COLORS.btnTraining }]}>Parar</Text>
+              <Ionicons name="pause" size={20} color={T.cyan} style={{ marginRight: 8 }} />
+              <Text style={[styles.ctaBtnText, { color: T.cyan }]}>Parar</Text>
             </Pressable>
           )}
-          {sessionState === 'paused' && (
+
+          {/* Estado: Pausado → Continuar + Finalizar */}
+          {isPaused && (
             <>
-              <Pressable style={[styles.controlBtn, styles.resumeBtn]} onPress={startResumeTracking}>
-                <Ionicons name="play" color={COLORS.btnTraining} size={20} />
-                <Text style={[styles.controlBtnText, { color: COLORS.btnTraining }]}>Continuar</Text>
+              <Pressable
+                style={[styles.ctaBtn, styles.ctaBtnOutlineCyan, { flex: 1 }]}
+                onPress={startResumeTracking}
+                accessibilityRole="button"
+                accessibilityLabel="Continuar treino"
+              >
+                <Ionicons name="play" size={20} color={T.cyan} style={{ marginRight: 8 }} />
+                <Text style={[styles.ctaBtnText, { color: T.cyan }]}>Continuar</Text>
               </Pressable>
-              <Pressable style={[styles.controlBtn, styles.finishBtn]} onPress={finishTracking}>
-                <Ionicons name="flag" color="#0B0D17" size={20} />
-                <Text style={[styles.controlBtnText, { color: '#0B0D17' }]}>Finalizar</Text>
+              <Pressable
+                style={[styles.ctaBtn, styles.ctaBtnFilled, { flex: 1 }]}
+                onPress={finishTracking}
+                accessibilityRole="button"
+                accessibilityLabel="Finalizar treino"
+              >
+                <Ionicons name="flag" size={20} color={T.bgPrimary} style={{ marginRight: 8 }} />
+                <Text style={[styles.ctaBtnText, { color: T.bgPrimary }]}>Finalizar</Text>
               </Pressable>
             </>
           )}
-        </View>
 
+        </View>
       </SafeAreaView>
     </View>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
+  // ── Layout base
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#0E0E1F',
   },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#0E0E1F',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: 'rgba(235,235,245,0.60)',
+    fontSize: 14,
+  },
+
+  // ── Header
   topOverlay: {
     position: 'absolute',
     top: 0,
@@ -190,82 +316,169 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 10,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 10,
+  },
   backBtn: {
-    margin: 16,
     width: 44,
-    height: 44,
+    height: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 22,
   },
+  workoutCard: {
+    flex: 1,
+    height: 50,
+    backgroundColor: '#1C1C2E',
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: '#EBEBF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  workoutDay: {
+    color: 'rgba(235,235,245,0.60)',
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  workoutTitle: {
+    color: '#EBEBF5',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  goalsBtn: {
+    width: 50,
+    height: 50,
+    backgroundColor: '#1C1C2E',
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+
+  // ── Bottom panel
   bottomPanel: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: COLORS.background,
+  },
+
+  // ── Telemetry card
+  telemetryCard: {
+    backgroundColor: '#0E0E1F',
+    marginHorizontal: 11,
+    marginBottom: 8,
+    borderRadius: 15,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
   },
   statusBanner: {
-    paddingVertical: 12,
+    height: 37,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 16,
   },
   statusText: {
-    fontWeight: '700',
-    fontSize: 14,
+    fontSize: 11,
+    fontWeight: '500',
+    letterSpacing: 0.2,
   },
-  rowSpecs: {
+  expandBtn: {
+    position: 'absolute',
+    right: 12,
+    padding: 4,
+  },
+  metricsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 24,
-    backgroundColor: COLORS.surface,
-  },
-  specBox: {
     alignItems: 'center',
+    paddingHorizontal: 8,
+    height: 67,
   },
-  specVal: {
-    color: COLORS.text,
-    fontSize: 24,
-    fontWeight: typography.fontWeights.bold as any,
-  },
-  specLabel: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-    marginTop: 4,
-    fontWeight: typography.fontWeights.normal as any,
-  },
-  btnRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 20,
-    paddingBottom: 10,
-    gap: 15,
-    paddingHorizontal: 20,
-  },
-  controlBtn: {
-    flexDirection: 'row',
+  metricBox: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 24,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    minWidth: 140,
   },
-  controlBtnText: {
-    color: 'white',
-    fontWeight: 'bold',
-    marginLeft: 8,
+  metricDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: 'rgba(235,235,245,0.12)',
+  },
+  metricValue: {
     fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 2,
   },
-  resumeBtn: {
-    borderColor: COLORS.btnTraining,
+  metricLabel: {
+    color: 'rgba(235,235,245,0.60)',
+    fontSize: 11,
+    fontWeight: '400',
+  },
+
+  // ── Buttons area
+  btnArea: {
+    backgroundColor: '#0E0E1F',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 11,
+    paddingTop: 17,
+    paddingBottom: 16,
+    gap: 12,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  ctaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 54,
+    borderRadius: 20,
+    minWidth: 222,
+  },
+  ctaBtnOutline: {
+    backgroundColor: '#1C1C2E',
     borderWidth: 1,
-    flex: 1,
+    borderColor: '#EBEBF5',
   },
-  finishBtn: {
-    backgroundColor: COLORS.btnTraining,
-    flex: 1,
+  ctaBtnOutlineCyan: {
+    backgroundColor: '#1C1C2E',
+    borderWidth: 1,
+    borderColor: '#00D4FF',
+  },
+  ctaBtnFilled: {
+    backgroundColor: '#00D4FF',
+    borderWidth: 1,
+    borderColor: '#00D4FF',
+  },
+  ctaBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

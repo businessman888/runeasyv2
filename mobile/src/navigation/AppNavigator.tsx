@@ -392,6 +392,11 @@ export function AppNavigator() {
                                 headerShown: false,
                                 gestureEnabled: false, // Bloquear swipe down para não cancelar o rastreio
                             }}
+                            initialParams={{
+                                workoutId: undefined,
+                                dayLabel: undefined,
+                                title: undefined,
+                            }}
                         />
                     </>
                 )}
