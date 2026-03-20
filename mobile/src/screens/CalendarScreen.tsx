@@ -1069,8 +1069,20 @@ export function CalendarScreen({ navigation }: any) {
                                     <TouchableOpacity
                                         style={styles.startWorkoutButton}
                                         onPress={() => {
+                                            const now = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), selectedDate);
+                                            const day = String(now.getDate()).padStart(2, '0');
+                                            const month = String(now.getMonth() + 1).padStart(2, '0');
+                                            const isToday = isSelectedDateToday();
+                                            const dayLabel = isToday
+                                                ? `Hoje ${day}/${month}`
+                                                : `${day}/${month}`;
+
                                             closeModal();
-                                            navigation.navigate('Running');
+                                            navigation.navigate('Running', {
+                                                workoutId: selectedWorkout?.id,
+                                                dayLabel,
+                                                title: selectedWorkout?.title ?? 'Meu Treino',
+                                            });
                                         }}
                                         activeOpacity={0.8}
                                     >
