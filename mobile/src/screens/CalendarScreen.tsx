@@ -1082,6 +1082,12 @@ export function CalendarScreen({ navigation }: any) {
                                                 workoutId: selectedWorkout?.id,
                                                 dayLabel,
                                                 title: selectedWorkout?.title ?? 'Meu Treino',
+                                                workoutBlocks: selectedWorkout?.blocks?.map((b: any) => ({
+                                                    type: b.type,
+                                                    distance_km: parseFloat(b.duration?.replace(/[^\d.]/g, '') || '0') || b.distance_km || 1,
+                                                    pace_min: 0,
+                                                    pace_max: 0,
+                                                })) ?? [],
                                             });
                                         }}
                                         activeOpacity={0.8}

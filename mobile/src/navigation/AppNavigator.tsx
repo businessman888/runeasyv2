@@ -396,6 +396,7 @@ export function AppNavigator() {
                                 workoutId: undefined,
                                 dayLabel: undefined,
                                 title: undefined,
+                                workoutBlocks: undefined,
                             }}
                         />
                     </>

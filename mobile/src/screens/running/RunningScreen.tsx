@@ -10,6 +10,9 @@ import Mapbox from '@rnmapbox/maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useTracking } from '../../hooks/useTracking';
+import { useWorkoutGoals } from '../../hooks/useWorkoutGoals';
+import { GoalsModal } from '../../components/GoalsModal';
+import type { WorkoutBlockAPI } from '../../types/workoutGoals';
 
 // ─── Tipos de rota ────────────────────────────────────────────────────────────
 type RunningRouteParams = {
@@ -17,6 +20,7 @@ type RunningRouteParams = {
     workoutId?: string;
     dayLabel?: string;
     title?: string;
+    workoutBlocks?: WorkoutBlockAPI[];
   };
 };
 
@@ -42,18 +46,29 @@ export function RunningScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RunningRouteParams, 'Running'>>();
   const [hasGPSFix, setHasGPSFix] = useState(false);
+  const [goalsModalVisible, setGoalsModalVisible] = useState(false);
 
   const {
     isReady,
     sessionState,
     routeCoordinates,
     distance,
+    timeMs,
     currentPace,
     formattedTime,
     startResumeTracking,
     pauseTracking,
     finishTracking,
   } = useTracking();
+
+  // ── Sistema de Metas ────────────────────────────────────────────────────
+  const workoutBlocks = route.params?.workoutBlocks;
+  const { goalSteps, allCompleted, hasGoals } = useWorkoutGoals({
+    workoutBlocks,
+    distance,
+    timeMs,
+    sessionState,
+  });
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (!isReady) {
@@ -171,14 +186,24 @@ export function RunningScreen() {
             <Text style={styles.workoutTitle} numberOfLines={1}>{workoutTitle}</Text>
           </View>
 
-          {/* Botão de Metas */}
-          <Pressable
-            style={styles.goalsBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Ver metas do treino"
-          >
-            <Ionicons name="cellular" size={22} color={T.cyan} />
-          </Pressable>
+          {/* Botão de Metas — check verde quando todas concluídas */}
+          {hasGoals && (
+            <Pressable
+              style={[
+                styles.goalsBtn,
+                allCompleted && styles.goalsBtnCompleted,
+              ]}
+              onPress={() => setGoalsModalVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Ver metas do treino"
+            >
+              {allCompleted ? (
+                <Ionicons name="checkmark-circle" size={24} color="#32CD32" />
+              ) : (
+                <Ionicons name="cellular" size={22} color={T.cyan} />
+              )}
+            </Pressable>
+          )}
 
         </View>
       </SafeAreaView>
@@ -286,6 +311,13 @@ export function RunningScreen() {
 
         </View>
       </SafeAreaView>
+
+      {/* ── GOALS MODAL ──────────────────────────────────────────────── */}
+      <GoalsModal
+        visible={goalsModalVisible}
+        onClose={() => setGoalsModalVisible(false)}
+        goalSteps={goalSteps}
+      />
     </View>
   );
 }
@@ -369,6 +401,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 4,
+  },
+  goalsBtnCompleted: {
+    borderWidth: 2,
+    borderColor: '#32CD32',
   },
 
   // ── Bottom panel

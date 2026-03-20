@@ -216,6 +216,7 @@ export function HomeScreen({ navigation }: any) {
             workoutId: todayWorkout?.id,
             dayLabel,
             title,
+            workoutBlocks: todayWorkout?.instructions_json ?? [],
         });
     };
 
