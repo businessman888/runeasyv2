@@ -200,11 +200,12 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     width: '92%',
-    maxHeight: SCREEN_HEIGHT * 0.78,
+    maxHeight: SCREEN_HEIGHT * 0.90,
     backgroundColor: T.modalBg,
     borderRadius: 20,
     paddingHorizontal: 5,
-    paddingVertical: 15,
+    paddingTop: 15,
+    paddingBottom: 0,
     overflow: 'hidden',
   },
 
@@ -235,11 +236,12 @@ const styles = StyleSheet.create({
 
   // ── Blocks scroll
   blocksScroll: {
-    flex: 1,
+    flexShrink: 1,
   },
   blocksContent: {
     paddingHorizontal: 8,
-    paddingVertical: 10,
+    paddingTop: 10,
+    paddingBottom: 20,
     gap: 10,
   },
 
