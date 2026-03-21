@@ -19,14 +19,11 @@ import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore,
 import { CircularProgress } from '../components/CircularProgress';
 import { Skeleton, SkeletonCircle, SkeletonText } from '../components/Skeleton';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { WeeklyStreakCard } from '../components/WeeklyStreakCard';
 
 import { BASE_API_URL } from '../config/api.config';
 
 // Icon components using @expo/vector-icons
-function FireIcon({ size = 24, color = '#FFC400' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="fire" size={size} color={color} />;
-}
-
 function RunningIcon({ size = 30, color = '#00D4FF' }: { size?: number; color?: string }) {
     return <MaterialCommunityIcons name="run" size={size} color={color} />;
 }
@@ -78,7 +75,7 @@ function BedIcon({ size = 24, color = '#A78BFA' }: { size?: number; color?: stri
 export function HomeScreen({ navigation }: any) {
     const { user } = useAuthStore();
     const { stats, fetchStats, isLoading: gamificationLoading } = useGamificationStore();
-    const { upcomingWorkouts, fetchUpcomingWorkouts, isLoading: trainingLoading, today, nextWorkout: storeNextWorkout, fetchSchedule, clearScheduleData } = useTrainingStore();
+    const { upcomingWorkouts, fetchUpcomingWorkouts, isLoading: trainingLoading, today, nextWorkout: storeNextWorkout, fetchSchedule, clearScheduleData, schedule } = useTrainingStore();
     const { latestSummary, fetchLatestSummary, latestActivity, latestActivityLoading, fetchLatestActivity } = useFeedbackStore();
     const { summary, fetchSummary, isLoading: statsLoading } = useStatsStore();
     const { unreadCount, fetchUnreadCount } = useNotificationStore();
@@ -344,13 +341,11 @@ export function HomeScreen({ navigation }: any) {
                     </TouchableOpacity>
                 </View>
 
-                {/* Streak Banner - Only show when streak > 0 */}
-                {currentStreak > 0 && (
-                    <View style={styles.streakBanner}>
-                        <FireIcon size={22} color="#FFC400" />
-                        <Text style={styles.streakText}>{currentStreak} dias de sequência!</Text>
-                    </View>
-                )}
+                {/* Weekly Streak Card */}
+                <WeeklyStreakCard
+                    currentStreak={currentStreak}
+                    schedule={schedule}
+                />
 
                 {/* Retrospective Card - Show when ready */}
                 {retrospectiveReady && (
@@ -725,24 +720,6 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: 10,
         fontWeight: 'bold' as any,
-    },
-
-    // Streak Banner
-    streakBanner: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.md,
-        backgroundColor: 'rgba(139, 119, 42, 0.3)',
-        borderWidth: 1,
-        borderColor: 'rgba(179, 152, 45, 0.6)',
-        borderRadius: borderRadius['2xl'],
-        paddingVertical: spacing.md,
-        paddingHorizontal: spacing.xl,
-    },
-    streakText: {
-        fontSize: typography.fontSizes.base,
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#FFC400',
     },
 
     // Level Card

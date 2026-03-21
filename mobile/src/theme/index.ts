@@ -30,6 +30,13 @@ export const colors = {
     border: '#2A2A3E',  // dark border
     borderLight: '#1E1E32',  // lighter dark border
 
+    // Streak Card (Figma)
+    streakCard: '#15152A',
+    streakDayCard: '#1C1C2E',
+    recovery: '#9747FF',
+    missed: '#FF453A',
+    completed: '#32CD32',
+
     // Glassmorphism overlay
     glassWhite: 'rgba(255, 255, 255, 0.1)',
     glassLight: 'rgba(255, 255, 255, 0.05)',
