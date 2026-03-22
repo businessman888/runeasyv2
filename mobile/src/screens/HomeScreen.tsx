@@ -6,20 +6,16 @@ import {
     StyleSheet,
     ScrollView,
     TouchableOpacity,
-    Image,
     Platform,
-    Linking,
-    Alert,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Storage from '../utils/storage';
-import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
 import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore, useStatsStore, useNotificationStore } from '../stores';
 import { CircularProgress } from '../components/CircularProgress';
-import { Skeleton, SkeletonCircle, SkeletonText } from '../components/Skeleton';
+import { Skeleton } from '../components/Skeleton';
 import { ScreenContainer } from '../components/ScreenContainer';
-import { WeeklyStreakCard } from '../components/WeeklyStreakCard';
+import { HomeFixedHeader } from '../components/HomeFixedHeader';
 
 import { BASE_API_URL } from '../config/api.config';
 
@@ -56,10 +52,6 @@ function ArrowRightIcon({ size = 16, color = '#00D4FF' }: { size?: number; color
     return <Ionicons name="arrow-forward" size={size} color={color} />;
 }
 
-function BellIcon({ size = 24, color = '#EBEBF5' }: { size?: number; color?: string }) {
-    return <Ionicons name="notifications" size={size} color={color} />;
-}
-
 function LockIcon({ size = 24, color = '#6B7280' }: { size?: number; color?: string }) {
     return <Ionicons name="lock-closed" size={size} color={color} />;
 }
@@ -83,8 +75,6 @@ export function HomeScreen({ navigation }: any) {
     const [recoveryTimeLeft, setRecoveryTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 });
     const [recoveryProgress, setRecoveryProgress] = useState(0);
     const [retrospectiveReady, setRetrospectiveReady] = useState(false);
-
-    const insets = useSafeAreaInsets();
 
     // Use useFocusEffect to refetch data when screen gains focus (revalidate on every visit)
     useFocusEffect(
@@ -268,13 +258,6 @@ export function HomeScreen({ navigation }: any) {
         return defaultPaces[workout.type] || '6:00';
     };
 
-    const getGreeting = () => {
-        const hour = new Date().getHours();
-        if (hour < 12) return 'Bom dia';
-        if (hour < 18) return 'Boa tarde';
-        return 'Boa noite';
-    };
-
     const formatTimeUnit = (value: number): string => {
         return value.toString().padStart(2, '0');
     };
@@ -288,64 +271,22 @@ export function HomeScreen({ navigation }: any) {
     const isButtonEnabled = isTodayWorkoutPending;
 
     return (
-        <ScreenContainer>
+        <ScreenContainer style={{ paddingTop: 0 }}>
+            <HomeFixedHeader
+                currentStreak={currentStreak}
+                schedule={schedule}
+                unreadCount={unreadCount}
+                profilePic={profilePic}
+                userName={userName}
+                onPressProfile={() => navigation.navigate('Settings')}
+                onPressNotifications={() => navigation.navigate('Notifications')}
+            />
+
             <ScrollView
                 style={styles.scrollView}
                 contentContainerStyle={styles.content}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Header */}
-                <View style={styles.header}>
-                    <View style={styles.headerLeft}>
-                        {isInitialLoading ? (
-                            <SkeletonCircle size={48} />
-                        ) : (
-                            <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
-                                {profilePic && profilePic.startsWith('http') ? (
-                                    <Image
-                                        source={{ uri: profilePic }}
-                                        style={styles.profileImage}
-                                    />
-                                ) : (
-                                    <View style={styles.profileImageInitials}>
-                                        <Text style={styles.profileInitialsText}>
-                                            {userName.split(' ').length > 1
-                                                ? (userName.split(' ')[0][0] + userName.split(' ')[userName.split(' ').length - 1][0]).toUpperCase()
-                                                : userName[0].toUpperCase()}
-                                        </Text>
-                                    </View>
-                                )}
-                            </TouchableOpacity>
-                        )}
-                        <View style={styles.headerText}>
-                            <Text style={styles.greetingText}>{getGreeting()}</Text>
-                            {isInitialLoading ? (
-                                <SkeletonText width={120} height={20} />
-                            ) : (
-                                <Text style={styles.userName}>{userName}</Text>
-                            )}
-                        </View>
-                    </View>
-                    <TouchableOpacity
-                        style={styles.notificationButton}
-                        onPress={() => navigation.navigate('Notifications')}
-                    >
-                        <BellIcon size={24} color="#EBEBF5" />
-                        {unreadCount > 0 && (
-                            <View style={styles.notificationBadge}>
-                                <Text style={styles.notificationBadgeText}>
-                                    {unreadCount > 9 ? '9+' : unreadCount}
-                                </Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
-                </View>
-
-                {/* Weekly Streak Card */}
-                <WeeklyStreakCard
-                    currentStreak={currentStreak}
-                    schedule={schedule}
-                />
 
                 {/* Retrospective Card - Show when ready */}
                 {retrospectiveReady && (
@@ -641,85 +582,9 @@ const styles = StyleSheet.create({
     },
     content: {
         paddingHorizontal: spacing.lg,
+        paddingTop: spacing.lg,
         paddingBottom: 120,
         gap: spacing.lg,
-    },
-
-    // Header
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingTop: spacing.lg,
-        paddingBottom: spacing.md,
-    },
-    headerLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.md,
-    },
-    profileImage: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        borderWidth: 2,
-        borderColor: colors.primary,
-    },
-    profileImageInitials: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        borderWidth: 2,
-        borderColor: colors.primary,
-        backgroundColor: '#1C1C2E',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    profileInitialsText: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: colors.primary,
-        textTransform: 'uppercase',
-    },
-    headerText: {
-        gap: 2,
-    },
-    greetingText: {
-        fontSize: typography.fontSizes.sm,
-        color: colors.textSecondary,
-    },
-    userName: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.bold as any,
-        color: colors.text,
-    },
-    notificationButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: colors.card,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    bellIcon: {
-        fontSize: 20,
-    },
-    notificationBadge: {
-        position: 'absolute',
-        top: -2,
-        right: -2,
-        backgroundColor: '#FF3B30',
-        borderRadius: 10,
-        minWidth: 18,
-        height: 18,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 4,
-    },
-    notificationBadgeText: {
-        color: '#FFFFFF',
-        fontSize: 10,
-        fontWeight: 'bold' as any,
     },
 
     // Level Card
