@@ -3,6 +3,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { SupabaseService } from '../../database';
 import { TrainingAIService, TrainingPlanRequest, GeneratedPlan, QuickPlanResult, GeneratedWeek } from './training-ai.service';
+import { GamificationService } from '../gamification/gamification.service';
 
 // Generation status types
 export type GenerationStatus = 'partial' | 'generating' | 'complete' | 'failed';
@@ -26,6 +27,7 @@ export class TrainingService {
     constructor(
         private readonly supabaseService: SupabaseService,
         private readonly trainingAIService: TrainingAIService,
+        private readonly gamificationService: GamificationService,
         @InjectQueue('feedback-queue') private feedbackQueue: Queue,
     ) { }
 
@@ -515,11 +517,24 @@ export class TrainingService {
             }
         }
 
-        // 3. Queue AI Feedback processing
+        // 3. Gamification: update streak and award XP
+        try {
+            await this.gamificationService.updateStreak(userId);
+            await this.gamificationService.awardWorkoutXP(userId, {
+                distance_km: finalDistanceKm,
+                pace_seconds_per_km: paceSeconds,
+                workoutId,
+            });
+        } catch (gamificationError) {
+            this.logger.error(`Gamification error for workout ${workoutId}`, gamificationError);
+            // Non-blocking: workout is already completed
+        }
+
+        // 4. Queue AI Feedback processing
         this.logger.log(`Enqueueing AI Feedback for Workout ${workoutId}`);
         await this.feedbackQueue.add(
-            'generate', 
-            { userId, workoutId, activityId: workoutId }, // Activity ID falls back to Workout ID as native DB
+            'generate',
+            { userId, workoutId, activityId: workoutId },
             { delay: 1000 }
         );
 

@@ -68,6 +68,10 @@ export const API_ENDPOINTS = {
     // Gamification
     GAMIFICATION_STATS: '/api/gamification/stats',
 
+    // Ranking
+    RANKING_GLOBAL: '/api/ranking/global',
+    RANKING_COHORT: '/api/ranking/cohort',
+
     // Notifications
     NOTIFICATIONS_UNREAD: '/api/notifications/unread-count',
 

@@ -3,6 +3,7 @@ export * from './OnboardingScreen';
 export * from './HomeScreen';
 export * from './CalendarScreen';
 export * from './BadgesScreen';
+export * from './RankingScreen';
 export * from './FeedbackScreen';
 export * from './EvolutionScreen';
 export * from './SettingsScreen';

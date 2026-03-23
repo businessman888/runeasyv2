@@ -34,6 +34,27 @@ export interface UserBadge {
     badge?: Badge;
 }
 
+export interface WorkoutXPData {
+    distance_km: number;
+    pace_seconds_per_km: number;
+    workoutId: string;
+    elevation_gain?: number;
+}
+
+export interface RankingUser {
+    id: string;
+    profile: { firstname?: string; lastname?: string; profile_pic?: string };
+    total_xp: number;
+    current_streak: number;
+}
+
+export interface RankingResponse {
+    rankings: (RankingUser & { rank: number })[];
+    userPosition: { rank: number; total_xp: number; current_streak: number; profile: Record<string, unknown> };
+    totalParticipants: number;
+    cohortInfo?: { month: number; year: number; totalCompetitors: number };
+}
+
 @Injectable()
 export class GamificationService {
     private readonly logger = new Logger(GamificationService.name);
@@ -427,5 +448,254 @@ export class GamificationService {
 
         if (error) throw error;
         return data;
+    }
+
+    // ─── Streak Logic ──────────────────────────────────────────────
+
+    private readonly SAO_PAULO_OFFSET_HOURS = -3;
+
+    private getSaoPauloToday(): string {
+        const now = new Date();
+        const saoPauloTime = new Date(now.getTime() + (this.SAO_PAULO_OFFSET_HOURS * 60 * 60 * 1000));
+        return saoPauloTime.toISOString().split('T')[0]; // YYYY-MM-DD
+    }
+
+    private getSaoPauloYesterday(): string {
+        const now = new Date();
+        const saoPauloTime = new Date(now.getTime() + (this.SAO_PAULO_OFFSET_HOURS * 60 * 60 * 1000));
+        saoPauloTime.setDate(saoPauloTime.getDate() - 1);
+        return saoPauloTime.toISOString().split('T')[0];
+    }
+
+    async updateStreak(userId: string): Promise<number> {
+        const today = this.getSaoPauloToday();
+        const yesterday = this.getSaoPauloYesterday();
+
+        const { data: user } = await this.supabaseService
+            .from('users')
+            .select('current_streak, last_activity_date')
+            .eq('id', userId)
+            .single();
+
+        const lastDate = user?.last_activity_date;
+        const currentStreak = user?.current_streak || 0;
+        let newStreak: number;
+
+        if (lastDate === today) {
+            return currentStreak;
+        } else if (lastDate === yesterday) {
+            newStreak = currentStreak + 1;
+        } else {
+            newStreak = 1;
+        }
+
+        await this.supabaseService
+            .from('users')
+            .update({ current_streak: newStreak, last_activity_date: today })
+            .eq('id', userId);
+
+        // Sync to user_levels for backward compatibility
+        const bestStreak = Math.max(newStreak, user?.current_streak || 0);
+        await this.supabaseService
+            .from('user_levels')
+            .upsert({
+                user_id: userId,
+                current_streak: newStreak,
+                best_streak: bestStreak,
+                updated_at: new Date().toISOString(),
+            });
+
+        this.logger.log(`User ${userId} streak updated to ${newStreak}`);
+        return newStreak;
+    }
+
+    // ─── XP Award Logic ────────────────────────────────────────────
+
+    async awardWorkoutXP(userId: string, workout: WorkoutXPData): Promise<number> {
+        let totalAwarded = 0;
+
+        // Check if this is the user's first workout (bonus)
+        const { data: userData } = await this.supabaseService
+            .from('users')
+            .select('total_xp')
+            .eq('id', userId)
+            .single();
+
+        const isFirstWorkout = (userData?.total_xp || 0) === 0;
+
+        if (isFirstWorkout) {
+            await this.addPoints(userId, 100, 'Primeiro treino concluído!', 'workout', workout.workoutId);
+            totalAwarded += 100;
+        }
+
+        // Distance XP: 10 per km
+        const distanceXP = Math.floor(workout.distance_km) * 10;
+        if (distanceXP > 0) {
+            await this.addPoints(userId, distanceXP, `Distância: ${workout.distance_km.toFixed(1)}km`, 'workout', workout.workoutId);
+            totalAwarded += distanceXP;
+        }
+
+        // Completion XP: 50 flat
+        await this.addPoints(userId, 50, 'Treino concluído', 'workout', workout.workoutId);
+        totalAwarded += 50;
+
+        // Pace bonus: 20 XP if pace < 6:00/km (360 seconds)
+        if (workout.pace_seconds_per_km > 0 && workout.pace_seconds_per_km < 360) {
+            await this.addPoints(userId, 20, 'Pace abaixo de 6:00/km', 'workout', workout.workoutId);
+            totalAwarded += 20;
+        }
+
+        // Long distance bonus: 50 XP if >= 10km
+        if (workout.distance_km >= 10) {
+            await this.addPoints(userId, 50, 'Corrida longa (10km+)', 'workout', workout.workoutId);
+            totalAwarded += 50;
+        }
+
+        // Ultra distance bonus: 100 XP if >= 21km
+        if (workout.distance_km >= 21) {
+            await this.addPoints(userId, 100, 'Ultra distância (21km+)', 'workout', workout.workoutId);
+            totalAwarded += 100;
+        }
+
+        // Elevation bonus: 15 XP if >= 100m elevation
+        if (workout.elevation_gain && workout.elevation_gain >= 100) {
+            await this.addPoints(userId, 15, 'Elevação significativa (100m+)', 'workout', workout.workoutId);
+            totalAwarded += 15;
+        }
+
+        // Streak bonus: 30 XP if active streak > 1
+        const { data: updatedUser } = await this.supabaseService
+            .from('users')
+            .select('current_streak')
+            .eq('id', userId)
+            .single();
+
+        if ((updatedUser?.current_streak || 0) > 1) {
+            await this.addPoints(userId, 30, `Streak de ${updatedUser.current_streak} dias`, 'workout', workout.workoutId);
+            totalAwarded += 30;
+        }
+
+        this.logger.log(`User ${userId} awarded ${totalAwarded} XP for workout ${workout.workoutId}`);
+        return totalAwarded;
+    }
+
+    // ─── Ranking Queries ───────────────────────────────────────────
+
+    async getGlobalRanking(userId: string, limit = 50): Promise<RankingResponse> {
+        const [rankingsResult, userResult, countResult] = await Promise.all([
+            this.supabaseService
+                .from('users')
+                .select('id, profile, total_xp, current_streak')
+                .gt('total_xp', 0)
+                .order('total_xp', { ascending: false })
+                .limit(limit),
+            this.supabaseService
+                .from('users')
+                .select('id, profile, total_xp, current_streak')
+                .eq('id', userId)
+                .single(),
+            this.supabaseService
+                .from('users')
+                .select('*', { count: 'exact', head: true })
+                .gt('total_xp', 0),
+        ]);
+
+        const rankings = (rankingsResult.data || []).map((user: RankingUser, index: number) => ({
+            ...user,
+            rank: index + 1,
+        }));
+
+        // Calculate user's rank
+        const userXP = userResult.data?.total_xp || 0;
+        const { count: usersAbove } = await this.supabaseService
+            .from('users')
+            .select('*', { count: 'exact', head: true })
+            .gt('total_xp', userXP);
+
+        const userRank = (usersAbove || 0) + 1;
+
+        return {
+            rankings,
+            userPosition: {
+                rank: userRank,
+                total_xp: userResult.data?.total_xp || 0,
+                current_streak: userResult.data?.current_streak || 0,
+                profile: userResult.data?.profile || {},
+            },
+            totalParticipants: countResult.count || 0,
+        };
+    }
+
+    async getCohortRanking(userId: string, limit = 50): Promise<RankingResponse> {
+        // Get user's creation date to determine cohort
+        const { data: currentUser } = await this.supabaseService
+            .from('users')
+            .select('id, profile, total_xp, current_streak, created_at')
+            .eq('id', userId)
+            .single();
+
+        if (!currentUser) {
+            return {
+                rankings: [],
+                userPosition: { rank: 0, total_xp: 0, current_streak: 0, profile: {} },
+                totalParticipants: 0,
+            };
+        }
+
+        const createdAt = new Date(currentUser.created_at);
+        const cohortMonth = createdAt.getMonth() + 1; // 1-indexed
+        const cohortYear = createdAt.getFullYear();
+
+        // Date range for the cohort month
+        const startOfMonth = `${cohortYear}-${String(cohortMonth).padStart(2, '0')}-01T00:00:00.000Z`;
+        const endOfMonth = cohortMonth === 12
+            ? `${cohortYear + 1}-01-01T00:00:00.000Z`
+            : `${cohortYear}-${String(cohortMonth + 1).padStart(2, '0')}-01T00:00:00.000Z`;
+
+        const [rankingsResult, countResult] = await Promise.all([
+            this.supabaseService
+                .from('users')
+                .select('id, profile, total_xp, current_streak')
+                .gte('created_at', startOfMonth)
+                .lt('created_at', endOfMonth)
+                .order('total_xp', { ascending: false })
+                .limit(limit),
+            this.supabaseService
+                .from('users')
+                .select('*', { count: 'exact', head: true })
+                .gte('created_at', startOfMonth)
+                .lt('created_at', endOfMonth),
+        ]);
+
+        const rankings = (rankingsResult.data || []).map((user: RankingUser, index: number) => ({
+            ...user,
+            rank: index + 1,
+        }));
+
+        // User's position within cohort
+        const { count: usersAboveInCohort } = await this.supabaseService
+            .from('users')
+            .select('*', { count: 'exact', head: true })
+            .gte('created_at', startOfMonth)
+            .lt('created_at', endOfMonth)
+            .gt('total_xp', currentUser.total_xp || 0);
+
+        const userRank = (usersAboveInCohort || 0) + 1;
+
+        return {
+            rankings,
+            userPosition: {
+                rank: userRank,
+                total_xp: currentUser.total_xp || 0,
+                current_streak: currentUser.current_streak || 0,
+                profile: currentUser.profile || {},
+            },
+            totalParticipants: countResult.count || 0,
+            cohortInfo: {
+                month: cohortMonth,
+                year: cohortYear,
+                totalCompetitors: countResult.count || 0,
+            },
+        };
     }
 }

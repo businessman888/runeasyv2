@@ -13,6 +13,7 @@ import {
     HomeScreen,
     CalendarScreen,
     BadgesScreen,
+    RankingScreen,
     FeedbackScreen,
     EvolutionScreen,
     SettingsScreen,
@@ -121,11 +122,11 @@ function MainTabs({ route, navigation }: any) {
                 }}
             />
             <Tab.Screen
-                name="Badges"
-                component={BadgesScreen}
+                name="Ranking"
+                component={RankingScreen}
                 options={{
-                    title: 'Badges',
-                    headerTitle: 'Minhas Badges',
+                    title: 'Ranking',
+                    headerTitle: 'Ranking',
                     headerShown: false,
                 }}
             />
@@ -278,6 +279,14 @@ export function AppNavigator() {
                             name="Main"
                             component={MainTabs}
                             options={{ headerShown: false }}
+                        />
+                        <Stack.Screen
+                            name="Badges"
+                            component={BadgesScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'card',
+                            }}
                         />
                         <Stack.Screen
                             name="WorkoutDetail"

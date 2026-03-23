@@ -8,12 +8,14 @@ import { TrainingSchedulerService } from './training-scheduler.service';
 import { RetrospectiveService } from './retrospective.service';
 import { NotificationModule } from '../notifications';
 import { UsersModule } from '../users/users.module';
+import { GamificationModule } from '../gamification/gamification.module';
 
 @Module({
     imports: [
         ScheduleModule.forRoot(),
         NotificationModule,
         UsersModule,
+        GamificationModule,
         BullModule.registerQueue({
             name: 'feedback-queue',
         }),

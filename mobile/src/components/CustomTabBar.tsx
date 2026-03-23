@@ -16,7 +16,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
             {state.routes.map((route, index) => {
                 const { options } = descriptors[route.key];
                 const isFocused = state.index === index;
-                const isCenterTab = route.name === 'Badges';
+                const isCenterTab = route.name === 'Ranking';
 
                 const onPress = () => {
                     const event = navigation.emit({
@@ -41,7 +41,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                     switch (route.name) {
                         case 'Home': return 'home';
                         case 'Calendar': return 'calendar';
-                        case 'Badges': return 'trophy';
+                        case 'Ranking': return 'trophy';
                         case 'Evolution': return 'brain';
                         case 'Settings': return 'profile';
                         default: return 'home';
