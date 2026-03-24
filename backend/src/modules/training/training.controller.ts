@@ -129,6 +129,13 @@ export class TrainingController {
 
             this.logger.log(`Onboarding data saved for user ${userId}`);
 
+            // Sync biometrics to users.profile JSONB so screens can access them directly
+            await this.usersService.updateProfile(userId, {
+                birth_date: dto.birth_date,
+                weight_kg: dto.weight,
+                height_cm: dto.height,
+            });
+
             // CRITICAL: Mark onboarding as complete in users table
             // This unlocks the user from the Onboarding screen
             await this.usersService.markOnboardingComplete(userId);

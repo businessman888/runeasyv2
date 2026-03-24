@@ -9,14 +9,33 @@ interface User {
     profile: {
         firstname: string;
         lastname: string;
+        full_name?: string;
         profile_pic: string;
+        avatar_url?: string;
         birth_date?: string;
         weight?: number;
+        weight_kg?: number;
         height?: number;
+        height_cm?: number;
     };
     subscription_status: 'trial' | 'active' | 'expired';
     created_at: string;
     onboarding_completed: boolean;
+}
+
+/** Returns the best available display name for the user */
+export function getDisplayName(user: User | null): string {
+    const p = user?.profile;
+    if (!p) return '';
+    return p.full_name
+        || [p.firstname, p.lastname].filter(Boolean).join(' ')
+        || '';
+}
+
+/** Returns a valid avatar URL or null */
+export function getAvatarUrl(user: User | null): string | null {
+    const url = user?.profile?.avatar_url || user?.profile?.profile_pic || '';
+    return url.startsWith('http') ? url : null;
 }
 
 interface AuthState {

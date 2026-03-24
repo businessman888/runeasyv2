@@ -24,7 +24,7 @@ interface UserStats {
 export interface RankingUser {
     id: string;
     rank: number;
-    profile: { firstname?: string; lastname?: string; profile_pic?: string };
+    profile: { firstname?: string; lastname?: string; full_name?: string; profile_pic?: string; avatar_url?: string };
     total_xp: number;
     current_streak: number;
 }
@@ -35,7 +35,7 @@ export interface RankingData {
         rank: number;
         total_xp: number;
         current_streak: number;
-        profile: { firstname?: string; lastname?: string; profile_pic?: string };
+        profile: { firstname?: string; lastname?: string; full_name?: string; profile_pic?: string; avatar_url?: string };
     };
     totalParticipants: number;
     cohortInfo?: { month: number; year: number; totalCompetitors: number };

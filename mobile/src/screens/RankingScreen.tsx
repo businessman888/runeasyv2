@@ -20,6 +20,7 @@ const MONTH_NAMES_PT = [
 ];
 
 function getUserDisplayName(profile: RankingUser['profile']): string {
+    if (profile?.full_name) return profile.full_name;
     if (profile?.firstname && profile?.lastname) {
         return `${profile.firstname} ${profile.lastname}`;
     }
@@ -47,7 +48,8 @@ function Avatar({ profile, size = 48, borderColor }: {
     size?: number;
     borderColor?: string;
 }) {
-    const hasImage = !!profile?.profile_pic;
+    const imageUrl = profile?.avatar_url || profile?.profile_pic || '';
+    const hasImage = imageUrl.startsWith('http');
     return (
         <View style={[
             styles.avatarContainer,
@@ -61,7 +63,7 @@ function Avatar({ profile, size = 48, borderColor }: {
         ]}>
             {hasImage ? (
                 <Image
-                    source={{ uri: profile.profile_pic }}
+                    source={{ uri: imageUrl }}
                     style={{ width: size - 4, height: size - 4, borderRadius: (size - 4) / 2 }}
                 />
             ) : (

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
-import { useAuthStore } from '../stores';
+import { useAuthStore, getDisplayName, getAvatarUrl } from '../stores';
 import { ScreenContainer } from '../components/ScreenContainer';
 
 // Icon components using @expo/vector-icons
@@ -61,9 +61,7 @@ export function SettingsScreen({ navigation }: any) {
         });
     };
 
-    const userName = user?.profile?.firstname
-        ? `${user.profile.firstname} ${user.profile.lastname || ''}`
-        : 'Alex Runner';
+    const userName = getDisplayName(user);
 
     return (
         <ScreenContainer>
@@ -77,9 +75,9 @@ export function SettingsScreen({ navigation }: any) {
                 <View style={styles.profileSection}>
                     <View style={styles.avatarWrapper}>
                         <View style={styles.avatarContainer}>
-                            {user?.profile?.profile_pic && user.profile.profile_pic.startsWith('http') ? (
+                            {getAvatarUrl(user) ? (
                                 <Image
-                                    source={{ uri: user.profile.profile_pic }}
+                                    source={{ uri: getAvatarUrl(user)! }}
                                     style={styles.avatar}
                                 />
                             ) : (

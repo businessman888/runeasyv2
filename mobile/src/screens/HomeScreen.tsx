@@ -11,7 +11,7 @@ import {
 import * as Storage from '../utils/storage';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
-import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore, useStatsStore, useNotificationStore } from '../stores';
+import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore, useStatsStore, useNotificationStore, getDisplayName, getAvatarUrl } from '../stores';
 import { CircularProgress } from '../components/CircularProgress';
 import { Skeleton } from '../components/Skeleton';
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -207,10 +207,8 @@ export function HomeScreen({ navigation }: any) {
         });
     };
 
-    const userName = user?.profile?.firstname
-        ? `${user.profile.firstname}${user.profile.lastname ? ' ' + user.profile.lastname : ''}`
-        : 'Corredor';
-    const profilePic = user?.profile?.profile_pic || 'https://i.pravatar.cc/100';
+    const userName = getDisplayName(user) || 'Corredor';
+    const profilePic = getAvatarUrl(user);
 
     const getWorkoutTypeName = (type: string): string => {
         const typeNames: Record<string, string> = {

@@ -13,7 +13,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, typography, spacing } from '../theme';
-import { useAuthStore } from '../stores';
+import { useAuthStore, getDisplayName, getAvatarUrl } from '../stores';
 import { CustomCalendar } from '../components/CustomCalendar';
 import { ScreenContainer } from '../components/ScreenContainer';
 
@@ -67,18 +67,18 @@ export function PersonalInfoScreen({ navigation }: any) {
         return `${day}/${month}/${year}`;
     };
 
-    // Form state
-    const [fullName, setFullName] = useState(
-        user?.profile?.firstname
-            ? `${user.profile.firstname} ${user.profile.lastname || ''}`
-            : 'João Carlos Gomes Pereira'
-    );
-    const [email] = useState(user?.email || 'fernanda.oliveira@email.com');
+    // Form state — initialized from real user data
+    const [fullName, setFullName] = useState(getDisplayName(user));
+    const [email] = useState(user?.email || '');
     const [birthDateObj, setBirthDateObj] = useState(parseBirthDate(user?.profile?.birth_date));
     const [showDatePicker, setShowDatePicker] = useState(false);
-    const [weight, setWeight] = useState(user?.profile?.weight?.toString() || '62');
-    const [height, setHeight] = useState(user?.profile?.height?.toString() || '168');
-    const [profilePhoto, setProfilePhoto] = useState(user?.profile?.profile_pic || null);
+    const [weight, setWeight] = useState(
+        (user?.profile?.weight_kg ?? user?.profile?.weight)?.toString() || ''
+    );
+    const [height, setHeight] = useState(
+        (user?.profile?.height_cm ?? user?.profile?.height)?.toString() || ''
+    );
+    const [profilePhoto, setProfilePhoto] = useState(getAvatarUrl(user));
     const [isSaving, setIsSaving] = useState(false);
 
     const getInitials = (name: string) => {
@@ -142,9 +142,12 @@ export function PersonalInfoScreen({ navigation }: any) {
             const updateData = {
                 firstname,
                 lastname,
+                full_name: fullName.trim(),
                 birth_date: birthDateObj.toISOString().split('T')[0],
                 weight: weight ? parseFloat(weight) : null,
                 height: height ? parseFloat(height) : null,
+                weight_kg: weight ? parseFloat(weight) : null,
+                height_cm: height ? parseFloat(height) : null,
             };
 
             const response = await fetch(`${API_URL}/users/${user.id}/profile`, {
@@ -166,10 +169,14 @@ export function PersonalInfoScreen({ navigation }: any) {
                     ...user.profile,
                     firstname,
                     lastname,
+                    full_name: fullName.trim(),
                     birth_date: birthDateObj.toISOString().split('T')[0],
                     weight: weight ? parseFloat(weight) : undefined,
+                    weight_kg: weight ? parseFloat(weight) : undefined,
                     height: height ? parseFloat(height) : undefined,
+                    height_cm: height ? parseFloat(height) : undefined,
                     profile_pic: profilePhoto || user?.profile?.profile_pic || '',
+                    avatar_url: profilePhoto || user?.profile?.avatar_url || '',
                 },
             });
 
