@@ -7,6 +7,9 @@ import { AppService } from './app.service';
 // Database
 import { DatabaseModule } from './database';
 
+// AI (Global)
+import { AIModule } from './common/ai';
+
 // Feature Modules
 import { TrainingModule } from './modules/training';
 import { GamificationModule } from './modules/gamification';
@@ -62,6 +65,9 @@ import { HealthModule } from './modules/health/health.module';
 
     // Database
     DatabaseModule,
+
+    // AI (Global — available to all modules)
+    AIModule,
 
     // Feature Modules
     TrainingModule,

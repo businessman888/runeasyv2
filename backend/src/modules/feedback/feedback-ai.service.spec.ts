@@ -1,14 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { FeedbackAIService } from './feedback-ai.service';
-import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../../database';
 import { NotificationService } from '../notifications/notification.service';
+import { AIRouterService } from '../../common/ai';
 
 describe('FeedbackAIService', () => {
     let service: FeedbackAIService;
     let mockSupabaseService: Partial<SupabaseService>;
-    let mockConfigService: Partial<ConfigService>;
     let mockNotificationService: Partial<NotificationService>;
+    let mockAIRouter: Partial<AIRouterService>;
 
     beforeEach(async () => {
         mockSupabaseService = {
@@ -27,20 +27,27 @@ describe('FeedbackAIService', () => {
             }),
         };
 
-        mockConfigService = {
-            get: jest.fn().mockReturnValue('test-api-key'),
-        };
-
         mockNotificationService = {
             sendFeedbackReadyNotification: jest.fn().mockResolvedValue(true),
+        };
+
+        mockAIRouter = {
+            isAvailable: true,
+            call: jest.fn().mockResolvedValue({
+                data: { hero_message: 'Test', hero_tone: 'celebration', metrics_comparison: {}, strengths: [], improvements: [], progression_impact: '' },
+                usage: { input_tokens: 100, output_tokens: 200, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+                model: 'claude-haiku-4-5-20251001',
+                latencyMs: 500,
+                wasFallback: false,
+            }),
         };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 FeedbackAIService,
                 { provide: SupabaseService, useValue: mockSupabaseService },
-                { provide: ConfigService, useValue: mockConfigService },
                 { provide: NotificationService, useValue: mockNotificationService },
+                { provide: AIRouterService, useValue: mockAIRouter },
             ],
         }).compile();
 

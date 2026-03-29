@@ -1,8 +1,7 @@
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import Anthropic from '@anthropic-ai/sdk';
 import { SupabaseService } from '../../database';
 import { NotificationService } from '../notifications/notification.service';
+import { AIRouterService, AI_FEATURES } from '../../common/ai';
 
 export interface WorkoutComparison {
     planned: {
@@ -57,20 +56,13 @@ export interface GeneratedFeedback {
 @Injectable()
 export class FeedbackAIService {
     private readonly logger = new Logger(FeedbackAIService.name);
-    private anthropic: Anthropic;
 
     constructor(
-        private configService: ConfigService,
         private supabaseService: SupabaseService,
         @Inject(forwardRef(() => NotificationService))
         private notificationService: NotificationService,
-    ) {
-        const apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
-        if (!apiKey) {
-            throw new Error('ANTHROPIC_API_KEY is not configured');
-        }
-        this.anthropic = new Anthropic({ apiKey });
-    }
+        private aiRouter: AIRouterService,
+    ) {}
 
     /**
      * Generate post-workout feedback using Claude AI
@@ -116,8 +108,8 @@ export class FeedbackAIService {
             },
         };
 
-        // 3. Generate feedback with Claude
-        const feedback = await this.callClaudeForFeedback(comparison, workout.type);
+        // 3. Generate feedback with AI Router
+        const feedback = await this.callAIForFeedback(comparison, workout.type, userId);
 
         // 4. Save feedback to database
         const { data: savedFeedback, error } = await this.supabaseService
@@ -158,11 +150,12 @@ export class FeedbackAIService {
     }
 
     /**
-     * Call Claude API to generate workout feedback
+     * Call AI Router to generate workout feedback
      */
-    private async callClaudeForFeedback(
+    private async callAIForFeedback(
         comparison: WorkoutComparison,
         workoutType: string,
+        userId: string,
     ): Promise<GeneratedFeedback> {
         const systemPrompt = `Você é um treinador de corrida experiente e motivador, especializado em dar feedback construtivo e personalizado.
 
@@ -241,21 +234,17 @@ Regras:
 - Seja específico aos dados, não genérico`;
 
         try {
-            const message = await this.anthropic.messages.create({
-                model: 'claude-sonnet-4-20250514',
-                max_tokens: 2000,
-                system: systemPrompt,
-                messages: [{ role: 'user', content: userPrompt }],
+            const result = await this.aiRouter.call<GeneratedFeedback>({
+                featureName: AI_FEATURES.FEEDBACK,
+                userId,
+                systemPrompt: [{ type: 'text' as const, text: systemPrompt, cache_control: { type: 'ephemeral' as const } }],
+                userMessage: userPrompt,
+                maxTokens: 2000,
             });
 
-            const textContent = message.content.find((block) => block.type === 'text');
-            if (!textContent || textContent.type !== 'text') {
-                throw new Error('No text content in AI response');
-            }
-
-            return this.extractJSON(textContent.text);
+            return result.data;
         } catch (error) {
-            this.logger.error('Failed to generate feedback with Claude', error);
+            this.logger.error('Failed to generate feedback with AI', error);
             throw error;
         }
     }
@@ -457,13 +446,6 @@ Regras:
 
     /**
      * Calculate estimated VO2 Max based on running performance
-     * Uses a simplified formula based on pace and heart rate
-     * 
-     * Formula: VO2max ≈ 15 × (HRmax / HRrest) for HR-based
-     * Or: VO2max ≈ 132.853 - (0.0769 × body_weight_lbs) - (0.3877 × age) + (6.315 × gender) - (3.2649 × time_min) - (0.1565 × HR)
-     * 
-     * Simplified approach: Using pace-based VDOT approximation
-     * For running: VO2max ≈ velocity (m/min) × 0.182 + 3.5
      */
     calculateVO2MaxEstimate(
         averagePaceMinPerKm: number,
@@ -471,41 +453,28 @@ Regras:
         distanceMeters: number,
         movingTimeSeconds: number
     ): { value: number; isValid: boolean; method: string } {
-        // Validate inputs - need at least 1km run for meaningful estimate
         if (distanceMeters < 1000 || movingTimeSeconds < 300) {
             return { value: 0, isValid: false, method: 'insufficient_data' };
         }
 
-        // Method 1: Pace-based estimation (VDOT approximation)
-        // Convert pace (min/km) to velocity (m/min)
         const velocityMPerMin = 1000 / averagePaceMinPerKm;
-
-        // Simplified VDOT formula for running speeds between 100-400 m/min
-        // VO2 = -4.60 + 0.182258 × velocity + 0.000104 × velocity²
         const vo2FromPace = -4.60 + (0.182258 * velocityMPerMin) + (0.000104 * Math.pow(velocityMPerMin, 2));
 
-        // Method 2: Heart rate adjustment (if available)
-        // Lower HR at same pace = higher efficiency = higher VO2 max
         let finalVO2 = vo2FromPace;
         let method = 'pace_based';
 
         if (averageHeartrate && averageHeartrate > 100 && averageHeartrate < 220) {
-            // Efficiency factor: typical running HR is 150-175 for moderate effort
-            // If HR is lower at given pace, VO2 max is likely higher
             const typicalHR = 165;
             const hrEfficiencyFactor = typicalHR / averageHeartrate;
-
-            // Apply HR adjustment (subtle, max ±10%)
             const adjustment = Math.min(Math.max(hrEfficiencyFactor - 1, -0.1), 0.1);
             finalVO2 = vo2FromPace * (1 + adjustment);
             method = 'pace_hr_combined';
         }
 
-        // Normalize to realistic VO2 max range (30-80 ml/kg/min)
         finalVO2 = Math.min(Math.max(finalVO2, 30), 80);
 
         return {
-            value: Math.round(finalVO2 * 10) / 10, // 1 decimal place
+            value: Math.round(finalVO2 * 10) / 10,
             isValid: true,
             method
         };
@@ -515,7 +484,6 @@ Regras:
      * Get VO2 Max trend by comparing with previous estimates
      */
     async getVO2MaxTrend(userId: string, currentVO2: number): Promise<{ trend_percent: number; previous_value: number | null }> {
-        // Get previous activities with HR data to estimate trend
         const { data: previousActivities } = await this.supabaseService
             .from('activities')
             .select('average_pace, average_heartrate, distance, moving_time, start_date')
@@ -529,8 +497,7 @@ Regras:
             return { trend_percent: 0, previous_value: null };
         }
 
-        // Calculate VO2 estimate for 2nd most recent activity
-        const prevActivity = previousActivities[1]; // Skip current, get previous
+        const prevActivity = previousActivities[1];
         const prevVO2 = this.calculateVO2MaxEstimate(
             prevActivity.average_pace,
             prevActivity.average_heartrate,
@@ -542,11 +509,10 @@ Regras:
             return { trend_percent: 0, previous_value: null };
         }
 
-        // Calculate percentage change
         const trendPercent = ((currentVO2 - prevVO2.value) / prevVO2.value) * 100;
 
         return {
-            trend_percent: Math.round(trendPercent * 10) / 10, // 1 decimal
+            trend_percent: Math.round(trendPercent * 10) / 10,
             previous_value: prevVO2.value
         };
     }
@@ -556,7 +522,6 @@ Regras:
      */
     async getWorkoutHistory(userId: string, limit = 20, offset = 0) {
         try {
-            // 1. Fetch activities for the user
             const { data: activities, error: activitiesError } = await this.supabaseService
                 .from('activities')
                 .select('*')
@@ -582,14 +547,12 @@ Regras:
                 };
             }
 
-            // 2. Fetch feedback for these activities
             const activityIds = activities.map(a => a.id);
             const { data: feedbacks } = await this.supabaseService
                 .from('ai_feedbacks')
                 .select('id, activity_id, hero_message, hero_tone, created_at')
                 .in('activity_id', activityIds);
 
-            // Create a map of activity_id -> feedback
             const feedbackMap = new Map();
             if (feedbacks) {
                 feedbacks.forEach(f => {
@@ -601,11 +564,9 @@ Regras:
                 });
             }
 
-            // 3. Calculate summary stats
             const totalDistance = activities.reduce((sum, a) => sum + (a.distance || 0), 0) / 1000;
             const totalElevation = activities.reduce((sum, a) => sum + (a.total_elevation_gain || 0), 0);
 
-            // 4. Group by month
             const monthGroups = new Map<string, any[]>();
 
             activities.forEach((activity) => {
@@ -616,7 +577,6 @@ Regras:
                     monthGroups.set(monthKey, []);
                 }
 
-                // Format workout data
                 const workout = {
                     id: activity.id,
                     date: activity.start_date,
@@ -637,7 +597,6 @@ Regras:
                 monthGroups.get(monthKey)!.push(workout);
             });
 
-            // 5. Convert to array format
             const months = Array.from(monthGroups.entries()).map(([month, workouts]) => ({
                 month,
                 workouts,
@@ -676,20 +635,5 @@ Regras:
             const paceMinPerKm = s.average_speed > 0 ? 1000 / s.average_speed / 60 : 0;
             return `- Km ${s.split}: ${paceMinPerKm.toFixed(2)} min/km`;
         }).join('\n');
-    }
-
-    private extractJSON(text: string): GeneratedFeedback {
-        let cleaned = text.trim();
-        if (cleaned.startsWith('```json')) {
-            cleaned = cleaned.slice(7);
-        } else if (cleaned.startsWith('```')) {
-            cleaned = cleaned.slice(3);
-        }
-        if (cleaned.endsWith('```')) {
-            cleaned = cleaned.slice(0, -3);
-        }
-        cleaned = cleaned.trim();
-
-        return JSON.parse(cleaned);
     }
 }

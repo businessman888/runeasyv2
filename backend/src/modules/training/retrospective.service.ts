@@ -4,7 +4,7 @@ import { SupabaseService } from '../../database';
 import { NotificationService } from '../notifications/notification.service';
 import { TrainingService } from './training.service';
 import { TrainingPlanRequest } from './training-ai.service';
-import Anthropic from '@anthropic-ai/sdk';
+import { AIRouterService, AI_FEATURES } from '../../common/ai';
 
 /**
  * Metrics calculated from comparing planned vs actual performance
@@ -80,7 +80,7 @@ export interface CustomizePlanDto {
 @Injectable()
 export class RetrospectiveService {
     private readonly logger = new Logger(RetrospectiveService.name);
-    private anthropic: Anthropic;
+    private readonly hasAIRouter: boolean;
 
     constructor(
         private readonly supabaseService: SupabaseService,
@@ -89,11 +89,9 @@ export class RetrospectiveService {
         private readonly notificationService: NotificationService,
         @Inject(forwardRef(() => TrainingService))
         private readonly trainingService: TrainingService,
+        private readonly aiRouter: AIRouterService,
     ) {
-        const apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
-        if (apiKey) {
-            this.anthropic = new Anthropic({ apiKey });
-        }
+        this.hasAIRouter = this.aiRouter.isAvailable;
     }
 
     /**
@@ -375,8 +373,8 @@ export class RetrospectiveService {
         metrics: RetrospectiveMetrics,
         userId: string
     ): Promise<AIRetrospectiveContent> {
-        // Fallback if no API key
-        if (!this.anthropic) {
+        // Fallback if no API key configured
+        if (!this.hasAIRouter) {
             return this.getFallbackInsights(metrics);
         }
 
@@ -414,19 +412,15 @@ Gere insights destacando:
 
 Responda APENAS com JSON.`;
 
-            const message = await this.anthropic.messages.create({
-                model: 'claude-sonnet-4-5-20250929',
-                max_tokens: 1000,
-                temperature: 0.7,
-                system: systemPrompt,
-                messages: [{ role: 'user', content: userPrompt }],
+            const result = await this.aiRouter.call<AIRetrospectiveContent>({
+                featureName: AI_FEATURES.RETROSPECTIVE,
+                userId,
+                systemPrompt: [{ type: 'text' as const, text: systemPrompt, cache_control: { type: 'ephemeral' as const } }],
+                userMessage: userPrompt,
+                maxTokens: 1000,
             });
 
-            const textContent = message.content.find(block => block.type === 'text');
-            if (textContent && textContent.type === 'text') {
-                const result = this.extractJSON<AIRetrospectiveContent>(textContent.text);
-                return result;
-            }
+            return result.data;
         } catch (error) {
             this.logger.error('[Retrospective] AI generation failed:', error);
         }
@@ -688,19 +682,6 @@ Responda APENAS com JSON.`;
     /**
      * Extract JSON from text (may contain markdown)
      */
-    private extractJSON<T>(text: string): T {
-        let cleaned = text.trim();
-        if (cleaned.startsWith('```json')) {
-            cleaned = cleaned.slice(7);
-        } else if (cleaned.startsWith('```')) {
-            cleaned = cleaned.slice(3);
-        }
-        if (cleaned.endsWith('```')) {
-            cleaned = cleaned.slice(0, -3);
-        }
-        return JSON.parse(cleaned.trim()) as T;
-    }
-
     /**
      * Map database row to Retrospective interface
      */

@@ -54,7 +54,7 @@ export class ReadinessService {
         };
 
         // 4. Get AI verdict
-        let verdict = await this.readinessAIService.analyzeReadiness(input);
+        let verdict = await this.readinessAIService.analyzeReadiness(input, dto.userId);
 
         // 5. ACWR Balancing Logic: Override red to yellow for borderline cases with positive check-in
         const checkInAvg = (dto.answers.sleep + dto.answers.legs + dto.answers.mood + dto.answers.stress + dto.answers.motivation) / 5;

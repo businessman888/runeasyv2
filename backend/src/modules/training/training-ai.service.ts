@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import Anthropic from '@anthropic-ai/sdk';
+import { AIRouterService, AI_FEATURES } from '../../common/ai';
 
 export interface TrainingPlanRequest {
   goal: string;
@@ -105,15 +104,8 @@ export interface GeneratedPlan {
 @Injectable()
 export class TrainingAIService {
   private readonly logger = new Logger(TrainingAIService.name);
-  private anthropic: Anthropic;
 
-  constructor(private configService: ConfigService) {
-    const apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
-    if (!apiKey) {
-      throw new Error('ANTHROPIC_API_KEY is not configured');
-    }
-    this.anthropic = new Anthropic({ apiKey });
-  }
+  constructor(private aiRouter: AIRouterService) {}
 
   // Shared helper maps
   private readonly goalDescriptions: Record<string, string> = {
@@ -238,26 +230,16 @@ Responda APENAS com o JSON.`;
 
     try {
       this.logger.log('[Prompt 1] Generating first workout...');
-      const startTime = Date.now();
 
-      const message = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 4000,
-        temperature: 1,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
+      const result = await this.aiRouter.call<QuickPlanResult>({
+        featureName: AI_FEATURES.PLAN_GENERATION_FIRST,
+        systemPrompt: [{ type: 'text' as const, text: systemPrompt, cache_control: { type: 'ephemeral' as const } }],
+        userMessage: userPrompt,
+        maxTokens: 4000,
       });
 
-      const textContent = message.content.find((block) => block.type === 'text');
-      if (!textContent || textContent.type !== 'text') {
-        throw new Error('No text content in AI response');
-      }
-
-      const result = this.extractJSON<QuickPlanResult>(textContent.text);
-      const elapsed = Date.now() - startTime;
-      this.logger.log(`[Prompt 1] First workout generated in ${elapsed}ms`);
-
-      return result;
+      this.logger.log(`[Prompt 1] First workout generated in ${result.latencyMs}ms`);
+      return result.data;
     } catch (error) {
       this.logger.error('[Prompt 1] Failed to generate first workout', error);
       throw error;
@@ -328,26 +310,16 @@ Responda APENAS com o JSON contendo as semanas 2 até ${request.targetWeeks}.`;
 
     try {
       this.logger.log(`[Prompt 2] Generating weeks 2-${request.targetWeeks}...`);
-      const startTime = Date.now();
 
-      const message = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 20000,
-        temperature: 1,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
+      const result = await this.aiRouter.call<FullScheduleResult>({
+        featureName: AI_FEATURES.PLAN_GENERATION_REMAINING,
+        systemPrompt: [{ type: 'text' as const, text: systemPrompt, cache_control: { type: 'ephemeral' as const } }],
+        userMessage: userPrompt,
+        maxTokens: 20000,
       });
 
-      const textContent = message.content.find((block) => block.type === 'text');
-      if (!textContent || textContent.type !== 'text') {
-        throw new Error('No text content in AI response');
-      }
-
-      const result = this.extractJSON<FullScheduleResult>(textContent.text);
-      const elapsed = Date.now() - startTime;
-      this.logger.log(`[Prompt 2] Generated ${result.weeks?.length || 0} weeks in ${elapsed}ms`);
-
-      return result;
+      this.logger.log(`[Prompt 2] Generated ${result.data.weeks?.length || 0} weeks in ${result.latencyMs}ms`);
+      return result.data;
     } catch (error) {
       this.logger.error('[Prompt 2] Failed to generate remaining schedule', error);
       throw error;
@@ -457,57 +429,21 @@ ${request.limitations ? `10. IMPORTANTE: Adapte o plano considerando a limitaç�
 Responda APENAS com o JSON, sem explicações adicionais.`;
 
     try {
-      this.logger.log('Generating training plan with Claude AI...');
+      this.logger.log('Generating training plan with AI Router...');
       this.logger.log(`Request params: goal=${request.goal}, level=${request.level}, weeks=${request.targetWeeks}, daysPerWeek=${request.daysPerWeek}`);
 
-      const message = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 20000,
-        temperature: 1,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
+      const result = await this.aiRouter.call<GeneratedPlan>({
+        featureName: AI_FEATURES.PLAN_GENERATION_LEGACY,
+        systemPrompt: [{ type: 'text' as const, text: systemPrompt, cache_control: { type: 'ephemeral' as const } }],
+        userMessage: userPrompt,
+        maxTokens: 20000,
       });
 
-      // Extract text content from response
-      const textContent = message.content.find((block) => block.type === 'text');
-      if (!textContent || textContent.type !== 'text') {
-        throw new Error('No text content in AI response');
-      }
-
-      this.logger.log('Received AI response, parsing JSON...');
-
-      // Parse JSON from response
-      const plan = this.extractJSON<GeneratedPlan>(textContent.text);
-
-      this.logger.log(`Generated plan with ${plan.weeks?.length || 0} weeks`);
-      return plan;
+      this.logger.log(`Generated plan with ${result.data.weeks?.length || 0} weeks in ${result.latencyMs}ms`);
+      return result.data;
     } catch (error) {
       this.logger.error('Failed to generate training plan', error);
       throw error;
-    }
-  }
-
-  /**
-   * Extract JSON from text that might contain markdown code blocks
-   */
-  private extractJSON<T = GeneratedPlan>(text: string): T {
-    // Remove markdown code blocks if present
-    let cleaned = text.trim();
-    if (cleaned.startsWith('```json')) {
-      cleaned = cleaned.slice(7);
-    } else if (cleaned.startsWith('```')) {
-      cleaned = cleaned.slice(3);
-    }
-    if (cleaned.endsWith('```')) {
-      cleaned = cleaned.slice(0, -3);
-    }
-    cleaned = cleaned.trim();
-
-    try {
-      return JSON.parse(cleaned) as T;
-    } catch (parseError) {
-      this.logger.error('Failed to parse JSON from AI response:', cleaned.substring(0, 500));
-      throw new Error(`Invalid JSON in AI response: ${parseError}`);
     }
   }
 }

@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import Anthropic from '@anthropic-ai/sdk';
+import { AIRouterService, AI_FEATURES } from '../../common/ai';
 
 export interface ReadinessInput {
     checkIn: {
@@ -44,17 +43,10 @@ export interface ReadinessVerdict {
 @Injectable()
 export class ReadinessAIService {
     private readonly logger = new Logger(ReadinessAIService.name);
-    private anthropic: Anthropic;
 
-    constructor(private configService: ConfigService) {
-        const apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
-        if (!apiKey) {
-            throw new Error('ANTHROPIC_API_KEY is not configured');
-        }
-        this.anthropic = new Anthropic({ apiKey });
-    }
+    constructor(private aiRouter: AIRouterService) {}
 
-    async analyzeReadiness(input: ReadinessInput): Promise<ReadinessVerdict> {
+    async analyzeReadiness(input: ReadinessInput, userId?: string): Promise<ReadinessVerdict> {
         const systemPrompt = `Você é o 'Head Coach IA' da RunEasy. Sua missão é decidir se o atleta deve manter o plano, reduzir a carga ou descansar hoje.
 
 INPUTS RECEBIDOS:
@@ -132,23 +124,17 @@ Hora atual: ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: 
 Gere o veredito de prontidão em JSON.`;
 
         try {
-            this.logger.log('Generating readiness verdict with Claude AI...');
+            this.logger.log('Generating readiness verdict with AI Router...');
 
-            const message = await this.anthropic.messages.create({
-                model: 'claude-sonnet-4-5-20250929',
-                max_tokens: 2000,
-                temperature: 0.7,
-                system: systemPrompt,
-                messages: [{ role: 'user', content: userPrompt }],
+            const result = await this.aiRouter.call<ReadinessVerdict>({
+                featureName: AI_FEATURES.READINESS,
+                userId,
+                systemPrompt: [{ type: 'text' as const, text: systemPrompt, cache_control: { type: 'ephemeral' as const } }],
+                userMessage: userPrompt,
+                maxTokens: 2000,
             });
 
-            const textContent = message.content.find((block) => block.type === 'text');
-            if (!textContent || textContent.type !== 'text') {
-                throw new Error('No text content in AI response');
-            }
-
-            this.logger.log('Received AI response, parsing JSON...');
-            const verdict = this.extractJSON(textContent.text);
+            const verdict = result.data;
             verdict.generated_at = new Date().toISOString();
 
             this.logger.log(`Readiness verdict: score=${verdict.readiness_score}, color=${verdict.status_color}`);
@@ -156,26 +142,6 @@ Gere o veredito de prontidão em JSON.`;
         } catch (error) {
             this.logger.error('Failed to generate readiness verdict', error);
             throw error;
-        }
-    }
-
-    private extractJSON(text: string): ReadinessVerdict {
-        let cleaned = text.trim();
-        if (cleaned.startsWith('```json')) {
-            cleaned = cleaned.slice(7);
-        } else if (cleaned.startsWith('```')) {
-            cleaned = cleaned.slice(3);
-        }
-        if (cleaned.endsWith('```')) {
-            cleaned = cleaned.slice(0, -3);
-        }
-        cleaned = cleaned.trim();
-
-        try {
-            return JSON.parse(cleaned);
-        } catch (parseError) {
-            this.logger.error('Failed to parse JSON from AI response:', cleaned.substring(0, 500));
-            throw new Error(`Invalid JSON in AI response: ${parseError}`);
         }
     }
 }

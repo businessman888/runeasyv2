@@ -1,7 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { getQueueToken } from '@nestjs/bullmq';
 import { TrainingService } from './training.service';
 import { SupabaseService } from '../../database';
 import { TrainingAIService } from './training-ai.service';
+import { GamificationService } from '../gamification/gamification.service';
 
 describe('TrainingService', () => {
     let service: TrainingService;
@@ -56,6 +58,8 @@ describe('TrainingService', () => {
                 TrainingService,
                 { provide: SupabaseService, useValue: mockSupabaseService },
                 { provide: TrainingAIService, useValue: mockTrainingAIService },
+                { provide: GamificationService, useValue: { awardPoints: jest.fn() } },
+                { provide: getQueueToken('feedback-queue'), useValue: { add: jest.fn() } },
             ],
         }).compile();
 
