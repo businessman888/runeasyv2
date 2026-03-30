@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import { useTracking } from '../../hooks/useTracking';
 import { useWorkoutGoals } from '../../hooks/useWorkoutGoals';
 import { GoalsModal } from '../../components/GoalsModal';
 import type { WorkoutBlockAPI } from '../../types/workoutGoals';
+
+type IndicatorState = 'disabled' | 'enabled' | 'moving';
 
 // ─── Tipos de rota ────────────────────────────────────────────────────────────
 type RunningRouteParams = {
@@ -42,11 +44,21 @@ const T = {
 
 
 // ─── Component ────────────────────────────────────────────────────────────────
+// Limiar de precisão para considerar GPS estável (mesmo valor do locationTask)
+const GPS_ACCURACY_THRESHOLD = 15;
+// Velocidade mínima para considerar que o usuário está em movimento (m/s)
+const MIN_MOVING_SPEED = 0.5;
 export function RunningScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RunningRouteParams, 'Running'>>();
   const [hasGPSFix, setHasGPSFix] = useState(false);
   const [goalsModalVisible, setGoalsModalVisible] = useState(false);
+  const [userCoords, setUserCoords] = useState<{
+    longitude: number;
+    latitude: number;
+    accuracy: number;
+    speed: number;
+  } | null>(null);
 
   const {
     isReady,
@@ -60,6 +72,17 @@ export function RunningScreen() {
     pauseTracking,
     finishTracking,
   } = useTracking();
+
+  // ── Estado visual do indicador ─────────────────────────────────────────
+  const indicatorState: IndicatorState = useMemo(() => {
+    if (!hasGPSFix || !userCoords || userCoords.accuracy > GPS_ACCURACY_THRESHOLD) {
+      return 'disabled';
+    }
+    if (sessionState === 'training' && userCoords.speed > MIN_MOVING_SPEED) {
+      return 'moving';
+    }
+    return 'enabled';
+  }, [hasGPSFix, userCoords, sessionState]);
 
   // ── Sistema de Metas ────────────────────────────────────────────────────
   const workoutBlocks = route.params?.workoutBlocks;
@@ -146,18 +169,75 @@ export function RunningScreen() {
           followUserMode={Mapbox.UserTrackingMode.FollowWithHeading}
           defaultSettings={{ zoomLevel: 18.5, animationDuration: 0 }}
         />
+        {/* Indicador customizado — CircleLayers nativos do Mapbox (sem RN views) */}
         <Mapbox.UserLocation
           visible={true}
-          showsUserHeadingIndicator
-          onUpdate={() => { if (!hasGPSFix) setHasGPSFix(true); }}
-        />
+          onUpdate={(location: any) => {
+            if (!hasGPSFix) setHasGPSFix(true);
+            try {
+              const coords = location?.coords;
+              if (coords) {
+                setUserCoords({
+                  longitude: coords.longitude,
+                  latitude: coords.latitude,
+                  accuracy: coords.accuracy ?? 0,
+                  speed: coords.speed ?? 0,
+                });
+              }
+            } catch (_) {}
+          }}
+        >
+          {/* Anel externo cyan */}
+          <Mapbox.CircleLayer
+            id="userOuterRing"
+            style={{
+              circleRadius: 12,
+              circleColor: indicatorState === 'disabled'
+                ? 'rgba(0, 127, 153, 0.3)'
+                : '#00D4FF',
+              circlePitchAlignment: 'viewport',
+            }}
+          />
+          {/* Círculo central escuro */}
+          <Mapbox.CircleLayer
+            id="userInnerCircle"
+            style={{
+              circleRadius: 6,
+              circleColor: indicatorState === 'disabled' ? '#0E0E1F' : '#1C1C2E',
+              circlePitchAlignment: 'viewport',
+            }}
+          />
+          {/* Ponto direcional — aparece só quando em movimento */}
+          <Mapbox.CircleLayer
+            id="userDirectionDot"
+            style={{
+              circleRadius: indicatorState === 'moving' ? 3 : 0,
+              circleColor: '#00D4FF',
+              circleTranslate: [0, 17],
+              circleTranslateAnchor: 'viewport',
+              circlePitchAlignment: 'viewport',
+            }}
+          />
+        </Mapbox.UserLocation>
+
+        {/* Rastro da corrida — glow + linha principal */}
         {routeCoordinates.length > 1 && (
           <Mapbox.ShapeSource id="routeSource" shape={geoJsonSource as any}>
+            <Mapbox.LineLayer
+              id="routeGlow"
+              style={{
+                lineColor: T.routeColor,
+                lineWidth: 14,
+                lineOpacity: 0.2,
+                lineJoin: 'round',
+                lineCap: 'round',
+              }}
+            />
             <Mapbox.LineLayer
               id="routeFill"
               style={{
                 lineColor: T.routeColor,
-                lineWidth: 5,
+                lineWidth: 6,
                 lineJoin: 'round',
                 lineCap: 'round',
               }}

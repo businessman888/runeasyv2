@@ -52,7 +52,7 @@ export function HomeFixedHeader({
         startOfWeek.setDate(now.getDate() - dayOfWeek);
         startOfWeek.setHours(0, 0, 0, 0);
 
-        const todayStr = now.toISOString().split('T')[0];
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         const days: WeekDay[] = [];
 
         for (let i = 0; i < 7; i++) {
