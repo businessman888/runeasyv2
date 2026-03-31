@@ -4,8 +4,6 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  Image,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
@@ -14,15 +12,8 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useTracking } from '../../hooks/useTracking';
 import { useWorkoutGoals } from '../../hooks/useWorkoutGoals';
 import { GoalsModal } from '../../components/GoalsModal';
+import { MapLocationPuck } from '../../components/map/MapLocationPuck';
 import type { WorkoutBlockAPI } from '../../types/workoutGoals';
-
-// ─── Puck Assets ──────────────────────────────────────────────────────────────
-// Android native expects string URIs, not RN asset IDs (numbers).
-// resolveAssetSource converts require() → { uri: string } which we extract.
-const resolveImg = (asset: number) => Image.resolveAssetSource(asset).uri;
-const puckCenter = resolveImg(require('../../assets/map/puckCenter.png'));
-const puckShadow = resolveImg(require('../../assets/map/leckPuck.png'));
-const puckCone   = resolveImg(require('../../assets/map/puckCone.png'));
 
 // ─── Tipos de rota ────────────────────────────────────────────────────────────
 type RunningRouteParams = {
@@ -156,22 +147,8 @@ export function RunningScreen() {
           followUserMode={Mapbox.UserTrackingMode.FollowWithHeading}
           defaultSettings={{ zoomLevel: 18.5, animationDuration: 0 }}
         />
-        {/* UserLocation ativo para GPS fix + motor de localização da Camera */}
-        <Mapbox.UserLocation
-          visible={false}
-          renderMode="native"
-          onUpdate={() => { if (!hasGPSFix) setHasGPSFix(true); }}
-        />
-
-        {/* Puck customizado com imagens nativas — sobrescreve o puck padrão */}
-        <Mapbox.LocationPuck
-          puckBearingEnabled={true}
-          puckBearing="heading"
-          topImage={puckCenter}
-          bearingImage={puckCone}
-          shadowImage={puckShadow}
-          scale={['interpolate', ['linear'], ['zoom'], 14, 0.6, 18, 0.8]}
-        />
+        {/* Indicador de localização customizado (componentizado) */}
+        <MapLocationPuck onGPSFix={() => { if (!hasGPSFix) setHasGPSFix(true); }} />
 
         {/* Rastro da corrida — glow + linha principal */}
         {routeCoordinates.length > 1 && (
