@@ -4,6 +4,8 @@ import {
   Text,
   Pressable,
   StyleSheet,
+  Image,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
@@ -15,9 +17,12 @@ import { GoalsModal } from '../../components/GoalsModal';
 import type { WorkoutBlockAPI } from '../../types/workoutGoals';
 
 // ─── Puck Assets ──────────────────────────────────────────────────────────────
-const puckCenter = require('../../assets/map/puckCenter.png');
-const puckShadow = require('../../assets/map/leckPuck.png');
-const puckCone   = require('../../assets/map/puckCone.png');
+// Android native expects string URIs, not RN asset IDs (numbers).
+// resolveAssetSource converts require() → { uri: string } which we extract.
+const resolveImg = (asset: number) => Image.resolveAssetSource(asset).uri;
+const puckCenter = resolveImg(require('../../assets/map/puckCenter.png'));
+const puckShadow = resolveImg(require('../../assets/map/leckPuck.png'));
+const puckCone   = resolveImg(require('../../assets/map/puckCone.png'));
 
 // ─── Tipos de rota ────────────────────────────────────────────────────────────
 type RunningRouteParams = {
@@ -153,7 +158,8 @@ export function RunningScreen() {
         />
         {/* UserLocation ativo para GPS fix + motor de localização da Camera */}
         <Mapbox.UserLocation
-          visible={true}
+          visible={false}
+          renderMode="native"
           onUpdate={() => { if (!hasGPSFix) setHasGPSFix(true); }}
         />
 

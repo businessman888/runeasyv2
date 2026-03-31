@@ -18,6 +18,8 @@ import {
     GoogleSignin,
     statusCodes,
 } from '@react-native-google-signin/google-signin';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
 
 // Configure Google Sign-In
 GoogleSignin.configure({
@@ -54,6 +56,7 @@ const GoogleIcon = () => (
 
 export function LoginScreen({ navigation }: { navigation: unknown }) {
     const [isLoading, setIsLoading] = React.useState(false);
+    const [isAppleLoading, setIsAppleLoading] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
     const { login } = useAuthStore();
 
@@ -136,6 +139,94 @@ export function LoginScreen({ navigation }: { navigation: unknown }) {
         }
     };
 
+    const handleAppleLogin = async () => {
+        setError(null);
+        setIsAppleLoading(true);
+
+        try {
+            console.log('[LOGIN] Starting Apple Sign-In...');
+
+            // 1. Generate raw nonce and its SHA256 hash (Supabase security requirement)
+            const rawNonce = Crypto.randomUUID();
+            const hashedNonce = await Crypto.digestStringAsync(
+                Crypto.CryptoDigestAlgorithm.SHA256,
+                rawNonce,
+            );
+
+            // 2. Request Apple credentials with hashed nonce
+            const credential = await AppleAuthentication.signInAsync({
+                requestedScopes: [
+                    AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+                    AppleAuthentication.AppleAuthenticationScope.EMAIL,
+                ],
+                nonce: hashedNonce,
+            });
+
+            const { identityToken, fullName } = credential;
+
+            if (!identityToken) {
+                throw new Error('No identityToken returned from Apple Sign-In');
+            }
+
+            // 3. Capture fullName on first login (Apple only sends it once)
+            const displayName = fullName
+                ? [fullName.givenName, fullName.familyName].filter(Boolean).join(' ')
+                : undefined;
+
+            if (displayName) {
+                console.log('[LOGIN] Apple fullName captured:', displayName);
+            }
+
+            // 4. Exchange Apple token with Supabase (rawNonce for server-side validation)
+            console.log('[LOGIN] Exchanging Apple token with Supabase...');
+            const { data, error: supabaseError } = await supabase.auth.signInWithIdToken({
+                provider: 'apple',
+                token: identityToken,
+                nonce: rawNonce,
+            });
+
+            if (supabaseError) {
+                console.error('[LOGIN] Supabase auth error:', supabaseError.message);
+                throw new Error(supabaseError.message);
+            }
+
+            if (!data.session || !data.user) {
+                throw new Error('No session returned from Supabase');
+            }
+
+            // 5. Update user metadata with fullName if available (first login only)
+            if (displayName) {
+                await supabase.auth.updateUser({
+                    data: { full_name: displayName },
+                });
+            }
+
+            console.log('[LOGIN] Supabase auth successful, userId:', data.user.id);
+
+            // 6. Login to backend
+            await login(data.user.id);
+            console.log('[LOGIN] Backend login complete — AppNavigator will auto-navigate');
+
+        } catch (err: unknown) {
+            console.error('[LOGIN] Apple error:', err);
+
+            if (
+                err !== null &&
+                typeof err === 'object' &&
+                'code' in err &&
+                (err as { code: string }).code === 'ERR_REQUEST_CANCELED'
+            ) {
+                setError(getErrorMessage('sign_in_cancelled'));
+            } else if (err instanceof Error) {
+                setError(err.message);
+            } else {
+                setError(getErrorMessage('auth_failed'));
+            }
+        } finally {
+            setIsAppleLoading(false);
+        }
+    };
+
     const insets = useSafeAreaInsets();
 
     return (
@@ -183,10 +274,30 @@ export function LoginScreen({ navigation }: { navigation: unknown }) {
                             </View>
                         )}
 
+                        {/* Apple Sign-In Button (iOS only, displayed first per Apple guidelines) */}
+                        {Platform.OS === 'ios' && (
+                            <View style={styles.appleButtonWrapper}>
+                                {isAppleLoading ? (
+                                    <View style={styles.appleLoadingContainer}>
+                                        <ActivityIndicator size="small" color="#FFFFFF" />
+                                        <Text style={styles.appleLoadingText}>Conectando...</Text>
+                                    </View>
+                                ) : (
+                                    <AppleAuthentication.AppleAuthenticationButton
+                                        buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                                        buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+                                        cornerRadius={16}
+                                        style={styles.appleButton}
+                                        onPress={handleAppleLogin}
+                                    />
+                                )}
+                            </View>
+                        )}
+
                         {/* Google Sign-In Button */}
                         <TouchableOpacity
                             onPress={handleGoogleLogin}
-                            disabled={isLoading}
+                            disabled={isLoading || isAppleLoading}
                             activeOpacity={0.8}
                             style={styles.googleButton}
                             accessibilityRole="button"
@@ -286,6 +397,29 @@ const styles = StyleSheet.create({
         color: '#EF4444',
         textAlign: 'center',
         fontSize: typography.fontSizes.sm,
+    },
+    appleButtonWrapper: {
+        width: '100%',
+        maxWidth: 340,
+        alignSelf: 'center',
+    },
+    appleButton: {
+        width: '100%',
+        height: 52,
+    },
+    appleLoadingContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#000000',
+        height: 52,
+        borderRadius: 16,
+        gap: 12,
+    },
+    appleLoadingText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '600',
     },
     googleButton: {
         width: '100%',

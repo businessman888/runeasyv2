@@ -15,8 +15,9 @@ export default {
   },
   ios: {
     supportsTablet: false,
-    bundleIdentifier: "com.runeasy.app",
+    bundleIdentifier: "com.oytotec.runeasy",
     newArchEnabled: true,
+    usesAppleSignIn: true,
     infoPlist: {
       NSMotionUsageDescription: "RunEasy usa sensores de movimento para melhorar a precisão do treino",
       NSLocationWhenInUseUsageDescription: "RunEasy precisa de acesso à sua localização para rastrear sua corrida.",
@@ -52,6 +53,7 @@ export default {
     }
   },
   plugins: [
+    "expo-apple-authentication",
     "./plugins/withMapboxAndroid",
     "expo-secure-store",
     [

@@ -23,6 +23,7 @@
     "@rnmapbox/maps": "^10.2.10",
     "@supabase/supabase-js": "^2.89.0",
     "expo": "~54.0.30",
+    "expo-apple-authentication": "~8.0.8",
     "expo-auth-session": "~7.0.10",
     "expo-constants": "^18.0.12",
     "expo-crypto": "~15.0.8",
