@@ -8,8 +8,10 @@ import {
     TouchableOpacity,
     ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
 import { useFeedbackStore, Feedback } from '../stores/feedbackStore';
+import { SharingModal } from './sharing/SharingModal';
 
 interface Props {
     route: any;
@@ -20,6 +22,7 @@ export function FeedbackScreen({ route, navigation }: Props) {
     const { feedbackId } = route.params || {};
     const { currentFeedback, fetchFeedback, rateFeedback, isLoading } = useFeedbackStore();
     const [selectedRating, setSelectedRating] = React.useState<number | null>(null);
+    const [sharingVisible, setSharingVisible] = React.useState(false);
 
     React.useEffect(() => {
         if (feedbackId) {
@@ -164,6 +167,15 @@ export function FeedbackScreen({ route, navigation }: Props) {
                     </View>
                 </View>
 
+                {/* Share Button */}
+                <TouchableOpacity
+                    style={styles.shareButton}
+                    onPress={() => setSharingVisible(true)}
+                >
+                    <Ionicons name="share-outline" size={20} color={colors.white} />
+                    <Text style={styles.shareButtonText}>Compartilhar Treino</Text>
+                </TouchableOpacity>
+
                 {/* Rating */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>⭐ Avalie este feedback</Text>
@@ -188,6 +200,12 @@ export function FeedbackScreen({ route, navigation }: Props) {
                     </Text>
                 </View>
             </ScrollView>
+
+            <SharingModal
+                visible={sharingVisible}
+                onClose={() => setSharingVisible(false)}
+                workoutId={feedback.workout_id}
+            />
         </SafeAreaView>
     );
 }
@@ -428,5 +446,20 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.sm,
         color: colors.textSecondary,
         textAlign: 'center',
+    },
+    shareButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.sm,
+        backgroundColor: colors.primary,
+        paddingVertical: spacing.md,
+        borderRadius: borderRadius.lg,
+        marginBottom: spacing.lg,
+    },
+    shareButtonText: {
+        color: colors.white,
+        fontSize: typography.fontSizes.md,
+        fontWeight: typography.fontWeights.bold,
     },
 });

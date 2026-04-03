@@ -20,6 +20,7 @@ import { UsersModule } from './modules/users';
 import { ReadinessModule } from './modules/readiness';
 import { OnboardingModule } from './modules/onboarding';
 import { HealthModule } from './modules/health/health.module';
+import { SharingModule } from './modules/sharing';
 
 @Module({
   imports: [
@@ -79,6 +80,7 @@ import { HealthModule } from './modules/health/health.module';
     ReadinessModule,
     OnboardingModule,
     HealthModule,
+    SharingModule,
   ],
   controllers: [AppController],
   providers: [AppService],
