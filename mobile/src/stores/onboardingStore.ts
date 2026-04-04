@@ -39,6 +39,7 @@ interface OnboardingData {
     limitations: { hasLimitation: boolean; details: string } | null; // Limitations screen - physical limitations
     preferredDays: number[];
     goalTimeframe: number | null; // Goal timeframe in months (1, 3, 6, 12)
+    preferredWearable: string | null; // 'garmin' | 'polar' | 'fitbit' | 'apple_watch' | null
 }
 
 
@@ -123,6 +124,7 @@ const initialData: Partial<OnboardingData> = {
     limitations: null,
     preferredDays: [],
     goalTimeframe: null,
+    preferredWearable: null,
 };
 
 export const useOnboardingStore = create<OnboardingState>((set, get) => ({

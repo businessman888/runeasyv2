@@ -10,6 +10,9 @@ import { DatabaseModule } from './database';
 // AI (Global)
 import { AIModule } from './common/ai';
 
+// Encryption (Global)
+import { EncryptionModule } from './common/encryption';
+
 // Feature Modules
 import { TrainingModule } from './modules/training';
 import { GamificationModule } from './modules/gamification';
@@ -21,6 +24,7 @@ import { ReadinessModule } from './modules/readiness';
 import { OnboardingModule } from './modules/onboarding';
 import { HealthModule } from './modules/health/health.module';
 import { SharingModule } from './modules/sharing';
+import { DevicesModule } from './modules/devices';
 
 @Module({
   imports: [
@@ -70,6 +74,9 @@ import { SharingModule } from './modules/sharing';
     // AI (Global — available to all modules)
     AIModule,
 
+    // Encryption (Global — available to all modules)
+    EncryptionModule,
+
     // Feature Modules
     TrainingModule,
     GamificationModule,
@@ -81,6 +88,7 @@ import { SharingModule } from './modules/sharing';
     OnboardingModule,
     HealthModule,
     SharingModule,
+    DevicesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

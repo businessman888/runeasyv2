@@ -28,11 +28,12 @@ import { RecentDistanceScreen } from './quiz/RecentDistanceScreen';
 import { DistanceTimeScreen } from './quiz/DistanceTimeScreen';
 import { StartDateScreen } from './quiz/StartDateScreen';
 import { GoalTimeframeScreen } from './quiz/GoalTimeframeScreen';
+import { WearableConnectionScreen } from './quiz/WearableConnectionScreen';
 
 // Import navigation buttons
 import { FixedNavigationButtons } from '../components/FixedNavigationButtons';
 
-const TOTAL_STEPS = 14;
+const TOTAL_STEPS = 15;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ============================================
@@ -193,6 +194,7 @@ export function OnboardingScreen({ navigation, route }: any) {
         { key: 'startDate', Component: StartDateScreen, title: 'Quando quer começar?' },                      // 11
         { key: 'limitations', Component: LimitationsScreen, title: 'Alguma limitação física?' },              // 12
         { key: 'goalTimeframe', Component: GoalTimeframeScreen, title: 'Quando deseja atingir sua meta?' },   // 13
+        { key: 'preferredWearable', Component: WearableConnectionScreen, title: 'Conectar dispositivo', isWearableStep: true }, // 14
     ];
 
     const currentStepData = QUIZ_STEPS[currentStep];
@@ -219,6 +221,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             case 11: return !!data.startDate;                                                                   // startDate
             case 12: return data.limitations && typeof data.limitations.hasLimitation === 'boolean';            // limitations
             case 13: return typeof data.goalTimeframe === 'number' && data.goalTimeframe > 0;                   // goalTimeframe
+            case 14: return true;                                                                              // wearable (optional)
             default: return false;
         }
     };
@@ -297,13 +300,28 @@ export function OnboardingScreen({ navigation, route }: any) {
     };
 
     // Determine button states
+    const isWearableStep = !!(currentStepData as any).isWearableStep;
     const showBackButton = currentStep > 0;
     const continueDisabled = !canContinue();
     const isLastStep = currentStep === TOTAL_STEPS - 1;
 
+    // Wearable step navigation callbacks
+    const handleWearableConnect = () => {
+        navigation.navigate('Quiz_PlanLoading', { userId });
+    };
+
+    const handleWearableSkip = () => {
+        navigation.navigate('Quiz_PlanLoading', { userId });
+    };
+
     // Render the current step's component
     const StepComponent = currentStepData.Component;
     const extraProps = (currentStepData as any).extraProps || {};
+
+    // Extra props for wearable step
+    const wearableProps = isWearableStep
+        ? { onConnect: handleWearableConnect, onSkip: handleWearableSkip }
+        : {};
 
     // Calculate Android status bar padding
     const androidStatusBarHeight = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 16 : 0;
@@ -340,19 +358,22 @@ export function OnboardingScreen({ navigation, route }: any) {
                         {...(currentStepData.keys ? getValue() : { value: getValue() })}
                         onChange={handleChange}
                         {...extraProps}
+                        {...wearableProps}
                     />
                 </ScrollView>
 
-                {/* Fixed Navigation Buttons (Figma node 428-464) */}
-                <View style={styles.buttonContainer}>
-                    <FixedNavigationButtons
-                        onBack={handleBack}
-                        onContinue={handleContinue}
-                        showBack={showBackButton}
-                        continueDisabled={continueDisabled}
-                        isLastStep={isLastStep}
-                    />
-                </View>
+                {/* Fixed Navigation Buttons — hidden on wearable step (has its own buttons) */}
+                {!isWearableStep && (
+                    <View style={styles.buttonContainer}>
+                        <FixedNavigationButtons
+                            onBack={handleBack}
+                            onContinue={handleContinue}
+                            showBack={showBackButton}
+                            continueDisabled={continueDisabled}
+                            isLastStep={isLastStep}
+                        />
+                    </View>
+                )}
             </SafeAreaView>
         </View>
     );
