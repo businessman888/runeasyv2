@@ -6,8 +6,11 @@ import {
     TouchableOpacity,
     Modal,
     Dimensions,
+    ActivityIndicator,
+    Alert,
 } from 'react-native';
 import Svg, { Path, Rect, Circle, G } from 'react-native-svg';
+import { connectWearable, WearableProvider } from '../../services/wearable-auth';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -136,9 +139,40 @@ export function WearableSelectionModal({
     selectedProvider,
 }: WearableSelectionModalProps) {
     const [localSelection, setLocalSelection] = useState<string | null>(selectedProvider);
+    const [isConnecting, setIsConnecting] = useState(false);
 
-    const handleConfirm = () => {
-        if (localSelection) {
+    const handleConfirm = async () => {
+        if (!localSelection) return;
+
+        // For providers with OAuth support, start real flow
+        if (localSelection === 'fitbit' || localSelection === 'polar') {
+            setIsConnecting(true);
+            try {
+                const result = await connectWearable(localSelection as WearableProvider);
+
+                if (result.success) {
+                    onSelect(localSelection);
+                } else if (result.error === 'Authorization cancelled') {
+                    // User cancelled — stay on modal
+                    setIsConnecting(false);
+                    return;
+                } else {
+                    Alert.alert(
+                        'Erro na conexão',
+                        result.error || 'Não foi possível conectar. Tente novamente.',
+                        [{ text: 'OK' }],
+                    );
+                    setIsConnecting(false);
+                    return;
+                }
+            } catch {
+                Alert.alert('Erro', 'Falha na conexão. Tente novamente.');
+                setIsConnecting(false);
+                return;
+            }
+            setIsConnecting(false);
+        } else {
+            // Garmin / Apple Watch — save preference only (OAuth coming later)
             onSelect(localSelection);
         }
     };
@@ -191,18 +225,22 @@ export function WearableSelectionModal({
                         <TouchableOpacity
                             style={[
                                 styles.connectButton,
-                                !localSelection && styles.connectButtonDisabled,
+                                (!localSelection || isConnecting) && styles.connectButtonDisabled,
                             ]}
                             onPress={handleConfirm}
-                            disabled={!localSelection}
+                            disabled={!localSelection || isConnecting}
                             activeOpacity={0.7}
                         >
-                            <Text style={[
-                                styles.connectText,
-                                !localSelection && styles.connectTextDisabled,
-                            ]}>
-                                Conectar
-                            </Text>
+                            {isConnecting ? (
+                                <ActivityIndicator color={DS.cyan} size="small" />
+                            ) : (
+                                <Text style={[
+                                    styles.connectText,
+                                    !localSelection && styles.connectTextDisabled,
+                                ]}>
+                                    Conectar
+                                </Text>
+                            )}
                         </TouchableOpacity>
 
                         <TouchableOpacity

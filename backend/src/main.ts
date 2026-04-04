@@ -16,6 +16,7 @@ async function bootstrap() {
     console.log('[Bootstrap] Criando aplicação NestJS...');
     const app = await NestFactory.create(AppModule, {
       logger: ['error', 'warn', 'log'],
+      rawBody: true, // Required for webhook signature verification
     });
     console.log('[Bootstrap] Aplicação NestJS criada com sucesso!');
 
