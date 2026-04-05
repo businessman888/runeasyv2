@@ -18,6 +18,8 @@ import { useAuthStore } from '../../stores/authStore';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop, Circle as SvgCircle } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
+import { usePlacement } from 'expo-superwall';
+import { PAYWALL_PLACEMENTS } from '../../services/paywall';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -119,13 +121,26 @@ const ProgressChart = () => {
 // =============================================
 export function SmartPlanScreen({ navigation, route }: any) {
     const { data, generatedPlan: storePlan } = useOnboardingStore();
+    const isPro = useAuthStore((s) => s.isPro);
     const userId = route?.params?.userId;
+    const { registerPlacement } = usePlacement();
 
     // Disable Android hardware back
     useEffect(() => {
         const backAction = () => true;
         const handler = BackHandler.addEventListener('hardwareBackPress', backAction);
         return () => handler.remove();
+    }, []);
+
+    // ── Trigger: onboarding_complete ──
+    // Registra o placement quando o usuário chega nesta tela (fim do quiz)
+    useEffect(() => {
+        if (!isPro) {
+            console.log('[Paywall] Registrando placement: onboarding_complete');
+            registerPlacement({ placement: PAYWALL_PLACEMENTS.ONBOARDING_COMPLETE }).catch((err) =>
+                console.warn('[Paywall] Erro ao registrar onboarding_complete:', err),
+            );
+        }
     }, []);
 
     // Plan data
@@ -150,8 +165,28 @@ export function SmartPlanScreen({ navigation, route }: any) {
         } catch { }
     };
 
-    const handleUnlockAll = () => {
+    const handleUnlockAll = async () => {
         console.log('[SmartPlan] Desbloquear tudo pressed');
+
+        // ── Trigger: view_training_plan ──
+        // Se o usuário não for Pro, exibe paywall antes de desbloquear
+        if (!isPro) {
+            try {
+                console.log('[Paywall] Registrando placement: view_training_plan');
+                await registerPlacement({ placement: PAYWALL_PLACEMENTS.VIEW_TRAINING_PLAN });
+            } catch (err) {
+                console.warn('[Paywall] Erro ao registrar view_training_plan:', err);
+            }
+
+            // Após o paywall, re-verifica se agora é Pro
+            await useAuthStore.getState().syncSubscriptionStatus();
+            const nowPro = useAuthStore.getState().isPro;
+            if (!nowPro) {
+                console.log('[SmartPlan] Usuário não converteu — mantendo na tela');
+                return;
+            }
+        }
+
         const currentUser = useAuthStore.getState().user;
         if (currentUser) {
             useAuthStore.getState().setUser({

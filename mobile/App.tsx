@@ -6,6 +6,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppNavigator } from './src/navigation';
 import { useNotifications } from './src/hooks/useNotifications';
 import Mapbox from '@rnmapbox/maps';
+import { SuperwallProvider } from 'expo-superwall';
+import { SuperwallBridge } from './src/components/paywall/SuperwallBridge';
+import { initializeRevenueCat, getSuperwallApiKey } from './src/services/paywall';
+import { initSubscriptionListener } from './src/stores/authStore';
 
 // Registra Task de Rastreamento (Background GPS)
 import './src/tasks/locationTask';
@@ -78,15 +82,34 @@ function NotificationManager() {
 }
 
 export default function App() {
+  // Inicializa RevenueCat e subscription listener uma vez
+  useEffect(() => {
+    initializeRevenueCat();
+    const removeListener = initSubscriptionListener();
+    return () => removeListener();
+  }, []);
+
+  const superwallApiKey = getSuperwallApiKey();
+
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
-        <GestureHandlerRootView style={styles.container}>
-          <StatusBar style="light" translucent backgroundColor="transparent" />
-          {/* NotificationManager is safe to use here because it uses navigationRef */}
-          <NotificationManager />
-          <AppNavigator />
-        </GestureHandlerRootView>
+        <SuperwallProvider
+          apiKeys={{
+            ios: superwallApiKey,
+            android: superwallApiKey,
+          }}
+          options={__DEV__ ? { logging: { level: 'debug' } } : undefined}
+        >
+          <GestureHandlerRootView style={styles.container}>
+            <StatusBar style="light" translucent backgroundColor="transparent" />
+            {/* Bridge que conecta Superwall hooks ao authStore */}
+            <SuperwallBridge />
+            {/* NotificationManager is safe to use here because it uses navigationRef */}
+            <NotificationManager />
+            <AppNavigator />
+          </GestureHandlerRootView>
+        </SuperwallProvider>
       </SafeAreaProvider>
     </ErrorBoundary>
   );

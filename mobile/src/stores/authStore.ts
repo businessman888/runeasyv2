@@ -2,6 +2,12 @@ import { create } from 'zustand';
 import * as Storage from '../utils/storage';
 import { supabase } from '../services/supabase';
 import { BASE_API_URL } from '../config/api.config';
+import {
+    identifyRevenueCatUser,
+    logoutRevenueCat,
+    checkProStatus,
+    addSubscriptionListener,
+} from '../services/paywall';
 
 interface User {
     id: string;
@@ -23,6 +29,22 @@ interface User {
     onboarding_completed: boolean;
 }
 
+/** Callback para Superwall identify — setado pelo SuperwallProvider via hook */
+let _superwallIdentifyFn: ((userId: string) => Promise<void>) | null = null;
+let _superwallResetFn: (() => Promise<void>) | null = null;
+
+/**
+ * Registra as funções do Superwall identify/reset.
+ * Deve ser chamado no componente que tem acesso ao useUser() hook.
+ */
+export function registerSuperwallHooks(
+    identifyFn: (userId: string) => Promise<void>,
+    resetFn: () => Promise<void>,
+): void {
+    _superwallIdentifyFn = identifyFn;
+    _superwallResetFn = resetFn;
+}
+
 /** Returns the best available display name for the user */
 export function getDisplayName(user: User | null): string {
     const p = user?.profile;
@@ -42,13 +64,16 @@ interface AuthState {
     user: User | null;
     isAuthenticated: boolean;
     isLoading: boolean;
+    isPro: boolean;
 
     // Actions
     setUser: (user: User | null) => void;
     setAuthenticated: (authenticated: boolean) => void;
+    setIsPro: (isPro: boolean) => void;
     login: (userId: string) => Promise<void>;
     logout: () => Promise<void>;
     checkAuth: () => Promise<void>;
+    syncSubscriptionStatus: () => Promise<void>;
 }
 
 const API_URL = BASE_API_URL;
@@ -72,6 +97,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     user: null,
     isAuthenticated: false,
     isLoading: true,
+    isPro: false,
 
     setUser: (user) => {
         set({ user, isAuthenticated: !!user });
@@ -79,6 +105,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     setAuthenticated: (authenticated) => {
         set({ isAuthenticated: authenticated });
+    },
+
+    setIsPro: (isPro) => {
+        set({ isPro });
     },
 
     login: async (userId: string) => {
@@ -114,6 +144,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
                 await Storage.setItemAsync('user_id', userId);
                 set({ user: userData.user, isAuthenticated: true, isLoading: false });
+
+                // ── Superwall Identify ──
+                if (_superwallIdentifyFn) {
+                    try {
+                        await _superwallIdentifyFn(userId);
+                        console.log('[AUTH] Superwall identify OK');
+                    } catch (err) {
+                        console.warn('[AUTH] Superwall identify falhou:', err);
+                    }
+                }
+
+                // ── RevenueCat Identify + Sync ──
+                try {
+                    await identifyRevenueCatUser(userId);
+                    const { isPro } = await checkProStatus();
+                    set({ isPro });
+                    console.log('[AUTH] RevenueCat sync — isPro:', isPro);
+                } catch (err) {
+                    console.warn('[AUTH] RevenueCat identify falhou:', err);
+                }
             } else {
                 console.warn('[AUTH] User not found in DB - clearing tokens');
                 await clearAllAuthTokens();
@@ -129,11 +179,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     logout: async () => {
         console.log('[AUTH] Logout');
         try {
+            // ── Superwall Reset ──
+            if (_superwallResetFn) {
+                try {
+                    await _superwallResetFn();
+                    console.log('[AUTH] Superwall reset OK');
+                } catch (err) {
+                    console.warn('[AUTH] Superwall reset falhou:', err);
+                }
+            }
+
+            // ── RevenueCat Logout ──
+            try {
+                await logoutRevenueCat();
+            } catch (err) {
+                console.warn('[AUTH] RevenueCat logout falhou:', err);
+            }
+
             await clearAllAuthTokens();
-            set({ user: null, isAuthenticated: false });
+            set({ user: null, isAuthenticated: false, isPro: false });
         } catch (error) {
             console.error('[AUTH] Logout error:', error);
-            set({ user: null, isAuthenticated: false });
+            set({ user: null, isAuthenticated: false, isPro: false });
         }
     },
 
@@ -191,4 +258,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             set({ isLoading: false });
         }
     },
+
+    syncSubscriptionStatus: async () => {
+        try {
+            const { isPro } = await checkProStatus();
+            set({ isPro });
+            console.log('[AUTH] Subscription sync — isPro:', isPro);
+        } catch (error) {
+            console.error('[AUTH] Erro ao sincronizar assinatura:', error);
+        }
+    },
 }));
+
+/**
+ * Inicializa o listener de mudanças de assinatura do RevenueCat.
+ * Deve ser chamado uma vez no _layout.tsx após inicializar o RevenueCat.
+ * Retorna a função de cleanup.
+ */
+export function initSubscriptionListener(): () => void {
+    return addSubscriptionListener((isPro) => {
+        useAuthStore.getState().setIsPro(isPro);
+        console.log('[AUTH] Subscription listener — isPro atualizado:', isPro);
+    });
+}
