@@ -40,8 +40,20 @@ const IS_DEV = __DEV__;
 let revenueCatInitialized = false;
 
 /**
+ * Valida se a chave de API do RevenueCat tem o formato esperado.
+ * Chaves válidas começam com `appl_` (iOS) ou `goog_` (Android).
+ */
+function isValidRevenueCatKey(apiKey: string): boolean {
+  return apiKey.startsWith('appl_') || apiKey.startsWith('goog_');
+}
+
+/**
  * Inicializa o SDK do RevenueCat com a chave da plataforma.
  * Deve ser chamado uma única vez no startup do app (ex: _layout.tsx).
+ *
+ * Se a chave não estiver configurada ou for inválida, a inicialização
+ * é ignorada silenciosamente — o app continua funcionando normalmente
+ * e o Superwall exibe o paywall independentemente.
  */
 export async function initializeRevenueCat(): Promise<void> {
   if (revenueCatInitialized) {
@@ -54,7 +66,16 @@ export async function initializeRevenueCat(): Promise<void> {
     : REVENUECAT_API_KEY_ANDROID;
 
   if (!apiKey) {
-    console.warn('[Paywall] Chave do RevenueCat não configurada para', Platform.OS);
+    console.warn('[Paywall] ⚠️ RevenueCat NÃO inicializado — chave não configurada para', Platform.OS);
+    console.warn('[Paywall] O app continuará funcionando normalmente. Superwall exibirá o paywall sem rastreamento de assinatura.');
+    return;
+  }
+
+  if (!isValidRevenueCatKey(apiKey)) {
+    console.warn('[Paywall] ⚠️ RevenueCat NÃO inicializado — chave inválida para', Platform.OS);
+    console.warn('[Paywall] Chaves válidas começam com "appl_" (iOS) ou "goog_" (Android).');
+    console.warn('[Paywall] Chave atual:', apiKey.substring(0, 10) + '...');
+    console.warn('[Paywall] O app continuará funcionando normalmente. Configure chaves reais no .env quando for publicar nas lojas.');
     return;
   }
 
@@ -70,6 +91,7 @@ export async function initializeRevenueCat(): Promise<void> {
     console.log('[Paywall] RevenueCat inicializado com sucesso');
   } catch (error) {
     console.error('[Paywall] Erro ao inicializar RevenueCat:', error);
+    console.warn('[Paywall] O app continuará funcionando sem rastreamento de assinatura.');
   }
 }
 
