@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   Pressable,
   StyleSheet,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
@@ -11,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useTracking } from '../../hooks/useTracking';
 import { useWorkoutGoals } from '../../hooks/useWorkoutGoals';
+import { useTrainingStore } from '../../stores';
 import { GoalsModal } from '../../components/GoalsModal';
 import { MapLocationPuck } from '../../components/map/MapLocationPuck';
 import type { WorkoutBlockAPI } from '../../types/workoutGoals';
@@ -49,6 +52,8 @@ export function RunningScreen() {
   const [hasGPSFix, setHasGPSFix] = useState(false);
   const [goalsModalVisible, setGoalsModalVisible] = useState(false);
 
+  const [isFinishing, setIsFinishing] = useState(false);
+
   const {
     isReady,
     sessionState,
@@ -60,7 +65,61 @@ export function RunningScreen() {
     startResumeTracking,
     pauseTracking,
     finishTracking,
+    clearTracking,
   } = useTracking();
+
+  const completeWorkout = useTrainingStore((s) => s.completeWorkout);
+
+  // ── Finalização segura do treino ──────────────────────────────────────
+  const handleFinish = useCallback(async () => {
+    const workoutId = route.params?.workoutId;
+
+    setIsFinishing(true);
+    try {
+      // 1. Captura dados finais (GPS para, mas MMKV NÃO é limpo ainda)
+      const trackingData = await finishTracking();
+
+      // 2. Envia ao backend (ou salva localmente se falhar)
+      const result = await completeWorkout({
+        workoutId: workoutId || `local_${Date.now()}`,
+        route_points: trackingData.routeData,
+        total_distance_meters: trackingData.distance,
+        duration_seconds: Math.round(trackingData.timeMs / 1000),
+      });
+
+      // 3. Dados salvos (backend ou local) — agora sim, limpa o MMKV
+      clearTracking();
+
+      // 4. Navega para tela de resumo
+      navigation.reset({
+        index: 0,
+        routes: [
+          { name: 'Main' as never },
+          {
+            name: 'RunSummary' as never,
+            params: {
+              workoutId: workoutId || undefined,
+              distance: trackingData.distance,
+              timeMs: trackingData.timeMs,
+              routeCoordinates: trackingData.routeData.map(
+                (p: { longitude: number; latitude: number }) => [p.longitude, p.latitude]
+              ),
+              savedLocally: result.savedLocally,
+            },
+          },
+        ],
+      });
+    } catch (error) {
+      console.error('[RunningScreen] Erro crítico na finalização:', error);
+      Alert.alert(
+        'Erro ao finalizar',
+        'Ocorreu um erro, mas seus dados de treino estão seguros. Tente finalizar novamente.',
+        [{ text: 'OK' }],
+      );
+    } finally {
+      setIsFinishing(false);
+    }
+  }, [route.params?.workoutId, finishTracking, completeWorkout, clearTracking, navigation]);
 
   // ── Sistema de Metas ────────────────────────────────────────────────────
   const workoutBlocks = route.params?.workoutBlocks;
@@ -99,6 +158,7 @@ export function RunningScreen() {
   const isCalculating = sessionState === 'calculating';
   const isTraining    = sessionState === 'training';
   const isPaused      = sessionState === 'paused';
+  const isFinished    = sessionState === 'finished';
 
   const statusBannerBg =
     isTraining  ? T.cyan :
@@ -301,6 +361,7 @@ export function RunningScreen() {
               <Pressable
                 style={[styles.ctaBtn, styles.ctaBtnOutlineCyan, { flex: 1 }]}
                 onPress={startResumeTracking}
+                disabled={isFinishing}
                 accessibilityRole="button"
                 accessibilityLabel="Continuar treino"
               >
@@ -308,13 +369,20 @@ export function RunningScreen() {
                 <Text style={[styles.ctaBtnText, { color: T.cyan }]}>Continuar</Text>
               </Pressable>
               <Pressable
-                style={[styles.ctaBtn, styles.ctaBtnFilled, { flex: 1 }]}
-                onPress={finishTracking}
+                style={[styles.ctaBtn, styles.ctaBtnFilled, { flex: 1 }, isFinishing && { opacity: 0.6 }]}
+                onPress={handleFinish}
+                disabled={isFinishing}
                 accessibilityRole="button"
                 accessibilityLabel="Finalizar treino"
               >
-                <Ionicons name="flag" size={20} color={T.bgPrimary} style={{ marginRight: 8 }} />
-                <Text style={[styles.ctaBtnText, { color: T.bgPrimary }]}>Finalizar</Text>
+                {isFinishing ? (
+                  <ActivityIndicator size="small" color={T.bgPrimary} />
+                ) : (
+                  <>
+                    <Ionicons name="flag" size={20} color={T.bgPrimary} style={{ marginRight: 8 }} />
+                    <Text style={[styles.ctaBtnText, { color: T.bgPrimary }]}>Finalizar</Text>
+                  </>
+                )}
               </Pressable>
             </>
           )}

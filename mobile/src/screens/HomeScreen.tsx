@@ -67,7 +67,7 @@ function BedIcon({ size = 24, color = '#A78BFA' }: { size?: number; color?: stri
 export function HomeScreen({ navigation }: any) {
     const { user } = useAuthStore();
     const { stats, fetchStats, isLoading: gamificationLoading } = useGamificationStore();
-    const { upcomingWorkouts, fetchUpcomingWorkouts, isLoading: trainingLoading, today, nextWorkout: storeNextWorkout, fetchSchedule, clearScheduleData, schedule } = useTrainingStore();
+    const { upcomingWorkouts, fetchUpcomingWorkouts, isLoading: trainingLoading, today, nextWorkout: storeNextWorkout, fetchSchedule, clearScheduleData, schedule, retryPendingWorkouts } = useTrainingStore();
     const { latestSummary, fetchLatestSummary, latestActivity, latestActivityLoading, fetchLatestActivity } = useFeedbackStore();
     const { summary, fetchSummary, isLoading: statsLoading } = useStatsStore();
     const { unreadCount, fetchUnreadCount } = useNotificationStore();
@@ -100,6 +100,7 @@ export function HomeScreen({ navigation }: any) {
                     fetchSummary(),
                     fetchUnreadCount(),
                     fetchSchedule(startStr, endStr),
+                    retryPendingWorkouts(),
                 ]);
 
                 // Check if retrospective is ready

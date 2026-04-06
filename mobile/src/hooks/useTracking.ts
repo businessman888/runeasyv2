@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import * as Location from 'expo-location';
 import { trackingStorage, LOCATION_TRACKING_TASK } from '../tasks/locationTask';
 
-export type SessionState = 'calculating' | 'training' | 'paused';
+export type SessionState = 'calculating' | 'training' | 'paused' | 'finished';
 
 export function useTracking() {
   const [sessionState, setSessionState] = useState<SessionState>('calculating');
@@ -159,38 +159,79 @@ export function useTracking() {
 
   const pauseTracking = useCallback(async () => {
     setSessionState('paused');
-    await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK);
+    try {
+      const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
+      if (hasStarted) {
+        await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK);
+      }
+    } catch (e) {
+      console.warn('[useTracking] Erro ao pausar location updates:', e);
+    }
   }, []);
 
   const finishTracking = useCallback(async () => {
-    setSessionState('calculating');
+    // Acumula o tempo que passou antes de mudar o estado
+    if (startTimeRef.current) {
+      const elapsedSinceStart = Date.now() - startTimeRef.current;
+      accumulatedTimeRef.current += elapsedSinceStart;
+      startTimeRef.current = null;
+    }
     if (timerRef.current) clearInterval(timerRef.current);
-    await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK);
-    
-    // Pegar estado final (GeoJson, tempos, etc)
-    const finalDistance = distance;
-    const finalRoute = trackingStorage.getString('route_points') || '[]';
-    const finalTime = timeMs;
 
-    // Limpar storage após finalizar
-    trackingStorage.remove('route_points');
-    trackingStorage.remove('current_distance');
-    trackingStorage.remove('accumulated_time_ms');
-    trackingStorage.remove('last_update_ts');
+    // Para o GPS
+    try {
+      const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
+      if (hasStarted) {
+        await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK);
+      }
+    } catch (e) {
+      console.warn('[useTracking] Erro ao parar location updates:', e);
+    }
+
+    // Lê dados finais do MMKV (fonte de verdade — background task escreve aqui)
+    const finalDistance = trackingStorage.getNumber('current_distance') || distance;
+    const finalRouteStr = trackingStorage.getString('route_points') || '[]';
+    const finalTime = accumulatedTimeRef.current || timeMs;
+
+    let routeData: Array<{
+      latitude: number;
+      longitude: number;
+      altitude: number | null;
+      timestamp: number;
+      speed: number | null;
+      accuracy: number | null;
+    }> = [];
+    try {
+      routeData = JSON.parse(finalRouteStr);
+    } catch (e) {
+      console.error('[useTracking] Erro ao parsear rota final:', e);
+    }
+
+    // NÃO limpa storage aqui — quem chamou deve chamar clearTracking() após confirmar salvamento
+    setSessionState('finished');
+
+    return {
+      distance: finalDistance,
+      timeMs: finalTime,
+      routeData,
+    };
+  }, [distance, timeMs]);
+
+  /** Limpa todo o estado de tracking — chamar SOMENTE após confirmar que os dados foram salvos */
+  const clearTracking = useCallback(() => {
+    trackingStorage.delete('route_points');
+    trackingStorage.delete('current_distance');
+    trackingStorage.delete('accumulated_time_ms');
+    trackingStorage.delete('last_update_ts');
 
     setRouteCoordinates([]);
     setDistance(0);
     setTimeMs(0);
+    setCurrentPace(0);
     accumulatedTimeRef.current = 0;
     startTimeRef.current = null;
-
-    // Retorna payload completo para o controller/hook q chamou enviar pra API Node.js
-    return {
-       distance: finalDistance,
-       timeMs: finalTime,
-       routeData: JSON.parse(finalRoute)
-    };
-  }, [distance, timeMs]);
+    setSessionState('calculating');
+  }, []);
 
 
   // O Pace normal da corrida é 'MM:SS'. Formater:
@@ -220,6 +261,7 @@ export function useTracking() {
     formattedTime: getFormattedTime(),
     startResumeTracking,
     pauseTracking,
-    finishTracking
+    finishTracking,
+    clearTracking,
   };
 }

@@ -33,6 +33,7 @@ import {
     RetrospectiveScreen,
     CustomizeGoalScreen,
     RunningScreen,
+    RunSummaryScreen,
 } from '../screens';
 import { PlanPreviewScreen as QuizPlanPreviewScreen } from '../screens/quiz/PlanPreviewScreen';
 import { PlanLoadingScreen } from '../screens/quiz/PlanLoadingScreen';
@@ -406,6 +407,15 @@ export function AppNavigator() {
                                 dayLabel: undefined,
                                 title: undefined,
                                 workoutBlocks: undefined,
+                            }}
+                        />
+                        <Stack.Screen
+                            name="RunSummary"
+                            component={RunSummaryScreen}
+                            options={{
+                                headerShown: false,
+                                gestureEnabled: false,
+                                animation: 'fade',
                             }}
                         />
                     </>

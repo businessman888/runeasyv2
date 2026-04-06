@@ -1,6 +1,48 @@
 import { create } from 'zustand';
+import { createMMKV } from 'react-native-mmkv';
 import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
+
+// ─── Persistência offline para workouts pendentes ────────────────────────────
+const pendingWorkoutsStorage = createMMKV({ id: 'pending-workouts' });
+
+export interface WorkoutTrackingPayload {
+    workoutId: string;
+    route_points: Array<{
+        latitude: number;
+        longitude: number;
+        altitude: number | null;
+        timestamp: number;
+        speed: number | null;
+        accuracy: number | null;
+    }>;
+    total_distance_meters: number;
+    duration_seconds: number;
+}
+
+/** Salva um workout pendente no MMKV para retry posterior */
+function savePendingWorkout(payload: WorkoutTrackingPayload) {
+    const existing = pendingWorkoutsStorage.getString('pending_list');
+    const list: WorkoutTrackingPayload[] = existing ? JSON.parse(existing) : [];
+    list.push(payload);
+    pendingWorkoutsStorage.set('pending_list', JSON.stringify(list));
+    console.log(`[PendingWorkouts] Salvo localmente. Total pendentes: ${list.length}`);
+}
+
+/** Remove um workout pendente pelo workoutId */
+function removePendingWorkout(workoutId: string) {
+    const existing = pendingWorkoutsStorage.getString('pending_list');
+    if (!existing) return;
+    const list: WorkoutTrackingPayload[] = JSON.parse(existing);
+    const filtered = list.filter(w => w.workoutId !== workoutId);
+    pendingWorkoutsStorage.set('pending_list', JSON.stringify(filtered));
+}
+
+/** Retorna todos os workouts pendentes */
+function getPendingWorkouts(): WorkoutTrackingPayload[] {
+    const existing = pendingWorkoutsStorage.getString('pending_list');
+    return existing ? JSON.parse(existing) : [];
+}
 
 interface Workout {
     id: string;
@@ -67,6 +109,8 @@ interface TrainingState {
     fetchUpcomingWorkouts: () => Promise<void>;
     fetchSchedule: (startDate: string, endDate: string) => Promise<void>;
     skipWorkout: (workoutId: string, reason: string) => Promise<void>;
+    completeWorkout: (payload: WorkoutTrackingPayload) => Promise<{ success: boolean; savedLocally: boolean }>;
+    retryPendingWorkouts: () => Promise<void>;
     checkPlanStatus: (planId: string) => Promise<boolean>;
     setGenerationStatus: (status: GenerationStatus) => void;
     clearScheduleData: () => void;
@@ -222,6 +266,85 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         } catch (error) {
             console.error('Check plan status error:', error);
             return false;
+        }
+    },
+
+    completeWorkout: async (payload: WorkoutTrackingPayload) => {
+        const userId = await getUserId();
+        if (!userId) {
+            savePendingWorkout(payload);
+            return { success: false, savedLocally: true };
+        }
+
+        try {
+            const response = await fetch(
+                `${API_URL}/training/workouts/${payload.workoutId}/complete`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-user-id': userId,
+                    },
+                    body: JSON.stringify({
+                        route_points: payload.route_points,
+                        total_distance_meters: payload.total_distance_meters,
+                        duration_seconds: payload.duration_seconds,
+                    }),
+                },
+            );
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`[completeWorkout] API error ${response.status}:`, errorText);
+                savePendingWorkout(payload);
+                return { success: false, savedLocally: true };
+            }
+
+            console.log(`[completeWorkout] Workout ${payload.workoutId} salvo no backend`);
+            // Refresh data
+            get().fetchUpcomingWorkouts();
+            return { success: true, savedLocally: false };
+        } catch (error) {
+            console.error('[completeWorkout] Erro de rede, salvando localmente:', error);
+            savePendingWorkout(payload);
+            return { success: false, savedLocally: true };
+        }
+    },
+
+    retryPendingWorkouts: async () => {
+        const pending = getPendingWorkouts();
+        if (pending.length === 0) return;
+
+        const userId = await getUserId();
+        if (!userId) return;
+
+        console.log(`[retryPendingWorkouts] Tentando reenviar ${pending.length} workout(s)...`);
+
+        for (const payload of pending) {
+            try {
+                const response = await fetch(
+                    `${API_URL}/training/workouts/${payload.workoutId}/complete`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-user-id': userId,
+                        },
+                        body: JSON.stringify({
+                            route_points: payload.route_points,
+                            total_distance_meters: payload.total_distance_meters,
+                            duration_seconds: payload.duration_seconds,
+                        }),
+                    },
+                );
+
+                if (response.ok) {
+                    removePendingWorkout(payload.workoutId);
+                    console.log(`[retryPendingWorkouts] Workout ${payload.workoutId} enviado com sucesso`);
+                }
+            } catch (e) {
+                console.warn(`[retryPendingWorkouts] Falha ao reenviar ${payload.workoutId}, mantendo pendente`);
+            }
         }
     },
 
