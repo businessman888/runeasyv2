@@ -22,26 +22,61 @@ export interface WorkoutTrackingPayload {
 
 /** Salva um workout pendente no MMKV para retry posterior */
 function savePendingWorkout(payload: WorkoutTrackingPayload) {
-    const existing = pendingWorkoutsStorage.getString('pending_list');
-    const list: WorkoutTrackingPayload[] = existing ? JSON.parse(existing) : [];
-    list.push(payload);
-    pendingWorkoutsStorage.set('pending_list', JSON.stringify(list));
-    console.log(`[PendingWorkouts] Salvo localmente. Total pendentes: ${list.length}`);
+    try {
+        const existing = pendingWorkoutsStorage.getString('pending_list');
+        const list: WorkoutTrackingPayload[] = existing ? JSON.parse(existing) : [];
+        // Evita duplicatas pelo workoutId
+        const alreadyExists = list.some(w => w.workoutId === payload.workoutId);
+        if (alreadyExists) {
+            console.log(`[PendingWorkouts] Workout ${payload.workoutId} já existe no pending, ignorando duplicata`);
+            return;
+        }
+        list.push(payload);
+        pendingWorkoutsStorage.set('pending_list', JSON.stringify(list));
+        console.log(`[PendingWorkouts] Salvo localmente. workoutId=${payload.workoutId}, dist=${payload.total_distance_meters}m, dur=${payload.duration_seconds}s, pontos=${payload.route_points.length}. Total pendentes: ${list.length}`);
+    } catch (e) {
+        console.error('[PendingWorkouts] ERRO CRÍTICO ao salvar workout pendente:', e);
+    }
 }
 
 /** Remove um workout pendente pelo workoutId */
 function removePendingWorkout(workoutId: string) {
-    const existing = pendingWorkoutsStorage.getString('pending_list');
-    if (!existing) return;
-    const list: WorkoutTrackingPayload[] = JSON.parse(existing);
-    const filtered = list.filter(w => w.workoutId !== workoutId);
-    pendingWorkoutsStorage.set('pending_list', JSON.stringify(filtered));
+    try {
+        const existing = pendingWorkoutsStorage.getString('pending_list');
+        if (!existing) return;
+        const list: WorkoutTrackingPayload[] = JSON.parse(existing);
+        const filtered = list.filter(w => w.workoutId !== workoutId);
+        pendingWorkoutsStorage.set('pending_list', JSON.stringify(filtered));
+        console.log(`[PendingWorkouts] Removido ${workoutId} do pending. Restantes: ${filtered.length}`);
+    } catch (e) {
+        console.error('[PendingWorkouts] Erro ao remover workout pendente:', e);
+    }
 }
 
 /** Retorna todos os workouts pendentes */
 function getPendingWorkouts(): WorkoutTrackingPayload[] {
-    const existing = pendingWorkoutsStorage.getString('pending_list');
-    return existing ? JSON.parse(existing) : [];
+    try {
+        const existing = pendingWorkoutsStorage.getString('pending_list');
+        const list = existing ? JSON.parse(existing) : [];
+        console.log(`[PendingWorkouts] getPendingWorkouts() → ${list.length} pendente(s)`);
+        return list;
+    } catch (e) {
+        console.error('[PendingWorkouts] Erro ao ler workouts pendentes:', e);
+        return [];
+    }
+}
+
+/** Debug: lista workouts pendentes no console */
+export function debugPendingWorkouts(): WorkoutTrackingPayload[] {
+    const pending = getPendingWorkouts();
+    if (pending.length === 0) {
+        console.log('[PendingWorkouts DEBUG] Nenhum workout pendente no MMKV');
+    } else {
+        pending.forEach((w, i) => {
+            console.log(`[PendingWorkouts DEBUG] [${i}] id=${w.workoutId}, dist=${w.total_distance_meters}m, dur=${w.duration_seconds}s, pontos=${w.route_points.length}`);
+        });
+    }
+    return pending;
 }
 
 interface Workout {
@@ -270,11 +305,19 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
     },
 
     completeWorkout: async (payload: WorkoutTrackingPayload) => {
+        console.log(`[completeWorkout] Iniciando. workoutId=${payload.workoutId}, dist=${payload.total_distance_meters}m, dur=${payload.duration_seconds}s, pontos=${payload.route_points.length}`);
+
+        // SAFETY FIRST: salva localmente ANTES de tentar API
+        // Se o app crashar/recarregar durante o fetch, os dados sobrevivem
+        savePendingWorkout(payload);
+
         const userId = await getUserId();
         if (!userId) {
-            savePendingWorkout(payload);
+            console.warn('[completeWorkout] Sem userId — mantendo no pending para retry');
             return { success: false, savedLocally: true };
         }
+
+        console.log(`[completeWorkout] userId=${userId}, URL=${API_URL}/training/workouts/${payload.workoutId}/complete`);
 
         try {
             const response = await fetch(
@@ -295,33 +338,41 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error(`[completeWorkout] API error ${response.status}:`, errorText);
-                savePendingWorkout(payload);
+                console.error(`[completeWorkout] API error ${response.status}: ${errorText}`);
+                // Dados já estão no pending — mantém lá
                 return { success: false, savedLocally: true };
             }
 
-            console.log(`[completeWorkout] Workout ${payload.workoutId} salvo no backend`);
-            // Refresh data
+            // Sucesso! Remove do pending
+            console.log(`[completeWorkout] Workout ${payload.workoutId} salvo no backend com sucesso`);
+            removePendingWorkout(payload.workoutId);
             get().fetchUpcomingWorkouts();
             return { success: true, savedLocally: false };
         } catch (error) {
-            console.error('[completeWorkout] Erro de rede, salvando localmente:', error);
-            savePendingWorkout(payload);
+            console.error('[completeWorkout] Erro de rede:', error);
+            // Dados já estão no pending — mantém lá
             return { success: false, savedLocally: true };
         }
     },
 
     retryPendingWorkouts: async () => {
         const pending = getPendingWorkouts();
-        if (pending.length === 0) return;
+        if (pending.length === 0) {
+            console.log('[retryPendingWorkouts] Nenhum workout pendente para reenviar');
+            return;
+        }
 
         const userId = await getUserId();
-        if (!userId) return;
+        if (!userId) {
+            console.warn('[retryPendingWorkouts] Sem userId, adiando retry');
+            return;
+        }
 
         console.log(`[retryPendingWorkouts] Tentando reenviar ${pending.length} workout(s)...`);
 
         for (const payload of pending) {
             try {
+                console.log(`[retryPendingWorkouts] Reenviando workoutId=${payload.workoutId}, dist=${payload.total_distance_meters}m`);
                 const response = await fetch(
                     `${API_URL}/training/workouts/${payload.workoutId}/complete`,
                     {
@@ -340,10 +391,13 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
 
                 if (response.ok) {
                     removePendingWorkout(payload.workoutId);
-                    console.log(`[retryPendingWorkouts] Workout ${payload.workoutId} enviado com sucesso`);
+                    console.log(`[retryPendingWorkouts] Workout ${payload.workoutId} enviado com sucesso!`);
+                } else {
+                    const errorText = await response.text();
+                    console.error(`[retryPendingWorkouts] API error ${response.status} para ${payload.workoutId}: ${errorText}`);
                 }
             } catch (e) {
-                console.warn(`[retryPendingWorkouts] Falha ao reenviar ${payload.workoutId}, mantendo pendente`);
+                console.warn(`[retryPendingWorkouts] Erro de rede para ${payload.workoutId}:`, e);
             }
         }
     },

@@ -9,6 +9,7 @@ import { createNavigationContainerRef } from '@react-navigation/native';
 
 // Define the navigation param list types
 export type RootStackParamList = {
+    Landing: undefined;
     Login: undefined;
     Onboarding: undefined;
     Main: { initialTab?: string };

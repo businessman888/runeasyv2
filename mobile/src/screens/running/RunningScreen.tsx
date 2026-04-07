@@ -73,24 +73,49 @@ export function RunningScreen() {
   // ── Finalização segura do treino ──────────────────────────────────────
   const handleFinish = useCallback(async () => {
     const workoutId = route.params?.workoutId;
+    console.log(`[RunningScreen] handleFinish iniciado. workoutId=${workoutId}`);
 
     setIsFinishing(true);
-    try {
-      // 1. Captura dados finais (GPS para, mas MMKV NÃO é limpo ainda)
-      const trackingData = await finishTracking();
 
-      // 2. Envia ao backend (ou salva localmente se falhar)
+    // 1. Captura dados finais (GPS para, mas MMKV NÃO é limpo ainda)
+    let trackingData: { distance: number; timeMs: number; routeData: any[] };
+    try {
+      trackingData = await finishTracking();
+      console.log(`[RunningScreen] finishTracking OK. dist=${trackingData.distance}m, time=${trackingData.timeMs}ms, pontos=${trackingData.routeData.length}`);
+    } catch (error) {
+      console.error('[RunningScreen] Erro no finishTracking:', error);
+      Alert.alert(
+        'Erro ao capturar dados',
+        'Não foi possível finalizar a captura GPS. Seus dados de tracking estão preservados no dispositivo. Tente novamente.',
+        [{ text: 'OK' }],
+      );
+      setIsFinishing(false);
+      return;
+    }
+
+    // 2. Envia ao backend (save-first: dados salvos em MMKV ANTES da tentativa de API)
+    let savedLocally = false;
+    try {
       const result = await completeWorkout({
         workoutId: workoutId || `local_${Date.now()}`,
         route_points: trackingData.routeData,
         total_distance_meters: trackingData.distance,
         duration_seconds: Math.round(trackingData.timeMs / 1000),
       });
+      savedLocally = result.savedLocally;
+      console.log(`[RunningScreen] completeWorkout resultado: success=${result.success}, savedLocally=${result.savedLocally}`);
+    } catch (error) {
+      // completeWorkout já salva localmente internamente, mas por segurança:
+      console.error('[RunningScreen] Erro inesperado no completeWorkout:', error);
+      savedLocally = true;
+    }
 
-      // 3. Dados salvos (backend ou local) — agora sim, limpa o MMKV
-      clearTracking();
+    // 3. Dados foram salvos (backend OU local) — agora limpa o tracking MMKV
+    clearTracking();
+    console.log('[RunningScreen] clearTracking executado');
 
-      // 4. Navega para tela de resumo
+    // 4. Navega para tela de resumo
+    try {
       navigation.reset({
         index: 0,
         routes: [
@@ -104,18 +129,22 @@ export function RunningScreen() {
               routeCoordinates: trackingData.routeData.map(
                 (p: { longitude: number; latitude: number }) => [p.longitude, p.latitude]
               ),
-              savedLocally: result.savedLocally,
+              savedLocally,
             },
           },
         ],
       });
-    } catch (error) {
-      console.error('[RunningScreen] Erro crítico na finalização:', error);
-      Alert.alert(
-        'Erro ao finalizar',
-        'Ocorreu um erro, mas seus dados de treino estão seguros. Tente finalizar novamente.',
-        [{ text: 'OK' }],
-      );
+    } catch (navError) {
+      console.error('[RunningScreen] Erro na navegação pós-treino:', navError);
+      // Dados já foram salvos — fallback: volta pra Home
+      try {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Main' as never }],
+        });
+      } catch (e) {
+        console.error('[RunningScreen] Erro crítico na navegação fallback:', e);
+      }
     } finally {
       setIsFinishing(false);
     }

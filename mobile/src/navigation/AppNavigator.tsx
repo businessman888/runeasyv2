@@ -8,6 +8,7 @@ import { SplashScreen } from '../components/SplashScreen';
 import { navigationRef, setNavigationReady } from './navigationRef';
 
 import {
+    LandingScreen,
     LoginScreen,
     OnboardingScreen,
     HomeScreen,
@@ -59,6 +60,7 @@ const linking: LinkingOptions<any> = {
     config: {
         screens: {
             Onboarding: 'google-auth',
+            Landing: 'landing',
             Login: 'login',
         },
     },
@@ -236,9 +238,14 @@ export function AppNavigator() {
             >
                 {!isAuthenticated ? (
                     /* ================================================
-                       STATE 1: NOT AUTHENTICATED - Login screen only
+                       STATE 1: NOT AUTHENTICATED - Landing + Login
                        ================================================ */
                     <>
+                        <Stack.Screen
+                            name="Landing"
+                            component={LandingScreen}
+                            options={{ headerShown: false }}
+                        />
                         <Stack.Screen
                             name="Login"
                             component={LoginScreen}
