@@ -76,6 +76,7 @@ interface OnboardingState {
     isComplete: boolean;
     isGenerating: boolean;
     generatedPlan: GeneratedPlanResult | null;
+    pendingPlanId: string | null;
     error: string | null;
     errorCode: typeof ONBOARDING_ERRORS[keyof typeof ONBOARDING_ERRORS] | null;
 
@@ -87,6 +88,8 @@ interface OnboardingState {
     reset: () => void;
     complete: () => void;
     submitOnboarding: () => Promise<GeneratedPlanResult | null>;
+    saveOnboardingOnly: () => Promise<boolean>;
+    triggerPlanGeneration: () => Promise<string | null>;
     clearError: () => void;
 }
 
@@ -133,6 +136,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
     isComplete: false,
     isGenerating: false,
     generatedPlan: null,
+    pendingPlanId: null,
     error: null,
     errorCode: null,
 
@@ -154,6 +158,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
         isComplete: false,
         isGenerating: false,
         generatedPlan: null,
+        pendingPlanId: null,
         error: null,
         errorCode: null,
     }),
@@ -354,6 +359,142 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                 isGenerating: false
             });
             console.error('Onboarding submission error:', error);
+            return null;
+        }
+    },
+
+    /**
+     * Save onboarding data to backend WITHOUT triggering AI generation.
+     * Called after paywall subscription is confirmed.
+     */
+    saveOnboardingOnly: async () => {
+        const { data } = get();
+
+        try {
+            const userId = await Storage.getItemAsync('user_id');
+            if (!userId) {
+                console.error('[saveOnboardingOnly] No user_id found');
+                return false;
+            }
+
+            // Same sanitization as submitOnboarding
+            let sanitizedWeight: number | null = null;
+            if (data.weight !== null && data.weight !== undefined) {
+                sanitizedWeight = typeof data.weight === 'string'
+                    ? parseFloat(data.weight as unknown as string)
+                    : Number(data.weight);
+                if (isNaN(sanitizedWeight)) sanitizedWeight = null;
+            }
+
+            let sanitizedHeight: number | null = null;
+            if (data.height !== null && data.height !== undefined) {
+                sanitizedHeight = typeof data.height === 'string'
+                    ? parseFloat(data.height as unknown as string)
+                    : Number(data.height);
+                if (isNaN(sanitizedHeight)) sanitizedHeight = null;
+            }
+
+            let sanitizedBirthDate: string | null = null;
+            if (data.birthDate) {
+                const { day, month, year } = data.birthDate;
+                const monthStr = String(month).padStart(2, '0');
+                const dayStr = String(day).padStart(2, '0');
+                sanitizedBirthDate = `${year}-${monthStr}-${dayStr}`;
+            }
+
+            let sanitizedStartDate: string | null = null;
+            if (data.startDate && typeof data.startDate === 'string') {
+                sanitizedStartDate = data.startDate;
+            }
+
+            const requestBody = {
+                birth_date: sanitizedBirthDate,
+                weight: sanitizedWeight,
+                height: sanitizedHeight,
+                goal: data.goal || '10k',
+                level: data.experience_level || 'beginner',
+                days_per_week: data.daysPerWeek || 3,
+                available_days: data.availableDays || [],
+                intense_day_index: data.intenseDayIndex ?? null,
+                current_pace_5k: data.currentPace5k ?? null,
+                pace_minutes: data.paceMinutes || null,
+                pace_seconds: data.paceSeconds || null,
+                dont_know_pace: data.dontKnowPace || false,
+                goal_timeframe: data.goalTimeframe ?? null,
+                target_weeks: data.goalTimeframe ? data.goalTimeframe * 4 : (data.targetWeeks || 8),
+                limitations: data.limitations?.hasLimitation ? data.limitations.details : null,
+                preferred_days: data.preferredDays || [],
+                recent_distance: data.recentDistance ?? null,
+                distance_time: data.distanceTime ?? null,
+                calculated_pace: data.calculatedPace ?? null,
+                start_date: sanitizedStartDate,
+            };
+
+            console.log('[saveOnboardingOnly] Saving onboarding data (no AI)...');
+
+            const response = await fetch(`${API_URL}/training/onboarding/save`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-user-id': userId,
+                },
+                body: JSON.stringify(requestBody),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[saveOnboardingOnly] Error:', response.status, errorText);
+                return false;
+            }
+
+            console.log('[saveOnboardingOnly] Onboarding data saved successfully');
+            set({ isComplete: true });
+            return true;
+        } catch (error) {
+            console.error('[saveOnboardingOnly] Error:', error);
+            return false;
+        }
+    },
+
+    /**
+     * Trigger AI plan generation after user has subscribed.
+     * Called from HomeScreen after navigation.
+     */
+    triggerPlanGeneration: async () => {
+        try {
+            const userId = await Storage.getItemAsync('user_id');
+            if (!userId) {
+                console.error('[triggerPlanGeneration] No user_id found');
+                return null;
+            }
+
+            console.log('[triggerPlanGeneration] Triggering AI plan generation...');
+
+            const response = await fetch(`${API_URL}/training/onboarding/generate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-user-id': userId,
+                },
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[triggerPlanGeneration] Error:', response.status, errorText);
+                return null;
+            }
+
+            const result = await response.json();
+            console.log('[triggerPlanGeneration] Plan generation started, plan_id:', result.plan_id);
+
+            set({
+                pendingPlanId: result.plan_id,
+                generatedPlan: result,
+            });
+
+            return result.plan_id;
+        } catch (error) {
+            console.error('[triggerPlanGeneration] Error:', error);
             return null;
         }
     },

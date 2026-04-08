@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
     View,
@@ -7,17 +7,23 @@ import {
     ScrollView,
     TouchableOpacity,
     Platform,
+    Animated,
+    ActivityIndicator,
 } from 'react-native';
+import LottieView from 'lottie-react-native';
 import * as Storage from '../utils/storage';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
 import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore, useStatsStore, useNotificationStore, getDisplayName, getAvatarUrl } from '../stores';
+import { useOnboardingStore } from '../stores/onboardingStore';
 import { CircularProgress } from '../components/CircularProgress';
 import { Skeleton } from '../components/Skeleton';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { HomeFixedHeader } from '../components/HomeFixedHeader';
 
 import { BASE_API_URL } from '../config/api.config';
+
+const MarathonAnimation = require('../../telas frontend/icons/icons second card/Marathon.json');
 
 // Icon components using @expo/vector-icons
 function RunningIcon({ size = 30, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -76,6 +82,122 @@ export function HomeScreen({ navigation }: any) {
     const [recoveryProgress, setRecoveryProgress] = useState(0);
     const [retrospectiveReady, setRetrospectiveReady] = useState(false);
 
+    // Plan generation overlay state
+    const [isPlanGenerating, setIsPlanGenerating] = useState(false);
+    const [planGenError, setPlanGenError] = useState(false);
+    const [planGenRetries, setPlanGenRetries] = useState(0);
+    const { triggerPlanGeneration, pendingPlanId } = useOnboardingStore();
+    const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const overlayFadeAnim = useRef(new Animated.Value(0)).current;
+
+    // Stop polling on unmount
+    useEffect(() => {
+        return () => {
+            if (pollingRef.current) clearInterval(pollingRef.current);
+        };
+    }, []);
+
+    // Overlay fade animation
+    useEffect(() => {
+        Animated.timing(overlayFadeAnim, {
+            toValue: isPlanGenerating ? 1 : 0,
+            duration: 300,
+            useNativeDriver: true,
+        }).start();
+    }, [isPlanGenerating]);
+
+    // Poll for plan status
+    const startPolling = useCallback(async (planId: string) => {
+        const userId = await Storage.getItemAsync('user_id');
+        if (!userId) return;
+
+        pollingRef.current = setInterval(async () => {
+            try {
+                const response = await fetch(`${BASE_API_URL}/training/plan/${planId}/status`, {
+                    headers: { 'x-user-id': userId },
+                });
+                if (!response.ok) return;
+
+                const result = await response.json();
+                if (result.generation_status === 'complete' || result.generation_status === 'partial') {
+                    // Plan is ready
+                    if (pollingRef.current) clearInterval(pollingRef.current);
+                    pollingRef.current = null;
+                    setIsPlanGenerating(false);
+                    setPlanGenError(false);
+
+                    // Re-fetch all home data
+                    const now = new Date();
+                    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                    const startStr = startOfMonth.toISOString().split('T')[0];
+                    const endDate = new Date(now);
+                    endDate.setMonth(endDate.getMonth() + 1);
+                    const endStr = endDate.toISOString().split('T')[0];
+
+                    await Promise.all([
+                        fetchUpcomingWorkouts(),
+                        fetchSchedule(startStr, endStr),
+                        fetchStats(),
+                    ]);
+                } else if (result.generation_status === 'failed') {
+                    if (pollingRef.current) clearInterval(pollingRef.current);
+                    pollingRef.current = null;
+                    setPlanGenError(true);
+                }
+            } catch (e) {
+                console.log('[HomeScreen] Polling error:', e);
+            }
+        }, 3000);
+    }, []);
+
+    // Trigger plan generation if no workouts exist
+    const checkAndTriggerGeneration = useCallback(async () => {
+        const userId = await Storage.getItemAsync('user_id');
+        if (!userId) return;
+
+        // Check if user has any workouts
+        const workouts = useTrainingStore.getState().upcomingWorkouts;
+        if (workouts && workouts.length > 0) return; // Plan already exists
+
+        // Check if user has onboarding data (just completed onboarding)
+        try {
+            const response = await fetch(`${BASE_API_URL}/training/plan`, {
+                headers: { 'x-user-id': userId },
+            });
+            const result = await response.json();
+            if (result.plan) return; // Plan exists, just no upcoming workouts
+        } catch {
+            // Continue to trigger generation
+        }
+
+        // No plan — trigger generation
+        console.log('[HomeScreen] No plan found, triggering AI generation...');
+        setIsPlanGenerating(true);
+        setPlanGenError(false);
+
+        const planId = await triggerPlanGeneration();
+        if (planId) {
+            startPolling(planId);
+        } else {
+            setPlanGenError(true);
+        }
+    }, [triggerPlanGeneration, startPolling]);
+
+    // Retry plan generation
+    const handleRetryGeneration = useCallback(async () => {
+        if (planGenRetries >= 3) return;
+        setPlanGenRetries((prev) => prev + 1);
+        setPlanGenError(false);
+        setIsPlanGenerating(true);
+
+        const planId = await triggerPlanGeneration();
+        if (planId) {
+            startPolling(planId);
+        } else {
+            setPlanGenError(true);
+        }
+    }, [planGenRetries, triggerPlanGeneration, startPolling]);
+
     // Use useFocusEffect to refetch data when screen gains focus (revalidate on every visit)
     useFocusEffect(
         useCallback(() => {
@@ -118,6 +240,9 @@ export function HomeScreen({ navigation }: any) {
                 }
 
                 setIsInitialLoading(false);
+
+                // After initial load, check if we need to trigger plan generation
+                checkAndTriggerGeneration();
             };
             loadData();
         }, [])
@@ -566,6 +691,52 @@ export function HomeScreen({ navigation }: any) {
                 </View>
             </ScrollView>
 
+
+            {/* Plan Generation Overlay */}
+            {(isPlanGenerating || planGenError) && (
+                <Animated.View style={[styles.planOverlay, { opacity: overlayFadeAnim }]} pointerEvents="auto">
+                    <View style={styles.planOverlayContent}>
+                        {!planGenError ? (
+                            <>
+                                <LottieView
+                                    source={MarathonAnimation}
+                                    autoPlay
+                                    loop
+                                    style={styles.planOverlayLottie}
+                                />
+                                <Text style={styles.planOverlayTitle}>
+                                    Gerando seu plano personalizado...
+                                </Text>
+                                <Text style={styles.planOverlaySubtitle}>
+                                    A IA está criando treinos sob medida para você
+                                </Text>
+                                <ActivityIndicator size="small" color="#00D4FF" style={{ marginTop: 16 }} />
+                            </>
+                        ) : (
+                            <>
+                                <MaterialCommunityIcons name="alert-circle-outline" size={60} color="#FF6B6B" />
+                                <Text style={styles.planOverlayTitle}>
+                                    Erro ao gerar seu plano
+                                </Text>
+                                <Text style={styles.planOverlaySubtitle}>
+                                    {planGenRetries >= 3
+                                        ? 'Entre em contato com o suporte para ajuda.'
+                                        : 'Houve um problema. Tente novamente.'}
+                                </Text>
+                                {planGenRetries < 3 && (
+                                    <TouchableOpacity
+                                        style={styles.planOverlayRetryButton}
+                                        onPress={handleRetryGeneration}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Text style={styles.planOverlayRetryText}>Tentar novamente</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </>
+                        )}
+                    </View>
+                </Animated.View>
+            )}
 
         </ScreenContainer >
     );
@@ -1079,5 +1250,53 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.4,
         shadowRadius: 8,
         elevation: 6,
+    },
+
+    // Plan Generation Overlay
+    planOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(14, 14, 31, 0.95)',
+        zIndex: 999,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    planOverlayContent: {
+        alignItems: 'center',
+        paddingHorizontal: 40,
+    },
+    planOverlayLottie: {
+        width: 180,
+        height: 180,
+        marginBottom: 20,
+    },
+    planOverlayTitle: {
+        fontSize: 22,
+        fontWeight: '700',
+        color: '#EBEBF5',
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    planOverlaySubtitle: {
+        fontSize: 15,
+        fontWeight: '400',
+        color: 'rgba(235, 235, 245, 0.6)',
+        textAlign: 'center',
+        lineHeight: 22,
+    },
+    planOverlayRetryButton: {
+        marginTop: 24,
+        backgroundColor: '#00D4FF',
+        borderRadius: 30,
+        paddingVertical: 14,
+        paddingHorizontal: 40,
+    },
+    planOverlayRetryText: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#0E0E1F',
     },
 });

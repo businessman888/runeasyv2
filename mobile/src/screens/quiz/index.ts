@@ -5,6 +5,6 @@ export { PaceConfirmScreen } from './PaceConfirmScreen';
 export { LimitationsScreen } from './LimitationsScreen';
 export { PlanPreviewScreen } from './PlanPreviewScreen';
 export { PlanLoadingScreen } from './PlanLoadingScreen';
-export { SmartPlanScreen } from './SmartPlanScreen';
+export { BriefingScreen } from './BriefingScreen';
 export { GoalTimeframeScreen } from './GoalTimeframeScreen';
 export { WearableConnectionScreen } from './WearableConnectionScreen';

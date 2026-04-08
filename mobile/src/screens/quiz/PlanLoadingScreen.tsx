@@ -8,44 +8,41 @@ import {
     Animated,
 } from 'react-native';
 import LottieView from 'lottie-react-native';
-import { colors } from '../../theme';
 import { useOnboardingStore } from '../../stores/onboardingStore';
+import { determineArchetype } from '../../utils/archetypes';
 
 const { width } = Dimensions.get('window');
 
-// Marathon animation 
+// Marathon animation
 const MarathonAnimation = require('../../../telas frontend/icons/icons second card/Marathon.json');
 
 const LOADING_MESSAGES = [
     'Analisando seu perfil de corredor',
+    'Identificando seu perfil de corredor',
     'Computando suas respostas',
     'Montando seu cronograma de treino',
 ];
 
-const MESSAGE_INTERVAL = 3000; // 3 seconds
+const MESSAGE_INTERVAL = 2000; // 2 seconds (4 messages in 8s)
+const TOTAL_DURATION = 8000; // 8 seconds fixed
 
 export function PlanLoadingScreen({ navigation, route }: any) {
-    const { userId, timeframe, onboardingData } = route?.params || {};
-    const { submitOnboarding, clearError, errorCode } = useOnboardingStore();
+    const { userId } = route?.params || {};
+    const { data } = useOnboardingStore();
 
     const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
-    const [isComplete, setIsComplete] = useState(false);
     const fadeAnim = useRef(new Animated.Value(1)).current;
     const progressAnim = useRef(new Animated.Value(0)).current;
-    const pendingNavigation = useRef<{ planData: any } | null>(null);
 
-    // Rotate messages every 3 seconds
+    // Rotate messages every 2 seconds
     useEffect(() => {
         const interval = setInterval(() => {
-            // Fade out
             Animated.timing(fadeAnim, {
                 toValue: 0,
                 duration: 300,
                 useNativeDriver: true,
             }).start(() => {
-                // Change message
                 setCurrentMessageIndex((prev) => (prev + 1) % LOADING_MESSAGES.length);
-                // Fade in
                 Animated.timing(fadeAnim, {
                     toValue: 1,
                     duration: 300,
@@ -57,63 +54,35 @@ export function PlanLoadingScreen({ navigation, route }: any) {
         return () => clearInterval(interval);
     }, [fadeAnim]);
 
-    // Animate progress bar progressively (simulates progress while waiting)
+    // Animate progress bar 0→100% over 8 seconds
     useEffect(() => {
-        // Animate to 70% over 4 seconds (simulating initial progress)
         Animated.timing(progressAnim, {
-            toValue: 0.7,
-            duration: 4000,
+            toValue: 1,
+            duration: TOTAL_DURATION,
             useNativeDriver: false,
         }).start();
     }, [progressAnim]);
 
-    // Complete progress bar when plan is ready
+    // After 8 seconds, compute archetype and navigate to BriefingScreen
     useEffect(() => {
-        if (isComplete && pendingNavigation.current) {
-            // Animate to 100% quickly
-            Animated.timing(progressAnim, {
-                toValue: 1,
-                duration: 300,
-                useNativeDriver: false,
-            }).start(() => {
-                // Navigate after progress bar completes
-                const { planData } = pendingNavigation.current!;
-                navigation.replace('SmartPlan', {
-                    userId,
-                    timeframe,
-                    planData,
-                });
+        const timer = setTimeout(() => {
+            const archetype = determineArchetype({
+                goal: data.goal || '5k',
+                experience_level: data.experience_level || 'beginner',
+                daysPerWeek: data.daysPerWeek || 3,
+                goalTimeframe: data.goalTimeframe,
+                calculatedPace: data.calculatedPace,
+                limitations: data.limitations,
+                hasInjury: data.hasInjury,
             });
-        }
-    }, [isComplete]);
 
-    // Trigger plan generation and navigate when complete
-    useEffect(() => {
-        const generatePlan = async () => {
-            clearError();
+            navigation.replace('BriefingScreen', {
+                archetype,
+                userId,
+            });
+        }, TOTAL_DURATION);
 
-            try {
-                const planData = await submitOnboarding();
-
-                if (planData) {
-                    // Store navigation data and trigger completion animation
-                    pendingNavigation.current = { planData };
-                    setIsComplete(true);
-                } else if (errorCode === 'AUTH_REQUIRED') {
-                    // User needs to login - redirect to Login screen
-                    navigation.replace('Login', {
-                        returnTo: 'Quiz_PlanPreview',
-                        message: 'Faça login para gerar seu plano de treino personalizado.',
-                    });
-                }
-            } catch (err) {
-                console.error('Failed to generate plan:', err);
-                // Stay on loading screen and show error
-                navigation.goBack();
-            }
-        };
-
-        generatePlan();
+        return () => clearTimeout(timer);
     }, []);
 
     const progressWidth = progressAnim.interpolate({
@@ -221,5 +190,3 @@ const styles = StyleSheet.create({
 });
 
 export default PlanLoadingScreen;
-
-

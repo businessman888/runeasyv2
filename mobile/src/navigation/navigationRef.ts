@@ -33,7 +33,7 @@ export type RootStackParamList = {
     Quiz_Limitations: undefined;
     Quiz_PlanPreview: undefined;
     Quiz_PlanLoading: undefined;
-    SmartPlan: undefined;
+    BriefingScreen: undefined;
     PlanPreview: undefined;
 };
 

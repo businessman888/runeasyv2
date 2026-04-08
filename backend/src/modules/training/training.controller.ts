@@ -176,6 +176,149 @@ export class TrainingController {
     }
 
     /**
+     * Save onboarding data ONLY (no AI generation).
+     * Called after paywall subscription is confirmed, before AI generation.
+     */
+    @Post('onboarding/save')
+    async saveOnboardingOnly(
+        @Headers('x-user-id') userId: string,
+        @Body() dto: CreatePlanDto,
+    ) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        try {
+            // Save onboarding data
+            const { error: upsertError } = await this.supabaseService.from('user_onboarding').upsert({
+                user_id: userId,
+                birth_date: dto.birth_date,
+                weight: dto.weight,
+                height: dto.height,
+                goal: dto.goal,
+                level: dto.level,
+                days_per_week: dto.days_per_week,
+                available_days: dto.available_days,
+                intense_day_index: dto.intense_day_index,
+                current_pace_5k: dto.current_pace_5k,
+                pace_minutes: dto.pace_minutes,
+                pace_seconds: dto.pace_seconds,
+                dont_know_pace: dto.dont_know_pace,
+                goal_timeframe: dto.goal_timeframe,
+                target_weeks: dto.target_weeks,
+                has_limitations: !!dto.limitations,
+                limitations: dto.limitations,
+                preferred_days: dto.preferred_days,
+                recent_distance: dto.recent_distance,
+                distance_time: dto.distance_time,
+                calculated_pace: dto.calculated_pace,
+                start_date: dto.start_date,
+                completed_at: new Date().toISOString(),
+                responses_json: dto,
+            });
+
+            if (upsertError) {
+                this.logger.error(`Failed to save onboarding data: ${upsertError.message}`, upsertError);
+                throw new HttpException(
+                    `Failed to save onboarding data: ${upsertError.message}`,
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                );
+            }
+
+            this.logger.log(`[save] Onboarding data saved for user ${userId}`);
+
+            // Sync biometrics to users.profile
+            await this.usersService.updateProfile(userId, {
+                birth_date: dto.birth_date,
+                weight_kg: dto.weight,
+                height_cm: dto.height,
+            });
+
+            // Mark onboarding as complete (unlocks user from onboarding screens)
+            await this.usersService.markOnboardingComplete(userId);
+            this.logger.log(`[save] Onboarding marked complete for user ${userId}`);
+
+            return { success: true };
+        } catch (error) {
+            this.logger.error('Save onboarding failed', error);
+            throw new HttpException(
+                error.message || 'Failed to save onboarding data',
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    /**
+     * Trigger AI plan generation from saved onboarding data.
+     * Called after user subscribes and navigates to Home.
+     * Idempotent: if a plan already exists, returns the existing plan_id.
+     */
+    @Post('onboarding/generate')
+    async generatePlanFromOnboarding(
+        @Headers('x-user-id') userId: string,
+    ) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        try {
+            // Check if user already has an active plan (idempotent)
+            const existingPlan = await this.trainingService.getActivePlan(userId);
+            if (existingPlan) {
+                this.logger.log(`[generate] User ${userId} already has active plan ${existingPlan.id}`);
+                return {
+                    plan_id: existingPlan.id,
+                    generation_status: existingPlan.generation_status || 'complete',
+                    already_exists: true,
+                };
+            }
+
+            // Read saved onboarding data
+            const { data: onboardingData, error: readError } = await this.supabaseService
+                .from('user_onboarding')
+                .select('*')
+                .eq('user_id', userId)
+                .single();
+
+            if (readError || !onboardingData) {
+                this.logger.error(`No onboarding data found for user ${userId}`, readError);
+                throw new HttpException(
+                    'Onboarding data not found. Please complete the quiz first.',
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
+            // Reconstruct plan request from saved data
+            const dto = onboardingData.responses_json || onboardingData;
+
+            const result = await this.trainingService.createQuickPlan(userId, {
+                goal: dto.goal || onboardingData.goal,
+                level: dto.level || onboardingData.level,
+                daysPerWeek: dto.days_per_week || onboardingData.days_per_week,
+                currentPace5k: dto.current_pace_5k || onboardingData.current_pace_5k,
+                targetWeeks: dto.target_weeks || onboardingData.target_weeks,
+                limitations: dto.limitations || onboardingData.limitations,
+                preferredDays: dto.preferred_days || onboardingData.preferred_days,
+                startDate: dto.start_date || onboardingData.start_date,
+            });
+
+            this.logger.log(`[generate] Plan generated for user ${userId}, plan_id: ${result.plan_id}`);
+
+            return {
+                plan_id: result.plan_id,
+                generation_status: result.generation_status,
+                workouts_count: result.workouts_count,
+            };
+        } catch (error) {
+            this.logger.error('Plan generation failed', error);
+            throw new HttpException(
+                error.message || 'Failed to generate plan',
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    /**
      * Get plan generation status (for polling during background generation)
      */
     @Get('plan/:id/status')

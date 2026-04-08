@@ -38,7 +38,7 @@ import {
 } from '../screens';
 import { PlanPreviewScreen as QuizPlanPreviewScreen } from '../screens/quiz/PlanPreviewScreen';
 import { PlanLoadingScreen } from '../screens/quiz/PlanLoadingScreen';
-import { SmartPlanScreen } from '../screens/quiz/SmartPlanScreen';
+import { BriefingScreen } from '../screens/quiz/BriefingScreen';
 import { PlanPreviewScreen as OldPlanPreviewScreen } from '../screens/PlanPreviewScreen';
 import { colors, typography } from '../theme';
 import { useAuthStore } from '../stores';
@@ -272,9 +272,9 @@ export function AppNavigator() {
                             options={{ headerShown: false, gestureEnabled: false }}
                         />
                         <Stack.Screen
-                            name="SmartPlan"
-                            component={SmartPlanScreen}
-                            options={{ headerShown: false }}
+                            name="BriefingScreen"
+                            component={BriefingScreen}
+                            options={{ headerShown: false, gestureEnabled: false }}
                         />
                     </>
                 ) : (
