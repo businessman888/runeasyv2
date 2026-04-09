@@ -20,6 +20,7 @@ import { CircularProgress } from '../components/CircularProgress';
 import { Skeleton } from '../components/Skeleton';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { HomeFixedHeader } from '../components/HomeFixedHeader';
+import { useHealthKitStore } from '../stores/healthKitStore';
 
 import { BASE_API_URL } from '../config/api.config';
 
@@ -77,6 +78,10 @@ export function HomeScreen({ navigation }: any) {
     const { latestSummary, fetchLatestSummary, latestActivity, latestActivityLoading, fetchLatestActivity } = useFeedbackStore();
     const { summary, fetchSummary, isLoading: statsLoading } = useStatsStore();
     const { unreadCount, fetchUnreadCount } = useNotificationStore();
+    const initializeHealthKit = useHealthKitStore((s) => s.initialize);
+    const syncHealthKitRecent = useHealthKitStore((s) => s.syncRecentIfConnected);
+    const healthKitLastSyncedCount = useHealthKitStore((s) => s.lastSyncedCount);
+    const clearHealthKitSyncedCount = useHealthKitStore((s) => s.clearLastSyncedCount);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [recoveryTimeLeft, setRecoveryTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 });
     const [recoveryProgress, setRecoveryProgress] = useState(0);
@@ -223,6 +228,8 @@ export function HomeScreen({ navigation }: any) {
                     fetchUnreadCount(),
                     fetchSchedule(startStr, endStr),
                     retryPendingWorkouts(),
+                    // iOS-only Apple HealthKit sync (no-op on Android / if not connected)
+                    initializeHealthKit().then(() => syncHealthKitRecent(7)),
                 ]);
 
                 // Check if retrospective is ready
@@ -247,6 +254,16 @@ export function HomeScreen({ navigation }: any) {
             loadData();
         }, [])
     );
+
+    // Auto-dismiss the Apple Health sync banner after a few seconds
+    useEffect(() => {
+        if (healthKitLastSyncedCount > 0) {
+            const timer = setTimeout(() => {
+                clearHealthKitSyncedCount();
+            }, 4000);
+            return () => clearTimeout(timer);
+        }
+    }, [healthKitLastSyncedCount, clearHealthKitSyncedCount]);
 
     // Recovery countdown timer
     useEffect(() => {
@@ -411,6 +428,18 @@ export function HomeScreen({ navigation }: any) {
                 contentContainerStyle={styles.content}
                 showsVerticalScrollIndicator={false}
             >
+
+                {/* Apple Health sync banner — shown for 4s after a successful sync */}
+                {healthKitLastSyncedCount > 0 && (
+                    <View style={styles.healthKitBanner}>
+                        <Ionicons name="checkmark-circle" size={18} color="#4ADE80" />
+                        <Text style={styles.healthKitBannerText}>
+                            {healthKitLastSyncedCount === 1
+                                ? '1 nova corrida sincronizada do Apple Health'
+                                : `${healthKitLastSyncedCount} novas corridas sincronizadas do Apple Health`}
+                        </Text>
+                    </View>
+                )}
 
                 {/* Retrospective Card - Show when ready */}
                 {retrospectiveReady && (
@@ -1190,6 +1219,25 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.sm,
         color: '#6B7280',
         textAlign: 'center' as const,
+    },
+    // Apple Health sync banner
+    healthKitBanner: {
+        flexDirection: 'row' as const,
+        alignItems: 'center' as const,
+        gap: 8,
+        backgroundColor: 'rgba(74, 222, 128, 0.1)',
+        borderRadius: borderRadius.lg,
+        borderWidth: 1,
+        borderColor: 'rgba(74, 222, 128, 0.3)',
+        paddingVertical: 10,
+        paddingHorizontal: spacing.md,
+        marginBottom: spacing.md,
+    },
+    healthKitBannerText: {
+        flex: 1,
+        fontSize: 13,
+        fontWeight: '500' as const,
+        color: '#EBEBF5',
     },
     // Retrospective Card
     retrospectiveCard: {

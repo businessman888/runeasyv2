@@ -13,6 +13,7 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
 import { useAuthStore, getDisplayName, getAvatarUrl } from '../stores';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { AppleHealthCard } from '../components/AppleHealthCard';
 
 // Icon components using @expo/vector-icons
 function PersonIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -137,6 +138,14 @@ export function SettingsScreen({ navigation }: any) {
                     </View>
                 </View>
 
+
+                {/* DISPOSITIVOS Section (iOS-only, hidden if HealthKit unavailable) */}
+                {Platform.OS === 'ios' && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>DISPOSITIVOS</Text>
+                        <AppleHealthCard />
+                    </View>
+                )}
 
                 {/* PREFERÊNCIAS Section */}
                 <View style={styles.section}>

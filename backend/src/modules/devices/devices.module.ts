@@ -8,6 +8,7 @@ import { ActivitySyncProcessor } from './activity-sync.processor';
 import { TokenRefreshService } from './token-refresh.service';
 import { FitbitOAuthService } from './providers/fitbit-oauth.service';
 import { PolarOAuthService } from './providers/polar-oauth.service';
+import { AppleHealthNormalizer } from './providers/apple-health.normalizer';
 
 @Module({
     imports: [
@@ -21,6 +22,7 @@ import { PolarOAuthService } from './providers/polar-oauth.service';
         TokenRefreshService,
         FitbitOAuthService,
         PolarOAuthService,
+        AppleHealthNormalizer,
     ],
     exports: [DevicesService, ActivitySyncService, TokenRefreshService],
 })

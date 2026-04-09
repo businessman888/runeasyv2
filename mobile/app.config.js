@@ -22,7 +22,10 @@ export default {
       NSMotionUsageDescription: "RunEasy usa sensores de movimento para melhorar a precisão do treino",
       NSLocationWhenInUseUsageDescription: "RunEasy precisa de acesso à sua localização para rastrear sua corrida.",
       NSLocationAlwaysAndWhenInUseUsageDescription: "RunEasy rastreia sua corrida mesmo com a tela desligada.",
-      NSLocationAlwaysUsageDescription: "RunEasy rastreia sua corrida mesmo em background."
+      NSLocationAlwaysUsageDescription: "RunEasy rastreia sua corrida mesmo em background.",
+      NSHealthShareUsageDescription: "Precisamos acessar seus dados de treino para sincronizar suas corridas do Apple Watch e personalizar seu plano de treino com IA.",
+      NSHealthUpdateUsageDescription: "Precisamos salvar informações dos seus treinos realizados no RunEasy.",
+      UIBackgroundModes: ["fetch", "processing", "location"]
     }
   },
   android: {
@@ -76,6 +79,14 @@ export default {
       "@rnmapbox/maps",
       {
         RNMapboxMapsDownloadToken: process.env.RNMAPBOX_DOWNLOAD_TOKEN || process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN
+      }
+    ],
+    [
+      "@kingstinct/react-native-healthkit",
+      {
+        background: true,
+        NSHealthShareUsageDescription: "Precisamos acessar seus dados de treino para sincronizar suas corridas do Apple Watch e personalizar seu plano de treino com IA.",
+        NSHealthUpdateUsageDescription: "Precisamos salvar informações dos seus treinos realizados no RunEasy."
       }
     ]
   ],

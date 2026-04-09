@@ -3,7 +3,7 @@ import { SupabaseService } from '../../database/supabase.service';
 import { EncryptionService } from '../../common/encryption/encryption.service';
 import { ConnectDeviceDto } from './dto/connect-device.dto';
 
-const VALID_PROVIDERS = ['garmin', 'fitbit', 'polar', 'apple_watch'] as const;
+const VALID_PROVIDERS = ['garmin', 'fitbit', 'polar', 'apple_watch', 'apple_health'] as const;
 type Provider = typeof VALID_PROVIDERS[number];
 
 @Injectable()
@@ -22,7 +22,10 @@ export class DevicesService {
     async connectDevice(userId: string, dto: ConnectDeviceDto) {
         this.validateProvider(dto.provider);
 
-        const encryptedAccessToken = this.encryptionService.encrypt(dto.access_token);
+        // apple_health is a local iOS permission — no OAuth token exists.
+        const encryptedAccessToken = dto.access_token
+            ? this.encryptionService.encrypt(dto.access_token)
+            : null;
         const encryptedRefreshToken = dto.refresh_token
             ? this.encryptionService.encrypt(dto.refresh_token)
             : null;

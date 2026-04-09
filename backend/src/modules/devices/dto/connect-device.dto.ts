@@ -3,11 +3,12 @@ import { IsString, IsOptional, IsNotEmpty } from 'class-validator';
 export class ConnectDeviceDto {
     @IsString()
     @IsNotEmpty()
-    provider: string; // 'garmin' | 'fitbit' | 'polar' | 'apple_watch'
+    provider: string; // 'garmin' | 'fitbit' | 'polar' | 'apple_watch' | 'apple_health'
 
+    // Optional: apple_health has no access token (local iOS permission only).
     @IsString()
-    @IsNotEmpty()
-    access_token: string;
+    @IsOptional()
+    access_token?: string;
 
     @IsString()
     @IsOptional()
