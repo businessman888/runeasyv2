@@ -478,11 +478,67 @@ export class TrainingService {
             : turfDistanceLimit;
 
         // Pace: mins per km (standard format for runners)
-        const paceSeconds = payload.duration_seconds && finalDistanceKm > 0 
-           ? payload.duration_seconds / finalDistanceKm 
+        const paceSeconds = payload.duration_seconds && finalDistanceKm > 0
+           ? payload.duration_seconds / finalDistanceKm
            : 0;
+        const paceMinPerKm = paceSeconds / 60;
 
-        // 1. Update Workout Status
+        // Compute elevation gain from GPS altitudes (best-effort)
+        let elevationGain = 0;
+        if (payload.route_points && payload.route_points.length > 1) {
+            for (let i = 1; i < payload.route_points.length; i++) {
+                const prev = payload.route_points[i - 1]?.altitude;
+                const curr = payload.route_points[i]?.altitude;
+                if (typeof prev === 'number' && typeof curr === 'number') {
+                    const diff = curr - prev;
+                    if (diff > 0) elevationGain += diff;
+                }
+            }
+        }
+
+        // 1. Create the matching `activities` row (source='phone').
+        // This is the canonical "executed run" record consumed by the feedback
+        // generator, the HomeScreen coach card (getLatestActivityWithFeedback),
+        // history, gamification, etc. Without it the entire downstream pipeline
+        // is invisible to the user.
+        const completedAtIso = new Date().toISOString();
+        const startDateIso = new Date(
+            Date.now() - (payload.duration_seconds || 0) * 1000,
+        ).toISOString();
+
+        const { data: insertedActivity, error: activityError } = await this.supabaseService
+            .from('activities')
+            .insert({
+                user_id: userId,
+                external_id: `phone_${workoutId}`,
+                source: 'phone',
+                name: workout.title || 'Corrida RunEasy',
+                type: 'Run',
+                start_date: startDateIso,
+                distance: finalDistanceKm * 1000, // meters
+                moving_time: payload.duration_seconds || 0,
+                elapsed_time: payload.duration_seconds || 0,
+                average_pace: paceMinPerKm || null,
+                max_pace: paceMinPerKm || null,
+                elevation_gain: elevationGain,
+                gps_route: payload.route_points || null,
+            })
+            .select()
+            .single();
+
+        if (activityError) {
+            this.logger.error(
+                `Failed to create activity row for workout ${workoutId}: ${activityError.message}`,
+                activityError,
+            );
+            // Non-blocking: we still want to mark the workout completed even if
+            // the activity insert fails. The feedback pipeline will degrade
+            // gracefully and the user can see the workout in the calendar.
+        }
+
+        const activityId: string | null = insertedActivity?.id ?? null;
+
+        // 2. Update Workout Status (and link to the new activity row)
         const { error: updateError, data: updatedWorkout } = await this.supabaseService
             .from('workouts')
             .update({
@@ -490,7 +546,8 @@ export class TrainingService {
                 distance_run: finalDistanceKm, // using existing or new column fallback
                 time_run_seconds: payload.duration_seconds, // Note: You may need migrations if these columns differ
                 pace_seconds_per_km: paceSeconds,
-                completed_at: new Date().toISOString()
+                completed_at: completedAtIso,
+                ...(activityId ? { activity_id: activityId } : {}),
             })
             .eq('id', workoutId)
             .select()
@@ -501,7 +558,7 @@ export class TrainingService {
              throw updateError;
         }
 
-        // 2. Insert Route
+        // 3. Insert Route (PostGIS LINESTRING)
         if (routeWKT) {
             const { error: routeError } = await this.supabaseService
                 .from('workout_routes')
@@ -517,7 +574,7 @@ export class TrainingService {
             }
         }
 
-        // 3. Gamification: update streak and award XP
+        // 4. Gamification: update streak and award XP
         try {
             await this.gamificationService.updateStreak(userId);
             await this.gamificationService.awardWorkoutXP(userId, {
@@ -530,13 +587,22 @@ export class TrainingService {
             // Non-blocking: workout is already completed
         }
 
-        // 4. Queue AI Feedback processing
-        this.logger.log(`Enqueueing AI Feedback for Workout ${workoutId}`);
-        await this.feedbackQueue.add(
-            'generate',
-            { userId, workoutId, activityId: workoutId },
-            { delay: 1000 }
-        );
+        // 5. Queue AI Feedback processing — only if we successfully created the
+        // activity row, otherwise the feedback service has nothing to read from.
+        if (activityId) {
+            this.logger.log(
+                `Enqueueing AI Feedback for Workout ${workoutId} / Activity ${activityId}`,
+            );
+            await this.feedbackQueue.add(
+                'generate',
+                { userId, workoutId, activityId },
+                { delay: 1000 },
+            );
+        } else {
+            this.logger.warn(
+                `Skipping AI feedback enqueue for workout ${workoutId}: activity row was not created`,
+            );
+        }
 
         return updatedWorkout;
     }
