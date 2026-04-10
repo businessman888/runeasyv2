@@ -102,6 +102,7 @@ export interface LatestActivityData {
         strengths: Array<{ title: string; description: string; icon?: string }>;
         improvements: Array<{ title: string; description: string; tip?: string; icon?: string }>;
     } | null;
+    workout_id: string | null;
     efficiency_percent: number;
     conquest: {
         goal_met: boolean;

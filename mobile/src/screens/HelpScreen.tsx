@@ -6,6 +6,7 @@ import {
     ScrollView,
     TouchableOpacity,
     TextInput,
+    Linking,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
@@ -42,6 +43,10 @@ function ChevronDownIcon({ size = 20, color = '#00D4FF' }: { size?: number; colo
 
 function ChatIcon({ size = 20, color = '#0A0A18' }: { size?: number; color?: string }) {
     return <Ionicons name="chatbubbles-outline" size={size} color={color} />;
+}
+
+function ExternalLinkIcon({ size = 18, color = 'rgba(235,235,245,0.4)' }: { size?: number; color?: string }) {
+    return <Ionicons name="open-outline" size={size} color={color} />;
 }
 
 interface Category {
@@ -175,13 +180,77 @@ export function HelpScreen({ navigation }: any) {
                     </View>
                 </View>
 
+                {/* Legal Section */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Legal</Text>
+                    <View style={styles.legalCard}>
+                        <TouchableOpacity
+                            style={styles.legalItem}
+                            activeOpacity={0.7}
+                            onPress={() => Linking.openURL('https://runeasy.com.br/privacidade.html')}
+                            accessibilityRole="button"
+                            accessibilityLabel="Abrir Política de Privacidade"
+                        >
+                            <View style={styles.legalItemLeft}>
+                                <View style={styles.legalIconContainer}>
+                                    <Ionicons name="shield-checkmark-outline" size={20} color="#00D4FF" />
+                                </View>
+                                <Text style={styles.legalItemText}>Política de Privacidade</Text>
+                            </View>
+                            <ExternalLinkIcon />
+                        </TouchableOpacity>
+
+                        <View style={styles.legalDivider} />
+
+                        <TouchableOpacity
+                            style={styles.legalItem}
+                            activeOpacity={0.7}
+                            onPress={() => Linking.openURL('https://runeasy.com.br/termos.html')}
+                            accessibilityRole="button"
+                            accessibilityLabel="Abrir Termos de Uso"
+                        >
+                            <View style={styles.legalItemLeft}>
+                                <View style={styles.legalIconContainer}>
+                                    <Ionicons name="document-text-outline" size={20} color="#00D4FF" />
+                                </View>
+                                <Text style={styles.legalItemText}>Termos de Uso</Text>
+                            </View>
+                            <ExternalLinkIcon />
+                        </TouchableOpacity>
+
+                        <View style={styles.legalDivider} />
+
+                        <TouchableOpacity
+                            style={styles.legalItem}
+                            activeOpacity={0.7}
+                            onPress={() => Linking.openURL('https://runeasy.com.br/sobre.html')}
+                            accessibilityRole="button"
+                            accessibilityLabel="Abrir página Sobre"
+                        >
+                            <View style={styles.legalItemLeft}>
+                                <View style={styles.legalIconContainer}>
+                                    <Ionicons name="information-circle-outline" size={20} color="#00D4FF" />
+                                </View>
+                                <Text style={styles.legalItemText}>Sobre</Text>
+                            </View>
+                            <ExternalLinkIcon />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
                 {/* Support Section */}
                 <View style={styles.supportSection}>
                     <Text style={styles.supportTitle}>Ainda precisa de ajuda?</Text>
                     <Text style={styles.supportDescription}>
                         Nossa equipe de suporte está pronta para te atender.
                     </Text>
-                    <TouchableOpacity style={styles.supportButton} activeOpacity={0.8}>
+                    <TouchableOpacity
+                        style={styles.supportButton}
+                        activeOpacity={0.8}
+                        onPress={() => navigation.navigate('Support')}
+                        accessibilityRole="button"
+                        accessibilityLabel="Falar com Suporte"
+                    >
                         <ChatIcon size={18} color="#0A0A18" />
                         <Text style={styles.supportButtonText}>Falar com Suporte</Text>
                     </TouchableOpacity>
@@ -317,6 +386,45 @@ const styles = StyleSheet.create({
         color: 'rgba(235,235,245,0.6)',
         marginTop: spacing.sm,
         lineHeight: 20,
+    },
+    // Legal Section
+    legalCard: {
+        backgroundColor: '#1C1C2E',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(235,235,245,0.1)',
+        overflow: 'hidden',
+    },
+    legalItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 14,
+        paddingHorizontal: spacing.md,
+    },
+    legalItemLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    legalIconContainer: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(0,212,255,0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: spacing.md,
+    },
+    legalItemText: {
+        fontSize: 15,
+        fontWeight: '500',
+        color: '#FFFFFF',
+    },
+    legalDivider: {
+        height: 1,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        marginLeft: 60,
     },
     // Support Section
     supportSection: {

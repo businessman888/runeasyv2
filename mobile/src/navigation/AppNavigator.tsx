@@ -31,6 +31,7 @@ import {
     TrainingHistoryScreen,
     NotificationSettingsScreen,
     HelpScreen,
+    SupportScreen,
     RetrospectiveScreen,
     CustomizeGoalScreen,
     RunningScreen,
@@ -389,6 +390,14 @@ export function AppNavigator() {
                         <Stack.Screen
                             name="Help"
                             component={HelpScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'card',
+                            }}
+                        />
+                        <Stack.Screen
+                            name="Support"
+                            component={SupportScreen}
                             options={{
                                 headerShown: false,
                                 presentation: 'card',

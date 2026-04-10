@@ -417,6 +417,7 @@ Regras:
                 improvements: feedback.improvements || [],
             } : null,
             efficiency_percent: Math.round(efficiencyPercent * 10) / 10,
+            workout_id: linkedWorkout?.id || feedback?.workout_id || null,
             conquest: {
                 goal_met: goalMet,
                 planned_distance_km: plannedDistanceKm,

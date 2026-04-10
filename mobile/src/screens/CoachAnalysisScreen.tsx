@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
 import { useFeedbackStore } from '../stores/feedbackStore';
+import { SharingModal } from './sharing/SharingModal';
 
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -277,6 +278,7 @@ function CircularScore({ percentage, size = 120 }: { percentage: number; size?: 
 export function CoachAnalysisScreen({ navigation, route }: any) {
     const { feedbackId, activityId } = route?.params || {};
     const { currentFeedback, fetchFeedback, latestActivity, latestActivityLoading, fetchLatestActivity, isLoading } = useFeedbackStore();
+    const [sharingVisible, setSharingVisible] = useState(false);
 
     useEffect(() => {
         if (feedbackId) {
@@ -287,6 +289,9 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
             fetchLatestActivity();
         }
     }, [feedbackId]);
+
+    // Determine workoutId for sharing modal
+    const workoutId = currentFeedback?.workout_id || latestActivity?.workout_id || null;
 
     // Determine data source: from currentFeedback (if feedbackId provided) or latestActivity
     const activity = currentFeedback?.activities || latestActivity?.activity;
@@ -393,8 +398,14 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                         <Text style={styles.headerSubtitle}>Relatório</Text>
                         <Text style={styles.headerTitle}>Treinador</Text>
                     </View>
-                    <TouchableOpacity style={styles.shareButton}>
-                        <ShareIcon size={24} color="#00D4FF" />
+                    <TouchableOpacity
+                        style={styles.shareButton}
+                        onPress={() => workoutId && setSharingVisible(true)}
+                        disabled={!workoutId}
+                        accessibilityRole="button"
+                        accessibilityLabel="Compartilhar treino"
+                    >
+                        <ShareIcon size={24} color={workoutId ? '#00D4FF' : '#555'} />
                     </TouchableOpacity>
                 </View>
 
@@ -671,6 +682,14 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
 
                 <View style={styles.spacer} />
             </ScrollView>
+
+            {workoutId && (
+                <SharingModal
+                    visible={sharingVisible}
+                    onClose={() => setSharingVisible(false)}
+                    workoutId={workoutId}
+                />
+            )}
         </View>
     );
 }
