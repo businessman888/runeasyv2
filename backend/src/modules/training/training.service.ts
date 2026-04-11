@@ -2,20 +2,20 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { SupabaseService } from '../../database';
-import { TrainingAIService, TrainingPlanRequest, GeneratedPlan, QuickPlanResult, GeneratedWeek } from './training-ai.service';
+import { TrainingAIService, TrainingPlanRequest, GeneratedPlan, GeneratedWeek } from './training-ai.service';
 import { GamificationService } from '../gamification/gamification.service';
 
 // Generation status types
 export type GenerationStatus = 'partial' | 'generating' | 'complete' | 'failed';
 
-// Quick plan response for fast frontend rendering
+// Plan creation response (returned immediately, before AI generation completes)
 export interface QuickPlanResponse {
     plan_id: string;
     generation_status: GenerationStatus;
-    planHeader: QuickPlanResult['planHeader'];
+    planHeader: { objectiveShort: string; durationWeeks: string; frequencyWeekly: string };
     planHeadline: string;
     welcomeBadge: string;
-    nextWorkout: QuickPlanResult['nextWorkout'];
+    nextWorkout: { title: string; duration: string; paceEstimate: string; type: string };
     workouts_count: number;
 }
 
@@ -55,16 +55,15 @@ export class TrainingService {
     }
 
     /**
-     * Create a quick training plan (Prompt 1 only) - Fast response ~3-5s
-     * Triggers background generation for remaining weeks
+     * Create a training plan using a SINGLE AI prompt (all weeks at once).
+     * Returns plan_id immediately; full generation runs in background.
+     * Frontend polls GET /plan/:id/status until generation_status === 'complete'.
      */
     async createQuickPlan(userId: string, onboardingData: TrainingPlanRequest): Promise<QuickPlanResponse> {
         try {
-            this.logger.log(`[Quick Plan] Starting fast plan generation for user ${userId}`);
-            const startTime = Date.now();
+            this.logger.log(`[Plan] Starting single-prompt plan generation for user ${userId}`);
 
             // Deactivate any existing active plans to prevent duplicates
-            // (handles race condition when frontend triggers generation twice)
             const { error: deactivateError } = await this.supabaseService
                 .from('training_plans')
                 .update({ status: 'cancelled' })
@@ -72,178 +71,123 @@ export class TrainingService {
                 .eq('status', 'active');
 
             if (deactivateError) {
-                this.logger.warn(`[Quick Plan] Failed to deactivate old plans: ${deactivateError.message}`);
+                this.logger.warn(`[Plan] Failed to deactivate old plans: ${deactivateError.message}`);
             }
 
-            // PROMPT 1: Generate only first workout (fast ~3-5s)
-            const quickResult = await this.trainingAIService.generateFirstWorkout(onboardingData);
-
-            // Save training plan to database with partial status
+            // Create plan record with 'generating' status (no AI call yet)
             const { data: plan, error: planError } = await this.supabaseService
                 .from('training_plans')
                 .insert({
                     user_id: userId,
                     goal: onboardingData.goal,
-                    duration_weeks: quickResult.duration_weeks,
-                    frequency_per_week: quickResult.frequency_per_week,
-                    plan_json: {
-                        ...quickResult,
-                        weeks: [quickResult.firstWeek], // Only first week initially
-                    },
+                    duration_weeks: onboardingData.targetWeeks,
+                    frequency_per_week: onboardingData.daysPerWeek,
+                    plan_json: {},
                     status: 'active',
-                    generation_status: 'partial',
-                    first_workout_json: quickResult.nextWorkout,
+                    generation_status: 'generating',
                 })
                 .select()
                 .single();
 
             if (planError) throw planError;
 
-            // Use user's selected start date, fallback to today
-            const planStartDate = onboardingData.startDate ? new Date(onboardingData.startDate) : new Date();
+            this.logger.log(`[Plan] Created plan record ${plan.id}, triggering background generation`);
 
-            // Create workouts for week 1 only
-            const workoutsToInsert = this.createWorkoutsForWeek(
-                plan.id,
-                userId,
-                quickResult.firstWeek,
-                planStartDate,
-            );
+            // Fire-and-forget: generate full plan in background (single prompt)
+            this.generateAndSaveFullPlan(plan.id, userId, onboardingData)
+                .then(() => {
+                    this.logger.log(`[Plan] Background generation completed for plan ${plan.id}`);
+                })
+                .catch((error) => {
+                    this.logger.error(`[Plan] Background generation failed for plan ${plan.id}`, error);
+                });
 
-            const { error: workoutsError } = await this.supabaseService
-                .from('workouts')
-                .insert(workoutsToInsert);
-
-            if (workoutsError) throw workoutsError;
-
-            const elapsed = Date.now() - startTime;
-            this.logger.log(`[Quick Plan] Created plan ${plan.id} with ${workoutsToInsert.length} workouts in ${elapsed}ms`);
-
-            // TRIGGER BACKGROUND GENERATION (non-blocking)
-            this.triggerBackgroundGeneration(
-                plan.id,
-                userId,
-                onboardingData,
-                quickResult.firstWeek,
-            );
-
-            // Return immediately with partial plan
+            // Return immediately — frontend polls for completion
             return {
                 plan_id: plan.id,
-                generation_status: 'partial',
-                planHeader: quickResult.planHeader,
-                planHeadline: quickResult.planHeadline,
-                welcomeBadge: quickResult.welcomeBadge,
-                nextWorkout: quickResult.nextWorkout,
-                workouts_count: workoutsToInsert.length,
+                generation_status: 'generating',
+                planHeader: {
+                    objectiveShort: onboardingData.goal,
+                    durationWeeks: `${onboardingData.targetWeeks} Sem`,
+                    frequencyWeekly: `${onboardingData.daysPerWeek}x/Sem`,
+                },
+                planHeadline: '',
+                welcomeBadge: '',
+                nextWorkout: { title: '', duration: '', paceEstimate: '', type: 'run' },
+                workouts_count: 0,
             };
         } catch (error) {
-            this.logger.error('[Quick Plan] Failed to create quick plan', error);
+            this.logger.error('[Plan] Failed to create plan', error);
             throw error;
         }
     }
 
     /**
-     * Trigger background generation for remaining weeks (Prompt 2)
-     * This runs asynchronously and doesn't block the response
+     * Generate the FULL training plan in background (single AI prompt for ALL weeks).
+     * Updates the plan record and creates all workout rows when done.
      */
-    private async triggerBackgroundGeneration(
+    private async generateAndSaveFullPlan(
         planId: string,
         userId: string,
         onboardingData: TrainingPlanRequest,
-        firstWeek: GeneratedWeek,
-    ): Promise<void> {
-        // Update status to generating
-        await this.supabaseService
-            .from('training_plans')
-            .update({ generation_status: 'generating' })
-            .eq('id', planId);
-
-        // Run in background (not awaited)
-        this.completeFullSchedule(planId, userId, onboardingData, firstWeek)
-            .then(() => {
-                this.logger.log(`[Background] Completed full schedule for plan ${planId}`);
-            })
-            .catch((error) => {
-                this.logger.error(`[Background] Failed to complete schedule for plan ${planId}`, error);
-            });
-    }
-
-    /**
-     * Complete the full schedule generation (Prompt 2)
-     * Called in background after quick plan creation
-     */
-    async completeFullSchedule(
-        planId: string,
-        userId: string,
-        onboardingData: TrainingPlanRequest,
-        firstWeek: GeneratedWeek,
     ): Promise<void> {
         try {
-            this.logger.log(`[Prompt 2] Starting full schedule generation for plan ${planId}`);
+            this.logger.log(`[FullGen] Starting full plan generation for plan ${planId} (${onboardingData.targetWeeks} weeks)`);
             const startTime = Date.now();
 
-            // PROMPT 2: Generate remaining weeks
-            const fullSchedule = await this.trainingAIService.generateRemainingSchedule(
-                onboardingData,
-                firstWeek,
-            );
+            // SINGLE PROMPT: Generate ALL weeks at once
+            const fullPlan = await this.trainingAIService.generateTrainingPlan(onboardingData);
 
-            // Get existing plan
-            const { data: existingPlan, error: fetchError } = await this.supabaseService
-                .from('training_plans')
-                .select('plan_json')
-                .eq('id', planId)
-                .single();
+            if (!fullPlan.weeks || fullPlan.weeks.length === 0) {
+                throw new Error('AI returned empty weeks array');
+            }
 
-            if (fetchError) throw fetchError;
-
-            // Merge first week with remaining weeks
-            const allWeeks = [firstWeek, ...fullSchedule.weeks];
-
-            // Update plan with complete schedule
+            // Update plan with complete data
             const { error: updateError } = await this.supabaseService
                 .from('training_plans')
                 .update({
-                    plan_json: {
-                        ...existingPlan.plan_json,
-                        weeks: allWeeks,
-                    },
+                    plan_json: fullPlan,
+                    duration_weeks: fullPlan.duration_weeks || onboardingData.targetWeeks,
+                    frequency_per_week: fullPlan.frequency_per_week || onboardingData.daysPerWeek,
+                    first_workout_json: fullPlan.nextWorkout || null,
                     generation_status: 'complete',
                 })
                 .eq('id', planId);
 
             if (updateError) throw updateError;
 
-            // Use user's selected start date, fallback to today
+            // Create ALL workouts at once
             const planStartDate = onboardingData.startDate ? new Date(onboardingData.startDate) : new Date();
-            const allWorkoutsToInsert = [];
+            const allWorkoutsToInsert: any[] = [];
 
-            for (const week of fullSchedule.weeks) {
+            for (const week of fullPlan.weeks) {
                 const weekWorkouts = this.createWorkoutsForWeek(planId, userId, week, planStartDate);
                 allWorkoutsToInsert.push(...weekWorkouts);
             }
 
             if (allWorkoutsToInsert.length > 0) {
-                const { error: workoutsError } = await this.supabaseService
-                    .from('workouts')
-                    .insert(allWorkoutsToInsert);
+                // Insert in batches of 100 to avoid payload limits
+                const BATCH_SIZE = 100;
+                for (let i = 0; i < allWorkoutsToInsert.length; i += BATCH_SIZE) {
+                    const batch = allWorkoutsToInsert.slice(i, i + BATCH_SIZE);
+                    const { error: workoutsError } = await this.supabaseService
+                        .from('workouts')
+                        .insert(batch);
 
-                if (workoutsError) throw workoutsError;
+                    if (workoutsError) throw workoutsError;
+                }
             }
 
             const elapsed = Date.now() - startTime;
-            this.logger.log(`[Prompt 2] Added ${allWorkoutsToInsert.length} workouts in ${elapsed}ms`);
+            this.logger.log(`[FullGen] Plan ${planId}: generated ${fullPlan.weeks.length} weeks, ${allWorkoutsToInsert.length} workouts in ${elapsed}ms`);
         } catch (error) {
-            this.logger.error(`[Prompt 2] Failed for plan ${planId}`, error);
+            this.logger.error(`[FullGen] Failed for plan ${planId}`, error);
 
-            // Mark as failed
+            // Mark as failed so frontend can show retry option
             await this.supabaseService
                 .from('training_plans')
                 .update({ generation_status: 'failed' })
                 .eq('id', planId);
-
-            throw error;
         }
     }
 

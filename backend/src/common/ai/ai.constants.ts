@@ -8,7 +8,8 @@ export const AI_MODELS = {
 export const AI_FEATURES = {
   PLAN_GENERATION_FIRST: 'plan_generation_first_workout',
   PLAN_GENERATION_REMAINING: 'plan_generation_remaining',
-  PLAN_GENERATION_LEGACY: 'plan_generation_legacy',
+  PLAN_GENERATION_LEGACY: 'plan_generation_legacy', // Now the primary method (single prompt)
+  PLAN_GENERATION_FULL: 'plan_generation_full', // Alias for clarity
   FEEDBACK: 'feedback',
   READINESS: 'readiness',
   RETROSPECTIVE: 'retrospective',
@@ -25,6 +26,7 @@ export const FEATURE_TIER_MAP: Record<string, AITier> = {
   [AI_FEATURES.PLAN_GENERATION_FIRST]: AITier.HIGH_PERFORMANCE,
   [AI_FEATURES.PLAN_GENERATION_REMAINING]: AITier.HIGH_PERFORMANCE,
   [AI_FEATURES.PLAN_GENERATION_LEGACY]: AITier.HIGH_PERFORMANCE,
+  [AI_FEATURES.PLAN_GENERATION_FULL]: AITier.HIGH_PERFORMANCE,
   [AI_FEATURES.RETROSPECTIVE]: AITier.HIGH_PERFORMANCE,
   [AI_FEATURES.FEEDBACK]: AITier.EFFICIENCY,
   [AI_FEATURES.READINESS]: AITier.EFFICIENCY,

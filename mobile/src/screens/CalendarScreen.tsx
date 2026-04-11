@@ -225,18 +225,28 @@ export function CalendarScreen({ navigation }: any) {
 
     // Check if schedule is locked based on generation status
     React.useEffect(() => {
-        const isLocked = generationStatus === 'partial' || generationStatus === 'generating';
+        const isLocked = generationStatus === 'generating';
         setIsScheduleLocked(isLocked);
 
-        // Start polling if locked
+        // Start polling if locked — stop when complete or failed
         if (isLocked && plan?.id) {
             pollingInterval.current = setInterval(async () => {
                 const isComplete = await checkPlanStatus(plan.id);
-                if (isComplete) {
+                const currentStatus = useTrainingStore.getState().generationStatus;
+
+                if (isComplete || currentStatus === 'failed') {
                     setIsScheduleLocked(false);
                     if (pollingInterval.current) {
                         clearInterval(pollingInterval.current);
                         pollingInterval.current = null;
+                    }
+                    // Refresh calendar data after generation completes
+                    if (isComplete) {
+                        const start = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+                        const end = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 2, 0);
+                        fetchSchedule(start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
+                        fetchWorkouts(start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
+                        fetchUpcomingWorkouts();
                     }
                 }
             }, POLLING_INTERVAL);

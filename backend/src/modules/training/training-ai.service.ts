@@ -327,48 +327,43 @@ Responda APENAS com o JSON contendo as semanas 2 até ${request.targetWeeks}.`;
   }
 
   /**
-   * Generate a personalized training plan using Claude AI (LEGACY - full plan at once)
-   * @deprecated Use generateFirstWorkout + generateRemainingSchedule for better UX
+   * Generate a FULL training plan using a single AI prompt (all weeks at once).
+   * Optimized: no fullSchedulePreview (saves ~50% output tokens), concise tips.
    */
   async generateTrainingPlan(request: TrainingPlanRequest): Promise<GeneratedPlan> {
-    const systemPrompt = `Você é um treinador de corrida de elite da RunEasy. Sua tarefa é analisar o perfil do atleta baseado nas respostas do quiz e gerar um plano de treino estruturado.
+    // GUARD: Clamp unrealistic pace values before sending to AI
+    let safePace = request.currentPace5k;
+    if (safePace !== null && safePace !== undefined) {
+      if (safePace > 15.0) {
+        this.logger.warn(`[Pace Guard] Pace ${safePace.toFixed(2)} min/km is unrealistic (>15), defaulting to 7.0`);
+        safePace = 7.0;
+      } else if (safePace < 2.0) {
+        this.logger.warn(`[Pace Guard] Pace ${safePace.toFixed(2)} min/km is impossibly fast (<2), clamping to 3.0`);
+        safePace = 3.0;
+      }
+    }
 
-REGRA CRÍTICA: Sua resposta deve ser APENAS um objeto JSON válido, sem nenhum texto antes ou depois, markdown ou explicações.
+    const systemPrompt = `Você é um treinador de corrida de elite da RunEasy. Gere um plano de treino COMPLETO e estruturado.
 
-O JSON deve seguir estritamente este schema para renderizar a tela do aplicativo:
+REGRA CRÍTICA: Responda APENAS com JSON válido. Sem texto, markdown ou explicações.
 
+Schema obrigatório:
 {
   "planHeader": {
     "objectiveShort": "String (ex: 10km)",
     "durationWeeks": "String (ex: 12 Sem)",
     "frequencyWeekly": "String (ex: 4x/Sem)"
   },
-  "planHeadline": "String (ex: Personalizado para sua meta de 10km Sub-50' com base na sua performance.)",
-  "welcomeBadge": "String (ex: Corredor Iniciante)",
+  "planHeadline": "String",
+  "welcomeBadge": "String",
   "nextWorkout": {
     "title": "String (ex: Rodagem Leve - 5 km)",
     "duration": "String (ex: 35 min)",
     "paceEstimate": "String (ex: Pace 5:30)",
     "type": "run"
   },
-  "fullSchedulePreview": [
-    {
-      "week": 1,
-      "focus": "Adaptação",
-      "workouts": [
-        {
-          "day": 1,
-          "type": "easy_run",
-          "title": "Rodagem Leve",
-          "distance_km": 5,
-          "duration": "35 min",
-          "pace": "7:00 min/km"
-        }
-      ]
-    }
-  ],
-  "duration_weeks": 12,
-  "frequency_per_week": 4,
+  "duration_weeks": number,
+  "frequency_per_week": number,
   "weeks": [
     {
       "week_number": 1,
@@ -383,66 +378,67 @@ O JSON deve seguir estritamente este schema para renderizar a tela do aplicativo
             {"type": "main", "distance_km": 3, "pace_min": 6.5, "pace_max": 7.0},
             {"type": "cooldown", "distance_km": 1, "pace_min": 7.0, "pace_max": 7.5}
           ],
-          "objective": "Desenvolver base aeróbica na Zona 2",
-          "tips": ["Mantenha cadência entre 170-180 passos/min", "Respire naturalmente"]
+          "objective": "String curta",
+          "tips": ["Dica 1", "Dica 2"]
         }
       ]
     }
   ]
 }
 
-REGRAS IMPORTANTES:
-1. O campo "weeks" é usado para salvar no banco de dados
-2. O campo "fullSchedulePreview" é uma versão simplificada para exibição na tela
-3. Ambos devem ter o mesmo conteúdo, apenas em formatos diferentes
-4. Tipos de treino válidos: easy_run, long_run, intervals, tempo, recovery
-5. Fases válidas: base, build, peak, taper`;
+REGRAS:
+1. Tipos de treino: easy_run, long_run, intervals, tempo, recovery
+2. Fases: base, build, peak, taper
+3. Cada treino DEVE ter exatamente 3 segments: warmup, main, cooldown
+4. Tips: máximo 2 por treino (seja conciso para economizar espaço)
+5. O nextWorkout deve corresponder ao primeiro treino da semana 1
+6. Gere TODAS as ${request.targetWeeks} semanas no array "weeks"`;
 
-    const userPrompt = `Crie um plano de treino personalizado com os seguintes parâmetros:
+    const userPrompt = `Crie o plano de treino COMPLETO (todas as ${request.targetWeeks} semanas):
 
-PERFIL DO CORREDOR (Quiz Responses):
-P1. Objetivo: ${this.goalDescriptions[request.goal] || request.goal}
-P2. Nível: ${this.levelDescriptions[request.level] || request.level}
-P3. Frequência disponível: ${request.daysPerWeek} dias/semana
-P4. Pace atual 5K: ${request.currentPace5k ? `${request.currentPace5k.toFixed(2)} min/km` : 'Não sei (iniciante)'}
-P5. Prazo para objetivo: ${request.targetWeeks} semanas
-P6. Limitações/Lesões: ${request.limitations || 'Nenhuma'}
+PERFIL DO CORREDOR:
+- Objetivo: ${this.goalDescriptions[request.goal] || request.goal}
+- Nível: ${this.levelDescriptions[request.level] || request.level}
+- Frequência: ${request.daysPerWeek} dias/semana
+- Pace 5K: ${safePace ? `${safePace.toFixed(2)} min/km` : 'Não sei (iniciante — usar 7:00 min/km como base)'}
+- Prazo: ${request.targetWeeks} semanas
+- Limitações: ${request.limitations || 'Nenhuma'}
 
-VALORES PARA O JSON:
+VALORES PRÉ-DEFINIDOS:
 - objectiveShort: "${this.goalLabels[request.goal] || request.goal}"
 - durationWeeks: "${request.targetWeeks} Sem"
 - frequencyWeekly: "${request.daysPerWeek}x/Sem"
 - welcomeBadge: "${this.levelLabels[request.level] || 'Corredor'}"
+- duration_weeks: ${request.targetWeeks}
+- frequency_per_week: ${request.daysPerWeek}
 
-REGRAS PARA O PLANO:
-1. Crie um plano de ${request.targetWeeks} semanas
-2. ${request.daysPerWeek} treinos por semana
-3. Inclua variedade: rodagem leve (60%), long run (20%), intervalados/tempo (20%)
-4. Pace de recuperação: pace_5k + 1.5 min/km
-5. Pace de rodagem leve: pace_5k + 0.5 a 1.0 min/km
-6. Pace de long run: pace_5k + 0.5 min/km
-7. Pace de intervalado: pace_5k - 0.5 min/km
-8. Se iniciante sem pace, use 7:00 min/km como base
-9. Divida em fases: base (40%), build (30%), peak (20%), taper (10%)
-${request.limitations ? `10. IMPORTANTE: Adapte o plano considerando a limitação: ${request.limitations}` : ''}
+PROGRESSÃO:
+1. ${request.daysPerWeek} treinos por semana, TODA semana
+2. Variedade: rodagem leve (60%), long run (20%), intervalados/tempo (20%)
+3. Fases: base (40%), build (30%), peak (20%), taper (10%)
+4. Aumente volume gradualmente até peak, depois reduza no taper
+5. Pace base: ${safePace ? `${safePace.toFixed(2)}` : '7.00'} min/km — ajuste por tipo de treino
+${request.targetPace ? `6. PACE ALVO: ${request.targetPace} min/km — progrida gradualmente` : ''}
+${request.limitations ? `7. ADAPTAÇÃO: ${request.limitations}` : ''}
 
-Responda APENAS com o JSON, sem explicações adicionais.`;
+IMPORTANTE: Gere TODAS as ${request.targetWeeks} semanas. Cada semana DEVE ter exatamente ${request.daysPerWeek} treinos.
+
+Responda APENAS com o JSON.`;
 
     try {
-      this.logger.log('Generating training plan with AI Router...');
-      this.logger.log(`Request params: goal=${request.goal}, level=${request.level}, weeks=${request.targetWeeks}, daysPerWeek=${request.daysPerWeek}`);
+      this.logger.log(`[FullPlan] Generating ${request.targetWeeks}-week plan with AI Router...`);
 
       const result = await this.aiRouter.call<GeneratedPlan>({
         featureName: AI_FEATURES.PLAN_GENERATION_LEGACY,
         systemPrompt: [{ type: 'text' as const, text: systemPrompt, cache_control: { type: 'ephemeral' as const } }],
         userMessage: userPrompt,
-        maxTokens: 20000,
+        maxTokens: 64000,
       });
 
-      this.logger.log(`Generated plan with ${result.data.weeks?.length || 0} weeks in ${result.latencyMs}ms`);
+      this.logger.log(`[FullPlan] Generated plan with ${result.data.weeks?.length || 0} weeks in ${result.latencyMs}ms`);
       return result.data;
     } catch (error) {
-      this.logger.error('Failed to generate training plan', error);
+      this.logger.error('[FullPlan] Failed to generate training plan', error);
       throw error;
     }
   }

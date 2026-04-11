@@ -132,8 +132,8 @@ export function HomeScreen({ navigation }: any) {
                 if (!response.ok) return;
 
                 const result = await response.json();
-                if (result.generation_status === 'complete' || result.generation_status === 'partial') {
-                    // Plan is ready
+                if (result.generation_status === 'complete') {
+                    // Plan is fully ready — dismiss overlay and refresh data
                     if (pollingRef.current) clearInterval(pollingRef.current);
                     pollingRef.current = null;
                     setIsPlanGenerating(false);
@@ -153,9 +153,12 @@ export function HomeScreen({ navigation }: any) {
                         fetchStats(),
                     ]);
                 } else if (result.generation_status === 'failed') {
+                    // Generation failed — dismiss overlay and show error
                     if (pollingRef.current) clearInterval(pollingRef.current);
                     pollingRef.current = null;
+                    setIsPlanGenerating(false);
                     setPlanGenError(true);
+                    generationTriggeredRef.current = false; // Allow retry
                 }
             } catch (e) {
                 console.log('[HomeScreen] Polling error:', e);
