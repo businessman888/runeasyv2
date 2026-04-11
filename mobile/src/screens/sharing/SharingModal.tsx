@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect, useMemo } from 'react';
+import React, { useRef, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,25 +9,29 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
+  Animated,
+  PanResponder,
+  ScrollView,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import ViewShot, { captureRef } from 'react-native-view-shot';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
 import * as Clipboard from 'expo-clipboard';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 import { useSharingStore } from '../../stores/sharingStore';
-import { ShareCardData, SharingTab, CardTemplateId, StickerTemplateId } from '../../types/sharing.types';
+import { ShareCardData, CardTemplateId, StickerTemplateId } from '../../types/sharing.types';
 import { CARD_TEMPLATES } from './components/cards';
 import { STICKER_TEMPLATES } from './components/stickers';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = 300;
-const CARD_HEIGHT = 400;
-const STICKER_SIZE = 140;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const MODAL_HEIGHT = SCREEN_HEIGHT * 0.88;
+const DISMISS_THRESHOLD = 150;
 const CARDS_PER_PAGE = 2;
+const CARD_THUMB_WIDTH = (SCREEN_WIDTH - 32 - 32 - 15) / 2; // modal padding 16*2 + inner padding 16*2 + gap
+const CARD_THUMB_HEIGHT = CARD_THUMB_WIDTH * 2.3; // ~aspect ratio from Figma (164x379)
+const STICKER_THUMB_SIZE = (SCREEN_WIDTH - 32 - 32 - 30) / 3; // 3 columns with gaps
 
 interface SharingModalProps {
   visible: boolean;
@@ -51,15 +55,60 @@ export function SharingModal({ visible, onClose, workoutId }: SharingModalProps)
   } = useSharingStore();
 
   const viewShotRef = useRef<any>(null);
+  const modalSlideAnim = useRef(new Animated.Value(0)).current;
+  const panY = useRef(new Animated.Value(0)).current;
+  const [modalActuallyVisible, setModalActuallyVisible] = useState(false);
+
+  // PanResponder for drag-to-dismiss
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => gestureState.dy > 5,
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          panY.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > DISMISS_THRESHOLD) {
+          handleClose();
+        } else {
+          Animated.spring(panY, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 100,
+            friction: 10,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   useEffect(() => {
     if (visible && workoutId) {
       fetchCardData(workoutId);
+      setModalActuallyVisible(true);
+      Animated.spring(modalSlideAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 11,
+      }).start();
     }
-    return () => {
-      if (!visible) reset();
-    };
   }, [visible, workoutId]);
+
+  const handleClose = useCallback(() => {
+    Animated.timing(modalSlideAnim, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      setModalActuallyVisible(false);
+      panY.setValue(0);
+      reset();
+      onClose();
+    });
+  }, [onClose, reset]);
 
   // Capture and share
   const handleShare = useCallback(async () => {
@@ -72,14 +121,11 @@ export function SharingModal({ visible, onClose, workoutId }: SharingModalProps)
       });
       const isAvailable = await Sharing.isAvailableAsync();
       if (isAvailable) {
-        await Sharing.shareAsync(uri, {
-          mimeType: 'image/png',
-          UTI: 'public.png',
-        });
+        await Sharing.shareAsync(uri, { mimeType: 'image/png', UTI: 'public.png' });
       } else {
         Alert.alert('Erro', 'Compartilhamento não disponível neste dispositivo');
       }
-    } catch (err) {
+    } catch {
       Alert.alert('Erro', 'Falha ao compartilhar imagem');
     }
   }, []);
@@ -100,7 +146,7 @@ export function SharingModal({ visible, onClose, workoutId }: SharingModalProps)
       });
       await MediaLibrary.saveToLibraryAsync(uri);
       Alert.alert('Salvo!', 'Imagem salva na galeria.');
-    } catch (err) {
+    } catch {
       Alert.alert('Erro', 'Falha ao salvar imagem');
     }
   }, []);
@@ -114,13 +160,10 @@ export function SharingModal({ visible, onClose, workoutId }: SharingModalProps)
         quality: 1,
         result: 'tmpfile',
       });
-      // Read as base64 and copy
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: 'base64',
-      });
+      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
       await Clipboard.setImageAsync(base64);
       Alert.alert('Copiado!', 'Sticker copiado para a área de transferência.');
-    } catch (err) {
+    } catch {
       Alert.alert('Erro', 'Falha ao copiar sticker');
     }
   }, []);
@@ -134,162 +177,162 @@ export function SharingModal({ visible, onClose, workoutId }: SharingModalProps)
     return pages;
   }, []);
 
-  if (!visible) return null;
+  if (!visible && !modalActuallyVisible) return null;
 
   return (
     <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={false}
+      visible={modalActuallyVisible}
+      transparent={true}
+      animationType="none"
       statusBarTranslucent
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-            <Ionicons name="close" size={24} color={colors.white} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Compartilhar</Text>
-          <View style={styles.placeholder} />
-        </View>
+      {/* Dark overlay */}
+      <View style={styles.overlay}>
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={handleClose}
+        />
 
-        {/* Tabs */}
-        <View style={styles.tabs}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'cards' && styles.tabActive]}
-            onPress={() => setActiveTab('cards')}
-          >
-            <Text style={[styles.tabText, activeTab === 'cards' && styles.tabTextActive]}>
-              Cards
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'stickers' && styles.tabActive]}
-            onPress={() => setActiveTab('stickers')}
-          >
-            <Text style={[styles.tabText, activeTab === 'stickers' && styles.tabTextActive]}>
-              Stickers
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {/* Modal bottom sheet */}
+        <Animated.View
+          style={[
+            styles.modalContainer,
+            {
+              transform: [
+                {
+                  translateY: Animated.add(
+                    modalSlideAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [SCREEN_HEIGHT, 0],
+                    }),
+                    panY
+                  ),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.modalInner}>
+            {/* Drag handle */}
+            <View {...panResponder.panHandlers} style={styles.dragHandleArea}>
+              <View style={styles.dragHandle} />
+            </View>
 
-        {/* Content */}
-        {isLoading ? (
-          <View style={styles.loading}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Carregando dados...</Text>
-          </View>
-        ) : error ? (
-          <View style={styles.loading}>
-            <Ionicons name="alert-circle" size={40} color={colors.error} />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : cardData ? (
-          activeTab === 'cards' ? (
-            <CardsTab
-              data={cardData}
-              selectedCard={selectedCard}
-              onSelectCard={setSelectedCard}
-              viewShotRef={viewShotRef}
-              cardPages={cardPages}
-            />
-          ) : (
-            <StickersTab
-              data={cardData}
-              selectedSticker={selectedSticker}
-              onSelectSticker={setSelectedSticker}
-              onLongPress={handleCopySticker}
-              viewShotRef={viewShotRef}
-            />
-          )
-        ) : null}
+            {/* Header row: tabs + close button */}
+            <View style={styles.headerRow}>
+              <View style={styles.tabsContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.tabPill,
+                    activeTab === 'stickers' && styles.tabPillActive,
+                  ]}
+                  onPress={() => setActiveTab('stickers')}
+                >
+                  <Text
+                    style={[
+                      styles.tabText,
+                      activeTab === 'stickers' && styles.tabTextActive,
+                    ]}
+                  >
+                    Stickers
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.tabPill,
+                    activeTab === 'cards' && styles.tabPillActive,
+                  ]}
+                  onPress={() => setActiveTab('cards')}
+                >
+                  <Text
+                    style={[
+                      styles.tabText,
+                      activeTab === 'cards' && styles.tabTextActive,
+                    ]}
+                  >
+                    Cards
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                onPress={handleClose}
+                style={styles.closeBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Fechar modal"
+              >
+                <Ionicons name="close" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
 
-        {/* Action buttons */}
-        {cardData && (
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-              <Ionicons name="download-outline" size={22} color={colors.white} />
-              <Text style={styles.saveBtnText}>Salvar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.shareBtn} onPress={handleShare}>
-              <Ionicons name="share-outline" size={22} color={colors.white} />
-              <Text style={styles.shareBtnText}>Compartilhar</Text>
-            </TouchableOpacity>
+            {/* Content */}
+            {isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={styles.loadingText}>Carregando dados...</Text>
+              </View>
+            ) : error ? (
+              <View style={styles.loadingContainer}>
+                <Ionicons name="alert-circle" size={40} color={colors.error} />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : cardData ? (
+              activeTab === 'stickers' ? (
+                <StickersTab
+                  data={cardData}
+                  selectedSticker={selectedSticker}
+                  onSelectSticker={setSelectedSticker}
+                  onLongPress={handleCopySticker}
+                  onSave={handleSave}
+                  onShare={handleShare}
+                />
+              ) : (
+                <CardsTab
+                  data={cardData}
+                  selectedCard={selectedCard}
+                  onSelectCard={setSelectedCard}
+                  cardPages={cardPages}
+                  onSave={handleSave}
+                  onShare={handleShare}
+                />
+              )
+            ) : null}
+
+            {/* Hidden full-size ViewShot for capture (off-screen) */}
+            {cardData && (
+              <View style={styles.offScreenCapture} pointerEvents="none">
+                <ViewShot
+                  ref={viewShotRef}
+                  options={{ format: 'png', quality: 1 }}
+                  style={activeTab === 'stickers' ? styles.captureSticker : styles.captureCard}
+                >
+                  {activeTab === 'stickers' ? (
+                    <SelectedStickerComponent data={cardData} selectedSticker={selectedSticker} />
+                  ) : (
+                    <SelectedCardComponent data={cardData} selectedCard={selectedCard} />
+                  )}
+                </ViewShot>
+              </View>
+            )}
           </View>
-        )}
+        </Animated.View>
       </View>
     </Modal>
   );
 }
 
-// ─── Cards Tab ────────────────────────────────────────────────
-interface CardsTabProps {
-  data: ShareCardData;
-  selectedCard: CardTemplateId;
-  onSelectCard: (id: CardTemplateId) => void;
-  viewShotRef: React.MutableRefObject<any>;
-  cardPages: typeof CARD_TEMPLATES[number][][];
+// ─── Hidden component resolvers for ViewShot capture ─────────
+function SelectedCardComponent({ data, selectedCard }: { data: ShareCardData; selectedCard: CardTemplateId }) {
+  const entry = CARD_TEMPLATES.find((c) => c.id === selectedCard) || CARD_TEMPLATES[0];
+  const Component = entry.Component;
+  return <Component data={data} />;
 }
 
-function CardsTab({ data, selectedCard, onSelectCard, viewShotRef, cardPages }: CardsTabProps) {
-  const selectedEntry = CARD_TEMPLATES.find((c) => c.id === selectedCard) || CARD_TEMPLATES[0];
-  const SelectedComponent = selectedEntry.Component;
-
-  return (
-    <View style={styles.tabContent}>
-      {/* Preview area — gradient is OUTSIDE ViewShot */}
-      <View style={styles.previewArea}>
-        <LinearGradient
-          colors={['#0A0A18', '#1A1A2E', '#0A0A18']}
-          style={StyleSheet.absoluteFill}
-        />
-        <ViewShot
-          ref={viewShotRef}
-          options={{ format: 'png', quality: 1 }}
-          style={styles.viewShot}
-        >
-          <SelectedComponent data={data} />
-        </ViewShot>
-      </View>
-
-      {/* Horizontal carousel — 2 per page */}
-      <FlatList
-        data={cardPages}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(_, i) => `page-${i}`}
-        contentContainerStyle={styles.carouselContent}
-        renderItem={({ item: page }) => (
-          <View style={styles.carouselPage}>
-            {page.map((entry) => (
-              <TouchableOpacity
-                key={entry.id}
-                style={[
-                  styles.carouselThumb,
-                  selectedCard === entry.id && styles.carouselThumbActive,
-                ]}
-                onPress={() => onSelectCard(entry.id)}
-              >
-                <View style={styles.thumbPreview}>
-                  <entry.Component data={data} />
-                </View>
-                <Text
-                  style={[
-                    styles.thumbLabel,
-                    selectedCard === entry.id && styles.thumbLabelActive,
-                  ]}
-                >
-                  {entry.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-      />
-    </View>
-  );
+function SelectedStickerComponent({ data, selectedSticker }: { data: ShareCardData; selectedSticker: StickerTemplateId }) {
+  const entry = STICKER_TEMPLATES.find((s) => s.id === selectedSticker) || STICKER_TEMPLATES[0];
+  const Component = entry.Component;
+  return <Component data={data} />;
 }
 
 // ─── Stickers Tab ─────────────────────────────────────────────
@@ -298,7 +341,8 @@ interface StickersTabProps {
   selectedSticker: StickerTemplateId;
   onSelectSticker: (id: StickerTemplateId) => void;
   onLongPress: () => void;
-  viewShotRef: React.MutableRefObject<any>;
+  onSave: () => void;
+  onShare: () => void;
 }
 
 function StickersTab({
@@ -306,38 +350,27 @@ function StickersTab({
   selectedSticker,
   onSelectSticker,
   onLongPress,
-  viewShotRef,
+  onSave,
+  onShare,
 }: StickersTabProps) {
-  const selectedEntry =
-    STICKER_TEMPLATES.find((s) => s.id === selectedSticker) || STICKER_TEMPLATES[0];
-  const SelectedComponent = selectedEntry.Component;
-
   return (
-    <View style={styles.tabContent}>
-      {/* Preview */}
-      <View style={styles.stickerPreviewArea}>
-        <LinearGradient
-          colors={['#0A0A18', '#1A1A2E', '#0A0A18']}
-          style={StyleSheet.absoluteFill}
-        />
-        <ViewShot
-          ref={viewShotRef}
-          options={{ format: 'png', quality: 1 }}
-          style={styles.stickerViewShot}
-        >
-          <SelectedComponent data={data} />
-        </ViewShot>
+    <ScrollView
+      style={styles.scrollContent}
+      contentContainerStyle={styles.scrollContentInner}
+      showsVerticalScrollIndicator={false}
+      bounces={false}
+      nestedScrollEnabled={true}
+    >
+      {/* Hint text */}
+      <View style={styles.hintRow}>
+        <Text style={styles.hintText}>Pressione e segure para copiar</Text>
       </View>
 
-      {/* Grid */}
-      <FlatList
-        data={STICKER_TEMPLATES}
-        numColumns={3}
-        showsVerticalScrollIndicator={false}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.stickerGrid}
-        renderItem={({ item }) => (
+      {/* Stickers grid */}
+      <View style={styles.stickerGrid}>
+        {STICKER_TEMPLATES.map((item) => (
           <TouchableOpacity
+            key={item.id}
             style={[
               styles.stickerThumb,
               selectedSticker === item.id && styles.stickerThumbActive,
@@ -345,245 +378,497 @@ function StickersTab({
             onPress={() => onSelectSticker(item.id)}
             onLongPress={onLongPress}
             delayLongPress={500}
+            accessibilityRole="button"
+            accessibilityLabel={item.label}
           >
             <View style={styles.stickerThumbInner}>
               <item.Component data={data} />
             </View>
-            <Text
-              style={[
-                styles.stickerLabel,
-                selectedSticker === item.id && styles.stickerLabelActive,
-              ]}
-            >
-              {item.label}
-            </Text>
           </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Actions */}
+      <View style={styles.actionsRow}>
+        <TouchableOpacity
+          style={styles.saveButton}
+          onPress={onSave}
+          accessibilityRole="button"
+          accessibilityLabel="Salvar no dispositivo"
+        >
+          <Ionicons name="save-outline" size={24} color="#0E0E1F" />
+          <Text style={styles.saveButtonText}>Salvar no dispositivo</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={{ height: 30 }} />
+    </ScrollView>
+  );
+}
+
+// ─── Cards Tab ────────────────────────────────────────────────
+interface CardsTabProps {
+  data: ShareCardData;
+  selectedCard: CardTemplateId;
+  onSelectCard: (id: CardTemplateId) => void;
+  cardPages: typeof CARD_TEMPLATES[number][][];
+  onSave: () => void;
+  onShare: () => void;
+}
+
+function CardsTab({
+  data,
+  selectedCard,
+  onSelectCard,
+  cardPages,
+  onSave,
+  onShare,
+}: CardsTabProps) {
+  const [currentPage, setCurrentPage] = useState(0);
+  const carouselWidth = SCREEN_WIDTH - 32; // modal horizontal padding
+
+  const handleScroll = useCallback(
+    (event: any) => {
+      const offsetX = event.nativeEvent.contentOffset.x;
+      const page = Math.round(offsetX / carouselWidth);
+      setCurrentPage(page);
+    },
+    [carouselWidth]
+  );
+
+  return (
+    <ScrollView
+      style={styles.scrollContent}
+      contentContainerStyle={styles.scrollContentInner}
+      showsVerticalScrollIndicator={false}
+      bounces={false}
+      nestedScrollEnabled={true}
+    >
+      {/* Cards carousel */}
+      <FlatList
+        data={cardPages}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(_, i) => `card-page-${i}`}
+        onMomentumScrollEnd={handleScroll}
+        scrollEnabled={true}
+        nestedScrollEnabled={true}
+        style={styles.carousel}
+        renderItem={({ item: page }) => (
+          <View style={[styles.carouselPage, { width: carouselWidth }]}>
+            {page.map((entry) => (
+              <TouchableOpacity
+                key={entry.id}
+                style={[
+                  styles.cardThumb,
+                  selectedCard === entry.id && styles.cardThumbActive,
+                ]}
+                onPress={() => onSelectCard(entry.id)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={entry.label}
+              >
+                <View style={styles.cardThumbContent}>
+                  <entry.Component data={data} />
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
         )}
       />
-    </View>
+
+      {/* Pagination dots */}
+      <View style={styles.paginationDots}>
+        {cardPages.map((_, i) => (
+          <View
+            key={`dot-${i}`}
+            style={[
+              styles.dot,
+              currentPage === i && styles.dotActive,
+            ]}
+          />
+        ))}
+      </View>
+
+      {/* Share options row */}
+      <View style={styles.shareOptionsRow}>
+        <ShareOption
+          icon="logo-instagram"
+          label="Story"
+          onPress={onShare}
+        />
+        <ShareOption
+          icon="logo-whatsapp"
+          label="Whatsapp"
+          onPress={onShare}
+        />
+        <ShareOptionCustom
+          iconName="message-processing"
+          label="Mensagem"
+          onPress={onShare}
+        />
+        <ShareOption
+          icon="chatbubble-ellipses"
+          label="Messenger"
+          onPress={onShare}
+        />
+        <ShareOption
+          icon="ellipsis-horizontal-circle"
+          label="Mais"
+          onPress={onShare}
+        />
+      </View>
+
+      {/* Save button */}
+      <View style={styles.actionsRow}>
+        <TouchableOpacity
+          style={styles.saveButton}
+          onPress={onSave}
+          accessibilityRole="button"
+          accessibilityLabel="Salvar no dispositivo"
+        >
+          <Ionicons name="save-outline" size={24} color="#0E0E1F" />
+          <Text style={styles.saveButtonText}>Salvar no dispositivo</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={{ height: 30 }} />
+    </ScrollView>
+  );
+}
+
+// ─── Share Option Button ──────────────────────────────────────
+function ShareOption({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={styles.shareOption}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <View style={styles.shareOptionIcon}>
+        <Ionicons name={icon} size={28} color="#FFFFFF" />
+      </View>
+      <Text style={styles.shareOptionLabel}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function ShareOptionCustom({
+  iconName,
+  label,
+  onPress,
+}: {
+  iconName: string;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={styles.shareOption}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <View style={styles.shareOptionIcon}>
+        <MaterialCommunityIcons name={iconName as any} size={28} color="#FFFFFF" />
+      </View>
+      <Text style={styles.shareOptionLabel}>{label}</Text>
+    </TouchableOpacity>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
+  // Overlay
+  overlay: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
   },
-  header: {
+
+  // Modal container (bottom sheet)
+  modalContainer: {
+    backgroundColor: '#1C1C2E',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
+    height: MODAL_HEIGHT,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 20,
+  },
+  modalInner: {
+    flex: 1,
+  },
+
+  // Drag handle
+  dragHandleArea: {
+    paddingVertical: 8,
+    alignItems: 'center',
+    backgroundColor: '#1C1C2E',
+  },
+  dragHandle: {
+    width: 40,
+    height: 5,
+    backgroundColor: 'rgba(235, 235, 245, 0.3)',
+    borderRadius: 3,
+    alignSelf: 'center',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+
+  // Header row
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.base,
-    paddingTop: spacing['3xl'],
-    paddingBottom: spacing.md,
+    paddingHorizontal: 16,
+    marginBottom: 20,
   },
-  closeBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    color: colors.white,
-    fontSize: typography.fontSizes.xl,
-    fontWeight: typography.fontWeights.bold,
-  },
-  placeholder: {
-    width: 40,
-  },
-
-  // Tabs
-  tabs: {
+  tabsContainer: {
     flexDirection: 'row',
-    marginHorizontal: spacing.base,
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
+    backgroundColor: '#15152A',
+    borderRadius: 20,
     padding: 3,
+    flex: 0,
+    alignSelf: 'center',
   },
-  tab: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    alignItems: 'center',
-    borderRadius: borderRadius.md,
+  tabPill: {
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
-  tabActive: {
-    backgroundColor: colors.primary,
+  tabPillActive: {
+    backgroundColor: '#0E0E1F',
+    shadowColor: '#000',
+    shadowOffset: { width: 1, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
   },
   tabText: {
-    color: colors.textSecondary,
-    fontSize: typography.fontSizes.md,
-    fontWeight: typography.fontWeights.semibold,
+    fontFamily: 'Inter',
+    fontWeight: '600',
+    fontSize: 10,
+    color: 'rgba(235, 235, 245, 0.6)',
   },
   tabTextActive: {
-    color: colors.white,
+    color: '#00D4FF',
+  },
+  closeBtn: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Loading
-  loading: {
+  loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.md,
+    gap: 12,
   },
   loadingText: {
-    color: colors.textSecondary,
-    fontSize: typography.fontSizes.md,
+    color: 'rgba(235, 235, 245, 0.6)',
+    fontSize: 14,
   },
   errorText: {
     color: colors.error,
-    fontSize: typography.fontSizes.md,
+    fontSize: 14,
     textAlign: 'center',
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: 24,
   },
 
-  // Tab content
-  tabContent: {
+  // Scroll content
+  scrollContent: {
     flex: 1,
+    paddingHorizontal: 16,
+  },
+  scrollContentInner: {
+    paddingBottom: 20,
+    flexGrow: 1,
   },
 
-  // Card preview
-  previewArea: {
-    height: CARD_HEIGHT + spacing.xl * 2,
+  // ─── Stickers ───────────────────────
+  hintRow: {
     alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: spacing.md,
-    marginHorizontal: spacing.base,
-    borderRadius: borderRadius.xl,
-    overflow: 'hidden',
+    paddingVertical: 12,
   },
-  viewShot: {
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
-    backgroundColor: 'transparent',
+  hintText: {
+    fontFamily: 'Inter',
+    fontWeight: '500',
+    fontSize: 11,
+    color: 'rgba(235, 235, 245, 0.6)',
   },
 
-  // Carousel
-  carouselContent: {
-    paddingHorizontal: spacing.base,
-  },
-  carouselPage: {
-    width: SCREEN_WIDTH - spacing.base * 2,
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    gap: spacing.md,
-  },
-  carouselThumb: {
-    width: (SCREEN_WIDTH - spacing.base * 2 - spacing.md) / 2,
-    aspectRatio: 3 / 4,
-    borderRadius: borderRadius.lg,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    overflow: 'hidden',
-    backgroundColor: colors.card,
-    alignItems: 'center',
-  },
-  carouselThumbActive: {
-    borderColor: colors.primary,
-  },
-  thumbPreview: {
-    flex: 1,
-    transform: [{ scale: 0.45 }],
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
-    alignSelf: 'center',
-  },
-  thumbLabel: {
-    color: colors.textMuted,
-    fontSize: typography.fontSizes.xs,
-    fontWeight: typography.fontWeights.medium,
-    paddingVertical: spacing.xs,
-  },
-  thumbLabelActive: {
-    color: colors.primary,
-  },
-
-  // Sticker preview
-  stickerPreviewArea: {
-    height: STICKER_SIZE + spacing.xl * 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: spacing.md,
-    marginHorizontal: spacing.base,
-    borderRadius: borderRadius.xl,
-    overflow: 'hidden',
-  },
-  stickerViewShot: {
-    width: STICKER_SIZE,
-    height: STICKER_SIZE,
-    backgroundColor: 'transparent',
-  },
-
-  // Sticker grid
   stickerGrid: {
-    paddingHorizontal: spacing.base,
-    paddingBottom: spacing.xl,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 15,
+    justifyContent: 'flex-start',
   },
   stickerThumb: {
-    flex: 1,
-    maxWidth: '33.3%',
+    width: STICKER_THUMB_SIZE,
+    height: STICKER_THUMB_SIZE,
+    borderRadius: 15,
+    backgroundColor: 'rgba(235, 235, 245, 0.1)',
+    borderWidth: 0.6,
+    borderColor: 'rgba(235, 235, 245, 0.6)',
+    overflow: 'hidden',
     alignItems: 'center',
-    padding: spacing.xs,
-    borderRadius: borderRadius.lg,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    marginBottom: spacing.sm,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 1,
+    elevation: 2,
   },
   stickerThumbActive: {
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(0, 212, 255, 0.05)',
+    borderColor: '#00D4FF',
+    borderWidth: 2,
   },
   stickerThumbInner: {
-    transform: [{ scale: 0.6 }],
-    width: STICKER_SIZE,
-    height: STICKER_SIZE,
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ scale: 0.65 }],
   },
-  stickerLabel: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: typography.fontWeights.medium,
-    marginTop: -spacing.sm,
+
+  // ─── Cards ──────────────────────────
+  carousel: {
+    flexGrow: 0,
   },
-  stickerLabelActive: {
-    color: colors.primary,
+  carouselPage: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 15,
+    paddingVertical: 14,
+  },
+  cardThumb: {
+    width: CARD_THUMB_WIDTH,
+    height: CARD_THUMB_HEIGHT,
+    borderRadius: 15,
+    borderWidth: 0.6,
+    borderColor: 'rgba(235, 235, 245, 0.6)',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 1,
+    elevation: 2,
+  },
+  cardThumbActive: {
+    borderColor: '#00D4FF',
+    borderWidth: 2,
+  },
+  cardThumbContent: {
+    flex: 1,
+    transform: [{ scale: 0.42 }],
+    width: 300,
+    height: 400,
+    alignSelf: 'center',
+  },
+
+  // Pagination
+  paginationDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 12,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(235, 235, 245, 0.1)',
+  },
+  dotActive: {
+    backgroundColor: '#00D4FF',
+  },
+
+  // Share options row
+  shareOptionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 16,
+  },
+  shareOption: {
+    alignItems: 'center',
+    width: 50,
+    gap: 8,
+  },
+  shareOptionIcon: {
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shareOptionLabel: {
+    fontFamily: 'Inter',
+    fontWeight: '500',
+    fontSize: 8,
+    color: '#EBEBF5',
+    textAlign: 'center',
+  },
+
+  // Off-screen ViewShot for capture
+  offScreenCapture: {
+    position: 'absolute',
+    left: -9999,
+    top: 0,
+  },
+  captureCard: {
+    width: 300,
+    height: 400,
+    backgroundColor: 'transparent',
+  },
+  captureSticker: {
+    width: 140,
+    height: 140,
+    backgroundColor: 'transparent',
   },
 
   // Actions
-  actions: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    paddingHorizontal: spacing.base,
-    paddingBottom: spacing['2xl'],
-    paddingTop: spacing.md,
+  actionsRow: {
+    paddingVertical: 14,
+    alignItems: 'center',
   },
-  saveBtn: {
-    flex: 1,
+  saveButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    backgroundColor: colors.card,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
+    gap: 8,
+    backgroundColor: '#00D4FF',
+    paddingVertical: 10,
+    paddingHorizontal: 40,
+    borderRadius: 20,
+    shadowColor: '#00D4FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 6,
   },
-  saveBtnText: {
-    color: colors.white,
-    fontSize: typography.fontSizes.md,
-    fontWeight: typography.fontWeights.semibold,
-  },
-  shareBtn: {
-    flex: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
-  },
-  shareBtnText: {
-    color: colors.white,
-    fontSize: typography.fontSizes.md,
-    fontWeight: typography.fontWeights.bold,
+  saveButtonText: {
+    fontFamily: 'Inter',
+    fontWeight: '600',
+    fontSize: 14,
+    color: '#0E0E1F',
   },
 });
