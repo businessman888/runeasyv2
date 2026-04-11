@@ -63,6 +63,18 @@ export class TrainingService {
             this.logger.log(`[Quick Plan] Starting fast plan generation for user ${userId}`);
             const startTime = Date.now();
 
+            // Deactivate any existing active plans to prevent duplicates
+            // (handles race condition when frontend triggers generation twice)
+            const { error: deactivateError } = await this.supabaseService
+                .from('training_plans')
+                .update({ status: 'cancelled' })
+                .eq('user_id', userId)
+                .eq('status', 'active');
+
+            if (deactivateError) {
+                this.logger.warn(`[Quick Plan] Failed to deactivate old plans: ${deactivateError.message}`);
+            }
+
             // PROMPT 1: Generate only first workout (fast ~3-5s)
             const quickResult = await this.trainingAIService.generateFirstWorkout(onboardingData);
 

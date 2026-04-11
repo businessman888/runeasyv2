@@ -13,7 +13,7 @@ import {
     Share,
     Alert,
 } from 'react-native';
-import { CommonActions } from '@react-navigation/native';
+// CommonActions removed — AppNavigator handles transition via onboarding_completed state
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useAuthStore } from '../../stores/authStore';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -166,7 +166,12 @@ export function BriefingScreen({ navigation, route }: any) {
             await useAuthStore.getState().syncSubscriptionStatus();
             const nowPro = useAuthStore.getState().isPro;
             if (!nowPro) {
-                return; // User didn't subscribe, stay on screen
+                // In dev mode, bypass paywall so we can test the full flow
+                if (__DEV__) {
+                    console.log('[BriefingScreen] DEV MODE — bypassing paywall, proceeding as Pro');
+                } else {
+                    return; // User didn't subscribe, stay on screen
+                }
             }
         }
 
@@ -183,26 +188,15 @@ export function BriefingScreen({ navigation, route }: any) {
             return;
         }
 
-        // Update local user state
+        // Update local user state — AppNavigator reacts to onboarding_completed
+        // and automatically transitions from onboarding stack to main stack.
+        // No manual navigation.reset or login needed (those caused double-mount).
         const currentUser = useAuthStore.getState().user;
         if (currentUser) {
             useAuthStore.getState().setUser({
                 ...currentUser,
                 onboarding_completed: true,
             });
-        }
-
-        // Navigate to Main (Home) — plan generation will be triggered there
-        setTimeout(() => {
-            try {
-                navigation.dispatch(
-                    CommonActions.reset({ index: 0, routes: [{ name: 'Main' }] })
-                );
-            } catch { }
-        }, 300);
-
-        if (userId) {
-            useAuthStore.getState().login(userId).catch(() => { });
         }
     };
 

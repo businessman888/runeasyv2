@@ -93,12 +93,14 @@ export function HomeScreen({ navigation }: any) {
     const [planGenRetries, setPlanGenRetries] = useState(0);
     const { triggerPlanGeneration, pendingPlanId } = useOnboardingStore();
     const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const generationTriggeredRef = useRef(false);
     const overlayFadeAnim = useRef(new Animated.Value(0)).current;
 
-    // Stop polling on unmount
+    // Stop polling and reset generation guard on unmount
     useEffect(() => {
         return () => {
             if (pollingRef.current) clearInterval(pollingRef.current);
+            generationTriggeredRef.current = false;
         };
     }, []);
 
@@ -115,6 +117,12 @@ export function HomeScreen({ navigation }: any) {
     const startPolling = useCallback(async (planId: string) => {
         const userId = await Storage.getItemAsync('user_id');
         if (!userId) return;
+
+        // Clear any existing polling interval to prevent leaks
+        if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+        }
 
         pollingRef.current = setInterval(async () => {
             try {
@@ -157,6 +165,9 @@ export function HomeScreen({ navigation }: any) {
 
     // Trigger plan generation if no workouts exist
     const checkAndTriggerGeneration = useCallback(async () => {
+        // Guard: prevent concurrent/double triggers
+        if (generationTriggeredRef.current) return;
+
         const userId = await Storage.getItemAsync('user_id');
         if (!userId) return;
 
@@ -175,7 +186,8 @@ export function HomeScreen({ navigation }: any) {
             // Continue to trigger generation
         }
 
-        // No plan — trigger generation
+        // No plan — trigger generation (set guard BEFORE async call)
+        generationTriggeredRef.current = true;
         console.log('[HomeScreen] No plan found, triggering AI generation...');
         setIsPlanGenerating(true);
         setPlanGenError(false);
@@ -185,6 +197,7 @@ export function HomeScreen({ navigation }: any) {
             startPolling(planId);
         } else {
             setPlanGenError(true);
+            generationTriggeredRef.current = false; // Allow retry on error
         }
     }, [triggerPlanGeneration, startPolling]);
 
@@ -194,12 +207,14 @@ export function HomeScreen({ navigation }: any) {
         setPlanGenRetries((prev) => prev + 1);
         setPlanGenError(false);
         setIsPlanGenerating(true);
+        generationTriggeredRef.current = true;
 
         const planId = await triggerPlanGeneration();
         if (planId) {
             startPolling(planId);
         } else {
             setPlanGenError(true);
+            generationTriggeredRef.current = false;
         }
     }, [planGenRetries, triggerPlanGeneration, startPolling]);
 
