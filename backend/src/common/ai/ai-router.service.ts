@@ -72,8 +72,21 @@ export class AIRouterService {
     const startTime = Date.now();
     const params = this.buildParams(model, options);
 
+    // Use streaming for large requests to avoid Anthropic SDK timeout guard
+    // "Streaming is required for operations that may take longer than 10 minutes"
+    const useStreaming = options.maxTokens > 8000;
+
     try {
-      const message = await this.anthropic!.messages.create(params as any);
+      let message: Anthropic.Message;
+
+      if (useStreaming) {
+        this.logger.log(`[AIRouter] Using streaming for ${options.featureName} (maxTokens: ${options.maxTokens})`);
+        const stream = this.anthropic!.messages.stream(params as any);
+        message = await stream.finalMessage();
+      } else {
+        message = await this.anthropic!.messages.create(params as any) as Anthropic.Message;
+      }
+
       const latencyMs = Date.now() - startTime;
 
       const textBlock = message.content.find((b) => b.type === 'text');
@@ -86,8 +99,8 @@ export class AIRouterService {
       const usage = {
         input_tokens: message.usage?.input_tokens || 0,
         output_tokens: message.usage?.output_tokens || 0,
-        cache_creation_input_tokens: message.usage?.cache_creation_input_tokens || 0,
-        cache_read_input_tokens: message.usage?.cache_read_input_tokens || 0,
+        cache_creation_input_tokens: (message.usage as any)?.cache_creation_input_tokens || 0,
+        cache_read_input_tokens: (message.usage as any)?.cache_read_input_tokens || 0,
       };
 
       const cost = this.usageService.calculateCost(model, usage);
