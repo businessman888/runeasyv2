@@ -265,12 +265,22 @@ export class TrainingController {
             // Check if user already has an active plan (idempotent)
             const existingPlan = await this.trainingService.getActivePlan(userId);
             if (existingPlan) {
-                this.logger.log(`[generate] User ${userId} already has active plan ${existingPlan.id}`);
-                return {
-                    plan_id: existingPlan.id,
-                    generation_status: existingPlan.generation_status || 'complete',
-                    already_exists: true,
-                };
+                // If the previous generation failed, cancel it and re-trigger
+                if (existingPlan.generation_status === 'failed') {
+                    this.logger.log(`[generate] Previous plan ${existingPlan.id} failed, cancelling and re-generating`);
+                    await this.supabaseService
+                        .from('training_plans')
+                        .update({ status: 'cancelled' })
+                        .eq('id', existingPlan.id);
+                    // Fall through to create a new plan below
+                } else {
+                    this.logger.log(`[generate] User ${userId} already has active plan ${existingPlan.id} (status: ${existingPlan.generation_status})`);
+                    return {
+                        plan_id: existingPlan.id,
+                        generation_status: existingPlan.generation_status || 'complete',
+                        already_exists: true,
+                    };
+                }
             }
 
             // Read saved onboarding data

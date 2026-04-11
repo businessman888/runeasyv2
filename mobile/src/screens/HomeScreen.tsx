@@ -176,20 +176,41 @@ export function HomeScreen({ navigation }: any) {
 
         // Check if user has any workouts
         const workouts = useTrainingStore.getState().upcomingWorkouts;
-        if (workouts && workouts.length > 0) return; // Plan already exists
+        if (workouts && workouts.length > 0) return; // Plan already exists with workouts
 
-        // Check if user has onboarding data (just completed onboarding)
+        // Check if user has an active plan
+        let shouldTriggerGeneration = true;
         try {
             const response = await fetch(`${BASE_API_URL}/training/plan`, {
                 headers: { 'x-user-id': userId },
             });
             const result = await response.json();
-            if (result.plan) return; // Plan exists, just no upcoming workouts
+            if (result.plan) {
+                const status = result.plan.generation_status;
+
+                if (status === 'complete') {
+                    // Plan is ready, just no upcoming workouts — don't re-trigger
+                    return;
+                }
+
+                if (status === 'generating') {
+                    // Plan is still generating — resume polling instead of re-triggering
+                    console.log('[HomeScreen] Plan still generating, resuming polling...');
+                    generationTriggeredRef.current = true;
+                    setIsPlanGenerating(true);
+                    setPlanGenError(false);
+                    startPolling(result.plan.id);
+                    return;
+                }
+
+                // status === 'failed' → fall through to trigger new generation
+                console.log('[HomeScreen] Plan generation previously failed, re-triggering...');
+            }
         } catch {
             // Continue to trigger generation
         }
 
-        // No plan — trigger generation (set guard BEFORE async call)
+        // No plan OR plan failed — trigger generation (set guard BEFORE async call)
         generationTriggeredRef.current = true;
         console.log('[HomeScreen] No plan found, triggering AI generation...');
         setIsPlanGenerating(true);

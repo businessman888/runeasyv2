@@ -133,30 +133,38 @@ export class TrainingService {
     ): Promise<void> {
         try {
             this.logger.log(`[FullGen] Starting full plan generation for plan ${planId} (${onboardingData.targetWeeks} weeks)`);
+            this.logger.log(`[FullGen] Onboarding data: goal=${onboardingData.goal}, level=${onboardingData.level}, daysPerWeek=${onboardingData.daysPerWeek}, pace=${onboardingData.currentPace5k}`);
             const startTime = Date.now();
 
-            // SINGLE PROMPT: Generate ALL weeks at once
+            // STEP 1: Call AI to generate the full plan
+            this.logger.log(`[FullGen] STEP 1: Calling AI (generateTrainingPlan)...`);
             const fullPlan = await this.trainingAIService.generateTrainingPlan(onboardingData);
+            this.logger.log(`[FullGen] STEP 1 DONE: AI returned ${fullPlan.weeks?.length || 0} weeks, duration_weeks=${fullPlan.duration_weeks}, frequency=${fullPlan.frequency_per_week} (${Date.now() - startTime}ms)`);
 
             if (!fullPlan.weeks || fullPlan.weeks.length === 0) {
                 throw new Error('AI returned empty weeks array');
             }
 
-            // Update plan with complete data
+            // STEP 2: Update plan record with complete data
+            this.logger.log(`[FullGen] STEP 2: Updating plan record in DB...`);
             const { error: updateError } = await this.supabaseService
                 .from('training_plans')
                 .update({
                     plan_json: fullPlan,
                     duration_weeks: fullPlan.duration_weeks || onboardingData.targetWeeks,
                     frequency_per_week: fullPlan.frequency_per_week || onboardingData.daysPerWeek,
-                    first_workout_json: fullPlan.nextWorkout || null,
                     generation_status: 'complete',
                 })
                 .eq('id', planId);
 
-            if (updateError) throw updateError;
+            if (updateError) {
+                this.logger.error(`[FullGen] STEP 2 FAILED: DB update error: ${updateError.message}`, updateError);
+                throw updateError;
+            }
+            this.logger.log(`[FullGen] STEP 2 DONE: Plan record updated successfully`);
 
-            // Create ALL workouts at once
+            // STEP 3: Create ALL workouts at once
+            this.logger.log(`[FullGen] STEP 3: Creating workout rows...`);
             const planStartDate = onboardingData.startDate ? new Date(onboardingData.startDate) : new Date();
             const allWorkoutsToInsert: any[] = [];
 
@@ -165,6 +173,7 @@ export class TrainingService {
                 allWorkoutsToInsert.push(...weekWorkouts);
             }
 
+            this.logger.log(`[FullGen] STEP 3: Inserting ${allWorkoutsToInsert.length} workouts in batches...`);
             if (allWorkoutsToInsert.length > 0) {
                 // Insert in batches of 100 to avoid payload limits
                 const BATCH_SIZE = 100;
@@ -174,19 +183,26 @@ export class TrainingService {
                         .from('workouts')
                         .insert(batch);
 
-                    if (workoutsError) throw workoutsError;
+                    if (workoutsError) {
+                        this.logger.error(`[FullGen] STEP 3 FAILED: Workout batch insert error (batch ${i / BATCH_SIZE + 1}): ${workoutsError.message}`, workoutsError);
+                        throw workoutsError;
+                    }
                 }
             }
 
             const elapsed = Date.now() - startTime;
-            this.logger.log(`[FullGen] Plan ${planId}: generated ${fullPlan.weeks.length} weeks, ${allWorkoutsToInsert.length} workouts in ${elapsed}ms`);
+            this.logger.log(`[FullGen] ✅ Plan ${planId}: generated ${fullPlan.weeks.length} weeks, ${allWorkoutsToInsert.length} workouts in ${elapsed}ms`);
         } catch (error) {
-            this.logger.error(`[FullGen] Failed for plan ${planId}`, error);
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            this.logger.error(`[FullGen] ❌ Failed for plan ${planId}: ${errorMsg}`, error);
 
-            // Mark as failed so frontend can show retry option
+            // Mark as failed and store error message for debugging
             await this.supabaseService
                 .from('training_plans')
-                .update({ generation_status: 'failed' })
+                .update({
+                    generation_status: 'failed',
+                    plan_json: { error: errorMsg, failed_at: new Date().toISOString() },
+                })
                 .eq('id', planId);
         }
     }
