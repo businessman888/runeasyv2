@@ -78,7 +78,7 @@ export default {
     [
       "@rnmapbox/maps",
       {
-        RNMapboxMapsDownloadToken: process.env.RNMAPBOX_DOWNLOAD_TOKEN || process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN
+        // O token de download é lido automaticamente de process.env.RNMAPBOX_MAPS_DOWNLOAD_TOKEN
       }
     ],
     [
