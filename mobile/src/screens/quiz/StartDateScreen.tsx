@@ -77,22 +77,22 @@ export function StartDateScreen({ value, onChange }: StartDateScreenProps) {
     const getDaysInMonth = (date: Date) => {
         const year = date.getFullYear();
         const month = date.getMonth();
-        const firstDay = new Date(year, month, 1);
+        const firstDay = createLocalDate(year, month, 1);
         const lastDay = new Date(year, month + 1, 0);
+        lastDay.setHours(0, 0, 0, 0);
         const daysInMonth = lastDay.getDate();
-        const startingDay = firstDay.getDay();
+        const startingDay = firstDay.getDay(); // 0=DOM, 1=SEG, ..., 6=SAB
 
         const days: (Date | null)[] = [];
 
-        // Previous month trailing days (shown dimmed)
-        const prevMonthLastDay = new Date(year, month, 0).getDate();
-        for (let i = startingDay - 1; i >= 0; i--) {
-            days.push(null); // null = empty/previous month
+        // Empty cells before the first day of the month
+        for (let i = 0; i < startingDay; i++) {
+            days.push(null);
         }
 
-        // Current month days
+        // Current month days — normalized to midnight local
         for (let i = 1; i <= daysInMonth; i++) {
-            days.push(new Date(year, month, i));
+            days.push(createLocalDate(year, month, i));
         }
 
         return days;

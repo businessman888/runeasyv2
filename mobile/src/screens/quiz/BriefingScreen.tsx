@@ -153,6 +153,8 @@ export function BriefingScreen({ navigation, route }: any) {
         } catch { }
     };
 
+    const isDevBuild = __DEV__ || process.env.APP_VARIANT === 'preview' || process.env.APP_VARIANT === 'development';
+
     const handleConfirmAndStart = async () => {
         // If not Pro, show paywall
         if (!isPro) {
@@ -166,9 +168,9 @@ export function BriefingScreen({ navigation, route }: any) {
             await useAuthStore.getState().syncSubscriptionStatus();
             const nowPro = useAuthStore.getState().isPro;
             if (!nowPro) {
-                // In dev mode, bypass paywall so we can test the full flow
-                if (__DEV__) {
-                    console.log('[BriefingScreen] DEV MODE — bypassing paywall, proceeding as Pro');
+                // In dev/preview builds, bypass paywall so we can test the full flow
+                if (isDevBuild) {
+                    console.log('[BriefingScreen] DEV/PREVIEW MODE — bypassing paywall, proceeding as Pro');
                 } else {
                     return; // User didn't subscribe, stay on screen
                 }
@@ -316,9 +318,6 @@ export function BriefingScreen({ navigation, route }: any) {
                         ============================================= */}
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Seus treinos</Text>
-                        <View style={[styles.todayBadge, { backgroundColor: accentColor + '30', borderColor: accentColor + '30' }]}>
-                            <Text style={[styles.todayBadgeText, { color: accentColor }]}>HOJE</Text>
-                        </View>
                     </View>
 
                     {/* Workout #1 — ACTIVE (archetype sample) */}

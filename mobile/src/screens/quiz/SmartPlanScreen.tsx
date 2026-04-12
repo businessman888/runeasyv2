@@ -165,6 +165,8 @@ export function SmartPlanScreen({ navigation, route }: any) {
         } catch { }
     };
 
+    const isDevBuild = __DEV__ || process.env.APP_VARIANT === 'preview' || process.env.APP_VARIANT === 'development';
+
     const handleUnlockAll = async () => {
         console.log('[SmartPlan] Desbloquear tudo pressed');
 
@@ -182,8 +184,12 @@ export function SmartPlanScreen({ navigation, route }: any) {
             await useAuthStore.getState().syncSubscriptionStatus();
             const nowPro = useAuthStore.getState().isPro;
             if (!nowPro) {
-                console.log('[SmartPlan] Usuário não converteu — mantendo na tela');
-                return;
+                if (isDevBuild) {
+                    console.log('[SmartPlan] DEV/PREVIEW MODE — bypassing paywall, proceeding');
+                } else {
+                    console.log('[SmartPlan] Usuário não converteu — mantendo na tela');
+                    return;
+                }
             }
         }
 
@@ -316,9 +322,6 @@ export function SmartPlanScreen({ navigation, route }: any) {
                         ============================================= */}
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Seus treinos</Text>
-                        <View style={styles.todayBadge}>
-                            <Text style={styles.todayBadgeText}>HOJE</Text>
-                        </View>
                     </View>
 
                     {/* Workout #1 — ACTIVE */}
