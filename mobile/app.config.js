@@ -34,7 +34,7 @@ export default {
     newArchEnabled: true,
     adaptiveIcon: {
       foregroundImage: "./assets/adaptive-icon.png",
-      backgroundColor: "#FF6B35"
+      backgroundColor: "#0E0E1F"
     },
     package: "com.runeasy.app",
     googleServicesFile: "./google-services.json",

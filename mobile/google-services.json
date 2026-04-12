@@ -12,7 +12,12 @@
           "package_name": "com.runeasy.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "74528549958-hf64h4138o6dr40d59q96bpl1pjk8qh4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCboNEKS58GEknYkVJ0ZklFYnEt7vmk11w"
@@ -20,7 +25,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "74528549958-hf64h4138o6dr40d59q96bpl1pjk8qh4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
