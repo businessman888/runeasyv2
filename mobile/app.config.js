@@ -1,6 +1,7 @@
 import 'dotenv/config';
 
 export default {
+  owner: "businessman23",
   name: "RunEasy",
   slug: "runeasy",
   version: "1.0.0",
@@ -18,6 +19,7 @@ export default {
     bundleIdentifier: "com.oytotec.runeasy",
     newArchEnabled: true,
     usesAppleSignIn: true,
+    googleServicesFile: "./GoogleService-Info.plist",
     infoPlist: {
       NSMotionUsageDescription: "RunEasy usa sensores de movimento para melhorar a precisão do treino",
       NSLocationWhenInUseUsageDescription: "RunEasy precisa de acesso à sua localização para rastrear sua corrida.",
@@ -25,7 +27,7 @@ export default {
       NSLocationAlwaysUsageDescription: "RunEasy rastreia sua corrida mesmo em background.",
       NSHealthShareUsageDescription: "Precisamos acessar seus dados de treino para sincronizar suas corridas do Apple Watch e personalizar seu plano de treino com IA.",
       NSHealthUpdateUsageDescription: "Precisamos salvar informações dos seus treinos realizados no RunEasy.",
-      UIBackgroundModes: ["fetch", "processing", "location"]
+      UIBackgroundModes: ["fetch", "processing", "location", "remote-notification"]
     }
   },
   android: {
