@@ -19,6 +19,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop, Circle as SvgCircle } from 'react-native-svg';
 import { usePlacement } from 'expo-superwall';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PAYWALL_PLACEMENTS } from '../../services/paywall';
 import {
     Archetype,
@@ -108,6 +109,7 @@ export function BriefingScreen({ navigation, route }: any) {
     const userId = route?.params?.userId;
     const archetype: Archetype = route?.params?.archetype;
     const { registerPlacement } = usePlacement();
+    const insets = useSafeAreaInsets();
 
     // Disable Android hardware back
     useEffect(() => {
@@ -153,7 +155,12 @@ export function BriefingScreen({ navigation, route }: any) {
         } catch { }
     };
 
-    const isDevBuild = __DEV__ || process.env.APP_VARIANT === 'preview' || process.env.APP_VARIANT === 'development';
+    // EXPO_PUBLIC_APP_VARIANT is inlined by Metro at build time; a plain APP_VARIANT
+    // lookup is stripped by the bundler in EAS preview/production builds.
+    const isDevBuild =
+        __DEV__ ||
+        process.env.EXPO_PUBLIC_APP_VARIANT === 'preview' ||
+        process.env.EXPO_PUBLIC_APP_VARIANT === 'development';
 
     const handleConfirmAndStart = async () => {
         // If not Pro, show paywall
@@ -209,9 +216,9 @@ export function BriefingScreen({ navigation, route }: any) {
             <ScrollView
                 style={styles.scrollView}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 100 }}
+                contentContainerStyle={{ paddingBottom: 100 + insets.bottom }}
             >
-                <View style={styles.content}>
+                <View style={[styles.content, { paddingTop: insets.top + 12 }]}>
                     {/* =============================================
                         1. HEADER — Archetype icon + name
                         ============================================= */}
@@ -428,7 +435,7 @@ export function BriefingScreen({ navigation, route }: any) {
             {/* =============================================
                 9. STICKY FOOTER CTA
                 ============================================= */}
-            <View style={styles.stickyFooter}>
+            <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
                 <TouchableOpacity
                     style={[styles.ctaButton, { backgroundColor: accentColor }]}
                     onPress={handleConfirmAndStart}
@@ -454,7 +461,6 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     content: {
-        paddingTop: Platform.OS === 'ios' ? 60 : 40,
         paddingHorizontal: 16,
     },
 
@@ -894,7 +900,7 @@ const styles = StyleSheet.create({
         lineHeight: 16,
     },
 
-    // — 9. Sticky Footer —
+    // — 9. Sticky Footer — paddingBottom applied dynamically via insets
     stickyFooter: {
         position: 'absolute',
         bottom: 0,
@@ -902,7 +908,6 @@ const styles = StyleSheet.create({
         right: 0,
         paddingHorizontal: 22,
         paddingTop: 16,
-        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
         backgroundColor: DS.bg,
     },
     ctaButton: {

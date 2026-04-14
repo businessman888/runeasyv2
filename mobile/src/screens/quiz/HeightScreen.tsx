@@ -63,14 +63,27 @@ export function HeightScreen({ value, onChange }: HeightScreenProps) {
 
     const panResponder = useRef(
         PanResponder.create({
-            onStartShouldSetPanResponder: () => true,
-            onMoveShouldSetPanResponder: () => true,
+            // Let children (marker TouchableOpacity) handle taps; only claim on actual drag.
+            onStartShouldSetPanResponder: () => false,
+            onStartShouldSetPanResponderCapture: () => false,
+            onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 2,
+            onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dy) > 2,
+            // Critical for iOS: do NOT yield the responder back to the parent ScrollView
+            // once the drag has started. Without this, the parent QuizOnboarding ScrollView
+            // reclaims the gesture on iOS and the ruler feels "stuck".
+            onPanResponderTerminationRequest: () => false,
+            // Android: block native ScrollView from capturing the gesture during drag.
+            onShouldBlockNativeResponder: () => true,
             onPanResponderGrant: () => {
                 panY.setOffset(lastOffset.current);
                 panY.setValue(0);
             },
             onPanResponderMove: (_, gesture) => {
                 panY.setValue(gesture.dy);
+                // Live update the displayed height for fluid feedback on both platforms.
+                const liveY = Math.max(0, Math.min(RULER_HEIGHT, lastOffset.current + gesture.dy));
+                const liveHeight = yToHeight(liveY);
+                setSelectedHeight((prev) => (prev === liveHeight ? prev : liveHeight));
             },
             onPanResponderRelease: (_, gesture) => {
                 const newY = Math.max(0, Math.min(RULER_HEIGHT, lastOffset.current + gesture.dy));

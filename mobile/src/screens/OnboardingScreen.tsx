@@ -8,7 +8,7 @@ import {
     Platform,
     Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { colors, typography, borderRadius } from '../theme';
 import Svg, { Path } from 'react-native-svg';
@@ -177,6 +177,7 @@ export function OnboardingScreen({ navigation, route }: any) {
     const { data, updateData } = useOnboardingStore();
     const [currentStep, setCurrentStep] = useState(0);
     const scrollViewRef = useRef<ScrollView>(null);
+    const insets = useSafeAreaInsets();
 
     // Define all quiz steps — 14 total (0-13)
     const QUIZ_STEPS: any[] = [
@@ -323,8 +324,16 @@ export function OnboardingScreen({ navigation, route }: any) {
         ? { onConnect: handleWearableConnect, onSkip: handleWearableSkip }
         : {};
 
-    // Calculate Android status bar padding
-    const androidStatusBarHeight = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 16 : 0;
+    // Reserved height at the bottom of the ScrollView so the fixed buttons
+    // never overlap the last item of each step. Mirrors the physical footer:
+    //   FixedNavigationButtons: 55 (button) + 12*2 (inner padding) = 79
+    //   + buttonContainer paddingTop (8) + bottomInset applied below.
+    const FOOTER_RESERVED_HEIGHT = 100;
+    const bottomInset = Math.max(insets.bottom, 12);
+    const topInset = Math.max(
+        insets.top,
+        Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 12,
+    );
 
     return (
         <View style={styles.container}>
@@ -335,46 +344,48 @@ export function OnboardingScreen({ navigation, route }: any) {
                 backgroundColor="transparent"
             />
 
-            <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-                {/* HEADER with XP and Progress Bar (Figma node 389-465) */}
-                <View style={[
-                    styles.headerContainer,
-                    Platform.OS === 'android' && { paddingTop: androidStatusBarHeight }
-                ]}>
-                    <ProgressHeader
-                        currentStep={currentStep + 1}
-                        totalSteps={TOTAL_STEPS}
+            {/* HEADER — top inset applied manually so it works under
+                Android Edge-to-Edge (newArchEnabled) where SafeAreaView padding
+                is bypassed by absolute children. */}
+            <View style={[styles.headerContainer, { paddingTop: topInset + 8 }]}>
+                <ProgressHeader
+                    currentStep={currentStep + 1}
+                    totalSteps={TOTAL_STEPS}
+                />
+            </View>
+
+            {/* Scrollable Content Area */}
+            <ScrollView
+                ref={scrollViewRef}
+                style={styles.scrollView}
+                contentContainerStyle={[
+                    styles.scrollContent,
+                    { paddingBottom: FOOTER_RESERVED_HEIGHT + bottomInset },
+                ]}
+                showsVerticalScrollIndicator={false}
+            >
+                <StepComponent
+                    {...(currentStepData.keys ? getValue() : { value: getValue() })}
+                    onChange={handleChange}
+                    {...extraProps}
+                    {...wearableProps}
+                />
+            </ScrollView>
+
+            {/* Fixed Navigation Buttons — bottom inset applied directly so the
+                buttons never escape under the Android gesture bar / iOS home
+                indicator. Hidden on wearable step (has its own buttons). */}
+            {!isWearableStep && (
+                <View style={[styles.buttonContainer, { paddingBottom: bottomInset }]}>
+                    <FixedNavigationButtons
+                        onBack={handleBack}
+                        onContinue={handleContinue}
+                        showBack={showBackButton}
+                        continueDisabled={continueDisabled}
+                        isLastStep={isLastStep}
                     />
                 </View>
-
-                {/* Scrollable Content Area */}
-                <ScrollView
-                    ref={scrollViewRef}
-                    style={styles.scrollView}
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
-                >
-                    <StepComponent
-                        {...(currentStepData.keys ? getValue() : { value: getValue() })}
-                        onChange={handleChange}
-                        {...extraProps}
-                        {...wearableProps}
-                    />
-                </ScrollView>
-
-                {/* Fixed Navigation Buttons — hidden on wearable step (has its own buttons) */}
-                {!isWearableStep && (
-                    <View style={styles.buttonContainer}>
-                        <FixedNavigationButtons
-                            onBack={handleBack}
-                            onContinue={handleContinue}
-                            showBack={showBackButton}
-                            continueDisabled={continueDisabled}
-                            isLastStep={isLastStep}
-                        />
-                    </View>
-                )}
-            </SafeAreaView>
+            )}
         </View>
     );
 }
@@ -388,13 +399,8 @@ const styles = StyleSheet.create({
         // FORCED DARK BACKGROUND - Never transparent!
         backgroundColor: FORCED_BG,
     },
-    safeArea: {
-        flex: 1,
-        backgroundColor: FORCED_BG,
-    },
     headerContainer: {
         paddingHorizontal: 12,
-        paddingTop: Platform.OS === 'ios' ? 8 : 0,
         paddingBottom: 16,
         backgroundColor: FORCED_BG,
     },
@@ -404,7 +410,6 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         paddingHorizontal: 20,
-        paddingBottom: 120, // Space for fixed buttons
     },
     buttonContainer: {
         position: 'absolute',
@@ -412,7 +417,11 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         backgroundColor: FORCED_BG,
-        paddingBottom: Platform.OS === 'ios' ? 0 : 16,
         paddingHorizontal: 12,
+        paddingTop: 8,
+        // Hairline top border so scrolling content has a visual boundary
+        // behind the fixed footer area.
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: FORCED_GLASS_STROKE,
     },
 });

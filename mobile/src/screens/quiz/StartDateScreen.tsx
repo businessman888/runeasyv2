@@ -186,37 +186,49 @@ export function StartDateScreen({ value, onChange }: StartDateScreenProps) {
                     ))}
                 </View>
 
-                {/* —— CALENDAR GRID — 41×41px cells —— */}
+                {/* —— CALENDAR GRID — rows of 7 cells, flex:1 per cell —— */}
                 <View style={styles.dayGrid}>
-                    {days.map((date, index) => {
-                        const selected = date && isDateSelected(date);
-                        const pastDay = date && isPast(date);
-                        const todayDay = date && isToday(date) && !selected;
-
-                        return (
-                            <TouchableOpacity
-                                key={index}
-                                style={[
-                                    styles.dayCell,
-                                    selected && styles.dayCellSelected,
-                                ]}
-                                onPress={() => date && handleDateSelect(date)}
-                                disabled={!date || isPast(date)}
-                                activeOpacity={0.7}
-                            >
-                                {date && (
-                                    <Text style={[
-                                        styles.dayText,
-                                        pastDay && styles.dayTextPast,
-                                        todayDay && styles.dayTextToday,
-                                        selected && styles.dayTextSelected,
-                                    ]}>
-                                        {date.getDate()}
-                                    </Text>
-                                )}
-                            </TouchableOpacity>
-                        );
-                    })}
+                    {(() => {
+                        // Pad trailing cells so the last week always has 7 slots
+                        const padded: (Date | null)[] = [...days];
+                        while (padded.length % 7 !== 0) padded.push(null);
+                        const weeks: (Date | null)[][] = [];
+                        for (let i = 0; i < padded.length; i += 7) {
+                            weeks.push(padded.slice(i, i + 7));
+                        }
+                        return weeks.map((week, wIdx) => (
+                            <View key={`w-${wIdx}`} style={styles.weekRow}>
+                                {week.map((date, cIdx) => {
+                                    const selected = date && isDateSelected(date);
+                                    const pastDay = date && isPast(date);
+                                    const todayDay = date && isToday(date) && !selected;
+                                    return (
+                                        <TouchableOpacity
+                                            key={`w-${wIdx}-c-${cIdx}`}
+                                            style={[
+                                                styles.dayCell,
+                                                selected && styles.dayCellSelected,
+                                            ]}
+                                            onPress={() => date && handleDateSelect(date)}
+                                            disabled={!date || isPast(date)}
+                                            activeOpacity={0.7}
+                                        >
+                                            {date && (
+                                                <Text style={[
+                                                    styles.dayText,
+                                                    pastDay && styles.dayTextPast,
+                                                    todayDay && styles.dayTextToday,
+                                                    selected && styles.dayTextSelected,
+                                                ]}>
+                                                    {date.getDate()}
+                                                </Text>
+                                            )}
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        ));
+                    })()}
                 </View>
             </View>
         </View>
@@ -310,13 +322,15 @@ const styles = StyleSheet.create({
 
     // — Day Grid —
     dayGrid: {
+        flexDirection: 'column',
+    },
+    weekRow: {
         flexDirection: 'row',
-        flexWrap: 'wrap',
     },
 
-    // — Individual Day Cell (Figma: 41×41px, flex 1/7) —
+    // — Individual Day Cell (Figma: 41×41px, flex 1/7 via row layout) —
     dayCell: {
-        width: `${100 / 7}%` as any,
+        flex: 1,
         height: CELL_SIZE,
         alignItems: 'center',
         justifyContent: 'center',

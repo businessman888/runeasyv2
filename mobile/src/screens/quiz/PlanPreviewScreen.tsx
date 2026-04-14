@@ -12,6 +12,7 @@ import {
 import { colors } from '../../theme';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import Svg, { Path, Rect } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QuizProgressBar } from '../../components/QuizProgressBar';
 
 
@@ -155,6 +156,7 @@ export function PlanPreviewScreen({ navigation, route }: any) {
     const userId = route?.params?.userId;
     const { data, updateData } = useOnboardingStore();
     const [selectedTimeframe, setSelectedTimeframe] = useState<string | null>(null);
+    const insets = useSafeAreaInsets();
 
     const handleSelect = (id: string) => {
         setSelectedTimeframe(id);
@@ -178,8 +180,12 @@ export function PlanPreviewScreen({ navigation, route }: any) {
         <View style={styles.container}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-            <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-                <View style={styles.content}>
+            <ScrollView
+                style={styles.scrollView}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 120 + insets.bottom }}
+            >
+                <View style={[styles.content, { paddingTop: insets.top + 12 }]}>
                     {/* Progress Indicator */}
                     <QuizProgressBar currentStep={6} />
 
@@ -225,7 +231,7 @@ export function PlanPreviewScreen({ navigation, route }: any) {
             </ScrollView>
 
             {/* Unlock Plan Button */}
-            <View style={styles.bottomButtonContainer}>
+            <View style={[styles.bottomButtonContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
                 <TouchableOpacity
                     style={[
                         styles.unlockButton,
@@ -256,9 +262,7 @@ const styles = StyleSheet.create({
     },
     content: {
         flex: 1,
-        paddingTop: Platform.OS === 'ios' ? 60 : 40,
         paddingHorizontal: 20,
-        paddingBottom: 120,
     },
     progressContainer: {
         marginBottom: 24,
@@ -373,7 +377,6 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         paddingHorizontal: 20,
-        paddingBottom: Platform.OS === 'ios' ? 40 : 30,
         paddingTop: 20,
         backgroundColor: colors.background,
     },

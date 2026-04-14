@@ -19,6 +19,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop, Circle as SvgCircle } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { usePlacement } from 'expo-superwall';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PAYWALL_PLACEMENTS } from '../../services/paywall';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -124,6 +125,7 @@ export function SmartPlanScreen({ navigation, route }: any) {
     const isPro = useAuthStore((s) => s.isPro);
     const userId = route?.params?.userId;
     const { registerPlacement } = usePlacement();
+    const insets = useSafeAreaInsets();
 
     // Disable Android hardware back
     useEffect(() => {
@@ -165,7 +167,14 @@ export function SmartPlanScreen({ navigation, route }: any) {
         } catch { }
     };
 
-    const isDevBuild = __DEV__ || process.env.APP_VARIANT === 'preview' || process.env.APP_VARIANT === 'development';
+    // EXPO_PUBLIC_APP_VARIANT is inlined by the Metro bundler at build time.
+    // Plain APP_VARIANT is NOT — process.env lookups without the EXPO_PUBLIC_ prefix
+    // are stripped in production/preview EAS builds, which is why the previous
+    // bypass silently failed and the "Desbloquear Tudo" button did nothing.
+    const isDevBuild =
+        __DEV__ ||
+        process.env.EXPO_PUBLIC_APP_VARIANT === 'preview' ||
+        process.env.EXPO_PUBLIC_APP_VARIANT === 'development';
 
     const handleUnlockAll = async () => {
         console.log('[SmartPlan] Desbloquear tudo pressed');
@@ -221,9 +230,9 @@ export function SmartPlanScreen({ navigation, route }: any) {
             <ScrollView
                 style={styles.scrollView}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 100 }}
+                contentContainerStyle={{ paddingBottom: 100 + insets.bottom }}
             >
-                <View style={styles.content}>
+                <View style={[styles.content, { paddingTop: insets.top + 12 }]}>
                     {/* =============================================
                         1. HEADER — Flash icon + Title + Share
                         ============================================= */}
@@ -436,7 +445,7 @@ export function SmartPlanScreen({ navigation, route }: any) {
             {/* =============================================
                 9. STICKY FOOTER CTA
                 ============================================= */}
-            <View style={styles.stickyFooter}>
+            <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
                 <TouchableOpacity
                     style={styles.ctaButton}
                     onPress={handleUnlockAll}
@@ -462,7 +471,6 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     content: {
-        paddingTop: Platform.OS === 'ios' ? 60 : 40,
         paddingHorizontal: 16,
     },
 
@@ -902,7 +910,7 @@ const styles = StyleSheet.create({
         lineHeight: 16,
     },
 
-    // — 9. Sticky Footer —
+    // — 9. Sticky Footer — paddingBottom applied dynamically via insets
     stickyFooter: {
         position: 'absolute',
         bottom: 0,
@@ -910,7 +918,6 @@ const styles = StyleSheet.create({
         right: 0,
         paddingHorizontal: 22,
         paddingTop: 16,
-        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
         backgroundColor: DS.bg,
     },
     ctaButton: {

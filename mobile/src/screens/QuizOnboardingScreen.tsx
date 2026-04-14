@@ -8,7 +8,7 @@ import {
     Platform,
     Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { colors, typography, borderRadius, shadows } from '../theme';
 import Svg, { Path } from 'react-native-svg';
@@ -179,6 +179,7 @@ export function QuizOnboardingScreen({ navigation, route }: any) {
     const { data, updateData } = useOnboardingStore();
     const [currentStep, setCurrentStep] = useState(0);
     const scrollViewRef = useRef<ScrollView>(null);
+    const insets = useSafeAreaInsets();
 
     // Define all quiz steps with their component and data key(s)
     const QUIZ_STEPS = [
@@ -424,8 +425,13 @@ export function QuizOnboardingScreen({ navigation, route }: any) {
     // Get extra props for current step
     const extraProps = (currentStepData as any).extraProps || {};
 
-    // Calculate Android status bar padding
-    const androidStatusBarHeight = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 16 : 0;
+    // Height reserved at the bottom of the ScrollView so the fixed buttons never
+    // overlap the last content of each step. Matches the physical footer height:
+    //   FixedNavigationButtons: 55px button + 12px top/bottom padding = 79px
+    //   + buttonContainer paddingTop (12) + paddingBottom applied via insets.
+    const FOOTER_RESERVED_HEIGHT = 100;
+    const bottomInset = Math.max(insets.bottom, 12);
+    const topInset = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 12);
 
     return (
         <View style={styles.container}>
@@ -436,44 +442,43 @@ export function QuizOnboardingScreen({ navigation, route }: any) {
                 backgroundColor="transparent"
             />
 
-            <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-                {/* HEADER with XP and Progress Bar (Figma node 389-465) */}
-                <View style={[
-                    styles.headerContainer,
-                    Platform.OS === 'android' && { paddingTop: androidStatusBarHeight }
-                ]}>
-                    <ProgressHeader
-                        currentStep={currentStep + 1}
-                        totalSteps={TOTAL_STEPS}
-                    />
-                </View>
+            {/* HEADER with XP and Progress Bar — top inset applied manually */}
+            <View style={[styles.headerContainer, { paddingTop: topInset + 8 }]}>
+                <ProgressHeader
+                    currentStep={currentStep + 1}
+                    totalSteps={TOTAL_STEPS}
+                />
+            </View>
 
-                {/* Scrollable Content Area */}
-                <ScrollView
-                    ref={scrollViewRef}
-                    style={styles.scrollView}
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
-                >
-                    <StepComponent
-                        value={getValue()}
-                        onChange={handleChange}
-                        {...(currentStepData.keys ? getValue() : {})}
-                        {...extraProps}
-                    />
-                </ScrollView>
+            {/* Scrollable Content Area */}
+            <ScrollView
+                ref={scrollViewRef}
+                style={styles.scrollView}
+                contentContainerStyle={[
+                    styles.scrollContent,
+                    { paddingBottom: FOOTER_RESERVED_HEIGHT + bottomInset },
+                ]}
+                showsVerticalScrollIndicator={false}
+            >
+                <StepComponent
+                    value={getValue()}
+                    onChange={handleChange}
+                    {...(currentStepData.keys ? getValue() : {})}
+                    {...extraProps}
+                />
+            </ScrollView>
 
-                {/* Fixed Navigation Buttons (Figma node 428-464) */}
-                <View style={styles.buttonContainer}>
-                    <FixedNavigationButtons
-                        onBack={handleBack}
-                        onContinue={handleContinue}
-                        showBack={showBackButton}
-                        continueDisabled={continueDisabled}
-                        isLastStep={isLastStep}
-                    />
-                </View>
-            </SafeAreaView>
+            {/* Fixed Navigation Buttons — bottom inset applied manually so they
+                never escape under the Android gesture bar / iOS home indicator. */}
+            <View style={[styles.buttonContainer, { paddingBottom: bottomInset }]}>
+                <FixedNavigationButtons
+                    onBack={handleBack}
+                    onContinue={handleContinue}
+                    showBack={showBackButton}
+                    continueDisabled={continueDisabled}
+                    isLastStep={isLastStep}
+                />
+            </View>
         </View>
     );
 }
@@ -487,14 +492,8 @@ const styles = StyleSheet.create({
         // FORCED DARK BACKGROUND - Never transparent!
         backgroundColor: FORCED_BG,
     },
-    safeArea: {
-        flex: 1,
-        // FORCED DARK BACKGROUND - Backup
-        backgroundColor: FORCED_BG,
-    },
     headerContainer: {
         paddingHorizontal: 12,
-        paddingTop: Platform.OS === 'ios' ? 8 : 0,
         paddingBottom: 16,
         backgroundColor: FORCED_BG,
     },
@@ -504,7 +503,6 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         paddingHorizontal: 20,
-        paddingBottom: 120, // Space for fixed buttons
     },
     buttonContainer: {
         position: 'absolute',
@@ -512,7 +510,11 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         backgroundColor: FORCED_BG,
-        paddingBottom: Platform.OS === 'ios' ? 0 : 16,
         paddingHorizontal: 12,
+        paddingTop: 8,
+        // Subtle top border so content scrolling behind the fixed area has a
+        // visual boundary and doesn't look cut mid-line.
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: FORCED_GLASS_STROKE,
     },
 });
