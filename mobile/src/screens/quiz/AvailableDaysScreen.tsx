@@ -54,6 +54,17 @@ export function AvailableDaysScreen({ value, onChange, maxDays = 7 }: AvailableD
         }
     }, [value]);
 
+    // When maxDays shrinks (user went back and lowered frequency), trim selection
+    useEffect(() => {
+        if (selectedDays.length > maxDays) {
+            const trimmed: number[] = [];
+            setSelectedDays(trimmed);
+            if (onChange) {
+                onChange(trimmed);
+            }
+        }
+    }, [maxDays]);
+
     const handleDayToggle = (dayId: number) => {
         let newDays: number[];
 
@@ -75,7 +86,9 @@ export function AvailableDaysScreen({ value, onChange, maxDays = 7 }: AvailableD
     };
 
     // Check for 3+ consecutive training days (not just 2)
+    // Only relevant when training <= 4 days; at 5+ days consecutive days are expected
     const hasConsecutiveDays = () => {
+        if (maxDays >= 5) return false; // high-frequency plans expect consecutive days
         if (selectedDays.length < 3) return false;
         const sorted = [...selectedDays].sort((a, b) => a - b);
         let consecutive = 1;

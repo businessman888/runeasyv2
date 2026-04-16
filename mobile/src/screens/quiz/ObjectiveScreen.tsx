@@ -80,7 +80,7 @@ export function ObjectiveScreen({ value, onChange }: ObjectiveScreenProps) {
     }, [value]);
 
     const handleSelect = (option: ObjectiveOption) => {
-        setSelectedObjective(option.id);
+        setSelectedObjective(option.storeValue);
         if (onChange) {
             onChange(option.storeValue);
         }
@@ -103,7 +103,7 @@ export function ObjectiveScreen({ value, onChange }: ObjectiveScreenProps) {
                         key={option.id}
                         style={[
                             styles.optionCard,
-                            selectedObjective === option.id && styles.optionCardSelected
+                            selectedObjective === option.storeValue && styles.optionCardSelected
                         ]}
                         onPress={() => handleSelect(option)}
                         activeOpacity={0.7}
@@ -113,7 +113,7 @@ export function ObjectiveScreen({ value, onChange }: ObjectiveScreenProps) {
                             <Text style={styles.optionTitle}>{option.title}</Text>
                             <Text style={styles.optionSubtitle}>{option.subtitle}</Text>
                         </View>
-                        <RadioButton selected={selectedObjective === option.id} />
+                        <RadioButton selected={selectedObjective === option.storeValue} />
                     </TouchableOpacity>
                 ))}
             </View>

@@ -218,12 +218,14 @@ export function QuizOnboardingScreen({ navigation, route }: any) {
             key: 'daysPerWeek',
             Component: FrequencyScreen,
             title: 'Quantos dias por semana?',
+            extraProps: { goal: data.goal, experience_level: data.experience_level },
         },
         // Step 7: Available Days
         {
             key: 'availableDays',
             Component: AvailableDaysScreen,
             title: 'Quais dias você tem disponíveis?',
+            extraProps: { maxDays: data.daysPerWeek || 3 },
         },
         // Step 8: Intense Day
         {
@@ -299,8 +301,8 @@ export function QuizOnboardingScreen({ navigation, route }: any) {
             case 5: // Frequency
                 return typeof data.daysPerWeek === 'number' && data.daysPerWeek >= 2 && data.daysPerWeek <= 7;
 
-            case 6: // Available Days
-                return Array.isArray(data.availableDays) && data.availableDays.length > 0;
+            case 6: // Available Days — must match exact daysPerWeek count
+                return Array.isArray(data.availableDays) && data.availableDays.length === (data.daysPerWeek || 3);
 
             case 7: // Intense Day
                 return data.intenseDayIndex !== null && data.intenseDayIndex !== undefined;
@@ -391,6 +393,17 @@ export function QuizOnboardingScreen({ navigation, route }: any) {
                 updateData({ [currentStepData.key]: value.toISOString() });
             } else {
                 updateData({ [currentStepData.key]: value });
+            }
+
+            // ── Dependency sync: daysPerWeek → availableDays / intenseDayIndex ──
+            // When user changes frequency to a value lower than current selected
+            // days, reset downstream selections to avoid stale state.
+            if (currentStepData.key === 'daysPerWeek') {
+                const newFreq = value as number;
+                const currentDays = data.availableDays || [];
+                if (currentDays.length > newFreq) {
+                    updateData({ availableDays: [], intenseDayIndex: null });
+                }
             }
         }
     };

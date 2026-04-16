@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
     View,
     Text,
@@ -25,22 +25,108 @@ const IdeaIcon = () => (
     </Svg>
 );
 
-const DAYS = [2, 3, 4, 5, 6, 7];
+// ── Smart recommendation logic ──────────────────────────────────────────
+interface FrequencyRecommendation {
+    min: number;
+    max: number;
+    maxAllowed: number; // hard cap for the slider
+    text: string;
+}
+
+function getRecommendation(goal?: string, level?: string): FrequencyRecommendation {
+    // Beginner — always conservative regardless of goal
+    if (level === 'beginner') {
+        return {
+            min: 2, max: 3, maxAllowed: 5,
+            text: 'Iniciantes devem correr em dias alternados (ex.: Seg, Qua, Sex) para recuperação muscular e articular (48h).',
+        };
+    }
+
+    // General fitness — moderate regardless of level
+    if (goal === 'general_fitness') {
+        return {
+            min: 2, max: 3, maxAllowed: 5,
+            text: 'Para saúde e bem-estar, 2-3 dias por semana com dias alternados é o ideal para manter a consistência.',
+        };
+    }
+
+    // Performance (5k / 10k) — intermediate or advanced
+    if (goal === '5k' || goal === '10k') {
+        return {
+            min: 3, max: 4, maxAllowed: 7,
+            text: 'Para melhorar seu desempenho em provas curtas, 3-4 dias permitem incluir intervalados e longão sem sobrecarga.',
+        };
+    }
+
+    // Half marathon / Marathon — intermediate
+    if (level === 'intermediate' && (goal === 'half_marathon' || goal === 'marathon')) {
+        return {
+            min: 4, max: 5, maxAllowed: 7,
+            text: 'Para meia/maratona no nível intermediário, 4-5 dias são fundamentais para construir base aeróbica e volume.',
+        };
+    }
+
+    // Half marathon / Marathon — advanced
+    if (level === 'advanced' && (goal === 'half_marathon' || goal === 'marathon')) {
+        return {
+            min: 5, max: 7, maxAllowed: 7,
+            text: 'Corredores avançados de longa distância treinam 5-7 dias por semana, incluindo sessões duplas quando necessário.',
+        };
+    }
+
+    // Fallback
+    return {
+        min: 3, max: 4, maxAllowed: 7,
+        text: 'Nós recomendamos pelo menos 3 dias para resultados consistentes no primeiro mês.',
+    };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 
 interface FrequencyScreenProps {
     value?: number;
     onChange?: (value: number) => void;
+    goal?: string;
+    experience_level?: string;
 }
 
-export function FrequencyScreen({ value, onChange }: FrequencyScreenProps) {
-    const [selectedDays, setSelectedDays] = useState<number>(value || 3);
+export function FrequencyScreen({ value, onChange, goal, experience_level }: FrequencyScreenProps) {
+    const recommendation = useMemo(
+        () => getRecommendation(goal, experience_level),
+        [goal, experience_level],
+    );
+
+    // Build the available days array based on the hard cap
+    const daysList = useMemo(() => {
+        const arr: number[] = [];
+        for (let d = 2; d <= recommendation.maxAllowed; d++) arr.push(d);
+        return arr;
+    }, [recommendation.maxAllowed]);
+
+    // Clamp initial/restored value to the allowed range
+    const clampedValue = useMemo(() => {
+        const v = value ?? recommendation.min;
+        if (v > recommendation.maxAllowed) return recommendation.maxAllowed;
+        if (v < 2) return 2;
+        return v;
+    }, [value, recommendation]);
+
+    const [selectedDays, setSelectedDays] = useState<number>(clampedValue);
     const [isDragging, setIsDragging] = useState(false);
     const trackRef = useRef<View>(null);
     const trackLayoutRef = useRef<{ x: number; width: number }>({ x: 0, width: SLIDER_WIDTH });
 
+    // Sync from parent value or clamp when recommendation changes
     useEffect(() => {
-        setSelectedDays(value || 3);
-    }, [value]);
+        const next = value ?? recommendation.min;
+        const clamped = Math.max(2, Math.min(next, recommendation.maxAllowed));
+        if (clamped !== selectedDays) {
+            setSelectedDays(clamped);
+            if (clamped !== value && onChange) {
+                onChange(clamped);
+            }
+        }
+    }, [value, recommendation.maxAllowed]);
 
     const handleSelectDay = useCallback((day: number) => {
         setSelectedDays(day);
@@ -49,19 +135,20 @@ export function FrequencyScreen({ value, onChange }: FrequencyScreenProps) {
         }
     }, [onChange]);
 
-    // Calculate slider position
-    const stepWidth = SLIDER_WIDTH / (DAYS.length - 1);
+    // Calculate slider position — dynamic based on daysList length
+    const stepWidth = daysList.length > 1 ? SLIDER_WIDTH / (daysList.length - 1) : SLIDER_WIDTH;
     const getSliderPosition = () => {
-        const index = DAYS.indexOf(selectedDays);
-        return index * stepWidth;
+        const index = daysList.indexOf(selectedDays);
+        return Math.max(0, index) * stepWidth;
     };
 
     // Convert x position to day value
     const positionToDay = useCallback((x: number): number => {
-        const index = Math.round(x / stepWidth);
-        const clampedIndex = Math.max(0, Math.min(index, DAYS.length - 1));
-        return DAYS[clampedIndex];
-    }, [stepWidth]);
+        const sw = daysList.length > 1 ? SLIDER_WIDTH / (daysList.length - 1) : SLIDER_WIDTH;
+        const index = Math.round(x / sw);
+        const clampedIndex = Math.max(0, Math.min(index, daysList.length - 1));
+        return daysList[clampedIndex];
+    }, [daysList]);
 
     // Handle track press to jump to position
     const handleTrackPress = useCallback((event: any) => {
@@ -167,7 +254,7 @@ export function FrequencyScreen({ value, onChange }: FrequencyScreenProps) {
 
                 {/* Day Numbers */}
                 <View style={styles.daysRow}>
-                    {DAYS.map((day) => (
+                    {daysList.map((day) => (
                         <TouchableOpacity
                             key={day}
                             onPress={() => handleSelectDay(day)}
@@ -184,14 +271,17 @@ export function FrequencyScreen({ value, onChange }: FrequencyScreenProps) {
                 </View>
             </View>
 
-            {/* Tip Card */}
+            {/* Smart Recommendation Card */}
             <View style={styles.tipCard}>
                 <View style={styles.tipIconContainer}>
                     <IdeaIcon />
                 </View>
                 <View style={styles.tipTextContainer}>
+                    <Text style={styles.tipHighlight}>
+                        Recomendado: {recommendation.min}-{recommendation.max} dias
+                    </Text>
                     <Text style={styles.tipText}>
-                        Nós recomendamos pelo menos 3 dias{'\n'}para resultados consistentes no{'\n'}primeiro mês.
+                        {recommendation.text}
                     </Text>
                 </View>
             </View>
@@ -298,11 +388,18 @@ const styles = StyleSheet.create({
     tipTextContainer: {
         flex: 1,
     },
+    tipHighlight: {
+        fontSize: typography.fontSizes.sm,
+        fontWeight: typography.fontWeights.semibold,
+        color: colors.primary,
+        lineHeight: 18,
+        marginBottom: 4,
+    },
     tipText: {
         fontSize: typography.fontSizes.sm,
         fontWeight: typography.fontWeights.normal,
         color: colors.textSecondary,
-        lineHeight: 16,
+        lineHeight: 18,
     },
 });
 
