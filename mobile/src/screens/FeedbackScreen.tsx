@@ -110,8 +110,8 @@ export function FeedbackScreen({ route, navigation }: Props) {
                     <View style={styles.metricsGrid}>
                         <MetricCard
                             label="Distância"
-                            planned={`${feedback.metrics_comparison.distance.planned.toFixed(1)} km`}
-                            executed={`${feedback.metrics_comparison.distance.executed.toFixed(1)} km`}
+                            planned={`${feedback.metrics_comparison.distance.planned.toFixed(2)} km`}
+                            executed={`${feedback.metrics_comparison.distance.executed.toFixed(2)} km`}
                             diff={feedback.metrics_comparison.distance.diff_percent}
                         />
                         <MetricCard

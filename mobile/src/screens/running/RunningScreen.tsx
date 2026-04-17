@@ -62,6 +62,7 @@ export function RunningScreen() {
     timeMs,
     currentPace,
     formattedTime,
+    initialPosition,
     startResumeTracking,
     pauseTracking,
     finishTracking,
@@ -234,7 +235,11 @@ export function RunningScreen() {
           animationDuration={1000}
           followUserLocation={true}
           followUserMode={Mapbox.UserTrackingMode.FollowWithHeading}
-          defaultSettings={{ zoomLevel: 18.5, animationDuration: 0 }}
+          defaultSettings={{
+            zoomLevel: 18.5,
+            animationDuration: 0,
+            centerCoordinate: initialPosition || undefined,
+          }}
         />
         {/* Indicador de localização customizado (componentizado) */}
         <MapLocationPuck onGPSFix={() => { if (!hasGPSFix) setHasGPSFix(true); }} />

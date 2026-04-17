@@ -37,10 +37,19 @@ TaskManager.defineTask(LOCATION_TRACKING_TASK, async ({ data, error }) => {
   const loc = locations[0];
 
   // ── FILTRO 1: Precisão do GPS ──────────────────────────────────────────────
-  // Descarta pontos com erro horizontal > MAX_ACCURACY_METERS
-  if (!loc.coords.accuracy || loc.coords.accuracy > MAX_ACCURACY_METERS) {
-    console.log(`[Tracking Task] Ponto ignorado. Precisão ruim: ${loc.coords.accuracy?.toFixed(1)}m (máx: ${MAX_ACCURACY_METERS}m)`);
+  // Após resume, GPS precisa de "warm-up" — primeiros pontos podem ter accuracy pior.
+  // Grace period: aceita até 30m nos primeiros pontos pós-resume.
+  const graceCount = trackingStorage.getNumber('resume_grace_count') || 0;
+  const accuracyLimit = graceCount > 0 ? 30 : MAX_ACCURACY_METERS;
+
+  if (!loc.coords.accuracy || loc.coords.accuracy > accuracyLimit) {
+    console.log(`[Tracking Task] Ponto ignorado. Precisão ruim: ${loc.coords.accuracy?.toFixed(1)}m (máx: ${accuracyLimit}m)`);
     return;
+  }
+
+  // Decrementar grace counter se aplicável
+  if (graceCount > 0) {
+    trackingStorage.set('resume_grace_count', graceCount - 1);
   }
 
   // ── FILTRO 2: Velocidade zero (parado) ────────────────────────────────────
@@ -80,6 +89,25 @@ TaskManager.defineTask(LOCATION_TRACKING_TASK, async ({ data, error }) => {
     };
 
     let currentDistance = trackingStorage.getNumber('current_distance') || 0;
+
+    // ── RESUME PÓS-PAUSA: novo segmento ──────────────────────────────────
+    // Quando o usuário pausa e se desloca, o primeiro ponto pós-resume pode
+    // estar a centenas de metros do último ponto salvo. Sem este tratamento,
+    // o filtro anti-teleporte (FILTRO 5) rejeitaria este e TODOS os pontos
+    // seguintes permanentemente ("teleport filter deadlock").
+    //
+    // Solução: aceitar o ponto como nova referência SEM somar distância.
+    const wasPaused = trackingStorage.getBoolean('tracking_paused');
+    if (wasPaused && routePointsList.length > 0) {
+      trackingStorage.set('tracking_paused', false);
+      trackingStorage.set('resume_grace_count', 3);
+
+      routePointsList.push(newPoint);
+      trackingStorage.set('route_points', JSON.stringify(routePointsList));
+      trackingStorage.set('last_update_ts', Date.now());
+      console.log(`[Tracking Task] ✓ Novo segmento pós-pausa. Ponto aceito como referência (sem distância). Precisão: ${newPoint.accuracy?.toFixed(1)}m`);
+      return;
+    }
 
     if (routePointsList.length > 0) {
       const lastPoint = routePointsList[routePointsList.length - 1];

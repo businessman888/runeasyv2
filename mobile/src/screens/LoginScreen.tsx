@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, spacing } from '../theme';
 import { useAuthStore } from '../stores';
 import { supabase } from '../services/supabase';
+import { BASE_API_URL } from '../config/api.config';
 import Svg, { Path } from 'react-native-svg';
 import {
     GoogleSignin,
@@ -83,23 +84,34 @@ export function LoginScreen({ navigation }: { navigation: unknown }) {
                 throw new Error('No idToken returned from Google Sign-In');
             }
 
-            // Exchange Google token with Supabase
-            console.log('[LOGIN] Exchanging token with Supabase...');
-            const { data, error: supabaseError } = await supabase.auth.signInWithIdToken({
-                provider: 'google',
-                token: idToken,
+            // Exchange Google token via backend (avoids DNS issues with direct Supabase calls)
+            console.log('[LOGIN] Exchanging token via backend...');
+            const authResponse = await fetch(`${BASE_API_URL}/auth/google`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ idToken }),
             });
 
-            if (supabaseError) {
-                console.error('[LOGIN] Supabase auth error:', supabaseError.message);
-                throw new Error(supabaseError.message);
+            if (!authResponse.ok) {
+                const errorBody = await authResponse.text();
+                console.error('[LOGIN] Backend auth error:', errorBody);
+                throw new Error('Falha na autenticação. Tente novamente.');
             }
 
-            if (!data.session || !data.user) {
-                throw new Error('No session returned from Supabase');
+            const authData = await authResponse.json();
+
+            // Set the session in the local Supabase client for session persistence
+            const { error: sessionError } = await supabase.auth.setSession({
+                access_token: authData.session.access_token,
+                refresh_token: authData.session.refresh_token,
+            });
+
+            if (sessionError) {
+                console.warn('[LOGIN] Could not persist session locally:', sessionError.message);
             }
 
-            console.log('[LOGIN] Supabase auth successful, userId:', data.user.id);
+            console.log('[LOGIN] Auth successful, userId:', authData.user.id);
+            const data = { user: authData.user, session: authData.session };
 
             // Login to our backend (fetch/create user data)
             await login(data.user.id);
@@ -171,31 +183,45 @@ export function LoginScreen({ navigation }: { navigation: unknown }) {
                 console.log('[LOGIN] Apple fullName captured:', displayName);
             }
 
-            // 4. Exchange Apple token with Supabase (rawNonce for server-side validation)
-            console.log('[LOGIN] Exchanging Apple token with Supabase...');
-            const { data, error: supabaseError } = await supabase.auth.signInWithIdToken({
-                provider: 'apple',
-                token: identityToken,
-                nonce: rawNonce,
+            // 4. Exchange Apple token via backend (avoids DNS issues with direct Supabase calls)
+            console.log('[LOGIN] Exchanging Apple token via backend...');
+            const authResponse = await fetch(`${BASE_API_URL}/auth/apple`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ idToken: identityToken, nonce: rawNonce }),
             });
 
-            if (supabaseError) {
-                console.error('[LOGIN] Supabase auth error:', supabaseError.message);
-                throw new Error(supabaseError.message);
+            if (!authResponse.ok) {
+                const errorBody = await authResponse.text();
+                console.error('[LOGIN] Backend auth error:', errorBody);
+                throw new Error('Falha na autenticação. Tente novamente.');
             }
 
-            if (!data.session || !data.user) {
-                throw new Error('No session returned from Supabase');
+            const authData = await authResponse.json();
+
+            // Set the session in the local Supabase client for session persistence
+            const { error: sessionError } = await supabase.auth.setSession({
+                access_token: authData.session.access_token,
+                refresh_token: authData.session.refresh_token,
+            });
+
+            if (sessionError) {
+                console.warn('[LOGIN] Could not persist session locally:', sessionError.message);
             }
 
             // 5. Update user metadata with fullName if available (first login only)
             if (displayName) {
-                await supabase.auth.updateUser({
-                    data: { full_name: displayName },
-                });
+                try {
+                    await supabase.auth.updateUser({
+                        data: { full_name: displayName },
+                    });
+                } catch {
+                    console.warn('[LOGIN] Could not update displayName locally, will sync via backend');
+                }
             }
 
-            console.log('[LOGIN] Supabase auth successful, userId:', data.user.id);
+            console.log('[LOGIN] Auth successful, userId:', authData.user.id);
+            const data = { user: authData.user, session: authData.session };
 
             // 6. Login to backend
             await login(data.user.id);

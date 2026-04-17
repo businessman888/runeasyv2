@@ -208,14 +208,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         try {
             set({ isLoading: true });
 
-            // First check Supabase session
-            const { data: { session } } = await supabase.auth.getSession();
+            // Try Supabase session with a timeout to avoid DNS hangs
+            let sessionUserId: string | null = null;
+            try {
+                const sessionPromise = supabase.auth.getSession();
+                const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+                const result = await Promise.race([sessionPromise, timeoutPromise]);
 
-            if (session) {
-                const userId = session.user.id;
-                console.log('[AUTH] Supabase session found for:', userId);
+                if (result && 'data' in result && result.data.session) {
+                    sessionUserId = result.data.session.user.id;
+                    console.log('[AUTH] Supabase session found for:', sessionUserId);
+                }
+            } catch (err) {
+                console.warn('[AUTH] Supabase session check failed, using fallback:', err);
+            }
 
-                // Validate user exists in backend
+            // Fallback to stored user_id if Supabase session unavailable
+            const userId = sessionUserId || await Storage.getItemAsync('user_id');
+
+            if (userId) {
                 const baseUrl = API_URL.endsWith('/api') ? API_URL : `${API_URL}/api`;
                 const response = await fetch(`${baseUrl}/users/${userId}`, {
                     headers: { 'x-user-id': userId },
@@ -232,24 +243,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                     set({ user: null, isAuthenticated: false });
                 }
             } else {
-                // Fallback: check stored user_id
-                const storedUserId = await Storage.getItemAsync('user_id');
-                if (storedUserId) {
-                    const baseUrl = API_URL.endsWith('/api') ? API_URL : `${API_URL}/api`;
-                    const response = await fetch(`${baseUrl}/users/${storedUserId}`, {
-                        headers: { 'x-user-id': storedUserId },
-                    });
-
-                    if (response.ok) {
-                        const userData = await response.json();
-                        set({ user: userData.user, isAuthenticated: true });
-                    } else {
-                        await clearAllAuthTokens();
-                        set({ user: null, isAuthenticated: false });
-                    }
-                } else {
-                    set({ user: null, isAuthenticated: false });
-                }
+                set({ user: null, isAuthenticated: false });
             }
         } catch (error) {
             console.error('[AUTH] Check auth error:', error);

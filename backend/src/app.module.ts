@@ -25,6 +25,7 @@ import { OnboardingModule } from './modules/onboarding';
 import { HealthModule } from './modules/health/health.module';
 import { SharingModule } from './modules/sharing';
 import { DevicesModule } from './modules/devices';
+import { AuthModule } from './modules/auth';
 
 @Module({
   imports: [
@@ -89,6 +90,7 @@ import { DevicesModule } from './modules/devices';
     HealthModule,
     SharingModule,
     DevicesModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

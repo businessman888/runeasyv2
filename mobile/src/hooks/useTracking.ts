@@ -11,6 +11,7 @@ export function useTracking() {
   const [timeMs, setTimeMs] = useState(0); // Tempo em milissegundos
   const [currentPace, setCurrentPace] = useState(0); // minutos por km
   const [isReady, setIsReady] = useState(false);
+  const [initialPosition, setInitialPosition] = useState<[number, number] | null>(null);
 
   // Usa refs para manter valores mutáveis dentro do intervalo de tempo sem causar re-renders exaustivos
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -34,6 +35,22 @@ export function useTracking() {
         let { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
         if (bgStatus !== 'granted') {
           console.warn('Permissão background negada — tracking só funcionará em foreground');
+        }
+
+        // Obtém posição inicial rápida para o mapa abrir em nível de rua (UX Uber-like)
+        // Usa cache do sistema (instantâneo) com fallback para posição atual (low accuracy = rápido)
+        try {
+          const lastKnown = await Location.getLastKnownPositionAsync();
+          if (lastKnown) {
+            setInitialPosition([lastKnown.coords.longitude, lastKnown.coords.latitude]);
+          } else {
+            const current = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Low,
+            });
+            setInitialPosition([current.coords.longitude, current.coords.latitude]);
+          }
+        } catch (e) {
+          console.warn('[useTracking] Não foi possível obter posição inicial');
         }
 
         // Tenta recuperar estado local se o app foi fechado no meio de uma corrida
@@ -159,6 +176,10 @@ export function useTracking() {
 
   const pauseTracking = useCallback(async () => {
     setSessionState('paused');
+    // Sinaliza no MMKV que o tracking foi pausado pelo usuário.
+    // A locationTask usa essa flag para tratar o primeiro ponto pós-resume
+    // como "novo segmento" (sem somar distância do deslocamento durante pausa).
+    trackingStorage.set('tracking_paused', true);
     try {
       const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
       if (hasStarted) {
@@ -223,6 +244,8 @@ export function useTracking() {
     trackingStorage.delete('current_distance');
     trackingStorage.delete('accumulated_time_ms');
     trackingStorage.delete('last_update_ts');
+    trackingStorage.delete('tracking_paused');
+    trackingStorage.delete('resume_grace_count');
 
     setRouteCoordinates([]);
     setDistance(0);
@@ -259,6 +282,7 @@ export function useTracking() {
     timeMs,
     currentPace: getFormattedPace(),
     formattedTime: getFormattedTime(),
+    initialPosition,
     startResumeTracking,
     pauseTracking,
     finishTracking,
