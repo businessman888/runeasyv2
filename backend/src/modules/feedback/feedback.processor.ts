@@ -27,7 +27,7 @@ export class FeedbackProcessor extends WorkerHost {
 
                 // Check badges after feedback (async, non-blocking for feedback)
                 try {
-                    await this.gamificationService.checkBadges(userId, { workoutId });
+                    await this.gamificationService.checkBadges(userId);
                     this.logger.log(`Badges checked for user ${userId}`);
                 } catch (badgeError) {
                     this.logger.error(`Badge check failed for user ${userId}`, badgeError);

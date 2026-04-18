@@ -546,13 +546,27 @@ export class TrainingService {
             }
         }
 
-        // 4. Gamification: update streak and award XP
+        // 4. Gamification: update streak, award XP and check badges
         try {
             await this.gamificationService.updateStreak(userId);
             await this.gamificationService.awardWorkoutXP(userId, {
                 distance_km: finalDistanceKm,
                 pace_seconds_per_km: paceSeconds,
                 workoutId,
+                elevation_gain: elevationGain,
+            });
+
+            const averageSpeedMs = payload.duration_seconds > 0
+                ? (finalDistanceKm * 1000) / payload.duration_seconds
+                : 0;
+
+            await this.gamificationService.checkBadges(userId, {
+                distance: finalDistanceKm * 1000,
+                average_speed: averageSpeedMs,
+                elapsed_time: payload.duration_seconds,
+                moving_time: payload.duration_seconds,
+                total_elevation_gain: elevationGain,
+                start_date: startDateIso,
             });
         } catch (gamificationError) {
             this.logger.error(`Gamification error for workout ${workoutId}`, gamificationError);
