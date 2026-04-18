@@ -79,6 +79,7 @@ interface OnboardingState {
     pendingPlanId: string | null;
     error: string | null;
     errorCode: typeof ONBOARDING_ERRORS[keyof typeof ONBOARDING_ERRORS] | null;
+    lastGenerationStatus: number | null;
 
     // Actions
     setStep: (step: number) => void;
@@ -139,6 +140,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
     pendingPlanId: null,
     error: null,
     errorCode: null,
+    lastGenerationStatus: null,
 
     setStep: (step) => set({ currentStep: step }),
 
@@ -161,6 +163,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
         pendingPlanId: null,
         error: null,
         errorCode: null,
+        lastGenerationStatus: null,
     }),
 
     complete: () => set({ isComplete: true }),
@@ -465,10 +468,11 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
             const userId = await Storage.getItemAsync('user_id');
             if (!userId) {
                 console.error('[triggerPlanGeneration] No user_id found');
+                set({ lastGenerationStatus: null });
                 return null;
             }
 
-            console.log('[triggerPlanGeneration] Triggering AI plan generation...');
+            console.log('[triggerPlanGeneration] Triggering AI plan generation for userId:', userId);
 
             const response = await fetch(`${API_URL}/training/onboarding/generate`, {
                 method: 'POST',
@@ -477,6 +481,8 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                     'x-user-id': userId,
                 },
             });
+
+            set({ lastGenerationStatus: response.status });
 
             if (!response.ok) {
                 const errorText = await response.text();
@@ -495,6 +501,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
             return result.plan_id;
         } catch (error) {
             console.error('[triggerPlanGeneration] Error:', error);
+            set({ lastGenerationStatus: null });
             return null;
         }
     },

@@ -229,8 +229,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 console.warn('[AUTH] Supabase session check failed, using fallback:', err);
             }
 
+            const storageUserId = await Storage.getItemAsync('user_id');
+            console.log('[AUTH] checkAuth — sessionUserId:', sessionUserId, '| storageUserId:', storageUserId);
+
+            // Desync guard: if both exist but differ, clear tokens to force fresh login
+            if (sessionUserId && storageUserId && sessionUserId !== storageUserId) {
+                console.warn('[AUTH] sessionUserId != storageUserId — clearing tokens to resync');
+                await clearAllAuthTokens();
+                set({ user: null, isAuthenticated: false });
+                return;
+            }
+
             // Fallback to stored user_id if Supabase session unavailable
-            const userId = sessionUserId || await Storage.getItemAsync('user_id');
+            const userId = sessionUserId || storageUserId;
 
             if (userId) {
                 const baseUrl = API_URL.endsWith('/api') ? API_URL : `${API_URL}/api`;

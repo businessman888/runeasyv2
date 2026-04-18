@@ -172,7 +172,16 @@ export function HomeScreen({ navigation }: any) {
         if (generationTriggeredRef.current) return;
 
         const userId = await Storage.getItemAsync('user_id');
+        const authUserId = useAuthStore.getState().user?.id;
+        console.log('[HomeScreen] checkAndTriggerGeneration — storage userId:', userId, '| auth store userId:', authUserId);
         if (!userId) return;
+
+        // Desync guard: if storage userId differs from auth store userId, force re-auth
+        if (authUserId && userId !== authUserId) {
+            console.warn('[HomeScreen] userId desync detected — logging out to resync');
+            await useAuthStore.getState().logout();
+            return;
+        }
 
         // Check if user has any workouts
         const workouts = useTrainingStore.getState().upcomingWorkouts;
@@ -191,6 +200,7 @@ export function HomeScreen({ navigation }: any) {
             }
 
             const result = await response.json();
+            console.log('[HomeScreen] Plan check result — plan:', result.plan ? `id=${result.plan.id} status=${result.plan.generation_status}` : 'null');
             if (result.plan) {
                 const status = result.plan.generation_status;
 
@@ -221,7 +231,7 @@ export function HomeScreen({ navigation }: any) {
 
         // No plan OR plan failed — trigger generation (set guard BEFORE async call)
         generationTriggeredRef.current = true;
-        console.log('[HomeScreen] No plan found, triggering AI generation...');
+        console.log('[HomeScreen] No plan found, triggering AI generation for userId:', userId);
         setIsPlanGenerating(true);
         setPlanGenError(false);
 
@@ -229,6 +239,15 @@ export function HomeScreen({ navigation }: any) {
         if (planId) {
             startPolling(planId);
         } else {
+            // Check if it was a 400 (onboarding data missing) — session is inconsistent, force logout
+            const status = useOnboardingStore.getState().lastGenerationStatus;
+            if (status === 400) {
+                console.warn('[HomeScreen] Plan generation returned 400 (onboarding missing) — forcing logout to resync session');
+                setIsPlanGenerating(false);
+                generationTriggeredRef.current = false;
+                await useAuthStore.getState().logout();
+                return;
+            }
             setPlanGenError(true);
             generationTriggeredRef.current = false; // Allow retry on error
         }

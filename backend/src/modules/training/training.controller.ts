@@ -168,6 +168,9 @@ export class TrainingController {
             };
         } catch (error) {
             this.logger.error('Onboarding failed', error);
+            if (error instanceof HttpException) {
+                throw error;
+            }
             throw new HttpException(
                 error.message || 'Failed to create plan',
                 HttpStatus.INTERNAL_SERVER_ERROR,
@@ -241,6 +244,9 @@ export class TrainingController {
             return { success: true };
         } catch (error) {
             this.logger.error('Save onboarding failed', error);
+            if (error instanceof HttpException) {
+                throw error;
+            }
             throw new HttpException(
                 error.message || 'Failed to save onboarding data',
                 HttpStatus.INTERNAL_SERVER_ERROR,
