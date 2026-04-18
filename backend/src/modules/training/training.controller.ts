@@ -321,6 +321,10 @@ export class TrainingController {
             };
         } catch (error) {
             this.logger.error('Plan generation failed', error);
+            // Re-throw HttpExceptions as-is to preserve their status code
+            if (error instanceof HttpException) {
+                throw error;
+            }
             throw new HttpException(
                 error.message || 'Failed to generate plan',
                 HttpStatus.INTERNAL_SERVER_ERROR,

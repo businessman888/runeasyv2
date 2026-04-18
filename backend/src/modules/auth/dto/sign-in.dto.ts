@@ -15,3 +15,9 @@ export class AppleSignInDto {
     @IsOptional()
     nonce?: string;
 }
+
+export class RefreshSessionDto {
+    @IsString()
+    @IsNotEmpty()
+    refreshToken: string;
+}

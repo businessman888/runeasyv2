@@ -40,6 +40,36 @@ export class AuthService {
         };
     }
 
+    async refreshSession(refreshToken: string) {
+        this.logger.log('[AUTH] Refreshing session via backend...');
+
+        const { data, error } = await this.supabaseService.auth.refreshSession({
+            refresh_token: refreshToken,
+        });
+
+        if (error) {
+            this.logger.error('[AUTH] Session refresh failed:', error.message);
+            throw new UnauthorizedException(error.message);
+        }
+
+        if (!data.session) {
+            throw new UnauthorizedException('No session returned from refresh');
+        }
+
+        return {
+            session: {
+                access_token: data.session.access_token,
+                refresh_token: data.session.refresh_token,
+                expires_in: data.session.expires_in,
+                token_type: data.session.token_type,
+            },
+            user: {
+                id: data.session.user.id,
+                email: data.session.user.email,
+            },
+        };
+    }
+
     async signInWithApple(idToken: string, nonce?: string) {
         this.logger.log('[AUTH] Exchanging Apple ID token with Supabase...');
 

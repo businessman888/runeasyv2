@@ -179,11 +179,17 @@ export function HomeScreen({ navigation }: any) {
         if (workouts && workouts.length > 0) return; // Plan already exists with workouts
 
         // Check if user has an active plan
-        let shouldTriggerGeneration = true;
         try {
             const response = await fetch(`${BASE_API_URL}/training/plan`, {
                 headers: { 'x-user-id': userId },
             });
+
+            if (!response.ok) {
+                // Server error or network issue — do NOT trigger generation
+                console.warn('[HomeScreen] Plan check returned status', response.status, '— skipping generation');
+                return;
+            }
+
             const result = await response.json();
             if (result.plan) {
                 const status = result.plan.generation_status;
@@ -206,8 +212,11 @@ export function HomeScreen({ navigation }: any) {
                 // status === 'failed' → fall through to trigger new generation
                 console.log('[HomeScreen] Plan generation previously failed, re-triggering...');
             }
-        } catch {
-            // Continue to trigger generation
+            // result.plan is null → user genuinely has no plan, trigger generation
+        } catch (err) {
+            // Network error — do NOT trigger generation, just log
+            console.warn('[HomeScreen] Plan check failed (network error), skipping generation:', err);
+            return;
         }
 
         // No plan OR plan failed — trigger generation (set guard BEFORE async call)

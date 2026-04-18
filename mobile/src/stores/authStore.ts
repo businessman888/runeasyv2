@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import * as Storage from '../utils/storage';
-import { supabase } from '../services/supabase';
+import { supabase, refreshSessionViaBackend } from '../services/supabase';
 import { BASE_API_URL } from '../config/api.config';
 import {
     identifyRevenueCatUser,
@@ -208,16 +208,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         try {
             set({ isLoading: true });
 
-            // Try Supabase session with a timeout to avoid DNS hangs
+            // Try Supabase session (reads local storage, no network call)
             let sessionUserId: string | null = null;
             try {
-                const sessionPromise = supabase.auth.getSession();
-                const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
-                const result = await Promise.race([sessionPromise, timeoutPromise]);
+                const { data: { session } } = await supabase.auth.getSession();
 
-                if (result && 'data' in result && result.data.session) {
-                    sessionUserId = result.data.session.user.id;
+                if (session) {
+                    sessionUserId = session.user.id;
                     console.log('[AUTH] Supabase session found for:', sessionUserId);
+
+                    // Check if token is close to expiry and refresh via backend
+                    const expiresAt = session.expires_at;
+                    const now = Math.floor(Date.now() / 1000);
+                    if (expiresAt && expiresAt - now < 300) {
+                        console.log('[AUTH] Token near expiry, refreshing via backend...');
+                        await refreshSessionViaBackend();
+                    }
                 }
             } catch (err) {
                 console.warn('[AUTH] Supabase session check failed, using fallback:', err);
