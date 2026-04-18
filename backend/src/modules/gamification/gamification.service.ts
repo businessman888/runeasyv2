@@ -19,10 +19,12 @@ export interface UserLevel {
 export interface Badge {
     id: string;
     name: string;
+    slug: string;
     description: string;
     icon: string;
     type: string;
     tier: number;
+    xp_reward: number;
     criteria: Record<string, unknown>;
 }
 
@@ -41,6 +43,15 @@ export interface WorkoutXPData {
     elevation_gain?: number;
 }
 
+export interface ActivityData {
+    distance?: number;        // meters
+    average_speed?: number;   // m/s
+    elapsed_time?: number;    // seconds
+    moving_time?: number;     // seconds
+    total_elevation_gain?: number; // meters
+    start_date?: string;
+}
+
 export interface RankingUser {
     id: string;
     profile: { firstname?: string; lastname?: string; profile_pic?: string };
@@ -55,27 +66,18 @@ export interface RankingResponse {
     cohortInfo?: { month: number; year: number; totalCompetitors: number };
 }
 
+type BadgeChecker = (userId: string, activityData?: ActivityData) => Promise<boolean>;
+
 @Injectable()
 export class GamificationService {
     private readonly logger = new Logger(GamificationService.name);
 
+    private readonly SAO_PAULO_OFFSET_HOURS = -3;
+
     // Level thresholds (points required for each level)
     private readonly levelThresholds = [
-        0,       // Level 1: 0 pts
-        100,     // Level 2: 100 pts
-        300,     // Level 3: 300 pts
-        600,     // Level 4: 600 pts
-        1000,    // Level 5: 1000 pts
-        1500,    // Level 6: 1500 pts
-        2200,    // Level 7: 2200 pts
-        3000,    // Level 8: 3000 pts
-        4000,    // Level 9: 4000 pts
-        5200,    // Level 10: 5200 pts
-        6600,    // Level 11: 6600 pts
-        8200,    // Level 12: 8200 pts
-        10000,   // Level 13: 10000 pts
-        12000,   // Level 14: 12000 pts
-        15000,   // Level 15: 15000 pts
+        0, 100, 300, 600, 1000, 1500, 2200, 3000, 4000, 5200,
+        6600, 8200, 10000, 12000, 15000,
     ];
 
     constructor(
@@ -83,9 +85,240 @@ export class GamificationService {
         private readonly notificationService: NotificationService,
     ) { }
 
-    /**
-     * Get user's gamification stats
-     */
+    // ─── Badge Checker Registry ────────────────────────────────────────────
+
+    private getBadgeCheckers(): Record<string, BadgeChecker> {
+        return {
+            // Milestone
+            primeiro_passo:    this.check_primeiro_passo.bind(this),
+            maratonista:       this.check_single_distance_km(21),
+            maratona_completa: this.check_single_distance_km(42.195),
+            cinquenta_km:      this.check_total_distance_km(50),
+            centuriao:         this.check_total_distance_km(100),
+            quinhentos_km:     this.check_total_distance_km(500),
+            mil_km:            this.check_total_distance_km(1000),
+            subidor:           this.check_single_elevation_m(500),
+            alpinista:         this.check_total_elevation_m(5000),
+
+            // Performance — pace
+            velocista_i:       this.check_pace_on_distance(5.5, 5),
+            velocista_ii:      this.check_pace_on_distance(5.0, 5),
+            velocista_iii:     this.check_pace_on_distance(4.5, 5),
+            velocista_iv:      this.check_pace_on_distance(4.0, 5),
+            foguete:           this.check_pace_on_distance(3.5, 1),
+            superacao:         this.check_superacao.bind(this),
+
+            // Performance — tempo
+            uma_hora:          this.check_single_duration_min(60),
+            duas_horas:        this.check_single_duration_min(120),
+
+            // Consistency
+            consistente:       this.check_activity_count_in_days(12, 30),
+            semana_completa:   this.check_semana_completa.bind(this),
+
+            // Streak
+            ignicao:           this.check_streak(7),
+            chama_viva:        this.check_streak(14),
+            chama_eterna:      this.check_streak(30),
+            imortal:           this.check_streak(60),
+
+            // Exploration
+            na_chuva_e_no_sol: this.check_all_time_periods.bind(this),
+            madrugador:        this.check_runs_in_time_window(5, 7, 5),
+            noturno:           this.check_runs_in_time_window(20, 24, 5),
+            diversificado:     this.check_all_weekdays.bind(this),
+
+            // Adherence
+            fiel_ao_plano:     this.check_fidelidade_plano.bind(this),
+        };
+    }
+
+    // ─── Individual Badge Checkers ─────────────────────────────────────────
+
+    private async check_primeiro_passo(userId: string): Promise<boolean> {
+        const { count } = await this.supabaseService
+            .from('activities')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId);
+        return (count || 0) >= 1;
+    }
+
+    private check_single_distance_km(thresholdKm: number): BadgeChecker {
+        return async (_userId: string, activityData?: ActivityData): Promise<boolean> => {
+            if (!activityData?.distance) return false;
+            return activityData.distance / 1000 >= thresholdKm;
+        };
+    }
+
+    private check_total_distance_km(thresholdKm: number): BadgeChecker {
+        return async (userId: string): Promise<boolean> => {
+            const { data } = await this.supabaseService
+                .from('activities')
+                .select('distance')
+                .eq('user_id', userId);
+            const totalKm = (data || []).reduce((acc, a) => acc + ((a.distance || 0) / 1000), 0);
+            return totalKm >= thresholdKm;
+        };
+    }
+
+    private check_single_elevation_m(thresholdM: number): BadgeChecker {
+        return async (_userId: string, activityData?: ActivityData): Promise<boolean> => {
+            return (activityData?.total_elevation_gain || 0) >= thresholdM;
+        };
+    }
+
+    private check_total_elevation_m(thresholdM: number): BadgeChecker {
+        return async (userId: string): Promise<boolean> => {
+            const { data } = await this.supabaseService
+                .from('activities')
+                .select('total_elevation_gain')
+                .eq('user_id', userId);
+            const totalM = (data || []).reduce((acc, a) => acc + ((a.total_elevation_gain || 0)), 0);
+            return totalM >= thresholdM;
+        };
+    }
+
+    private check_pace_on_distance(maxPaceMinKm: number, minDistanceKm: number): BadgeChecker {
+        return async (_userId: string, activityData?: ActivityData): Promise<boolean> => {
+            if (!activityData?.average_speed || !activityData?.distance) return false;
+            if (activityData.distance < minDistanceKm * 1000) return false;
+            const paceMinPerKm = (1000 / activityData.average_speed) / 60;
+            return paceMinPerKm <= maxPaceMinKm;
+        };
+    }
+
+    private async check_superacao(userId: string, activityData?: ActivityData): Promise<boolean> {
+        if (!activityData?.average_speed) return false;
+
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const { data: oldActivities } = await this.supabaseService
+            .from('activities')
+            .select('average_speed')
+            .eq('user_id', userId)
+            .gte('distance', 5000)
+            .lte('start_date', thirtyDaysAgo.toISOString())
+            .order('average_speed', { ascending: false })
+            .limit(1);
+
+        if (!oldActivities?.[0]) return false;
+
+        const oldPace = (1000 / oldActivities[0].average_speed) / 60;
+        const newPace = (1000 / activityData.average_speed) / 60;
+        const improvement = ((oldPace - newPace) / oldPace) * 100;
+        return improvement >= 5;
+    }
+
+    private check_single_duration_min(thresholdMin: number): BadgeChecker {
+        return async (_userId: string, activityData?: ActivityData): Promise<boolean> => {
+            const durationSeconds = activityData?.elapsed_time ?? activityData?.moving_time ?? 0;
+            return durationSeconds / 60 >= thresholdMin;
+        };
+    }
+
+    private check_activity_count_in_days(count: number, days: number): BadgeChecker {
+        return async (userId: string): Promise<boolean> => {
+            const since = new Date();
+            since.setDate(since.getDate() - days);
+            const { count: recent } = await this.supabaseService
+                .from('activities')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', userId)
+                .gte('start_date', since.toISOString());
+            return (recent || 0) >= count;
+        };
+    }
+
+    private async check_semana_completa(userId: string): Promise<boolean> {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+        const { data: weekWorkouts } = await this.supabaseService
+            .from('workouts')
+            .select('status')
+            .eq('user_id', userId)
+            .gte('scheduled_date', sevenDaysAgo.toISOString());
+
+        if (!weekWorkouts || weekWorkouts.length < 3) return false;
+        return weekWorkouts.every(w => w.status === 'completed');
+    }
+
+    private check_streak(days: number): BadgeChecker {
+        return async (userId: string): Promise<boolean> => {
+            const stats = await this.getUserStats(userId);
+            return (stats?.current_streak || 0) >= days;
+        };
+    }
+
+    private async check_all_time_periods(userId: string): Promise<boolean> {
+        const { data: activities } = await this.supabaseService
+            .from('activities')
+            .select('start_date')
+            .eq('user_id', userId);
+
+        if (!activities) return false;
+
+        const conditions = new Set<string>();
+        for (const a of activities) {
+            const h = new Date(a.start_date).getHours();
+            if (h >= 0 && h < 5)  conditions.add('madrugada');
+            if (h >= 5 && h < 9)  conditions.add('manha');
+            if (h >= 9 && h < 17) conditions.add('tarde');
+            if (h >= 17 && h < 20) conditions.add('fim_de_tarde');
+            if (h >= 20)           conditions.add('noite');
+        }
+        return conditions.size >= 5;
+    }
+
+    private check_runs_in_time_window(hourFrom: number, hourTo: number, threshold: number): BadgeChecker {
+        return async (userId: string): Promise<boolean> => {
+            const { data: activities } = await this.supabaseService
+                .from('activities')
+                .select('start_date')
+                .eq('user_id', userId);
+
+            if (!activities) return false;
+
+            const count = activities.filter(a => {
+                const h = new Date(a.start_date).getHours();
+                return h >= hourFrom && h < hourTo;
+            }).length;
+
+            return count >= threshold;
+        };
+    }
+
+    private async check_all_weekdays(userId: string): Promise<boolean> {
+        const { data: activities } = await this.supabaseService
+            .from('activities')
+            .select('start_date')
+            .eq('user_id', userId);
+
+        if (!activities) return false;
+
+        const weekdays = new Set(activities.map(a => new Date(a.start_date).getDay()));
+        return weekdays.size >= 7;
+    }
+
+    private async check_fidelidade_plano(userId: string): Promise<boolean> {
+        const fourWeeksAgo = new Date();
+        fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+
+        const { data: plannedWorkouts } = await this.supabaseService
+            .from('workouts')
+            .select('status')
+            .eq('user_id', userId)
+            .gte('scheduled_date', fourWeeksAgo.toISOString());
+
+        if (!plannedWorkouts || plannedWorkouts.length === 0) return false;
+
+        const completedCount = plannedWorkouts.filter(w => w.status === 'completed').length;
+        return (completedCount / plannedWorkouts.length) * 100 >= 80;
+    }
+
+    // ─── Core Public API ───────────────────────────────────────────────────
+
     async getUserStats(userId: string): Promise<UserLevel | null> {
         const { data, error } = await this.supabaseService
             .from('user_levels')
@@ -97,11 +330,7 @@ export class GamificationService {
         return data;
     }
 
-    /**
-     * Get all badges with user's earned status
-     */
     async getBadges(userId: string): Promise<(Badge & { earned: boolean; earned_at?: string })[]> {
-        // Get all badges
         const { data: allBadges, error: badgesError } = await this.supabaseService
             .from('badges')
             .select('*')
@@ -109,26 +338,22 @@ export class GamificationService {
 
         if (badgesError) throw badgesError;
 
-        // Get user's earned badges
         const { data: userBadges } = await this.supabaseService
             .from('user_badges')
             .select('badge_id, earned_at')
             .eq('user_id', userId);
 
         const earnedMap = new Map(
-            (userBadges || []).map((ub) => [ub.badge_id, ub.earned_at])
+            (userBadges || []).map(ub => [ub.badge_id, ub.earned_at]),
         );
 
-        return (allBadges || []).map((badge) => ({
+        return (allBadges || []).map(badge => ({
             ...badge,
             earned: earnedMap.has(badge.id),
             earned_at: earnedMap.get(badge.id),
         }));
     }
 
-    /**
-     * Add points to user and recalculate level
-     */
     async addPoints(
         userId: string,
         points: number,
@@ -136,27 +361,20 @@ export class GamificationService {
         referenceType?: string,
         referenceId?: string,
     ): Promise<{ newTotal: number; levelUp: boolean; newLevel: number }> {
-        // Get current stats
         const currentStats = await this.getUserStats(userId);
         const currentPoints = currentStats?.total_points || 0;
         const currentLevel = currentStats?.current_level || 1;
         const newTotal = currentPoints + points;
-
-        // Calculate new level
         const newLevel = this.calculateLevel(newTotal);
         const levelUp = newLevel > currentLevel;
 
-        // Update user_levels
-        await this.supabaseService
-            .from('user_levels')
-            .upsert({
-                user_id: userId,
-                total_points: newTotal,
-                current_level: newLevel,
-                updated_at: new Date().toISOString(),
-            });
+        await this.supabaseService.from('user_levels').upsert({
+            user_id: userId,
+            total_points: newTotal,
+            current_level: newLevel,
+            updated_at: new Date().toISOString(),
+        });
 
-        // Record points history
         await this.supabaseService.from('points_history').insert({
             user_id: userId,
             points,
@@ -172,272 +390,71 @@ export class GamificationService {
         return { newTotal, levelUp, newLevel };
     }
 
-    /**
-     * Calculate level based on total points
-     * Level 1->2: 1000 XP
-     * Level 2->3: 1100 XP
-     * Level 3->4: 1200 XP
-     * Pattern: 1000 + (level - 1) * 100
-     */
-    calculateLevel(totalPoints: number): number {
-        let level = 1;
-        let pointsNeeded = 0;
-
-        while (pointsNeeded <= totalPoints) {
-            const nextLevelPoints = 1000 + (level - 1) * 100;
-            pointsNeeded += nextLevelPoints;
-
-            if (pointsNeeded > totalPoints) {
-                return level;
-            }
-            level++;
-        }
-
-        return level;
-    }
-
-    /**
-     * Get points needed for next level
-     * Returns points still needed to reach next level
-     */
-    getPointsForNextLevel(currentLevel: number, totalPoints: number): number {
-        // Calculate total points needed to reach current level
-        let pointsToCurrentLevel = 0;
-        for (let i = 1; i < currentLevel; i++) {
-            pointsToCurrentLevel += 1000 + (i - 1) * 100;
-        }
-
-        // Points needed for next level
-        const pointsForNextLevel = 1000 + (currentLevel - 1) * 100;
-
-        // Points already earned towards next level
-        const pointsInCurrentLevel = totalPoints - pointsToCurrentLevel;
-
-        // Points still needed
-        return pointsForNextLevel - pointsInCurrentLevel;
-    }
-
-    /**
-     * Check and award badges after an activity
-     */
-    async checkBadges(userId: string, activityData?: any): Promise<Badge[]> {
+    async checkBadges(userId: string, activityData?: ActivityData): Promise<Badge[]> {
         const earnedBadges: Badge[] = [];
 
-        // Get user's current badges
-        const { data: userBadges } = await this.supabaseService
-            .from('user_badges')
-            .select('badge_id')
-            .eq('user_id', userId);
+        const [userBadgesResult, allBadgesResult] = await Promise.all([
+            this.supabaseService.from('user_badges').select('badge_id').eq('user_id', userId),
+            this.supabaseService.from('badges').select('*'),
+        ]);
 
-        const earnedBadgeIds = new Set((userBadges || []).map((ub) => ub.badge_id));
+        const earnedBadgeIds = new Set((userBadgesResult.data || []).map(ub => ub.badge_id));
+        const allBadges: Badge[] = allBadgesResult.data || [];
 
-        // Get all badges
-        const { data: allBadges } = await this.supabaseService
-            .from('badges')
-            .select('*');
+        if (allBadges.length === 0) return earnedBadges;
 
-        if (!allBadges) return earnedBadges;
-
-        // Get user stats for checking criteria
-        const userStats = await this.getUserStats(userId);
-
-        // Get user's activity count and data
-        const { count: activityCount } = await this.supabaseService
-            .from('activities')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', userId);
+        const checkers = this.getBadgeCheckers();
 
         for (const badge of allBadges) {
             if (earnedBadgeIds.has(badge.id)) continue;
 
+            const checker = checkers[badge.slug];
+            if (!checker) {
+                this.logger.warn(`No checker registered for badge slug: ${badge.slug}`);
+                continue;
+            }
+
             let earned = false;
-
-            // Check by badge type and name
-            switch (badge.type) {
-                case 'milestone': {
-                    if (badge.name === 'Primeiro Passo') {
-                        // First workout completed
-                        earned = (activityCount || 0) >= 1;
-                    } else if (badge.name === 'Maratonista') {
-                        // Completed run >= 21km
-                        if (activityData?.distance) {
-                            earned = activityData.distance / 1000 >= 21;
-                        }
-                    }
-                    break;
-                }
-
-                case 'performance': {
-                    if (badge.name === 'Velocista I') {
-                        // Pace < 5:30/km on 5k+ run
-                        if (activityData?.average_speed && activityData?.distance >= 5000) {
-                            const paceMinPerKm = (1000 / activityData.average_speed) / 60; // Convert to min/km
-                            earned = paceMinPerKm <= 5.5; // 5:30 = 5.5 minutes
-                        }
-                    } else if (badge.name === 'Velocista II') {
-                        // Pace < 5:00/km on 5k+ run
-                        if (activityData?.average_speed && activityData?.distance >= 5000) {
-                            const paceMinPerKm = (1000 / activityData.average_speed) / 60;
-                            earned = paceMinPerKm <= 5.0; // 5:00 = 5 minutes
-                        }
-                    } else if (badge.name === 'Superação') {
-                        // Improved pace by 5% in 30 days
-                        // Get best pace from 30 days ago
-                        const thirtyDaysAgo = new Date();
-                        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-                        const { data: oldActivities } = await this.supabaseService
-                            .from('activities')
-                            .select('average_speed, distance')
-                            .eq('user_id', userId)
-                            .gte('distance', 5000)
-                            .lte('start_date', thirtyDaysAgo.toISOString())
-                            .order('average_speed', { ascending: false })
-                            .limit(1);
-
-                        if (oldActivities?.[0] && activityData?.average_speed) {
-                            const oldPace = (1000 / oldActivities[0].average_speed) / 60;
-                            const newPace = (1000 / activityData.average_speed) / 60;
-                            const improvement = ((oldPace - newPace) / oldPace) * 100;
-                            earned = improvement >= 5;
-                        }
-                    }
-                    break;
-                }
-
-                case 'consistency': {
-                    if (badge.name === 'Consistente') {
-                        // 12 workouts in last 30 days
-                        const thirtyDaysAgo = new Date();
-                        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-                        const { count: recentWorkouts } = await this.supabaseService
-                            .from('activities')
-                            .select('*', { count: 'exact', head: true })
-                            .eq('user_id', userId)
-                            .gte('start_date', thirtyDaysAgo.toISOString());
-
-                        earned = (recentWorkouts || 0) >= 12;
-                    } else if (badge.name === 'Semana Completa') {
-                        // Completed all workouts from current week's plan
-                        const { data: weekWorkouts } = await this.supabaseService
-                            .from('workouts')
-                            .select('status')
-                            .eq('user_id', userId)
-                            .gte('scheduled_date', new Date(new Date().setDate(new Date().getDate() - 7)).toISOString());
-
-                        if (weekWorkouts && weekWorkouts.length > 0) {
-                            const allCompleted = weekWorkouts.every(w => w.status === 'completed');
-                            earned = allCompleted && weekWorkouts.length >= 3; // At least 3 workouts
-                        }
-                    }
-                    break;
-                }
-
-                case 'streak': {
-                    if (badge.name === 'Chama Eterna') {
-                        // 30-day streak
-                        earned = (userStats?.current_streak || 0) >= 30;
-                    }
-                    break;
-                }
-
-                case 'exploration': {
-                    if (badge.name === 'Na Chuva e no Sol') {
-                        // Trained in 5 different weather conditions
-                        // This would require weather data from activities
-                        // For now, we'll check if user has activities in different times of day
-                        const { data: activities } = await this.supabaseService
-                            .from('activities')
-                            .select('start_date')
-                            .eq('user_id', userId);
-
-                        if (activities) {
-                            const hours = new Set<number>(activities.map((a: any) => new Date(a.start_date).getHours()));
-                            // Consider different time ranges as "different conditions"
-                            const conditions = new Set<string>();
-                            hours.forEach((h: number) => {
-                                if (h >= 5 && h < 9) conditions.add('morning');
-                                if (h >= 12 && h < 15) conditions.add('noon');
-                                if (h >= 17 && h < 20) conditions.add('evening');
-                                if (h >= 20 || h < 5) conditions.add('night');
-                                if (h >= 9 && h < 12) conditions.add('late_morning');
-                            });
-                            earned = conditions.size >= 5;
-                        }
-                    }
-                    break;
-                }
-
-                case 'adherence': {
-                    if (badge.name === 'Fiel ao Plano') {
-                        // 80% adherence to plan for 4 weeks (28 days)
-                        const fourWeeksAgo = new Date();
-                        fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
-
-                        const { data: plannedWorkouts } = await this.supabaseService
-                            .from('workouts')
-                            .select('status')
-                            .eq('user_id', userId)
-                            .gte('scheduled_date', fourWeeksAgo.toISOString());
-
-                        if (plannedWorkouts && plannedWorkouts.length > 0) {
-                            const completedCount = plannedWorkouts.filter(w => w.status === 'completed').length;
-                            const adherenceRate = (completedCount / plannedWorkouts.length) * 100;
-                            earned = adherenceRate >= 80;
-                        }
-                    }
-                    break;
-                }
+            try {
+                earned = await checker(userId, activityData);
+            } catch (err) {
+                this.logger.error(`Checker error for badge ${badge.slug}: ${err}`);
+                continue;
             }
 
-            if (earned) {
-                // Award badge
-                await this.supabaseService.from('user_badges').insert({
-                    user_id: userId,
-                    badge_id: badge.id,
-                });
+            if (!earned) continue;
 
-                // Add points for badge
-                await this.addPoints(userId, 100, `Badge conquistado: ${badge.name}`, 'badge', badge.id);
+            await this.supabaseService.from('user_badges').insert({
+                user_id: userId,
+                badge_id: badge.id,
+            });
 
-                // Create achievement notification
-                await this.notificationService.createNotification(
-                    userId,
-                    'achievement',
-                    '🏆 Nova Conquista!',
-                    `Parabéns! Você desbloqueou: ${badge.name}`,
-                    {
-                        badge_id: badge.id,
-                        badge_name: badge.name,
-                        screen: 'Badges', // Navigate to badges screen
-                    },
-                );
+            const xp = badge.xp_reward ?? 100;
+            await this.addPoints(userId, xp, `Badge conquistado: ${badge.name}`, 'badge', badge.id);
 
-                // Send push notification
-                await this.notificationService.sendPushNotification(
-                    userId,
-                    '🏆 Nova Conquista!',
-                    `Parabéns! Você desbloqueou: ${badge.name}`,
-                    {
-                        type: 'achievement',
-                        badge_id: badge.id,
-                        screen: 'Badges',
-                    },
-                    { channelId: 'achievements' },
-                );
+            await this.notificationService.createNotification(
+                userId,
+                'achievement',
+                '🏆 Nova Conquista!',
+                `Parabéns! Você desbloqueou: ${badge.name}`,
+                { badge_id: badge.id, badge_name: badge.name, screen: 'Badges' },
+            );
 
-                earnedBadges.push(badge);
-                this.logger.log(`User ${userId} earned badge: ${badge.name}`);
-            }
+            await this.notificationService.sendPushNotification(
+                userId,
+                '🏆 Nova Conquista!',
+                `Parabéns! Você desbloqueou: ${badge.name}`,
+                { type: 'achievement', badge_id: badge.id, screen: 'Badges' },
+                { channelId: 'achievements' },
+            );
+
+            earnedBadges.push(badge);
+            this.logger.log(`User ${userId} earned badge: ${badge.name} (+${xp} XP)`);
         }
 
         return earnedBadges;
     }
 
-    /**
-     * Get user's points history
-     */
     async getPointsHistory(userId: string, limit = 50) {
         const { data, error } = await this.supabaseService
             .from('points_history')
@@ -450,21 +467,43 @@ export class GamificationService {
         return data;
     }
 
-    // ─── Streak Logic ──────────────────────────────────────────────
+    // ─── Level Calculation ─────────────────────────────────────────────────
 
-    private readonly SAO_PAULO_OFFSET_HOURS = -3;
+    calculateLevel(totalPoints: number): number {
+        let level = 1;
+        let pointsNeeded = 0;
+
+        while (true) {
+            const nextLevelPoints = 1000 + (level - 1) * 100;
+            pointsNeeded += nextLevelPoints;
+            if (pointsNeeded > totalPoints) return level;
+            level++;
+        }
+    }
+
+    getPointsForNextLevel(currentLevel: number, totalPoints: number): number {
+        let pointsToCurrentLevel = 0;
+        for (let i = 1; i < currentLevel; i++) {
+            pointsToCurrentLevel += 1000 + (i - 1) * 100;
+        }
+        const pointsForNextLevel = 1000 + (currentLevel - 1) * 100;
+        const pointsInCurrentLevel = totalPoints - pointsToCurrentLevel;
+        return pointsForNextLevel - pointsInCurrentLevel;
+    }
+
+    // ─── Streak Logic ──────────────────────────────────────────────────────
 
     private getSaoPauloToday(): string {
         const now = new Date();
-        const saoPauloTime = new Date(now.getTime() + (this.SAO_PAULO_OFFSET_HOURS * 60 * 60 * 1000));
-        return saoPauloTime.toISOString().split('T')[0]; // YYYY-MM-DD
+        const sp = new Date(now.getTime() + this.SAO_PAULO_OFFSET_HOURS * 3600 * 1000);
+        return sp.toISOString().split('T')[0];
     }
 
     private getSaoPauloYesterday(): string {
         const now = new Date();
-        const saoPauloTime = new Date(now.getTime() + (this.SAO_PAULO_OFFSET_HOURS * 60 * 60 * 1000));
-        saoPauloTime.setDate(saoPauloTime.getDate() - 1);
-        return saoPauloTime.toISOString().split('T')[0];
+        const sp = new Date(now.getTime() + this.SAO_PAULO_OFFSET_HOURS * 3600 * 1000);
+        sp.setDate(sp.getDate() - 1);
+        return sp.toISOString().split('T')[0];
     }
 
     async updateStreak(userId: string): Promise<number> {
@@ -494,76 +533,63 @@ export class GamificationService {
             .update({ current_streak: newStreak, last_activity_date: today })
             .eq('id', userId);
 
-        // Sync to user_levels for backward compatibility
-        const bestStreak = Math.max(newStreak, user?.current_streak || 0);
-        await this.supabaseService
-            .from('user_levels')
-            .upsert({
-                user_id: userId,
-                current_streak: newStreak,
-                best_streak: bestStreak,
-                updated_at: new Date().toISOString(),
-            });
+        const bestStreak = Math.max(newStreak, currentStreak);
+        await this.supabaseService.from('user_levels').upsert({
+            user_id: userId,
+            current_streak: newStreak,
+            best_streak: bestStreak,
+            updated_at: new Date().toISOString(),
+        });
 
         this.logger.log(`User ${userId} streak updated to ${newStreak}`);
         return newStreak;
     }
 
-    // ─── XP Award Logic ────────────────────────────────────────────
+    // ─── XP Award Logic ────────────────────────────────────────────────────
 
     async awardWorkoutXP(userId: string, workout: WorkoutXPData): Promise<number> {
         let totalAwarded = 0;
 
-        // Check if this is the user's first workout (bonus)
         const { data: userData } = await this.supabaseService
             .from('users')
             .select('total_xp')
             .eq('id', userId)
             .single();
 
-        const isFirstWorkout = (userData?.total_xp || 0) === 0;
-
-        if (isFirstWorkout) {
+        if ((userData?.total_xp || 0) === 0) {
             await this.addPoints(userId, 100, 'Primeiro treino concluído!', 'workout', workout.workoutId);
             totalAwarded += 100;
         }
 
-        // Distance XP: 10 per km
         const distanceXP = Math.floor(workout.distance_km) * 10;
         if (distanceXP > 0) {
             await this.addPoints(userId, distanceXP, `Distância: ${workout.distance_km.toFixed(1)}km`, 'workout', workout.workoutId);
             totalAwarded += distanceXP;
         }
 
-        // Completion XP: 50 flat
         await this.addPoints(userId, 50, 'Treino concluído', 'workout', workout.workoutId);
         totalAwarded += 50;
 
-        // Pace bonus: 20 XP if pace < 6:00/km (360 seconds)
         if (workout.pace_seconds_per_km > 0 && workout.pace_seconds_per_km < 360) {
             await this.addPoints(userId, 20, 'Pace abaixo de 6:00/km', 'workout', workout.workoutId);
             totalAwarded += 20;
         }
 
-        // Long distance bonus: 50 XP if >= 10km
         if (workout.distance_km >= 10) {
             await this.addPoints(userId, 50, 'Corrida longa (10km+)', 'workout', workout.workoutId);
             totalAwarded += 50;
         }
 
-        // Ultra distance bonus: 100 XP if >= 21km
         if (workout.distance_km >= 21) {
             await this.addPoints(userId, 100, 'Ultra distância (21km+)', 'workout', workout.workoutId);
             totalAwarded += 100;
         }
 
-        // Elevation bonus: 15 XP if >= 100m elevation
         if (workout.elevation_gain && workout.elevation_gain >= 100) {
             await this.addPoints(userId, 15, 'Elevação significativa (100m+)', 'workout', workout.workoutId);
             totalAwarded += 15;
         }
 
-        // Streak bonus: 30 XP if active streak > 1
         const { data: updatedUser } = await this.supabaseService
             .from('users')
             .select('current_streak')
@@ -579,7 +605,7 @@ export class GamificationService {
         return totalAwarded;
     }
 
-    // ─── Ranking Queries ───────────────────────────────────────────
+    // ─── Ranking Queries ───────────────────────────────────────────────────
 
     async getGlobalRanking(userId: string, limit = 50): Promise<RankingResponse> {
         const [rankingsResult, userResult, countResult] = await Promise.all([
@@ -605,19 +631,16 @@ export class GamificationService {
             rank: index + 1,
         }));
 
-        // Calculate user's rank
         const userXP = userResult.data?.total_xp || 0;
         const { count: usersAbove } = await this.supabaseService
             .from('users')
             .select('*', { count: 'exact', head: true })
             .gt('total_xp', userXP);
 
-        const userRank = (usersAbove || 0) + 1;
-
         return {
             rankings,
             userPosition: {
-                rank: userRank,
+                rank: (usersAbove || 0) + 1,
                 total_xp: userResult.data?.total_xp || 0,
                 current_streak: userResult.data?.current_streak || 0,
                 profile: userResult.data?.profile || {},
@@ -627,7 +650,6 @@ export class GamificationService {
     }
 
     async getCohortRanking(userId: string, limit = 50): Promise<RankingResponse> {
-        // Get user's creation date to determine cohort
         const { data: currentUser } = await this.supabaseService
             .from('users')
             .select('id, profile, total_xp, current_streak, created_at')
@@ -643,10 +665,9 @@ export class GamificationService {
         }
 
         const createdAt = new Date(currentUser.created_at);
-        const cohortMonth = createdAt.getMonth() + 1; // 1-indexed
+        const cohortMonth = createdAt.getMonth() + 1;
         const cohortYear = createdAt.getFullYear();
 
-        // Date range for the cohort month
         const startOfMonth = `${cohortYear}-${String(cohortMonth).padStart(2, '0')}-01T00:00:00.000Z`;
         const endOfMonth = cohortMonth === 12
             ? `${cohortYear + 1}-01-01T00:00:00.000Z`
@@ -672,7 +693,6 @@ export class GamificationService {
             rank: index + 1,
         }));
 
-        // User's position within cohort
         const { count: usersAboveInCohort } = await this.supabaseService
             .from('users')
             .select('*', { count: 'exact', head: true })
@@ -680,22 +700,16 @@ export class GamificationService {
             .lt('created_at', endOfMonth)
             .gt('total_xp', currentUser.total_xp || 0);
 
-        const userRank = (usersAboveInCohort || 0) + 1;
-
         return {
             rankings,
             userPosition: {
-                rank: userRank,
+                rank: (usersAboveInCohort || 0) + 1,
                 total_xp: currentUser.total_xp || 0,
                 current_streak: currentUser.current_streak || 0,
                 profile: currentUser.profile || {},
             },
             totalParticipants: countResult.count || 0,
-            cohortInfo: {
-                month: cohortMonth,
-                year: cohortYear,
-                totalCompetitors: countResult.count || 0,
-            },
+            cohortInfo: { month: cohortMonth, year: cohortYear, totalCompetitors: countResult.count || 0 },
         };
     }
 }

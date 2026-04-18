@@ -5,10 +5,12 @@ import { BASE_API_URL } from '../config/api.config';
 interface Badge {
     id: string;
     name: string;
+    slug: string;
     description: string;
     icon: string;
     type: string;
     tier: number;
+    xp_reward: number;
     earned: boolean;
     earned_at?: string;
 }
