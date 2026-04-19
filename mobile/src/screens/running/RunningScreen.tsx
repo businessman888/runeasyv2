@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -49,6 +49,7 @@ const T = {
 export function RunningScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RunningRouteParams, 'Running'>>();
+  const insets = useSafeAreaInsets();
   const [hasGPSFix, setHasGPSFix] = useState(false);
   const [goalsModalVisible, setGoalsModalVisible] = useState(false);
 
@@ -313,7 +314,7 @@ export function RunningScreen() {
       </SafeAreaView>
 
       {/* ── BOTTOM PANEL ────────────────────────────────────────────────── */}
-      <SafeAreaView style={styles.bottomPanel} edges={['bottom']}>
+      <View style={styles.bottomPanel}>
 
         {/* Card de telemetria flutuante */}
         <View style={styles.telemetryCard}>
@@ -361,7 +362,7 @@ export function RunningScreen() {
         </View>
 
         {/* Área de botões */}
-        <View style={styles.btnArea}>
+        <View style={[styles.btnArea, { paddingBottom: insets.bottom + 16 }]}>
 
           {/* Estado: Calculando → Iniciar */}
           {isCalculating && (
@@ -422,7 +423,7 @@ export function RunningScreen() {
           )}
 
         </View>
-      </SafeAreaView>
+      </View>
 
       {/* ── GOALS MODAL ──────────────────────────────────────────────── */}
       <GoalsModal
@@ -592,7 +593,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 17,
-    paddingBottom: 16,
+    paddingBottom: 16, // overridden inline with insets.bottom + 16
     gap: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },

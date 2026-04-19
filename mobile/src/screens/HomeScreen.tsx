@@ -20,6 +20,7 @@ import { CircularProgress } from '../components/CircularProgress';
 import { Skeleton } from '../components/Skeleton';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { HomeFixedHeader } from '../components/HomeFixedHeader';
+import { WorkoutCard } from '../components/WorkoutCard';
 import { useHealthKitStore } from '../stores/healthKitStore';
 
 import { BASE_API_URL } from '../config/api.config';
@@ -73,7 +74,7 @@ function BedIcon({ size = 24, color = '#A78BFA' }: { size?: number; color?: stri
 
 export function HomeScreen({ navigation }: any) {
     const { user } = useAuthStore();
-    const { stats, fetchStats, isLoading: gamificationLoading } = useGamificationStore();
+    const { stats, badges, fetchStats, fetchBadges, isLoading: gamificationLoading } = useGamificationStore();
     const { upcomingWorkouts, fetchUpcomingWorkouts, isLoading: trainingLoading, today, nextWorkout: storeNextWorkout, fetchSchedule, clearScheduleData, schedule, retryPendingWorkouts } = useTrainingStore();
     const { latestSummary, fetchLatestSummary, latestActivity, latestActivityLoading, fetchLatestActivity } = useFeedbackStore();
     const { summary, fetchSummary, isLoading: statsLoading } = useStatsStore();
@@ -288,6 +289,7 @@ export function HomeScreen({ navigation }: any) {
 
                 await Promise.all([
                     fetchStats(),
+                    fetchBadges(),
                     fetchUpcomingWorkouts(),
                     fetchLatestSummary(),
                     fetchLatestActivity(),
@@ -565,6 +567,10 @@ export function HomeScreen({ navigation }: any) {
                     </View>
                 </View>
 
+                {/* ── Seus treinos ─────────────────────────────────────────────── */}
+                <View>
+                    <Text style={styles.sectionTitle}>Seus treinos</Text>
+
                 {/* Recovery Card - Show when it's a recovery day */}
                 {isRecoveryDay && (
                     <View style={styles.recoveryCard}>
@@ -628,75 +634,27 @@ export function HomeScreen({ navigation }: any) {
 
                 {/* Workout Card - Show when it's NOT a recovery day and there's a workout to show */}
                 {!isRecoveryDay && mainWorkout && (
-                    <View key={`main-workout-${mainWorkout.id || mainWorkout.scheduled_date}`} style={styles.workoutCard}>
-                        <View style={styles.workoutHeader}>
-                            <View style={styles.proximoBadge}>
-                                <View style={[styles.proximoDot, hasTodayWorkout && { backgroundColor: '#00D4FF' }]} />
-                                <Text style={styles.proximoText}>{hasTodayWorkout ? 'Hoje' : 'Próximo'}</Text>
-                            </View>
-                            <View style={styles.runnerIcon}>
-                                <RunningIcon size={30} color="#00D4FF" />
-                            </View>
-                        </View>
-
-                        <Text style={styles.workoutTitle}>{getWorkoutTypeName(mainWorkout.type)}</Text>
-                        <View style={styles.workoutTimeRow}>
-                            <CalendarSmallIcon size={16} />
-                            <Text style={styles.workoutTime}>{formatWorkoutDate(mainWorkout.scheduled_date)}</Text>
-                        </View>
-
-                        <View style={styles.workoutStats}>
-                            <View style={styles.statBox}>
-                                <View style={styles.statHeader}>
-                                    <DistanceIcon size={18} color="#00D4FF" />
-                                    <Text style={styles.statLabel}>Distância</Text>
-                                </View>
-                                <Text style={styles.statValue}>
-                                    {mainWorkout.distance_km.toFixed(1)} <Text style={styles.statUnit}>km</Text>
-                                </Text>
-                            </View>
-                            <View style={styles.statBox}>
-                                <View style={styles.statHeader}>
-                                    <PaceIcon size={18} color="#00D4FF" />
-                                    <Text style={styles.statLabel}>Pace</Text>
-                                </View>
-                                <Text style={styles.statValue}>
-                                    {getWorkoutPace(mainWorkout)} <Text style={styles.statUnit}>/km</Text>
-                                </Text>
-                            </View>
-                        </View>
-
-
-                        <TouchableOpacity
-                            style={[
-                                styles.startButton,
-                                !isButtonEnabled && styles.startButtonDisabled
-                            ]}
-                            onPress={handleStartWorkout}
-                            disabled={!isButtonEnabled}
-                        >
-                            <ShoeIcon size={24} color={isButtonEnabled ? "#0E0E1F" : "#6B7280"} />
-                            <Text style={[
-                                styles.startButtonText,
-                                !isButtonEnabled && styles.startButtonTextDisabled
-                            ]}>
-                                {isButtonEnabled ? 'Iniciar Treino' : hasTodayWorkout ? 'Treino Concluído' : 'Disponível ' + formatWorkoutDate(mainWorkout.scheduled_date)}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
+                    <WorkoutCard
+                        key={`main-workout-${mainWorkout.id || mainWorkout.scheduled_date}`}
+                        workout={mainWorkout as any}
+                        isToday={hasTodayWorkout}
+                        isCompleted={todayData?.status === 'completed' && hasTodayWorkout}
+                        onStartWorkout={handleStartWorkout}
+                        allBadges={badges}
+                    />
                 )}
 
                 {/* No Workout Card - Only show if no recovery and no workout */}
-                {
-                    !mainWorkout && !isRecoveryDay && (
-                        <View style={styles.workoutCard}>
-                            <View style={styles.lockedContent}>
-                                <RunningIcon size={48} color="#6B7280" />
-                                <Text style={styles.lockedText}>Nenhum treino agendado</Text>
-                            </View>
+                {!mainWorkout && !isRecoveryDay && (
+                    <View style={styles.workoutCard}>
+                        <View style={styles.lockedContent}>
+                            <RunningIcon size={48} color="#6B7280" />
+                            <Text style={styles.lockedText}>Nenhum treino agendado</Text>
                         </View>
-                    )
-                }
+                    </View>
+                )}
+                </View>
+                {/* ── fim Seus treinos ─────────────────────────────────────────── */}
 
                 {/* AI Analysis Card */}
                 <View style={styles.aiCard}>
@@ -1046,7 +1004,16 @@ const styles = StyleSheet.create({
         color: colors.text,
     },
 
-    // Workout Card
+    // Section title — "Seus treinos" (Figma: Inter 600 15px #EBEBF5, x:17 y:8.5)
+    sectionTitle: {
+        fontSize: 15,
+        fontWeight: '600' as const,
+        color: '#EBEBF5',
+        marginLeft: 17,
+        marginBottom: 11,
+    },
+
+    // Workout Card (legacy — kept for the "no workout" empty state)
     workoutCard: {
         backgroundColor: colors.card,
         borderRadius: borderRadius['2xl'],
