@@ -80,8 +80,9 @@ export function useTracking() {
     initializeTracker();
   }, []);
 
-  // Sync reativo de foreground lendo o state do MMKV periodicamente:
-  // (A Background task popula o MMKV por baixo dos panos e aqui nós lemos pra View na UI thread)
+  // Sync reativo de foreground lendo o state do MMKV periodicamente.
+  // Pace também é calculado aqui para evitar o bug de re-criação de interval
+  // causado por dependências [distance, timeMs] no useEffect separado.
   useEffect(() => {
     let syncTimer: NodeJS.Timeout;
 
@@ -98,7 +99,18 @@ export function useTracking() {
             setRouteCoordinates(parsed.map((p: any) => [p.longitude, p.latitude]));
           } catch(e) {}
         }
-        
+
+        // Calcula pace usando refs (evita closure stale sobre timeMs/distance)
+        // startTimeRef.current é não-nulo enquanto treinando
+        const currentTimeMs = accumulatedTimeRef.current +
+          (startTimeRef.current ? Date.now() - startTimeRef.current : 0);
+
+        if (currentDist > 50 && currentTimeMs > 0) {
+          const pace = (currentTimeMs / 60000) / (currentDist / 1000);
+          if (isFinite(pace) && pace > 0) {
+            setCurrentPace(pace);
+          }
+        }
       }, 1000);
     }
 
@@ -135,25 +147,6 @@ export function useTracking() {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [sessionState]);
-
-  // Sync Pace médio a cada 3 segundos pra não ficar pulando muito
-  useEffect(() => {
-     const paceTimer = setInterval(() => {
-        if (distance > 50 && timeMs > 0) { // Só calcula pace depois de 50 metros no mínimo
-            // Distância em km
-            const distanceKm = distance / 1000;
-            // Tempo total em minutos
-            const timeMinutes = timeMs / 60000;
-            
-            // Minutos por km
-            const pace = timeMinutes / distanceKm;
-            setCurrentPace(pace);
-        }
-     }, 3000);
-
-     return () => clearInterval(paceTimer);
-  }, [distance, timeMs]);
-
 
   const startResumeTracking = useCallback(async () => {
     setSessionState('training');

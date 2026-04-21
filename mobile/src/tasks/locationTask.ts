@@ -8,12 +8,15 @@ export const LOCATION_TRACKING_TASK = 'BACKGROUND_LOCATION_TASK';
 export const trackingStorage = createMMKV({ id: 'running-tracking-storage' });
 
 // ─── Constantes de filtro anti-drift ─────────────────────────────────────────
-// Limiar de precisão: pontos com erro > 15m são descartados (GPS indoor ruim)
-const MAX_ACCURACY_METERS = 15;
+// Limiar de precisão: pontos com erro > 10m são descartados.
+// Reduzido de 15m para 10m: com 15m de tolerância, o GPS oscilava ±15m mesmo parado,
+// gerando saltos falsos de 8–15m que passavam pelo filtro de distância mínima.
+const MAX_ACCURACY_METERS = 10;
 
-// Distância mínima entre dois pontos consecutivos para ser aceito como movimento real
-// Abaixo disso (< 8m) é ruído do GPS parado, não deslocamento real
-const MIN_DISTANCE_METERS = 8;
+// Distância mínima entre dois pontos consecutivos para ser aceito como movimento real.
+// Aumentado de 8m para 10m: exige deslocamento maior para descartar ruído residual
+// de GPS com 10m de precisão (oscilação ~5–8m ainda possível).
+const MIN_DISTANCE_METERS = 10;
 
 // Distância máxima por intervalo: > 200m em 2s = ~360 km/h, impossível a pé → descarta
 const MAX_DISTANCE_PER_INTERVAL_METERS = 200;
@@ -40,7 +43,8 @@ TaskManager.defineTask(LOCATION_TRACKING_TASK, async ({ data, error }) => {
   // Após resume, GPS precisa de "warm-up" — primeiros pontos podem ter accuracy pior.
   // Grace period: aceita até 30m nos primeiros pontos pós-resume.
   const graceCount = trackingStorage.getNumber('resume_grace_count') || 0;
-  const accuracyLimit = graceCount > 0 ? 30 : MAX_ACCURACY_METERS;
+  // Grace após resume: aceita até 20m (era 30m) — GPS precisa de warm-up mas 30m era excessivo
+  const accuracyLimit = graceCount > 0 ? 20 : MAX_ACCURACY_METERS;
 
   if (!loc.coords.accuracy || loc.coords.accuracy > accuracyLimit) {
     console.log(`[Tracking Task] Ponto ignorado. Precisão ruim: ${loc.coords.accuracy?.toFixed(1)}m (máx: ${accuracyLimit}m)`);

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -52,8 +52,9 @@ export function RunningScreen() {
   const insets = useSafeAreaInsets();
   const [hasGPSFix, setHasGPSFix] = useState(false);
   const [goalsModalVisible, setGoalsModalVisible] = useState(false);
-
+  const [isFollowingUser, setIsFollowingUser] = useState(true);
   const [isFinishing, setIsFinishing] = useState(false);
+  const cameraRef = useRef<Mapbox.Camera>(null);
 
   const {
     isReady,
@@ -231,11 +232,18 @@ export function RunningScreen() {
         scaleBarEnabled={false}
       >
         <Mapbox.Camera
+          ref={cameraRef}
           pitch={0}
           zoomLevel={18.5}
-          animationDuration={1000}
-          followUserLocation={true}
+          animationDuration={800}
+          followUserLocation={isFollowingUser}
           followUserMode={Mapbox.UserTrackingMode.FollowWithHeading}
+          onUserTrackingModeChange={(e) => {
+            // Mapbox desabilita follow quando o usuário arrasta o mapa manualmente
+            if (!e.nativeEvent.payload.followUserLocation) {
+              setIsFollowingUser(false);
+            }
+          }}
           defaultSettings={{
             zoomLevel: 18.5,
             animationDuration: 0,
@@ -252,8 +260,8 @@ export function RunningScreen() {
               id="routeGlow"
               style={{
                 lineColor: T.routeColor,
-                lineWidth: 14,
-                lineOpacity: 0.2,
+                lineWidth: 16,
+                lineOpacity: 0.35,
                 lineJoin: 'round',
                 lineCap: 'round',
               }}
@@ -262,7 +270,8 @@ export function RunningScreen() {
               id="routeFill"
               style={{
                 lineColor: T.routeColor,
-                lineWidth: 6,
+                lineWidth: 7,
+                lineOpacity: 1,
                 lineJoin: 'round',
                 lineCap: 'round',
               }}
@@ -312,6 +321,22 @@ export function RunningScreen() {
 
         </View>
       </SafeAreaView>
+
+      {/* ── RECENTER FAB — aparece quando o usuário arrasta o mapa ──────── */}
+      {!isFollowingUser && (
+        <Pressable
+          style={[styles.recenterBtn, { top: insets.top + 70 }]}
+          onPress={() => {
+            // Re-habilita follow: seta false primeiro para forçar re-mount do Camera
+            setIsFollowingUser(false);
+            requestAnimationFrame(() => setIsFollowingUser(true));
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Centralizar no meu local"
+        >
+          <Ionicons name="locate" size={22} color={T.cyan} />
+        </Pressable>
+      )}
 
       {/* ── BOTTOM PANEL ────────────────────────────────────────────────── */}
       <View style={styles.bottomPanel}>
@@ -518,6 +543,26 @@ const styles = StyleSheet.create({
   goalsBtnCompleted: {
     borderWidth: 2,
     borderColor: '#32CD32',
+  },
+
+  // ── Recenter FAB
+  recenterBtn: {
+    position: 'absolute',
+    right: 16,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#1C1C2E',
+    borderWidth: 1,
+    borderColor: '#00D4FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 20,
+    shadowColor: '#00D4FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
   },
 
   // ── Bottom panel
