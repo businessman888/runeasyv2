@@ -62,24 +62,19 @@ export function useTracking(workoutId?: string) {
         const storedSessionKey = trackingStorage.getString('tracking_workout_id') || '';
         const wasFinished = trackingStorage.getBoolean('tracking_finished') ?? false;
 
-        const hasStaleData = wasFinished || (
-          storedSessionKey !== '' && storedSessionKey !== currentSessionKey
-        );
+        // Expira dados se a data do treino já passou (ex: pausou ontem e não concluiu)
+        const storedDate = trackingStorage.getString('tracking_date') || '';
+        const today = new Date().toISOString().split('T')[0];
+        const isExpired = storedDate !== '' && storedDate < today;
 
-        if (hasStaleData) {
-          // Dados de outra sessão (ou sessão já finalizada mas GPS escreveu após clearTracking)
-          // → limpa silenciosamente para garantir tela em branco
-          console.log(`[useTracking] Dados obsoletos detectados. stored="${storedSessionKey}", current="${currentSessionKey}", finished=${wasFinished} → limpando`);
-          trackingStorage.delete('route_points');
-          trackingStorage.delete('current_distance');
-          trackingStorage.delete('accumulated_time_ms');
-          trackingStorage.delete('last_update_ts');
-          trackingStorage.delete('tracking_paused');
-          trackingStorage.delete('resume_grace_count');
-          trackingStorage.delete('tracking_workout_id');
-          trackingStorage.delete('tracking_finished');
-        } else {
-          // Mesma sessão (ou ambos indefinidos = corrida livre) → crash-recovery legítimo
+        // Restaura SOMENTE se for a mesma sessão, não finalizada e não expirada.
+        // Nota: NÃO limpamos MMKV aqui — isso é feito em startResumeTracking quando
+        // o usuário inicia uma nova sessão. Limpar no init causava o bug de zeragem.
+        const isSameSession = !wasFinished && !isExpired &&
+          storedSessionKey === currentSessionKey;
+
+        if (isSameSession) {
+          // Mesma sessão → crash-recovery legítimo (pausa → saiu → voltou mesmo dia)
           const savedRouteStr = trackingStorage.getString('route_points');
           if (savedRouteStr) {
             try {
@@ -96,6 +91,10 @@ export function useTracking(workoutId?: string) {
               console.error('[useTracking] Erro ao fazer parse da rota recuperada');
             }
           }
+        } else if (storedSessionKey !== '' || wasFinished || isExpired) {
+          // Dados de outra sessão / expirados / finalizados → apenas loga.
+          // A limpeza acontece em startResumeTracking quando o usuário iniciar.
+          console.log(`[useTracking] Dados de sessão diferente ou expirada ignorados. stored="${storedSessionKey}", current="${currentSessionKey}", finished=${wasFinished}, expired=${isExpired}`);
         }
       } catch (e) {
         console.error('[useTracking] Erro na inicialização:', e);
@@ -179,10 +178,37 @@ export function useTracking(workoutId?: string) {
   const startResumeTracking = useCallback(async () => {
     setSessionState('training');
 
-    // Persiste o identificador da sessão para o crash-recovery distinguir sessões
     const sessionKey = workoutId || FREE_RUN_SESSION_KEY;
+    const storedKey = trackingStorage.getString('tracking_workout_id') || '';
+    const wasFinished = trackingStorage.getBoolean('tracking_finished') ?? false;
+    const storedDate = trackingStorage.getString('tracking_date') || '';
+    const today = new Date().toISOString().split('T')[0];
+    const isExpired = storedDate !== '' && storedDate < today;
+
+    // Limpa dados obsoletos AQUI (não no init), para garantir que ao iniciar um
+    // treino diferente (ou no dia seguinte) o MMKV começa limpo.
+    const isNewSession = wasFinished || isExpired ||
+      (storedKey !== '' && storedKey !== sessionKey);
+
+    if (isNewSession) {
+      console.log(`[useTracking] Nova sessão detectada em startResume → limpando MMKV. stored="${storedKey}", current="${sessionKey}", finished=${wasFinished}, expired=${isExpired}`);
+      trackingStorage.delete('route_points');
+      trackingStorage.delete('current_distance');
+      trackingStorage.delete('accumulated_time_ms');
+      trackingStorage.delete('last_update_ts');
+      trackingStorage.delete('tracking_paused');
+      trackingStorage.delete('resume_grace_count');
+      setRouteCoordinates([]);
+      setDistance(0);
+      setTimeMs(0);
+      setCurrentPace(0);
+      accumulatedTimeRef.current = 0;
+      startTimeRef.current = null;
+    }
+
+    // Persiste identificador e data da sessão para crash-recovery e expiry
     trackingStorage.set('tracking_workout_id', sessionKey);
-    // Garante que o flag de finalização está limpo (cobre caso de re-start após erro)
+    trackingStorage.set('tracking_date', today);
     trackingStorage.delete('tracking_finished');
 
     const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
@@ -199,7 +225,7 @@ export function useTracking(workoutId?: string) {
             },
         });
     }
-  }, []);
+  }, [workoutId]);
 
   const pauseTracking = useCallback(async () => {
     setSessionState('paused');
@@ -279,6 +305,7 @@ export function useTracking(workoutId?: string) {
     trackingStorage.delete('resume_grace_count');
     trackingStorage.delete('tracking_workout_id');
     trackingStorage.delete('tracking_finished');
+    trackingStorage.delete('tracking_date');
 
     setRouteCoordinates([]);
     setDistance(0);
