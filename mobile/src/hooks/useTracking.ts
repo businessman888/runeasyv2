@@ -4,7 +4,10 @@ import { trackingStorage, LOCATION_TRACKING_TASK } from '../tasks/locationTask';
 
 export type SessionState = 'calculating' | 'training' | 'paused' | 'finished';
 
-export function useTracking() {
+// Chave sentinela para corridas livres (sem workoutId associado)
+const FREE_RUN_SESSION_KEY = '__free_run__';
+
+export function useTracking(workoutId?: string) {
   const [sessionState, setSessionState] = useState<SessionState>('calculating');
   const [routeCoordinates, setRouteCoordinates] = useState<number[][]>([]); // Array [lng, lat] para o Mapbox
   const [distance, setDistance] = useState(0);
@@ -53,20 +56,45 @@ export function useTracking() {
           console.warn('[useTracking] Não foi possível obter posição inicial');
         }
 
-        // Tenta recuperar estado local se o app foi fechado no meio de uma corrida
-        const savedRouteStr = trackingStorage.getString('route_points');
-        if (savedRouteStr) {
-          try {
-            const parsedPoints = JSON.parse(savedRouteStr);
-            if (parsedPoints.length > 0) {
-              setRouteCoordinates(parsedPoints.map((p: any) => [p.longitude, p.latitude]));
-              setDistance(trackingStorage.getNumber('current_distance') || 0);
-              accumulatedTimeRef.current = trackingStorage.getNumber('accumulated_time_ms') || 0;
-              setTimeMs(accumulatedTimeRef.current);
-              setSessionState('paused'); // Sugere "Retomar" no invés de iniciar do zero
+        // ── Crash-recovery com identificação de sessão ───────────────────────
+        // Identifica a sessão atual: workoutId real ou chave sentinela para corridas livres
+        const currentSessionKey = workoutId || FREE_RUN_SESSION_KEY;
+        const storedSessionKey = trackingStorage.getString('tracking_workout_id') || '';
+        const wasFinished = trackingStorage.getBoolean('tracking_finished') ?? false;
+
+        const hasStaleData = wasFinished || (
+          storedSessionKey !== '' && storedSessionKey !== currentSessionKey
+        );
+
+        if (hasStaleData) {
+          // Dados de outra sessão (ou sessão já finalizada mas GPS escreveu após clearTracking)
+          // → limpa silenciosamente para garantir tela em branco
+          console.log(`[useTracking] Dados obsoletos detectados. stored="${storedSessionKey}", current="${currentSessionKey}", finished=${wasFinished} → limpando`);
+          trackingStorage.delete('route_points');
+          trackingStorage.delete('current_distance');
+          trackingStorage.delete('accumulated_time_ms');
+          trackingStorage.delete('last_update_ts');
+          trackingStorage.delete('tracking_paused');
+          trackingStorage.delete('resume_grace_count');
+          trackingStorage.delete('tracking_workout_id');
+          trackingStorage.delete('tracking_finished');
+        } else {
+          // Mesma sessão (ou ambos indefinidos = corrida livre) → crash-recovery legítimo
+          const savedRouteStr = trackingStorage.getString('route_points');
+          if (savedRouteStr) {
+            try {
+              const parsedPoints = JSON.parse(savedRouteStr);
+              if (parsedPoints.length > 0) {
+                setRouteCoordinates(parsedPoints.map((p: any) => [p.longitude, p.latitude]));
+                setDistance(trackingStorage.getNumber('current_distance') || 0);
+                accumulatedTimeRef.current = trackingStorage.getNumber('accumulated_time_ms') || 0;
+                setTimeMs(accumulatedTimeRef.current);
+                setSessionState('paused'); // Sugere "Retomar" para o mesmo treino
+                console.log(`[useTracking] Crash-recovery: sessão "${currentSessionKey}" restaurada`);
+              }
+            } catch (e) {
+              console.error('[useTracking] Erro ao fazer parse da rota recuperada');
             }
-          } catch (e) {
-            console.error('Erro ao fazer parse da rota recuperada');
           }
         }
       } catch (e) {
@@ -151,6 +179,12 @@ export function useTracking() {
   const startResumeTracking = useCallback(async () => {
     setSessionState('training');
 
+    // Persiste o identificador da sessão para o crash-recovery distinguir sessões
+    const sessionKey = workoutId || FREE_RUN_SESSION_KEY;
+    trackingStorage.set('tracking_workout_id', sessionKey);
+    // Garante que o flag de finalização está limpo (cobre caso de re-start após erro)
+    trackingStorage.delete('tracking_finished');
+
     const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
     if (!hasStarted) {
         await Location.startLocationUpdatesAsync(LOCATION_TRACKING_TASK, {
@@ -191,6 +225,10 @@ export function useTracking() {
       startTimeRef.current = null;
     }
     if (timerRef.current) clearInterval(timerRef.current);
+
+    // Sinaliza ANTES de parar o GPS: a locationTask verifica esta flag e descarta
+    // qualquer update residual que chegue após stopLocationUpdatesAsync (race condition Android).
+    trackingStorage.set('tracking_finished', true);
 
     // Para o GPS
     try {
@@ -239,6 +277,8 @@ export function useTracking() {
     trackingStorage.delete('last_update_ts');
     trackingStorage.delete('tracking_paused');
     trackingStorage.delete('resume_grace_count');
+    trackingStorage.delete('tracking_workout_id');
+    trackingStorage.delete('tracking_finished');
 
     setRouteCoordinates([]);
     setDistance(0);

@@ -69,7 +69,7 @@ export function RunningScreen() {
     pauseTracking,
     finishTracking,
     clearTracking,
-  } = useTracking();
+  } = useTracking(route.params?.workoutId);
 
   const completeWorkout = useTrainingStore((s) => s.completeWorkout);
 

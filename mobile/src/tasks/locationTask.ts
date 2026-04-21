@@ -29,6 +29,13 @@ const MAX_SPEED_MS = 15;
 const MIN_SPEED_TO_MOVE_MS = 0.5; // < 1.8 km/h = parado ou andando bem devagar
 
 TaskManager.defineTask(LOCATION_TRACKING_TASK, async ({ data, error }) => {
+  // Guard de sessão finalizada: impede que o último update do GPS (que pode chegar
+  // após stopLocationUpdatesAsync no Android) re-escreva dados no MMKV após clearTracking.
+  if (trackingStorage.getBoolean('tracking_finished')) {
+    console.log('[Tracking Task] Sessão finalizada — descartando update residual do GPS');
+    return;
+  }
+
   if (error) {
     console.error('[Tracking Task] Erro na task de localização:', error);
     return;
