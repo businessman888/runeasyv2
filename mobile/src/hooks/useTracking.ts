@@ -75,22 +75,24 @@ export function useTracking(workoutId?: string) {
 
         if (isSameSession) {
           // Mesma sessão → crash-recovery legítimo (pausa → saiu → voltou mesmo dia)
+          // Sempre restaura para 'paused', mesmo sem pontos de rota (GPS pode não ter aceito
+          // nenhum ponto ainda se o usuário pausou muito cedo ou estava parado).
           const savedRouteStr = trackingStorage.getString('route_points');
           if (savedRouteStr) {
             try {
               const parsedPoints = JSON.parse(savedRouteStr);
               if (parsedPoints.length > 0) {
                 setRouteCoordinates(parsedPoints.map((p: any) => [p.longitude, p.latitude]));
-                setDistance(trackingStorage.getNumber('current_distance') || 0);
-                accumulatedTimeRef.current = trackingStorage.getNumber('accumulated_time_ms') || 0;
-                setTimeMs(accumulatedTimeRef.current);
-                setSessionState('paused'); // Sugere "Retomar" para o mesmo treino
-                console.log(`[useTracking] Crash-recovery: sessão "${currentSessionKey}" restaurada`);
               }
             } catch (e) {
               console.error('[useTracking] Erro ao fazer parse da rota recuperada');
             }
           }
+          setDistance(trackingStorage.getNumber('current_distance') || 0);
+          accumulatedTimeRef.current = trackingStorage.getNumber('accumulated_time_ms') || 0;
+          setTimeMs(accumulatedTimeRef.current);
+          setSessionState('paused');
+          console.log(`[useTracking] Crash-recovery: sessão "${currentSessionKey}" restaurada`);
         } else if (storedSessionKey !== '' || wasFinished || isExpired) {
           // Dados de outra sessão / expirados / finalizados → apenas loga.
           // A limpeza acontece em startResumeTracking quando o usuário iniciar.
