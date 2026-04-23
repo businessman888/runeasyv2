@@ -19,6 +19,8 @@ import { TrainingAIService } from './training-ai.service';
 import { SupabaseService } from '../../database';
 import { SupabaseAuthGuard } from '../../common/guards/supabase-auth.guard';
 import { UsersService } from '../users/users.service';
+import { CreateManualWorkoutDto } from './dto/create-manual-workout.dto';
+import { CompleteFreeWorkoutDto } from './dto/complete-free-workout.dto';
 
 interface CreatePlanDto {
     // Biometrics (New)
@@ -447,6 +449,56 @@ export class TrainingController {
 
         const workout = await this.trainingService.skipWorkout(userId, workoutId, dto.reason);
         return { workout };
+    }
+
+    /**
+     * Create a user-defined manual workout (source='manual').
+     * Saved as a regular workout row so it appears on the calendar and can be tracked.
+     */
+    @Post('workouts/manual')
+    async createManualWorkout(
+        @Headers('x-user-id') userId: string,
+        @Body() dto: CreateManualWorkoutDto,
+    ) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        try {
+            const workout = await this.trainingService.createManualWorkout(userId, dto);
+            return { success: true, workout };
+        } catch (error) {
+            this.logger.error('Failed to create manual workout', error);
+            throw new HttpException(
+                error.message || 'Failed to create manual workout',
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    /**
+     * Complete a free run (source='free').
+     * Creates the workout row on the fly and routes through the standard completion pipeline.
+     */
+    @Post('workouts/free/complete')
+    async completeFreeWorkout(
+        @Headers('x-user-id') userId: string,
+        @Body() dto: CompleteFreeWorkoutDto,
+    ) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        try {
+            const workout = await this.trainingService.completeFreeWorkout(userId, dto);
+            return { success: true, workout };
+        } catch (error) {
+            this.logger.error('Failed to complete free workout', error);
+            throw new HttpException(
+                error.message || 'Failed to complete free workout',
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
     }
 
     /**

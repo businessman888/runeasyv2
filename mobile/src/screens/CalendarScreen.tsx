@@ -778,6 +778,31 @@ export function CalendarScreen({ navigation }: any) {
                                             {selectedDateWorkout.type === 'intervals' || selectedDateWorkout.type === 'tempo' ? 'ALTA INTENSIDADE' : 'MODERADO'}
                                         </Text>
                                     </View>
+                                    {(() => {
+                                        const src = (selectedDateWorkout as any).source as ('plan' | 'manual' | 'free' | undefined);
+                                        if (!src || src === 'plan') {
+                                            return (
+                                                <View style={[styles.sourceBadge, { borderColor: '#00D4FF' }]}>
+                                                    <Ionicons name="flash" size={12} color="#00D4FF" />
+                                                    <Text style={[styles.sourceBadgeText, { color: '#00D4FF' }]}>PLANO</Text>
+                                                </View>
+                                            );
+                                        }
+                                        if (src === 'manual') {
+                                            return (
+                                                <View style={[styles.sourceBadge, { borderColor: '#A78BFA' }]}>
+                                                    <Ionicons name="create-outline" size={12} color="#A78BFA" />
+                                                    <Text style={[styles.sourceBadgeText, { color: '#A78BFA' }]}>MANUAL</Text>
+                                                </View>
+                                            );
+                                        }
+                                        return (
+                                            <View style={[styles.sourceBadge, { borderColor: '#32CD32' }]}>
+                                                <MaterialCommunityIcons name="run" size={12} color="#32CD32" />
+                                                <Text style={[styles.sourceBadgeText, { color: '#32CD32' }]}>LIVRE</Text>
+                                            </View>
+                                        );
+                                    })()}
                                     <View style={styles.pendingBadge}>
                                         <View style={styles.pendingDot} />
                                         <Text style={styles.pendingText}>
@@ -1088,11 +1113,20 @@ export function CalendarScreen({ navigation }: any) {
                                                 : `${day}/${month}`;
 
                                             closeModal();
+                                            const src = (selectedDateWorkout as any)?.source as ('plan' | 'manual' | 'free' | undefined);
+                                            const mode = src === 'manual' ? 'manual' : 'planned';
                                             navigation.navigate('Running', {
                                                 workoutId: selectedWorkout?.id,
                                                 dayLabel,
                                                 title: selectedWorkout?.title ?? 'Meu Treino',
                                                 workoutBlocks: selectedDateWorkout?.instructions_json ?? [],
+                                                mode,
+                                                targetPaceSeconds: src === 'manual'
+                                                    ? (selectedDateWorkout as any)?.target_pace_seconds
+                                                    : undefined,
+                                                targetDistanceKm: src === 'manual'
+                                                    ? selectedDateWorkout?.distance_km
+                                                    : undefined,
                                             });
                                         }}
                                         activeOpacity={0.8}
@@ -1394,6 +1428,21 @@ const styles = StyleSheet.create({
         fontSize: 11,
         fontWeight: typography.fontWeights.bold as any,
         color: '#00D4FF',
+        letterSpacing: 0.5,
+    },
+    sourceBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'transparent',
+        borderWidth: 1,
+        paddingHorizontal: spacing.sm,
+        paddingVertical: spacing.xs,
+        borderRadius: borderRadius.md,
+    },
+    sourceBadgeText: {
+        fontSize: 10,
+        fontWeight: typography.fontWeights.bold as any,
         letterSpacing: 0.5,
     },
     pendingBadge: {

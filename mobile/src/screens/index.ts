@@ -18,6 +18,7 @@ export * from './HelpScreen';
 export * from './SupportScreen';
 export * from './RetrospectiveScreen';
 export * from './CustomizeGoalScreen';
+export * from './ManualWorkoutConfigScreen';
 
 // Quiz Screens
 export * from './quiz';

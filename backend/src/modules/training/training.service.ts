@@ -573,9 +573,11 @@ export class TrainingService {
             // Non-blocking: workout is already completed
         }
 
-        // 5. Queue AI Feedback processing — only if we successfully created the
-        // activity row, otherwise the feedback service has nothing to read from.
-        if (activityId) {
+        // 5. Queue AI Feedback processing — only for plan-generated workouts.
+        // Manual and free workouts have no AI coach, so we skip the enqueue
+        // (and skip when the activity row failed to insert, since the feedback
+        // service has nothing to read from).
+        if (activityId && workout.source === 'plan') {
             this.logger.log(
                 `Enqueueing AI Feedback for Workout ${workoutId} / Activity ${activityId}`,
             );
@@ -584,13 +586,120 @@ export class TrainingService {
                 { userId, workoutId, activityId },
                 { delay: 1000 },
             );
-        } else {
+        } else if (!activityId) {
             this.logger.warn(
                 `Skipping AI feedback enqueue for workout ${workoutId}: activity row was not created`,
+            );
+        } else {
+            this.logger.log(
+                `Skipping AI feedback for workout ${workoutId}: source=${workout.source} (no AI coach for manual/free)`,
             );
         }
 
         return updatedWorkout;
+    }
+
+    /**
+     * Create a user-defined manual workout (no AI plan). The workout is saved
+     * with status='pending' and a single 'main' instruction block so that the
+     * existing real-time goals UI (useWorkoutGoals) shows the user's targets
+     * during the run.
+     */
+    async createManualWorkout(
+        userId: string,
+        dto: import('./dto/create-manual-workout.dto').CreateManualWorkoutDto,
+    ) {
+        const paceMinutes = dto.target_pace_seconds / 60;
+
+        const { data, error } = await this.supabaseService
+            .from('workouts')
+            .insert({
+                user_id: userId,
+                plan_id: null,
+                source: 'manual',
+                title: dto.title,
+                type: dto.type,
+                week_number: null,
+                scheduled_date: dto.scheduled_date,
+                scheduled_time: dto.scheduled_time ?? '05:00:00',
+                distance_km: dto.distance_km,
+                target_pace_seconds: dto.target_pace_seconds,
+                target_duration_seconds: dto.target_duration_seconds,
+                instructions_json: [
+                    {
+                        type: 'main',
+                        distance_km: dto.distance_km,
+                        pace_min: paceMinutes,
+                        pace_max: paceMinutes,
+                    },
+                ],
+                objective: dto.title,
+                tips: [],
+                status: 'pending',
+            })
+            .select()
+            .single();
+
+        if (error) {
+            this.logger.error(`Failed to create manual workout for user ${userId}: ${error.message}`, error);
+            throw error;
+        }
+
+        return data;
+    }
+
+    /**
+     * Persist a free run (no pre-existing workout). Creates a workout row with
+     * source='free', then delegates to completeWorkout so the route, activity,
+     * gamification and pending-id all flow through the same code path.
+     */
+    async completeFreeWorkout(
+        userId: string,
+        payload: import('./dto/complete-free-workout.dto').CompleteFreeWorkoutDto,
+    ) {
+        const startedAt = payload.started_at ? new Date(payload.started_at) : new Date(Date.now() - payload.duration_seconds * 1000);
+        const scheduledDate = startedAt.toISOString().split('T')[0];
+        const distanceKm = (payload.total_distance_meters || 0) / 1000;
+
+        const titleByHour = (date: Date): string => {
+            // São Paulo local hour (UTC-3)
+            const localHour = (date.getUTCHours() + 24 + this.SAO_PAULO_OFFSET_HOURS) % 24;
+            if (localHour >= 5 && localHour < 12) return 'Corrida da manhã';
+            if (localHour >= 12 && localHour < 18) return 'Corrida da tarde';
+            return 'Corrida da noite';
+        };
+
+        const { data: workout, error: insertError } = await this.supabaseService
+            .from('workouts')
+            .insert({
+                user_id: userId,
+                plan_id: null,
+                source: 'free',
+                title: titleByHour(startedAt),
+                type: 'free_run',
+                week_number: null,
+                scheduled_date: scheduledDate,
+                distance_km: distanceKm,
+                instructions_json: [],
+                objective: null,
+                tips: [],
+                status: 'pending',
+            })
+            .select()
+            .single();
+
+        if (insertError) {
+            this.logger.error(`Failed to create free workout row for user ${userId}: ${insertError.message}`, insertError);
+            throw insertError;
+        }
+
+        // Reuse the full completion pipeline (activity insert, route, gamification).
+        // AI feedback is automatically skipped because workout.source !== 'plan'.
+        return this.completeWorkout(userId, workout.id, {
+            route_points: payload.route_points,
+            total_distance_meters: payload.total_distance_meters,
+            duration_seconds: payload.duration_seconds,
+        });
     }
 
     /**

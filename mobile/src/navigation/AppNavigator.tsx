@@ -34,6 +34,7 @@ import {
     SupportScreen,
     RetrospectiveScreen,
     CustomizeGoalScreen,
+    ManualWorkoutConfigScreen,
     RunningScreen,
     RunSummaryScreen,
 } from '../screens';
@@ -412,6 +413,14 @@ export function AppNavigator() {
                             }}
                         />
                         <Stack.Screen
+                            name="ManualWorkoutConfig"
+                            component={ManualWorkoutConfigScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'card',
+                            }}
+                        />
+                        <Stack.Screen
                             name="Running"
                             component={RunningScreen}
                             options={{
@@ -423,6 +432,9 @@ export function AppNavigator() {
                                 dayLabel: undefined,
                                 title: undefined,
                                 workoutBlocks: undefined,
+                                mode: 'planned',
+                                targetPaceSeconds: undefined,
+                                targetDistanceKm: undefined,
                             }}
                         />
                         <Stack.Screen

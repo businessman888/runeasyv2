@@ -21,6 +21,7 @@ import { Skeleton } from '../components/Skeleton';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { HomeFixedHeader } from '../components/HomeFixedHeader';
 import { WorkoutCard } from '../components/WorkoutCard';
+import { HomeFab } from '../components/HomeFab';
 import { useHealthKitStore } from '../stores/healthKitStore';
 
 import { BASE_API_URL } from '../config/api.config';
@@ -411,12 +412,26 @@ export function HomeScreen({ navigation }: any) {
             ? `${getWorkoutTypeName(todayWorkout.type)} - ${todayWorkout.distance_km.toFixed(1)}Km`
             : 'Meu Treino';
 
+        const src = (todayWorkout as any)?.source as ('plan' | 'manual' | 'free' | undefined);
+        const mode = src === 'manual' ? 'manual' : 'planned';
+
         navigation.navigate('Running', {
             workoutId: todayWorkout?.id,
             dayLabel,
             title,
             workoutBlocks: todayWorkout?.instructions_json ?? [],
+            mode,
+            targetPaceSeconds: src === 'manual' ? (todayWorkout as any)?.target_pace_seconds : undefined,
+            targetDistanceKm: src === 'manual' ? todayWorkout?.distance_km : undefined,
         });
+    };
+
+    const handleStartFreeRun = () => {
+        navigation.navigate('Running', { mode: 'free' });
+    };
+
+    const handleOpenManualConfig = () => {
+        navigation.navigate('ManualWorkoutConfig');
     };
 
     const userName = getDisplayName(user) || 'Corredor';
@@ -792,6 +807,10 @@ export function HomeScreen({ navigation }: any) {
                 </Animated.View>
             )}
 
+            <HomeFab
+                onPressFreeRun={handleStartFreeRun}
+                onPressManual={handleOpenManualConfig}
+            />
         </ScreenContainer >
     );
 }

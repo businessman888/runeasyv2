@@ -19,12 +19,19 @@ import { MapLocationPuck } from '../../components/map/MapLocationPuck';
 import type { WorkoutBlockAPI } from '../../types/workoutGoals';
 
 // ─── Tipos de rota ────────────────────────────────────────────────────────────
+export type RunMode = 'planned' | 'manual' | 'free';
+
 type RunningRouteParams = {
   Running: {
     workoutId?: string;
     dayLabel?: string;
     title?: string;
     workoutBlocks?: WorkoutBlockAPI[];
+    mode?: RunMode;
+    /** Para modo 'manual': pace alvo em segundos/km (usado em Goals e na comparação no Summary) */
+    targetPaceSeconds?: number;
+    /** Para modo 'manual': distância alvo em km */
+    targetDistanceKm?: number;
   };
 };
 
@@ -72,11 +79,15 @@ export function RunningScreen() {
   } = useTracking(route.params?.workoutId);
 
   const completeWorkout = useTrainingStore((s) => s.completeWorkout);
+  const completeFreeRun = useTrainingStore((s) => s.completeFreeRun);
+
+  const mode: RunMode = route.params?.mode ?? (route.params?.workoutId ? 'planned' : 'free');
+  const isFreeMode = mode === 'free';
 
   // ── Finalização segura do treino ──────────────────────────────────────
   const handleFinish = useCallback(async () => {
     const workoutId = route.params?.workoutId;
-    console.log(`[RunningScreen] handleFinish iniciado. workoutId=${workoutId}`);
+    console.log(`[RunningScreen] handleFinish iniciado. mode=${mode}, workoutId=${workoutId}`);
 
     setIsFinishing(true);
 
@@ -98,18 +109,32 @@ export function RunningScreen() {
 
     // 2. Envia ao backend (save-first: dados salvos em MMKV ANTES da tentativa de API)
     let savedLocally = false;
+    let resolvedWorkoutId: string | undefined = workoutId;
     try {
-      const result = await completeWorkout({
-        workoutId: workoutId || `local_${Date.now()}`,
-        route_points: trackingData.routeData,
-        total_distance_meters: trackingData.distance,
-        duration_seconds: Math.round(trackingData.timeMs / 1000),
-      });
-      savedLocally = result.savedLocally;
-      console.log(`[RunningScreen] completeWorkout resultado: success=${result.success}, savedLocally=${result.savedLocally}`);
+      if (isFreeMode) {
+        const result = await completeFreeRun({
+          localId: `free_${Date.now()}`,
+          route_points: trackingData.routeData,
+          total_distance_meters: trackingData.distance,
+          duration_seconds: Math.round(trackingData.timeMs / 1000),
+          started_at: new Date(Date.now() - trackingData.timeMs).toISOString(),
+        });
+        savedLocally = result.savedLocally;
+        if (result.workout?.id) resolvedWorkoutId = result.workout.id;
+        console.log(`[RunningScreen] completeFreeRun resultado: success=${result.success}, savedLocally=${result.savedLocally}, workoutId=${resolvedWorkoutId}`);
+      } else {
+        const result = await completeWorkout({
+          workoutId: workoutId || `local_${Date.now()}`,
+          route_points: trackingData.routeData,
+          total_distance_meters: trackingData.distance,
+          duration_seconds: Math.round(trackingData.timeMs / 1000),
+        });
+        savedLocally = result.savedLocally;
+        console.log(`[RunningScreen] completeWorkout resultado: success=${result.success}, savedLocally=${result.savedLocally}`);
+      }
     } catch (error) {
-      // completeWorkout já salva localmente internamente, mas por segurança:
-      console.error('[RunningScreen] Erro inesperado no completeWorkout:', error);
+      // completeWorkout/completeFreeRun já salvam localmente internamente, mas por segurança:
+      console.error('[RunningScreen] Erro inesperado na finalização:', error);
       savedLocally = true;
     }
 
@@ -126,13 +151,18 @@ export function RunningScreen() {
           {
             name: 'RunSummary' as never,
             params: {
-              workoutId: workoutId || undefined,
+              workoutId: resolvedWorkoutId || undefined,
               distance: trackingData.distance,
               timeMs: trackingData.timeMs,
+              routePoints: trackingData.routeData,
               routeCoordinates: trackingData.routeData.map(
                 (p: { longitude: number; latitude: number }) => [p.longitude, p.latitude]
               ),
               savedLocally,
+              mode,
+              targetPaceSeconds: route.params?.targetPaceSeconds,
+              targetDistanceKm: route.params?.targetDistanceKm,
+              workoutTitle: route.params?.title,
             },
           },
         ],
@@ -151,7 +181,7 @@ export function RunningScreen() {
     } finally {
       setIsFinishing(false);
     }
-  }, [route.params?.workoutId, finishTracking, completeWorkout, clearTracking, navigation]);
+  }, [route.params?.workoutId, route.params?.title, route.params?.targetPaceSeconds, route.params?.targetDistanceKm, mode, isFreeMode, finishTracking, completeWorkout, completeFreeRun, clearTracking, navigation]);
 
   // ── Sistema de Metas ────────────────────────────────────────────────────
   const workoutBlocks = route.params?.workoutBlocks;
@@ -294,14 +324,21 @@ export function RunningScreen() {
             <Ionicons name="chevron-back" size={22} color={T.textPrimary} />
           </Pressable>
 
-          {/* Card de info do treino */}
-          <View style={styles.workoutCard}>
-            <Text style={styles.workoutDay}>{dayLabel}</Text>
-            <Text style={styles.workoutTitle} numberOfLines={1}>{workoutTitle}</Text>
-          </View>
+          {/* Card de info do treino — escondido no modo livre */}
+          {!isFreeMode ? (
+            <View style={styles.workoutCard}>
+              <Text style={styles.workoutDay}>{dayLabel}</Text>
+              <Text style={styles.workoutTitle} numberOfLines={1}>{workoutTitle}</Text>
+            </View>
+          ) : (
+            <View style={styles.workoutCard}>
+              <Text style={styles.workoutDay}>{dayLabel}</Text>
+              <Text style={styles.workoutTitle} numberOfLines={1}>Treino livre</Text>
+            </View>
+          )}
 
-          {/* Botão de Metas — check verde quando todas concluídas */}
-          {hasGoals && (
+          {/* Botão de Metas — check verde quando todas concluídas; oculto no modo livre */}
+          {hasGoals && !isFreeMode && (
             <Pressable
               style={[
                 styles.goalsBtn,

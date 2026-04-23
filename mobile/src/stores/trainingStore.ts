@@ -5,19 +5,32 @@ import { BASE_API_URL } from '../config/api.config';
 
 // ─── Persistência offline para workouts pendentes ────────────────────────────
 const pendingWorkoutsStorage = createMMKV({ id: 'pending-workouts' });
+const pendingFreeRunsStorage = createMMKV({ id: 'pending-free-runs' });
+
+export interface RoutePoint {
+    latitude: number;
+    longitude: number;
+    altitude: number | null;
+    timestamp: number;
+    speed: number | null;
+    accuracy: number | null;
+}
 
 export interface WorkoutTrackingPayload {
     workoutId: string;
-    route_points: Array<{
-        latitude: number;
-        longitude: number;
-        altitude: number | null;
-        timestamp: number;
-        speed: number | null;
-        accuracy: number | null;
-    }>;
+    route_points: RoutePoint[];
     total_distance_meters: number;
     duration_seconds: number;
+}
+
+export interface FreeRunPayload {
+    /** Local id (uuid) usado apenas para deduplicar pendentes — não é enviado pro backend */
+    localId: string;
+    route_points: RoutePoint[];
+    total_distance_meters: number;
+    duration_seconds: number;
+    started_at?: string;
+    city?: string;
 }
 
 /** Salva um workout pendente no MMKV para retry posterior */
@@ -79,17 +92,81 @@ export function debugPendingWorkouts(): WorkoutTrackingPayload[] {
     return pending;
 }
 
+// ─── Persistência offline de free runs ───────────────────────────────────────
+function savePendingFreeRun(payload: FreeRunPayload) {
+    try {
+        const existing = pendingFreeRunsStorage.getString('pending_list');
+        const list: FreeRunPayload[] = existing ? JSON.parse(existing) : [];
+        if (list.some(r => r.localId === payload.localId)) {
+            console.log(`[PendingFreeRuns] localId ${payload.localId} já existe, ignorando duplicata`);
+            return;
+        }
+        list.push(payload);
+        pendingFreeRunsStorage.set('pending_list', JSON.stringify(list));
+        console.log(`[PendingFreeRuns] Salvo localmente. localId=${payload.localId}, dist=${payload.total_distance_meters}m, dur=${payload.duration_seconds}s. Total pendentes: ${list.length}`);
+    } catch (e) {
+        console.error('[PendingFreeRuns] ERRO CRÍTICO ao salvar free run:', e);
+    }
+}
+
+function removePendingFreeRun(localId: string) {
+    try {
+        const existing = pendingFreeRunsStorage.getString('pending_list');
+        if (!existing) return;
+        const list: FreeRunPayload[] = JSON.parse(existing);
+        const filtered = list.filter(r => r.localId !== localId);
+        pendingFreeRunsStorage.set('pending_list', JSON.stringify(filtered));
+        console.log(`[PendingFreeRuns] Removido ${localId}. Restantes: ${filtered.length}`);
+    } catch (e) {
+        console.error('[PendingFreeRuns] Erro ao remover free run pendente:', e);
+    }
+}
+
+function getPendingFreeRuns(): FreeRunPayload[] {
+    try {
+        const existing = pendingFreeRunsStorage.getString('pending_list');
+        return existing ? JSON.parse(existing) : [];
+    } catch {
+        return [];
+    }
+}
+
+export type WorkoutSource = 'plan' | 'manual' | 'free';
+export type WorkoutType =
+    | 'easy_run'
+    | 'long_run'
+    | 'intervals'
+    | 'tempo'
+    | 'recovery'
+    | 'fartlek'
+    | 'progressive'
+    | 'free_run';
+
+export interface ManualWorkoutDto {
+    title: string;
+    type: Exclude<WorkoutType, 'free_run'>;
+    scheduled_date: string;
+    distance_km: number;
+    target_pace_seconds: number;
+    target_duration_seconds: number;
+    scheduled_time?: string;
+}
+
 interface Workout {
     id: string;
-    plan_id: string;
-    week_number: number;
-    scheduled_date: string;
-    type: 'easy_run' | 'long_run' | 'intervals' | 'tempo' | 'recovery';
+    plan_id: string | null;
+    week_number: number | null;
+    scheduled_date: string | null;
+    type: WorkoutType;
     distance_km: number;
     objective: string;
     tips: string[];
     status: 'pending' | 'completed' | 'skipped' | 'missed';
     activity_id?: number;
+    source?: WorkoutSource;
+    title?: string | null;
+    target_pace_seconds?: number | null;
+    target_duration_seconds?: number | null;
     instructions_json: Array<{
         type: 'warmup' | 'main' | 'cooldown';
         distance_km: number;
@@ -110,6 +187,10 @@ export interface ScheduleDay {
         objective: string | null;
         instructions_json: any[];
         tips: string | null;
+        source?: WorkoutSource;
+        title?: string | null;
+        target_pace_seconds?: number | null;
+        target_duration_seconds?: number | null;
     } | null;
     is_today: boolean;
     is_past: boolean;
@@ -145,7 +226,10 @@ interface TrainingState {
     fetchSchedule: (startDate: string, endDate: string) => Promise<void>;
     skipWorkout: (workoutId: string, reason: string) => Promise<void>;
     completeWorkout: (payload: WorkoutTrackingPayload) => Promise<{ success: boolean; savedLocally: boolean }>;
+    completeFreeRun: (payload: FreeRunPayload) => Promise<{ success: boolean; savedLocally: boolean; workout?: Workout }>;
+    createManualWorkout: (dto: ManualWorkoutDto) => Promise<Workout>;
     retryPendingWorkouts: () => Promise<void>;
+    retryPendingFreeRuns: () => Promise<void>;
     checkPlanStatus: (planId: string) => Promise<boolean>;
     setGenerationStatus: (status: GenerationStatus) => void;
     clearScheduleData: () => void;
@@ -352,6 +436,123 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
             console.error('[completeWorkout] Erro de rede:', error);
             // Dados já estão no pending — mantém lá
             return { success: false, savedLocally: true };
+        }
+    },
+
+    completeFreeRun: async (payload: FreeRunPayload) => {
+        console.log(`[completeFreeRun] Iniciando. localId=${payload.localId}, dist=${payload.total_distance_meters}m, dur=${payload.duration_seconds}s, pontos=${payload.route_points.length}`);
+
+        // SAFETY FIRST: salva localmente antes de tentar API
+        savePendingFreeRun(payload);
+
+        const userId = await getUserId();
+        if (!userId) {
+            console.warn('[completeFreeRun] Sem userId — mantendo no pending para retry');
+            return { success: false, savedLocally: true };
+        }
+
+        try {
+            const response = await fetch(`${API_URL}/training/workouts/free/complete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-user-id': userId,
+                },
+                body: JSON.stringify({
+                    route_points: payload.route_points,
+                    total_distance_meters: payload.total_distance_meters,
+                    duration_seconds: payload.duration_seconds,
+                    started_at: payload.started_at,
+                    city: payload.city,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`[completeFreeRun] API error ${response.status}: ${errorText}`);
+                return { success: false, savedLocally: true };
+            }
+
+            const data = await response.json();
+            console.log(`[completeFreeRun] Free run salvo no backend. id=${data.workout?.id}`);
+            removePendingFreeRun(payload.localId);
+            get().fetchUpcomingWorkouts();
+            return { success: true, savedLocally: false, workout: data.workout };
+        } catch (error) {
+            console.error('[completeFreeRun] Erro de rede:', error);
+            return { success: false, savedLocally: true };
+        }
+    },
+
+    createManualWorkout: async (dto: ManualWorkoutDto) => {
+        const userId = await getUserId();
+        if (!userId) throw new Error('Usuário não autenticado');
+
+        const response = await fetch(`${API_URL}/training/workouts/manual`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-user-id': userId,
+            },
+            body: JSON.stringify(dto),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`[createManualWorkout] API error ${response.status}: ${errorText}`);
+            let message = 'Falha ao criar treino manual';
+            try {
+                const parsed = JSON.parse(errorText);
+                if (Array.isArray(parsed.message)) message = parsed.message.join('; ');
+                else if (typeof parsed.message === 'string') message = parsed.message;
+            } catch {
+                /* not JSON */
+            }
+            throw new Error(message);
+        }
+
+        const data = await response.json();
+        // Refresh listas para o calendário/home pegarem o novo treino
+        get().fetchUpcomingWorkouts();
+        return data.workout as Workout;
+    },
+
+    retryPendingFreeRuns: async () => {
+        const pending = getPendingFreeRuns();
+        if (pending.length === 0) return;
+
+        const userId = await getUserId();
+        if (!userId) return;
+
+        console.log(`[retryPendingFreeRuns] Tentando reenviar ${pending.length} free run(s)...`);
+
+        for (const payload of pending) {
+            try {
+                const response = await fetch(`${API_URL}/training/workouts/free/complete`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-user-id': userId,
+                    },
+                    body: JSON.stringify({
+                        route_points: payload.route_points,
+                        total_distance_meters: payload.total_distance_meters,
+                        duration_seconds: payload.duration_seconds,
+                        started_at: payload.started_at,
+                        city: payload.city,
+                    }),
+                });
+
+                if (response.ok) {
+                    removePendingFreeRun(payload.localId);
+                    console.log(`[retryPendingFreeRuns] Free run ${payload.localId} reenviado com sucesso!`);
+                } else {
+                    const errorText = await response.text();
+                    console.error(`[retryPendingFreeRuns] API error ${response.status} para ${payload.localId}: ${errorText}`);
+                }
+            } catch (e) {
+                console.warn(`[retryPendingFreeRuns] Erro de rede para ${payload.localId}:`, e);
+            }
         }
     },
 
