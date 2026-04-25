@@ -209,10 +209,17 @@ export function RunningScreen() {
   });
 
   // ── Loading ──────────────────────────────────────────────────────────────
-  if (!isReady) {
+  // Bloqueia a renderização do Mapbox enquanto a posição inicial não estiver
+  // resolvida. Renderizar o MapView sem centerCoordinate faz com que ele
+  // inicialize em [0,0] (oceano Atlântico → vista continental). Só montamos
+  // o mapa quando temos coordenadas reais para passar à Camera.
+  if (!isReady || !initialPosition) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Carregando módulo GPS...</Text>
+        <ActivityIndicator size="large" color={T.cyan} />
+        <Text style={[styles.loadingText, { marginTop: 12 }]}>
+          {!isReady ? 'Carregando módulo GPS...' : 'Localizando você...'}
+        </Text>
       </View>
     );
   }
@@ -280,10 +287,15 @@ export function RunningScreen() {
         <Mapbox.Camera
           ref={cameraRef}
           pitch={0}
-          zoomLevel={18.5}
+          zoomLevel={17}
+          centerCoordinate={initialPosition}
+          animationMode="flyTo"
           animationDuration={800}
           followUserLocation={isFollowingUser}
           followUserMode={Mapbox.UserTrackingMode.FollowWithHeading}
+          followZoomLevel={17}
+          minZoomLevel={12}
+          maxZoomLevel={20}
           onUserTrackingModeChange={(e) => {
             // Mapbox desabilita follow quando o usuário arrasta o mapa manualmente
             if (!e.nativeEvent.payload.followUserLocation) {
@@ -291,9 +303,9 @@ export function RunningScreen() {
             }
           }}
           defaultSettings={{
-            zoomLevel: 18.5,
+            zoomLevel: 17,
             animationDuration: 0,
-            centerCoordinate: initialPosition || undefined,
+            centerCoordinate: initialPosition,
           }}
         />
         {/* Indicador de localização customizado (componentizado) */}
