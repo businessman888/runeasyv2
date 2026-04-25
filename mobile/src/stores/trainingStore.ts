@@ -175,6 +175,32 @@ interface Workout {
     }>;
 }
 
+/** Returned by GET /training/workouts/:id — workout row enriched with the
+ *  linked activity (gps_route + execution metrics) so RunSummary can render
+ *  the real route when opened from Home/History. */
+export interface WorkoutDetails extends Workout {
+    activity: {
+        id: number;
+        name: string;
+        distance: number;            // metros
+        moving_time: number;          // segundos
+        elapsed_time?: number;
+        average_pace: number;         // min/km
+        average_speed: number;        // m/s
+        total_elevation_gain?: number;
+        elevation_gain?: number;
+        start_date: string;
+        gps_route: Array<{
+            latitude: number;
+            longitude: number;
+            altitude: number | null;
+            timestamp: number;
+            speed: number | null;
+            accuracy: number | null;
+        }> | null;
+    } | null;
+}
+
 // Schedule day from API - type and status are authoritative
 export interface ScheduleDay {
     date: string;
@@ -222,6 +248,7 @@ interface TrainingState {
     // Actions
     fetchPlan: () => Promise<void>;
     fetchWorkouts: (startDate: string, endDate: string) => Promise<void>;
+    fetchWorkoutDetails: (workoutId: string) => Promise<WorkoutDetails | null>;
     fetchUpcomingWorkouts: () => Promise<void>;
     fetchSchedule: (startDate: string, endDate: string) => Promise<void>;
     skipWorkout: (workoutId: string, reason: string) => Promise<void>;
@@ -256,6 +283,22 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
     setGenerationStatus: (status) => set({ generationStatus: status }),
 
     clearScheduleData: () => set({ today: null, nextWorkout: null, schedule: [] }),
+
+    fetchWorkoutDetails: async (workoutId: string) => {
+        try {
+            const userId = await getUserId();
+            if (!userId) return null;
+            const response = await fetch(`${API_URL}/training/workouts/${workoutId}`, {
+                headers: { 'x-user-id': userId },
+            });
+            if (!response.ok) return null;
+            const data = await response.json();
+            return (data?.workout as WorkoutDetails) ?? null;
+        } catch (e) {
+            console.error('[fetchWorkoutDetails] erro:', e);
+            return null;
+        }
+    },
 
     fetchPlan: async () => {
         try {

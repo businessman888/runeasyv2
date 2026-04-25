@@ -680,57 +680,94 @@ export function HomeScreen({ navigation }: any) {
                             <Skeleton width="40%" height={36} style={{ marginBottom: 8 }} />
                             <Skeleton width="60%" height={24} />
                         </View>
-                    ) : latestActivity?.activity ? (
-                        <>
-                            <View style={styles.aiHeader}>
-                                <View>
-                                    <Text style={styles.aiTitle}>Análise do Treinador</Text>
-                                    <Text style={styles.aiSubtitle}>
-                                        {latestActivity.activity.name || 'Corrida'} - {latestActivity.activity.date_label}
-                                    </Text>
-                                </View>
-                                <BinocularsIcon size={35} color="#00D4FF" />
-                            </View>
+                    ) : latestActivity?.activity ? (() => {
+                        // Treinos 'free'/'manual' não têm feedback do treinador (regra do backend
+                        // em training.service.ts:580 — IA só roda em source='plan'). Mostramos um
+                        // card de "Resumo do treino" que abre a RunSummary.
+                        const source = latestActivity.workout_source;
+                        const isPlanWorkout = source === 'plan';
+                        const isCoachReady = isPlanWorkout && !!latestActivity.feedback;
+                        const cardTitle = isPlanWorkout ? 'Análise do Treinador' : 'Resumo do treino';
+                        const cardCta = isPlanWorkout
+                            ? (isCoachReady ? 'Ver feedback completo' : 'Análise em preparo...')
+                            : 'Ver resumo do treino';
 
-                            <View style={styles.aiStats}>
-                                <View style={styles.aiPaceSection}>
-                                    <Text style={styles.aiPace}>
-                                        {latestActivity.activity.formatted_pace} <Text style={styles.aiPaceUnit}>km</Text>
-                                    </Text>
-                                    <View style={styles.efficiencyBadge}>
-                                        <TrendUpIcon size={18} color={latestActivity.efficiency_percent >= 0 ? "#32CD32" : "#FF6B6B"} />
-                                        <Text style={[
-                                            styles.efficiencyText,
-                                            { color: latestActivity.efficiency_percent >= 0 ? "#32CD32" : "#FF6B6B" }
-                                        ]}>
-                                            {latestActivity.efficiency_percent >= 0 ? '+' : ''}{latestActivity.efficiency_percent}% EFICIENTE
-                                        </Text>
-                                    </View>
-                                </View>
-                                <View style={styles.miniChart}>
-                                    <View style={[styles.bar, { height: 20 }]} />
-                                    <View style={[styles.bar, { height: 28 }]} />
-                                    <View style={[styles.bar, { height: 24 }]} />
-                                    <View style={[styles.barActive, { height: 40 }]} />
-                                    <View style={[styles.bar, { height: 32 }]} />
-                                    <View style={[styles.barActive, { height: 48 }]} />
-                                </View>
-                            </View>
-
-                            <TouchableOpacity
-                                style={styles.feedbackButton}
-                                onPress={() => navigation.navigate('CoachAnalysis', {
+                        const handleOpen = () => {
+                            if (isPlanWorkout) {
+                                if (!isCoachReady) return;
+                                navigation.navigate('CoachAnalysis', {
                                     activityId: latestActivity.activity?.id,
                                     feedbackId: latestActivity.feedback?.id,
-                                })}
-                            >
-                                <Text style={styles.feedbackButtonText}>Ver feedback completo</Text>
-                                <ArrowRightIcon size={18} color="#00D4FF" />
-                            </TouchableOpacity>
+                                });
+                            } else {
+                                navigation.navigate('RunSummary', {
+                                    workoutId: latestActivity.workout_id ?? undefined,
+                                    distance: latestActivity.activity?.distance ?? 0,
+                                    timeMs: (latestActivity.activity?.moving_time ?? 0) * 1000,
+                                    routeCoordinates: [],
+                                    routePoints: [],
+                                    savedLocally: false,
+                                    mode: source === 'manual' ? 'manual' : 'free',
+                                    targetPaceSeconds: latestActivity.target_pace_seconds ?? undefined,
+                                    targetDistanceKm: latestActivity.conquest?.planned_distance_km ?? undefined,
+                                    workoutTitle: latestActivity.workout_title
+                                        ?? latestActivity.activity?.name
+                                        ?? undefined,
+                                });
+                            }
+                        };
 
+                        return (
+                            <>
+                                <View style={styles.aiHeader}>
+                                    <View>
+                                        <Text style={styles.aiTitle}>{cardTitle}</Text>
+                                        <Text style={styles.aiSubtitle}>
+                                            {latestActivity.activity.name || 'Corrida'} - {latestActivity.activity.date_label}
+                                        </Text>
+                                    </View>
+                                    <BinocularsIcon size={35} color="#00D4FF" />
+                                </View>
 
-                        </>
-                    ) : hasCompletedWorkouts ? (
+                                <View style={styles.aiStats}>
+                                    <View style={styles.aiPaceSection}>
+                                        <Text style={styles.aiPace}>
+                                            {latestActivity.activity.formatted_pace} <Text style={styles.aiPaceUnit}>km</Text>
+                                        </Text>
+                                        <View style={styles.efficiencyBadge}>
+                                            <TrendUpIcon size={18} color={latestActivity.efficiency_percent >= 0 ? "#32CD32" : "#FF6B6B"} />
+                                            <Text style={[
+                                                styles.efficiencyText,
+                                                { color: latestActivity.efficiency_percent >= 0 ? "#32CD32" : "#FF6B6B" }
+                                            ]}>
+                                                {latestActivity.efficiency_percent >= 0 ? '+' : ''}{latestActivity.efficiency_percent}% EFICIENTE
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.miniChart}>
+                                        <View style={[styles.bar, { height: 20 }]} />
+                                        <View style={[styles.bar, { height: 28 }]} />
+                                        <View style={[styles.bar, { height: 24 }]} />
+                                        <View style={[styles.barActive, { height: 40 }]} />
+                                        <View style={[styles.bar, { height: 32 }]} />
+                                        <View style={[styles.barActive, { height: 48 }]} />
+                                    </View>
+                                </View>
+
+                                <TouchableOpacity
+                                    style={[
+                                        styles.feedbackButton,
+                                        isPlanWorkout && !isCoachReady && { opacity: 0.5 },
+                                    ]}
+                                    onPress={handleOpen}
+                                    disabled={isPlanWorkout && !isCoachReady}
+                                >
+                                    <Text style={styles.feedbackButtonText}>{cardCta}</Text>
+                                    <ArrowRightIcon size={18} color="#00D4FF" />
+                                </TouchableOpacity>
+                            </>
+                        );
+                    })() : hasCompletedWorkouts ? (
                         <>
                             <View style={styles.aiHeader}>
                                 <View>

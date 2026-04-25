@@ -306,7 +306,7 @@ Regras:
         // 3. Get linked workout to check goal
         const { data: linkedWorkout } = await this.supabaseService
             .from('workouts')
-            .select('id, distance_km, type')
+            .select('id, distance_km, type, source, title, target_pace_seconds, target_duration_seconds')
             .eq('activity_id', latestActivity.id)
             .single();
 
@@ -418,6 +418,10 @@ Regras:
             } : null,
             efficiency_percent: Math.round(efficiencyPercent * 10) / 10,
             workout_id: linkedWorkout?.id || feedback?.workout_id || null,
+            workout_source: linkedWorkout?.source || null,
+            workout_title: linkedWorkout?.title || null,
+            target_pace_seconds: linkedWorkout?.target_pace_seconds || null,
+            target_duration_seconds: linkedWorkout?.target_duration_seconds || null,
             conquest: {
                 goal_met: goalMet,
                 planned_distance_km: plannedDistanceKm,
@@ -565,6 +569,27 @@ Regras:
                 });
             }
 
+            // Map source ('plan' | 'manual' | 'free') by activity_id so the
+            // mobile history can route free/manual workouts to RunSummary
+            // instead of the coach analysis screen.
+            const { data: linkedWorkouts } = await this.supabaseService
+                .from('workouts')
+                .select('id, activity_id, source, title')
+                .in('activity_id', activityIds);
+
+            const workoutInfoMap = new Map<string, { workout_id: string; source: string | null; title: string | null }>();
+            if (linkedWorkouts) {
+                linkedWorkouts.forEach(w => {
+                    if (w.activity_id) {
+                        workoutInfoMap.set(w.activity_id, {
+                            workout_id: w.id,
+                            source: w.source ?? null,
+                            title: w.title ?? null,
+                        });
+                    }
+                });
+            }
+
             const totalDistance = activities.reduce((sum, a) => sum + (a.distance || 0), 0) / 1000;
             const totalElevation = activities.reduce((sum, a) => sum + (a.total_elevation_gain || 0), 0);
 
@@ -578,6 +603,7 @@ Regras:
                     monthGroups.set(monthKey, []);
                 }
 
+                const linked = workoutInfoMap.get(activity.id);
                 const workout = {
                     id: activity.id,
                     date: activity.start_date,
@@ -593,6 +619,9 @@ Regras:
                         : null,
                     elevation_gain: activity.total_elevation_gain || 0,
                     feedback: feedbackMap.get(activity.id) || null,
+                    workout_id: linked?.workout_id ?? null,
+                    source: linked?.source ?? null,
+                    title: linked?.title ?? null,
                 };
 
                 monthGroups.get(monthKey)!.push(workout);

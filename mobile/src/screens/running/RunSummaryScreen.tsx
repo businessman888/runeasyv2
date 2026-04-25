@@ -1,18 +1,22 @@
-import React, { useMemo, useRef, useCallback } from 'react';
+import React, { useMemo, useRef, useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
   Pressable,
   StyleSheet,
   Share,
-  Platform,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { LineChart } from 'react-native-gifted-charts';
+import * as Location from 'expo-location';
+import { useAuthStore, getDisplayName, getAvatarUrl } from '../../stores/authStore';
+import { useTrainingStore } from '../../stores';
 import {
   calculateSplits,
   calculatePaceChart,
@@ -40,29 +44,48 @@ type RunSummaryRouteParams = {
   };
 };
 
-// ─── Design Tokens ────────────────────────────────────────────────────────────
+// ─── Design Tokens (Figma) ────────────────────────────────────────────────────
 const T = {
   bgPrimary: '#0E0E1F',
   cardSurface: '#1C1C2E',
-  cardLight: '#252538',
+  cardDarker: '#15152A',
   cyan: '#00D4FF',
   textPrimary: '#EBEBF5',
   textSecondary: 'rgba(235, 235, 245, 0.60)',
   textMuted: 'rgba(235, 235, 245, 0.35)',
+  divider: 'rgba(235, 235, 245, 0.10)',
   success: '#32CD32',
   warning: '#FFC400',
   danger: '#FF453A',
   routeColor: '#00D4FF',
-  border: 'rgba(255,255,255,0.08)',
 };
 
-function formatDistance(meters: number) {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function formatDistanceKm(meters: number) {
   return (meters / 1000).toFixed(2);
 }
 
-function formatTodayDate() {
-  const d = new Date();
-  return d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' });
+function formatHeaderDate(d: Date = new Date()) {
+  const day = d.getDate().toString().padStart(2, '0');
+  const monthsShort = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const month = monthsShort[d.getMonth()];
+  const year = d.getFullYear();
+  return `${day} ${month}, ${year}`;
+}
+
+function getAutoTitle(d: Date = new Date()) {
+  const h = d.getHours();
+  if (h < 12) return 'Corrida da manhã';
+  if (h < 18) return 'Corrida da tarde';
+  return 'Corrida da noite';
+}
+
+function getInitials(name: string): string {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 type Status = 'good' | 'ok' | 'bad';
@@ -72,18 +95,16 @@ function getDeltaStatus(actual: number, target: number, tolerance = 0.05): Statu
   if (Math.abs(ratio) <= tolerance * 2) return 'ok';
   return 'bad';
 }
-
-function statusColor(status: Status) {
-  if (status === 'good') return T.success;
-  if (status === 'ok') return T.warning;
+function statusColor(s: Status) {
+  if (s === 'good') return T.success;
+  if (s === 'ok') return T.warning;
   return T.danger;
 }
-
-function statusLabel(actual: number, target: number, formatter: (n: number) => string): string {
+function statusLabel(actual: number, target: number, fmt: (n: number) => string) {
   const delta = actual - target;
   if (delta === 0) return 'No alvo';
   const sign = delta > 0 ? '+' : '−';
-  return `${sign}${formatter(Math.abs(delta))}`;
+  return `${sign}${fmt(Math.abs(delta))}`;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -94,10 +115,11 @@ export function RunSummaryScreen() {
   const sheetRef = useRef<BottomSheet>(null);
 
   const {
-    distance = 0,
-    timeMs = 0,
-    routeCoordinates = [],
-    routePoints = [],
+    workoutId,
+    distance: initialDistance = 0,
+    timeMs: initialTimeMs = 0,
+    routeCoordinates: initialRouteCoords = [],
+    routePoints: initialRoutePoints = [],
     savedLocally = false,
     mode = 'free',
     targetPaceSeconds,
@@ -105,7 +127,84 @@ export function RunSummaryScreen() {
     workoutTitle,
   } = route.params || {};
 
-  // Métricas derivadas
+  // ── Hidratação opcional via backend ─────────────────────────────────────
+  // Quando a tela é aberta da Home/Histórico, os params vêm sem rota nem
+  // amostras GPS. Chamamos GET /training/workouts/:id (que devolve a activity
+  // com gps_route) e enriquecemos o estado local com os dados reais para que
+  // o mapa, splits e gráfico de pace fiquem fiéis ao treino executado.
+  const fetchWorkoutDetails = useTrainingStore((s) => s.fetchWorkoutDetails);
+  const hasInitialRoute = initialRoutePoints.length > 1;
+
+  type Enriched = {
+    routePoints: RoutePoint[];
+    routeCoordinates: number[][];
+    distance: number;
+    timeMs: number;
+  };
+  const [enriched, setEnriched] = useState<Enriched | null>(null);
+  const [enriching, setEnriching] = useState(false);
+
+  useEffect(() => {
+    if (hasInitialRoute || !workoutId) return;
+    let cancelled = false;
+    setEnriching(true);
+    (async () => {
+      const details = await fetchWorkoutDetails(workoutId);
+      if (cancelled) return;
+      const activity = details?.activity;
+      if (activity) {
+        const gps = (activity.gps_route ?? []) as RoutePoint[];
+        const coords = gps
+          .filter((p) => p && typeof p.longitude === 'number' && typeof p.latitude === 'number')
+          .map((p) => [p.longitude, p.latitude]);
+        setEnriched({
+          routePoints: gps,
+          routeCoordinates: coords,
+          distance: activity.distance ?? initialDistance,
+          timeMs: (activity.moving_time ?? Math.round(initialTimeMs / 1000)) * 1000,
+        });
+      }
+      setEnriching(false);
+    })();
+    return () => { cancelled = true; };
+  }, [workoutId, hasInitialRoute, fetchWorkoutDetails, initialDistance, initialTimeMs]);
+
+  const distance = enriched?.distance ?? initialDistance;
+  const timeMs = enriched?.timeMs ?? initialTimeMs;
+  const routeCoordinates = enriched?.routeCoordinates ?? initialRouteCoords;
+  const routePoints = enriched?.routePoints ?? initialRoutePoints;
+
+  // ── Usuário (avatar + nome) ────────────────────────────────────────────
+  const user = useAuthStore((s) => s.user);
+  const displayName = useMemo(() => getDisplayName(user) || 'Corredor', [user]);
+  const avatarUrl = useMemo(() => getAvatarUrl(user), [user]);
+  const initials = useMemo(() => getInitials(displayName), [displayName]);
+
+  // ── Reverse geocode → cidade ───────────────────────────────────────────
+  const [city, setCity] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCity() {
+      if (routeCoordinates.length === 0) return;
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const mid = routeCoordinates[Math.floor(routeCoordinates.length / 2)];
+        const [lng, lat] = mid;
+        const results = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+        if (cancelled) return;
+        const first = results?.[0];
+        const cityName = first?.city || first?.subregion || first?.region;
+        if (cityName) setCity(cityName);
+      } catch {
+        /* silent — fica só com a data */
+      }
+    }
+    loadCity();
+    return () => { cancelled = true; };
+  }, [routeCoordinates]);
+
+  // ── Métricas ───────────────────────────────────────────────────────────
   const splits: SplitData[] = useMemo(
     () => (routePoints.length > 1 ? calculateSplits(routePoints) : []),
     [routePoints],
@@ -119,11 +218,15 @@ export function RunSummaryScreen() {
     [routePoints, distance, timeMs],
   );
 
-  const distanceKm = formatDistance(distance);
+  const distanceKm = formatDistanceKm(distance);
   const timeStr = formatDurationMs(timeMs);
   const avgPaceStr = formatPaceSeconds(summary.avgPaceSecondsPerKm);
 
-  // Bounds para o mapa
+  const headerDate = useMemo(() => formatHeaderDate(), []);
+  const autoTitle = useMemo(() => getAutoTitle(), []);
+  const dateLine = city ? `${headerDate} — ${city}` : headerDate;
+
+  // ── Mapa: bounds da rota ───────────────────────────────────────────────
   const hasRoute = routeCoordinates.length > 1;
   let centerCoord = routeCoordinates[0] || [-46.6333, -23.5505];
   let bounds: { ne: number[]; sw: number[] } | undefined;
@@ -140,7 +243,6 @@ export function RunSummaryScreen() {
       (bounds.ne[1] + bounds.sw[1]) / 2,
     ];
   }
-
   const geoJsonSource = {
     type: 'FeatureCollection' as const,
     features: [
@@ -163,38 +265,34 @@ export function RunSummaryScreen() {
   };
 
   const handleShare = useCallback(async () => {
-    const titlePrefix = mode === 'free' ? 'Treino livre' : workoutTitle ?? 'Treino';
+    const titlePrefix = mode === 'free' ? autoTitle : workoutTitle ?? 'Treino';
     const message = `${titlePrefix} 🏃\n\nDistância: ${distanceKm} km\nTempo: ${timeStr}\nPace médio: ${avgPaceStr} /km`;
     try {
       await Share.share({ message });
     } catch {
-      /* user cancelled */
+      /* user cancelou */
     }
-  }, [mode, workoutTitle, distanceKm, timeStr, avgPaceStr]);
+  }, [mode, autoTitle, workoutTitle, distanceKm, timeStr, avgPaceStr]);
 
   // Snap points: 35% (vê mapa), 92% (full)
   const snapPoints = useMemo(() => ['35%', '92%'], []);
 
-  // Planned vs executed (apenas no modo manual ou planejado se houver target)
+  // ── Planejado vs Executado (apenas modo manual) ────────────────────────
   const showPlannedVsExecuted = mode === 'manual' && targetPaceSeconds && targetDistanceKm;
   const distanceStatus: Status | null = showPlannedVsExecuted
     ? getDeltaStatus(distance / 1000, targetDistanceKm!)
     : null;
-  const paceStatus: Status | null = showPlannedVsExecuted && summary.avgPaceSecondsPerKm > 0
-    // Para pace, "menor é melhor" — invertemos a leitura
-    ? getDeltaStatus(targetPaceSeconds!, summary.avgPaceSecondsPerKm)
-    : null;
+  const paceStatus: Status | null =
+    showPlannedVsExecuted && summary.avgPaceSecondsPerKm > 0
+      ? getDeltaStatus(targetPaceSeconds!, summary.avgPaceSecondsPerKm)
+      : null;
 
-  // Pace chart data
-  const chartData = paceChart.map((p) => ({
-    value: p.paceSecondsPerKm,
-    label: '',
-  }));
-  const chartHasData = chartData.length > 1;
+  // ── Chart de pace (eixo Y invertido) ───────────────────────────────────
+  const chartCfg = useMemo(() => buildChartConfig(paceChart, summary.avgPaceSecondsPerKm), [paceChart, summary.avgPaceSecondsPerKm]);
 
   return (
     <View style={styles.container}>
-      {/* ── Mapa em tela cheia atrás ─────────────────────────────────────── */}
+      {/* ── Mapa fullscreen atrás ───────────────────────────────────────── */}
       <View style={StyleSheet.absoluteFillObject}>
         <Mapbox.MapView
           style={StyleSheet.absoluteFillObject}
@@ -225,7 +323,6 @@ export function RunSummaryScreen() {
             }
             animationDuration={0}
           />
-
           {hasRoute && (
             <Mapbox.ShapeSource id="summaryRoute" shape={geoJsonSource as any}>
               <Mapbox.LineLayer
@@ -250,32 +347,51 @@ export function RunSummaryScreen() {
             </Mapbox.ShapeSource>
           )}
         </Mapbox.MapView>
+
+        {/* Overlay no mapa: rota indisponível ou hidratando */}
+        {!hasRoute && (
+          <View style={styles.mapOverlay} pointerEvents="none">
+            <View style={styles.mapOverlayPill}>
+              {enriching ? (
+                <>
+                  <ActivityIndicator size="small" color={T.cyan} />
+                  <Text style={styles.mapOverlayText}>Carregando rota...</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="map-outline" size={16} color={T.textSecondary} />
+                  <Text style={styles.mapOverlayText}>Rota não disponível</Text>
+                </>
+              )}
+            </View>
+          </View>
+        )}
       </View>
 
-      {/* Header overlay */}
+      {/* ── Header da screen (chevron + "Relatório" + share) ───────────── */}
       <SafeAreaView edges={['top']} style={styles.topOverlay}>
-        <Pressable style={styles.iconBtn} onPress={handleClose} hitSlop={10}>
-          <Ionicons name="close" size={22} color={T.textPrimary} />
+        <Pressable
+          style={styles.iconBtn}
+          onPress={handleClose}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Voltar"
+        >
+          <Ionicons name="chevron-back" size={22} color={T.textPrimary} />
         </Pressable>
-        <View style={styles.completedBadge}>
-          <Ionicons name="checkmark-circle" size={18} color={T.success} />
-          <Text style={styles.completedText}>Treino concluído</Text>
-        </View>
-        <Pressable style={styles.iconBtn} onPress={handleShare} hitSlop={10}>
-          <Ionicons name="share-outline" size={22} color={T.textPrimary} />
+        <Text style={styles.screenTitle}>Relatório</Text>
+        <Pressable
+          style={styles.iconBtn}
+          onPress={handleShare}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Compartilhar"
+        >
+          <Ionicons name="share-outline" size={20} color={T.textPrimary} />
         </Pressable>
       </SafeAreaView>
 
-      {savedLocally && (
-        <View style={[styles.offlineBanner, { top: insets.top + 60 }]}>
-          <Ionicons name="cloud-offline-outline" size={16} color={T.warning} />
-          <Text style={styles.offlineBannerText}>
-            Salvo localmente. Será enviado quando houver conexão.
-          </Text>
-        </View>
-      )}
-
-      {/* ── Bottom Sheet estilo Strava ────────────────────────────────────── */}
+      {/* ── Bottom Sheet (modal de resultado) ──────────────────────────── */}
       <BottomSheet
         ref={sheetRef}
         index={0}
@@ -285,43 +401,49 @@ export function RunSummaryScreen() {
         enablePanDownToClose={false}
       >
         <BottomSheetScrollView
-          contentContainerStyle={[styles.sheetContent, { paddingBottom: insets.bottom + 100 }]}
+          contentContainerStyle={[styles.sheetContent, { paddingBottom: insets.bottom + 32 }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Cabeçalho do sheet */}
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>
-              {workoutTitle ?? (mode === 'free' ? 'Treino livre' : 'Treino')}
+          {/* Avatar + nome + data + cidade */}
+          <View style={styles.userRow}>
+            <Avatar uri={avatarUrl} initials={initials} />
+            <View style={styles.userTextWrap}>
+              <Text style={styles.userName} numberOfLines={1}>{displayName}</Text>
+              <Text style={styles.userDate} numberOfLines={1}>{dateLine}</Text>
+            </View>
+          </View>
+
+          {/* Pill offline (discreta) */}
+          {savedLocally && (
+            <View style={styles.offlinePill}>
+              <Ionicons name="cloud-offline-outline" size={13} color={T.warning} />
+              <Text style={styles.offlinePillText}>
+                Salvo localmente — será enviado quando houver conexão
+              </Text>
+            </View>
+          )}
+
+          {/* Título auto */}
+          <View style={styles.titleWrap}>
+            <Text style={styles.runTitle}>
+              {workoutTitle && mode !== 'free' ? workoutTitle : autoTitle}
             </Text>
-            <Text style={styles.sheetDate}>{formatTodayDate()}</Text>
           </View>
 
-          {/* Métricas grandes */}
-          <View style={styles.bigMetricsRow}>
-            <View style={styles.bigMetric}>
-              <Text style={styles.bigMetricValue}>{distanceKm}</Text>
-              <Text style={styles.bigMetricUnit}>km</Text>
-              <Text style={styles.bigMetricLabel}>Distância</Text>
-            </View>
-            <View style={styles.bigMetricDivider} />
-            <View style={styles.bigMetric}>
-              <Text style={styles.bigMetricValue}>{timeStr}</Text>
-              <Text style={[styles.bigMetricUnit, { opacity: 0 }]}>.</Text>
-              <Text style={styles.bigMetricLabel}>Tempo</Text>
-            </View>
-            <View style={styles.bigMetricDivider} />
-            <View style={styles.bigMetric}>
-              <Text style={styles.bigMetricValue}>{avgPaceStr}</Text>
-              <Text style={styles.bigMetricUnit}>/km</Text>
-              <Text style={styles.bigMetricLabel}>Pace médio</Text>
-            </View>
+          {/* Row de 5 métricas */}
+          <View style={styles.metricsRow}>
+            <MetricCell label="Distância" value={`${distanceKm} Km`} />
+            <MetricCell label="Tempo" value={timeStr} />
+            <MetricCell label="Pace" value={`${avgPaceStr} /Km`} />
+            <MetricCell label="Elev. Gan" value={`${summary.totalElevationGainM} m`} />
+            <MetricCell label="Elev Max" value={`${summary.maxAltitudeM} m`} />
           </View>
 
-          {/* ── Planejado vs Executado (apenas modo manual) ──────────────── */}
+          {/* Planejado vs Executado (modo manual) */}
           {showPlannedVsExecuted && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Planejado vs Executado</Text>
-              <View style={styles.compareCard}>
+            <View style={styles.cardDark}>
+              <Text style={styles.cardTitle}>Planejado vs Executado</Text>
+              <View style={{ marginTop: 4 }}>
                 <CompareRow
                   label="Distância"
                   planned={`${targetDistanceKm!.toFixed(1)} km`}
@@ -345,141 +467,217 @@ export function RunSummaryScreen() {
             </View>
           )}
 
-          {/* ── Splits ───────────────────────────────────────────────────── */}
-          {splits.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Splits por km</Text>
-              <View style={styles.splitsCard}>
-                <View style={styles.splitsHeaderRow}>
-                  <Text style={[styles.splitsHeaderText, { flex: 0.5 }]}>Km</Text>
-                  <Text style={[styles.splitsHeaderText, { flex: 2 }]}>Pace</Text>
-                  <Text style={[styles.splitsHeaderText, { flex: 1, textAlign: 'right' }]}>↑ m</Text>
-                </View>
-                {splits.map((s) => (
-                  <View key={s.kmNumber} style={styles.splitRow}>
-                    <Text style={[styles.splitKm, { flex: 0.5 }]}>
-                      {s.kmNumber}
-                      {s.distanceMeters < 1000 && (
-                        <Text style={styles.splitFraction}>
-                          {' '}({(s.distanceMeters / 1000).toFixed(2)}km)
-                        </Text>
-                      )}
-                    </Text>
-                    <View style={[styles.splitBarContainer, { flex: 2 }]}>
-                      <View style={[styles.splitBar, { width: `${s.barWidthRatio * 100}%` }]} />
-                      <Text style={styles.splitPace}>{formatPaceSeconds(s.paceSecondsPerKm)}</Text>
-                    </View>
-                    <Text style={[styles.splitElevation, { flex: 1, textAlign: 'right' }]}>
-                      {s.elevationGainM > 0 ? `+${s.elevationGainM}` : '—'}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
+          {/* Card Splits — sempre presente, com empty state se não houver dados */}
+          <View style={styles.cardDark}>
+            <Text style={styles.cardTitle}>Splits</Text>
 
-          {/* ── Gráfico de pace ──────────────────────────────────────────── */}
-          {chartHasData && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Pace ao longo da corrida</Text>
-              <View style={styles.chartCard}>
-                <LineChart
-                  data={chartData}
-                  height={140}
-                  width={300}
-                  hideDataPoints
-                  thickness={2.5}
-                  color={T.cyan}
-                  startFillColor={T.cyan}
-                  endFillColor={T.cyan}
-                  startOpacity={0.45}
-                  endOpacity={0.05}
-                  areaChart
-                  curved
-                  yAxisColor="transparent"
-                  xAxisColor="transparent"
-                  hideRules
-                  hideYAxisText
-                  initialSpacing={0}
-                  endSpacing={0}
-                  spacing={Math.max(2, 280 / Math.max(chartData.length - 1, 1))}
-                />
-                <View style={styles.chartLegend}>
-                  <Text style={styles.chartLegendText}>
-                    Melhor: <Text style={{ color: T.cyan }}>{formatPaceSeconds(summary.bestPaceSecondsPerKm)}</Text>
-                  </Text>
-                  <Text style={styles.chartLegendText}>
-                    Pior: <Text style={{ color: T.warning }}>{formatPaceSeconds(summary.worstPaceSecondsPerKm)}</Text>
-                  </Text>
+            {splits.length > 0 ? (
+              <>
+                <View style={styles.splitsHeader}>
+                  <Text style={[styles.splitsHeaderText, styles.colKm]}>Km</Text>
+                  <Text style={[styles.splitsHeaderText, styles.colPace]}>Pace</Text>
+                  <View style={styles.colBar} />
+                  <Text style={[styles.splitsHeaderText, styles.colElev]}>Elev</Text>
                 </View>
-              </View>
-            </View>
-          )}
-
-          {/* ── Resumo de pace + elevação ────────────────────────────────── */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Resumo</Text>
-            <View style={styles.summaryGrid}>
-              <SummaryItem
+                <View style={styles.splitsBody}>
+                  {splits.map((s) => (
+                    <SplitRow key={s.kmNumber} split={s} />
+                  ))}
+                </View>
+              </>
+            ) : (
+              <CardEmptyState
                 icon="speedometer-outline"
-                label="Pace médio"
-                value={`${avgPaceStr}/km`}
+                title={enriching ? 'Carregando splits...' : 'Sem splits para esse treino'}
+                subtitle={
+                  enriching
+                    ? undefined
+                    : 'Treinos curtos (menos de 1 km) ou sem GPS contínuo não geram splits.'
+                }
+                loading={enriching}
               />
-              <SummaryItem
-                icon="trending-down"
-                label="Pace mais rápido"
-                value={`${formatPaceSeconds(summary.bestPaceSecondsPerKm)}/km`}
-              />
-              <SummaryItem
-                icon="trending-up"
-                label="Pace mais lento"
-                value={`${formatPaceSeconds(summary.worstPaceSecondsPerKm)}/km`}
-              />
-              <SummaryItem
-                icon="trail-sign-outline"
-                label="Ganho de elevação"
-                value={`${summary.totalElevationGainM} m`}
-              />
-              <SummaryItem
-                icon="triangle-outline"
-                label="Altitude máxima"
-                value={`${summary.maxAltitudeM} m`}
-              />
-              <SummaryItem
-                icon="flame-outline"
-                label="Calorias (est.)"
-                value={`${Math.round((distance / 1000) * 65)} kcal`}
-              />
-            </View>
+            )}
           </View>
 
-          {/* ── Compartilhamento ─────────────────────────────────────────── */}
-          <View style={styles.section}>
-            <Pressable style={styles.shareCard} onPress={handleShare} android_ripple={{ color: T.cardLight }}>
-              <View style={styles.shareIconWrap}>
-                <Ionicons name="share-social" size={20} color={T.cyan} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.shareTitle}>Compartilhar treino</Text>
-                <Text style={styles.shareSubtitle}>Mande os números pros amigos</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={T.textSecondary} />
-            </Pressable>
+          {/* Card Pace — sempre presente, com empty state se não houver dados */}
+          <View style={styles.cardDark}>
+            <Text style={styles.cardTitle}>Pace</Text>
+
+            {paceChart.length > 1 ? (
+              <>
+                <View style={styles.chartWrap}>
+                  <LineChart
+                    data={chartCfg.data}
+                    height={170}
+                    width={chartCfg.width}
+                    thickness={2}
+                    color={T.cyan}
+                    areaChart
+                    curved
+                    startFillColor={T.cyan}
+                    endFillColor={T.cyan}
+                    startOpacity={0.45}
+                    endOpacity={0.05}
+                    initialSpacing={8}
+                    endSpacing={8}
+                    spacing={chartCfg.spacing}
+                    yAxisColor="transparent"
+                    xAxisColor={T.divider}
+                    rulesType="solid"
+                    rulesColor="rgba(235,235,245,0.06)"
+                    yAxisTextStyle={styles.chartAxisText}
+                    xAxisLabelTextStyle={styles.chartAxisText}
+                    yAxisLabelTexts={chartCfg.yAxisLabelTexts}
+                    noOfSections={chartCfg.yAxisLabelTexts.length - 1}
+                    maxValue={chartCfg.maxValue}
+                    yAxisLabelWidth={36}
+                    yAxisLabelSuffix=""
+                    xAxisLabelTexts={chartCfg.xLabels}
+                    showVerticalLines={false}
+                    hideDataPoints={false}
+                    dataPointsRadius={3.5}
+                    dataPointsColor={'#FFFFFF'}
+                    dataPointsShape={'circular'}
+                    showReferenceLine1={chartCfg.refValue > 0}
+                    referenceLine1Position={chartCfg.refValue}
+                    referenceLine1Config={{
+                      color: 'rgba(255,255,255,0.35)',
+                      dashWidth: 4,
+                      dashGap: 3,
+                      thickness: 1,
+                    }}
+                  />
+                  <Text style={styles.chartUnit}>/km</Text>
+                </View>
+
+                <View style={styles.paceList}>
+                  <PaceStatRow label="Pace" value={`${avgPaceStr} /Km`} />
+                  <PaceStatRow label="Tempo" value={timeStr} />
+                  <PaceStatRow
+                    label="Pace mais lento"
+                    value={`${formatPaceSeconds(summary.worstPaceSecondsPerKm)} /Km`}
+                  />
+                  <PaceStatRow
+                    label="Melhor pace"
+                    value={`${formatPaceSeconds(summary.bestPaceSecondsPerKm)} /Km`}
+                    isLast
+                  />
+                </View>
+              </>
+            ) : (
+              <>
+                <CardEmptyState
+                  icon="trending-up-outline"
+                  title={enriching ? 'Carregando gráfico...' : 'Sem variação de pace registrada'}
+                  subtitle={
+                    enriching
+                      ? undefined
+                      : 'Treino muito curto ou sem GPS suficiente para gerar a curva.'
+                  }
+                  loading={enriching}
+                />
+                {/* Mesmo sem o chart, mostramos o resumo numérico (vem do summary geral) */}
+                <View style={styles.paceList}>
+                  <PaceStatRow label="Pace" value={`${avgPaceStr} /Km`} />
+                  <PaceStatRow label="Tempo" value={timeStr} isLast />
+                </View>
+              </>
+            )}
           </View>
         </BottomSheetScrollView>
       </BottomSheet>
-
-      {/* ── Botão fixo ────────────────────────────────────────────────────── */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
-        <Pressable style={styles.homeBtn} onPress={handleClose}>
-          <Text style={styles.homeBtnText}>Concluir</Text>
-        </Pressable>
-      </View>
     </View>
   );
 }
 
 // ─── Subcomponents ────────────────────────────────────────────────────────────
+
+function Avatar({ uri, initials }: { uri: string | null; initials: string }) {
+  if (uri) {
+    return <Image source={{ uri }} style={styles.avatar} />;
+  }
+  return (
+    <View style={[styles.avatar, styles.avatarFallback]}>
+      <Text style={styles.avatarInitials}>{initials}</Text>
+    </View>
+  );
+}
+
+function MetricCell({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.metricCell}>
+      <Text style={styles.metricLabel} numberOfLines={1}>{label}</Text>
+      <Text style={styles.metricValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function SplitRow({ split }: { split: SplitData }) {
+  const isFractional = split.distanceMeters < 1000;
+  return (
+    <View style={styles.splitRow}>
+      <View style={styles.colKm}>
+        <Text style={styles.splitKmText}>
+          {split.kmNumber}
+          {isFractional && (
+            <Text style={styles.splitFraction}>
+              {` (${(split.distanceMeters / 1000).toFixed(2)})`}
+            </Text>
+          )}
+        </Text>
+      </View>
+      <View style={styles.colPace}>
+        <Text style={styles.splitText}>{formatPaceSeconds(split.paceSecondsPerKm)}</Text>
+      </View>
+      <View style={styles.colBar}>
+        <View style={[styles.splitBar, { width: `${Math.max(8, split.barWidthRatio * 100)}%` }]} />
+      </View>
+      <View style={styles.colElev}>
+        <Text style={styles.splitText}>
+          {split.elevationGainM > 0 ? `+${split.elevationGainM}` : split.elevationGainM === 0 ? '0' : split.elevationGainM}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function CardEmptyState({
+  icon,
+  title,
+  subtitle,
+  loading,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  subtitle?: string;
+  loading?: boolean;
+}) {
+  return (
+    <View style={styles.emptyState}>
+      {loading ? (
+        <ActivityIndicator size="small" color={T.cyan} />
+      ) : (
+        <View style={styles.emptyStateIconWrap}>
+          <Ionicons name={icon} size={22} color={T.textSecondary} />
+        </View>
+      )}
+      <Text style={styles.emptyStateTitle}>{title}</Text>
+      {subtitle && <Text style={styles.emptyStateSubtitle}>{subtitle}</Text>}
+    </View>
+  );
+}
+
+function PaceStatRow({ label, value, isLast }: { label: string; value: string; isLast?: boolean }) {
+  return (
+    <View style={[styles.paceStatRow, !isLast && styles.paceStatRowBorder]}>
+      <Text style={styles.paceStatLabel}>{label}</Text>
+      <Text style={styles.paceStatValue}>{value}</Text>
+    </View>
+  );
+}
+
 function CompareRow({
   label,
   planned,
@@ -501,7 +699,12 @@ function CompareRow({
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={styles.compareExecuted}>{executed}</Text>
-        <View style={[styles.compareDeltaBadge, { backgroundColor: statusColor(status) + '22', borderColor: statusColor(status) }]}>
+        <View
+          style={[
+            styles.compareDeltaBadge,
+            { backgroundColor: statusColor(status) + '22', borderColor: statusColor(status) },
+          ]}
+        >
           <View style={[styles.compareDot, { backgroundColor: statusColor(status) }]} />
           <Text style={[styles.compareDeltaText, { color: statusColor(status) }]}>{delta}</Text>
         </View>
@@ -510,24 +713,75 @@ function CompareRow({
   );
 }
 
-function SummaryItem({
-  icon,
-  label,
-  value,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value: string;
-}) {
-  return (
-    <View style={styles.summaryItem}>
-      <View style={styles.summaryItemIcon}>
-        <Ionicons name={icon} size={18} color={T.cyan} />
-      </View>
-      <Text style={styles.summaryItemValue}>{value}</Text>
-      <Text style={styles.summaryItemLabel}>{label}</Text>
-    </View>
-  );
+// ─── Chart helpers ────────────────────────────────────────────────────────────
+
+interface ChartConfig {
+  data: { value: number }[];
+  yAxisLabelTexts: string[];
+  maxValue: number;
+  refValue: number;
+  xLabels: string[];
+  width: number;
+  spacing: number;
+}
+
+function buildChartConfig(
+  paceChart: { distanceKm: number; paceSecondsPerKm: number }[],
+  avgPace: number,
+): ChartConfig {
+  if (paceChart.length === 0) {
+    return { data: [], yAxisLabelTexts: [], maxValue: 0, refValue: 0, xLabels: [], width: 280, spacing: 0 };
+  }
+
+  // Range em segundos arredondado para minutos cheios
+  const allPaces = paceChart.map((p) => p.paceSecondsPerKm);
+  const rawMin = Math.min(...allPaces);
+  const rawMax = Math.max(...allPaces);
+  const paceMinFloor = Math.max(60, Math.floor(rawMin / 60) * 60);
+  const paceMaxCeil = Math.max(paceMinFloor + 60, Math.ceil(rawMax / 60) * 60);
+  const range = paceMaxCeil - paceMinFloor;
+
+  // Inversão: valores no chart = (paceMaxCeil - paceSeconds), pace rápido fica no topo
+  const data = paceChart.map((p) => ({
+    value: paceMaxCeil - p.paceSecondsPerKm,
+  }));
+
+  // Y axis labels: gifted-charts vai de baixo (idx 0) para cima
+  const ySteps = Math.min(5, Math.max(3, Math.round(range / 60)));
+  const yAxisLabelTexts: string[] = [];
+  for (let i = 0; i <= ySteps; i++) {
+    // i=0 → base → pace mais lento (paceMaxCeil)
+    // i=ySteps → topo → pace mais rápido (paceMinFloor)
+    const pace = paceMaxCeil - (range / ySteps) * i;
+    yAxisLabelTexts.push(formatPaceSeconds(pace));
+  }
+
+  // Reference line do pace médio (no espaço invertido)
+  const refValue = avgPace > 0 ? Math.max(0, paceMaxCeil - avgPace) : 0;
+
+  // X axis: ~5 labels em km
+  const xLabels: string[] = paceChart.map((p, i) => {
+    const stride = Math.max(1, Math.ceil(paceChart.length / 5));
+    if (i === 0 || i === paceChart.length - 1 || i % stride === 0) {
+      return `${p.distanceKm.toFixed(1)} km`;
+    }
+    return '';
+  });
+
+  // Largura/spacing dinâmicos
+  const baseWidth = 280;
+  const spacing = Math.max(6, baseWidth / Math.max(paceChart.length - 1, 1));
+  const width = Math.max(baseWidth, spacing * Math.max(paceChart.length - 1, 1));
+
+  return {
+    data,
+    yAxisLabelTexts,
+    maxValue: range,
+    refValue,
+    xLabels,
+    width,
+    spacing,
+  };
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -537,7 +791,7 @@ const styles = StyleSheet.create({
     backgroundColor: T.bgPrimary,
   },
 
-  // Header overlay
+  // Header overlay (screen)
   topOverlay: {
     position: 'absolute',
     top: 0, left: 0, right: 0,
@@ -555,131 +809,326 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  completedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(14, 14, 31, 0.85)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-  },
-  completedText: {
-    color: T.success,
-    fontSize: 14,
+  screenTitle: {
+    color: T.textPrimary,
+    fontSize: 16,
     fontWeight: '600',
-  },
-  offlineBanner: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 196, 0, 0.18)',
-    paddingHorizontal: 12,
+    backgroundColor: 'rgba(14, 14, 31, 0.85)',
+    paddingHorizontal: 18,
     paddingVertical: 8,
-    borderRadius: 10,
-    gap: 8,
-    zIndex: 9,
-  },
-  offlineBannerText: {
-    color: T.warning,
-    fontSize: 12,
-    flex: 1,
+    borderRadius: 18,
+    overflow: 'hidden',
   },
 
   // Bottom sheet
   sheetBackground: {
-    backgroundColor: T.bgPrimary,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: T.cardSurface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   sheetHandle: {
-    backgroundColor: T.textMuted,
-    width: 48,
+    backgroundColor: 'rgba(235,235,245,0.10)',
+    width: 60,
+    height: 6,
   },
   sheetContent: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 12,
+    paddingBottom: 32,
   },
-  sheetHeader: {
-    paddingVertical: 8,
+
+  // User row
+  userRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingTop: 4,
+    paddingBottom: 14,
+  },
+  avatar: {
+    width: 47,
+    height: 47,
+    borderRadius: 24,
+    backgroundColor: T.cardDarker,
+  },
+  avatarFallback: {
+    backgroundColor: 'rgba(0, 212, 255, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: T.cyan,
+  },
+  avatarInitials: {
+    color: T.cyan,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  userTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  userName: {
+    color: T.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  userDate: {
+    color: T.textSecondary,
+    fontSize: 10,
+    fontWeight: '500',
+    lineHeight: 15,
+    marginTop: 2,
+  },
+
+  // Offline pill
+  offlinePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 196, 0, 0.14)',
+    borderColor: 'rgba(255, 196, 0, 0.40)',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    gap: 6,
     marginBottom: 12,
   },
-  sheetTitle: {
+  offlinePillText: {
+    color: T.warning,
+    fontSize: 11,
+    fontWeight: '500',
+  },
+
+  // Title
+  titleWrap: {
+    paddingTop: 4,
+    paddingBottom: 14,
+    alignItems: 'center',
+  },
+  runTitle: {
     color: T.textPrimary,
-    fontSize: 22,
-    fontWeight: '700',
-  },
-  sheetDate: {
-    color: T.textSecondary,
-    fontSize: 13,
-    marginTop: 2,
-    textTransform: 'capitalize',
+    fontSize: 20,
+    fontWeight: '500',
+    lineHeight: 30,
+    textAlign: 'center',
   },
 
-  // Big metrics
-  bigMetricsRow: {
+  // Métricas (5 colunas)
+  metricsRow: {
     flexDirection: 'row',
-    backgroundColor: T.cardSurface,
-    borderRadius: 18,
-    paddingVertical: 18,
-    paddingHorizontal: 8,
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  bigMetric: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  bigMetricDivider: {
-    width: 1,
-    height: 36,
-    backgroundColor: T.border,
-  },
-  bigMetricValue: {
-    color: T.cyan,
-    fontSize: 24,
-    fontWeight: '700',
-    lineHeight: 28,
-  },
-  bigMetricUnit: {
-    color: T.textSecondary,
-    fontSize: 11,
-    marginTop: 1,
-  },
-  bigMetricLabel: {
-    color: T.textSecondary,
-    fontSize: 11,
-    marginTop: 4,
-  },
-
-  // Sections
-  section: {
+    paddingVertical: 8,
     marginBottom: 18,
   },
-  sectionTitle: {
+  metricCell: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 2,
+    gap: 6,
+  },
+  metricLabel: {
+    color: T.textSecondary,
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  metricValue: {
     color: T.textPrimary,
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 8,
-    paddingHorizontal: 4,
+    fontSize: 14,
+    fontWeight: '600',
   },
 
-  // Compare (planned vs executed)
-  compareCard: {
-    backgroundColor: T.cardSurface,
-    borderRadius: 16,
-    padding: 14,
+  // Cards (Splits / Pace / Compare)
+  cardDark: {
+    backgroundColor: T.cardDarker,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 16,
+    marginBottom: 14,
   },
-  compareRow: {
+  cardTitle: {
+    color: T.textPrimary,
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+    paddingBottom: 16,
+  },
+
+  // Splits layout (Km | Pace | Bar | Elev)
+  colKm: {
+    width: 48,
+    paddingLeft: 4,
+    justifyContent: 'center',
+  },
+  colPace: {
+    width: 56,
+    justifyContent: 'center',
+  },
+  colBar: {
+    flex: 1,
+    height: 16,
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  colElev: {
+    width: 44,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingRight: 4,
+  },
+  splitsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(235,235,245,0.10)',
+  },
+  splitsHeaderText: {
+    color: T.textSecondary,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  splitsBody: {
+    paddingTop: 4,
+  },
+  splitRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 6,
   },
+  splitKmText: {
+    color: T.textSecondary,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  splitFraction: {
+    color: T.textMuted,
+    fontSize: 11,
+    fontWeight: '400',
+  },
+  splitText: {
+    color: T.textSecondary,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  splitBar: {
+    height: 8,
+    backgroundColor: T.cyan,
+    borderRadius: 4,
+  },
+
+  // Pace card / chart
+  chartWrap: {
+    paddingTop: 4,
+    paddingBottom: 8,
+    paddingLeft: 4,
+    minHeight: 200,
+  },
+  chartAxisText: {
+    color: T.textPrimary,
+    fontSize: 11,
+  },
+  chartUnit: {
+    position: 'absolute',
+    top: 0,
+    left: 4,
+    color: T.textPrimary,
+    fontSize: 11,
+    fontWeight: '400',
+    opacity: 0.7,
+  },
+
+  paceList: {
+    marginTop: 12,
+    paddingTop: 4,
+  },
+  paceStatRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+  },
+  paceStatRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(235,235,245,0.08)',
+  },
+  paceStatLabel: {
+    color: T.textSecondary,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  paceStatValue: {
+    color: T.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // Map overlay (rota indisponível / hidratando)
+  mapOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 110,
+  },
+  mapOverlayPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: 'rgba(14, 14, 31, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(235, 235, 245, 0.10)',
+  },
+  mapOverlayText: {
+    color: T.textSecondary,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+
+  // Empty state (cards Splits / Pace sem dados)
+  emptyState: {
+    paddingVertical: 18,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyStateIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(235, 235, 245, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyStateTitle: {
+    color: T.textPrimary,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  emptyStateSubtitle: {
+    color: T.textSecondary,
+    fontSize: 11,
+    textAlign: 'center',
+    paddingHorizontal: 12,
+    lineHeight: 16,
+  },
+
+  // Compare (modo manual)
+  compareRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
   compareDivider: {
-    height: 1,
-    backgroundColor: T.border,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: T.divider,
     marginVertical: 6,
   },
   compareLabel: {
@@ -714,176 +1163,6 @@ const styles = StyleSheet.create({
   },
   compareDeltaText: {
     fontSize: 11,
-    fontWeight: '700',
-  },
-
-  // Splits
-  splitsCard: {
-    backgroundColor: T.cardSurface,
-    borderRadius: 16,
-    padding: 12,
-  },
-  splitsHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: T.border,
-  },
-  splitsHeaderText: {
-    color: T.textSecondary,
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  splitRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.04)',
-  },
-  splitKm: {
-    color: T.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  splitFraction: {
-    color: T.textSecondary,
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  splitBarContainer: {
-    height: 24,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 6,
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-    overflow: 'hidden',
-  },
-  splitBar: {
-    position: 'absolute',
-    top: 0, bottom: 0, left: 0,
-    backgroundColor: T.cyan + '55',
-    borderRadius: 6,
-  },
-  splitPace: {
-    color: T.textPrimary,
-    fontSize: 13,
-    fontWeight: '600',
-    zIndex: 1,
-  },
-  splitElevation: {
-    color: T.textSecondary,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-
-  // Chart
-  chartCard: {
-    backgroundColor: T.cardSurface,
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 4,
-    overflow: 'hidden',
-  },
-  chartLegend: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 12,
-    paddingHorizontal: 16,
-  },
-  chartLegendText: {
-    color: T.textSecondary,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-
-  // Summary grid
-  summaryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  summaryItem: {
-    flexBasis: '31.5%',
-    flexGrow: 1,
-    backgroundColor: T.cardSurface,
-    borderRadius: 14,
-    padding: 12,
-    alignItems: 'flex-start',
-  },
-  summaryItemIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0, 212, 255, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  summaryItemValue: {
-    color: T.textPrimary,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  summaryItemLabel: {
-    color: T.textSecondary,
-    fontSize: 11,
-    marginTop: 2,
-  },
-
-  // Share
-  shareCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: T.cardSurface,
-    borderRadius: 16,
-    padding: 14,
-    gap: 12,
-  },
-  shareIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 212, 255, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shareTitle: {
-    color: T.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  shareSubtitle: {
-    color: T.textSecondary,
-    fontSize: 12,
-    marginTop: 2,
-  },
-
-  // Footer
-  footer: {
-    position: 'absolute',
-    bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    backgroundColor: T.bgPrimary,
-    borderTopWidth: 1,
-    borderTopColor: T.border,
-  },
-  homeBtn: {
-    backgroundColor: T.cyan,
-    height: 52,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  homeBtnText: {
-    color: T.bgPrimary,
-    fontSize: 16,
     fontWeight: '700',
   },
 });

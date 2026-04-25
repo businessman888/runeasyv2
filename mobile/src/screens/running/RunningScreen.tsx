@@ -138,45 +138,61 @@ export function RunningScreen() {
       savedLocally = true;
     }
 
-    // 3. Dados foram salvos (backend OU local) — agora limpa o tracking MMKV
-    clearTracking();
-    console.log('[RunningScreen] clearTracking executado');
+    // 3. Limpa o tracking MMKV — protegido: NUNCA pode bloquear a navegação.
+    // (clearTracking chama mmkv.delete + setSessionState; se algo lançar aqui,
+    // a Promise rejeita silenciosamente e o overlay de loading nunca sai.)
+    try {
+      clearTracking();
+      console.log('[RunningScreen] clearTracking executado');
+    } catch (clearError) {
+      console.error('[RunningScreen] Erro ao limpar tracking (ignorado):', clearError);
+    }
 
-    // 4. Navega para tela de resumo
+    // 4. Navega para tela de resumo.
+    // IMPORTANTE: index aponta para a rota ATIVA. RunSummary está em routes[1],
+    // então index precisa ser 1 — caso contrário Main fica visível e o resumo
+    // nunca é renderizado.
+    console.log('[RunningScreen] Navegando para RunSummary...');
+    const summaryParams = {
+      workoutId: resolvedWorkoutId || undefined,
+      distance: trackingData.distance,
+      timeMs: trackingData.timeMs,
+      routePoints: trackingData.routeData,
+      routeCoordinates: trackingData.routeData.map(
+        (p: { longitude: number; latitude: number }) => [p.longitude, p.latitude]
+      ),
+      savedLocally,
+      mode,
+      targetPaceSeconds: route.params?.targetPaceSeconds,
+      targetDistanceKm: route.params?.targetDistanceKm,
+      workoutTitle: route.params?.title,
+    };
+
     try {
       navigation.reset({
-        index: 0,
+        index: 1,
         routes: [
-          { name: 'Main' as never },
-          {
-            name: 'RunSummary' as never,
-            params: {
-              workoutId: resolvedWorkoutId || undefined,
-              distance: trackingData.distance,
-              timeMs: trackingData.timeMs,
-              routePoints: trackingData.routeData,
-              routeCoordinates: trackingData.routeData.map(
-                (p: { longitude: number; latitude: number }) => [p.longitude, p.latitude]
-              ),
-              savedLocally,
-              mode,
-              targetPaceSeconds: route.params?.targetPaceSeconds,
-              targetDistanceKm: route.params?.targetDistanceKm,
-              workoutTitle: route.params?.title,
-            },
-          },
+          { name: 'Main' as never, params: { initialTab: 'Home' } },
+          { name: 'RunSummary' as never, params: summaryParams },
         ],
       });
+      console.log('[RunningScreen] navigation.reset disparado');
     } catch (navError) {
-      console.error('[RunningScreen] Erro na navegação pós-treino:', navError);
-      // Dados já foram salvos — fallback: volta pra Home
+      console.error('[RunningScreen] Erro no navigation.reset:', navError);
+      // Fallback 1: navigate normal
       try {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'Main' as never }],
-        });
+        (navigation as any).navigate('RunSummary', summaryParams);
       } catch (e) {
-        console.error('[RunningScreen] Erro crítico na navegação fallback:', e);
+        console.error('[RunningScreen] Erro no navigate fallback:', e);
+        // Fallback 2: volta pra Home (dados já estão salvos)
+        try {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Main' as never, params: { initialTab: 'Home' } }],
+          });
+        } catch (e2) {
+          console.error('[RunningScreen] Erro crítico na navegação:', e2);
+        }
       }
     } finally {
       setIsFinishing(false);
@@ -493,6 +509,27 @@ export function RunningScreen() {
         onClose={() => setGoalsModalVisible(false)}
         goalSteps={goalSteps}
       />
+
+      {/* ── FINISHING OVERLAY (pré-carregamento até abrir o RunSummary) ── */}
+      {isFinishing && (
+        <View style={styles.finishingOverlay}>
+          <View style={styles.finishingCard}>
+            <View style={styles.finishingSpinnerWrap}>
+              <ActivityIndicator size="large" color={T.cyan} />
+              <Ionicons
+                name="flag"
+                size={26}
+                color={T.cyan}
+                style={styles.finishingFlagIcon}
+              />
+            </View>
+            <Text style={styles.finishingTitle}>Finalizando treino</Text>
+            <Text style={styles.finishingSubtitle}>
+              Calculando splits, pace e elevação…
+            </Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -709,5 +746,53 @@ const styles = StyleSheet.create({
   ctaBtnText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+
+  // ── Finishing overlay
+  finishingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(14, 14, 31, 0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+    paddingHorizontal: 32,
+  },
+  finishingCard: {
+    width: '100%',
+    maxWidth: 320,
+    alignItems: 'center',
+    padding: 28,
+    borderRadius: 24,
+    backgroundColor: '#1C1C2E',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 212, 255, 0.20)',
+    shadowColor: '#00D4FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    elevation: 10,
+  },
+  finishingSpinnerWrap: {
+    width: 72,
+    height: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  finishingFlagIcon: {
+    position: 'absolute',
+  },
+  finishingTitle: {
+    color: '#EBEBF5',
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  finishingSubtitle: {
+    color: 'rgba(235,235,245,0.60)',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

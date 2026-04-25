@@ -68,6 +68,12 @@ export interface WorkoutHistoryItem {
         hero_message: string;
         hero_tone: string;
     } | null;
+    /** Linked workouts row id (used to fetch route details) */
+    workout_id?: string | null;
+    /** 'plan' workouts open the coach analysis; 'manual'/'free' open the run summary */
+    source?: 'plan' | 'manual' | 'free' | null;
+    /** Custom title set by the user on manual workouts */
+    title?: string | null;
 }
 
 export interface WorkoutMonth {
@@ -103,6 +109,10 @@ export interface LatestActivityData {
         improvements: Array<{ title: string; description: string; tip?: string; icon?: string }>;
     } | null;
     workout_id: string | null;
+    workout_source: 'plan' | 'manual' | 'free' | null;
+    workout_title: string | null;
+    target_pace_seconds: number | null;
+    target_duration_seconds: number | null;
     efficiency_percent: number;
     conquest: {
         goal_met: boolean;

@@ -714,7 +714,23 @@ export class TrainingService {
             .single();
 
         if (error) throw error;
-        return data;
+
+        // Enrich with activity data (gps_route + execution metrics) for the
+        // RunSummary screen when the user opens a saved workout from
+        // Home/History — the route is stored on `activities`, not `workouts`.
+        let activity: any = null;
+        if (data?.activity_id) {
+            const { data: act } = await this.supabaseService
+                .from('activities')
+                .select(
+                    'id, name, distance, moving_time, elapsed_time, average_pace, average_speed, total_elevation_gain, elevation_gain, start_date, gps_route',
+                )
+                .eq('id', data.activity_id)
+                .single();
+            activity = act ?? null;
+        }
+
+        return { ...data, activity };
     }
 
     /**

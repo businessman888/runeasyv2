@@ -79,15 +79,37 @@ export function TrainingHistoryScreen({ navigation }: any) {
         fetchWorkoutHistory();
     }, []);
 
-    const navigateToFeedback = (workout: any) => {
-        if (workout.feedback) {
+    const navigateToWorkout = (workout: any) => {
+        // 'plan' workouts have AI coach analysis; 'manual'/'free' open the
+        // RunSummary directly. When source is missing (legacy data), fall back
+        // to feedback presence as a heuristic.
+        const source: 'plan' | 'manual' | 'free' | null | undefined =
+            workout.source ?? (workout.feedback ? 'plan' : null);
+
+        if (source === 'plan' && workout.feedback) {
             navigation.navigate('CoachAnalysis', {
                 feedbackId: workout.feedback.id,
                 activityId: workout.id,
             });
-        } else {
-            console.log('No feedback available for this workout');
+            return;
         }
+
+        if (source === 'manual' || source === 'free') {
+            navigation.navigate('RunSummary', {
+                workoutId: workout.workout_id ?? undefined,
+                distance: workout.distance ?? 0,
+                timeMs: (workout.moving_time ?? 0) * 1000,
+                routeCoordinates: [],
+                routePoints: [],
+                savedLocally: false,
+                mode: source,
+                workoutTitle: workout.title ?? workout.name ?? undefined,
+            });
+            return;
+        }
+
+        // Source desconhecido e sem feedback: nada para mostrar
+        console.log('[TrainingHistory] Workout sem source nem feedback — sem destino');
     };
 
     const formatDistance = (meters: number) => {
@@ -212,7 +234,7 @@ export function TrainingHistoryScreen({ navigation }: any) {
                                 key={workout.id}
                                 style={styles.workoutCard}
                                 activeOpacity={0.7}
-                                onPress={() => navigateToFeedback(workout)}
+                                onPress={() => navigateToWorkout(workout)}
                             >
                                 <View style={styles.workoutDateContainer}>
                                     <Text style={styles.workoutDay}>

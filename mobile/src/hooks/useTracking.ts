@@ -194,12 +194,12 @@ export function useTracking(workoutId?: string) {
 
     if (isNewSession) {
       console.log(`[useTracking] Nova sessão detectada em startResume → limpando MMKV. stored="${storedKey}", current="${sessionKey}", finished=${wasFinished}, expired=${isExpired}`);
-      trackingStorage.delete('route_points');
-      trackingStorage.delete('current_distance');
-      trackingStorage.delete('accumulated_time_ms');
-      trackingStorage.delete('last_update_ts');
-      trackingStorage.delete('tracking_paused');
-      trackingStorage.delete('resume_grace_count');
+      trackingStorage.remove('route_points');
+      trackingStorage.remove('current_distance');
+      trackingStorage.remove('accumulated_time_ms');
+      trackingStorage.remove('last_update_ts');
+      trackingStorage.remove('tracking_paused');
+      trackingStorage.remove('resume_grace_count');
       setRouteCoordinates([]);
       setDistance(0);
       setTimeMs(0);
@@ -211,7 +211,7 @@ export function useTracking(workoutId?: string) {
     // Persiste identificador e data da sessão para crash-recovery e expiry
     trackingStorage.set('tracking_workout_id', sessionKey);
     trackingStorage.set('tracking_date', today);
-    trackingStorage.delete('tracking_finished');
+    trackingStorage.remove('tracking_finished');
 
     const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
     if (!hasStarted) {
@@ -299,15 +299,15 @@ export function useTracking(workoutId?: string) {
 
   /** Limpa todo o estado de tracking — chamar SOMENTE após confirmar que os dados foram salvos */
   const clearTracking = useCallback(() => {
-    trackingStorage.delete('route_points');
-    trackingStorage.delete('current_distance');
-    trackingStorage.delete('accumulated_time_ms');
-    trackingStorage.delete('last_update_ts');
-    trackingStorage.delete('tracking_paused');
-    trackingStorage.delete('resume_grace_count');
-    trackingStorage.delete('tracking_workout_id');
-    trackingStorage.delete('tracking_finished');
-    trackingStorage.delete('tracking_date');
+    trackingStorage.remove('route_points');
+    trackingStorage.remove('current_distance');
+    trackingStorage.remove('accumulated_time_ms');
+    trackingStorage.remove('last_update_ts');
+    trackingStorage.remove('tracking_paused');
+    trackingStorage.remove('resume_grace_count');
+    trackingStorage.remove('tracking_workout_id');
+    trackingStorage.remove('tracking_finished');
+    trackingStorage.remove('tracking_date');
 
     setRouteCoordinates([]);
     setDistance(0);
