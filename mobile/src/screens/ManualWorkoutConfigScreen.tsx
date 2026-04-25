@@ -7,14 +7,14 @@ import {
     ScrollView,
     Alert,
     ActivityIndicator,
-    Platform,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { CustomCalendar } from '../components/CustomCalendar';
+import { WorkoutCreatedPopup } from '../components/WorkoutCreatedPopup';
 import { useTrainingStore, type ManualWorkoutDto } from '../stores/trainingStore';
 
 type ManualType = 'easy_run' | 'long_run' | 'intervals' | 'fartlek' | 'tempo' | 'recovery' | 'progressive';
@@ -128,6 +128,7 @@ export function ManualWorkoutConfigScreen() {
     const [scheduledDate, setScheduledDate] = useState<Date>(new Date());
     const [showPicker, setShowPicker] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [showSuccessPopup, setShowSuccessPopup] = useState(false);
 
     const handleTypeChange = (newType: ManualType) => {
         const newConfig = TYPES.find((t) => t.id === newType)!;
@@ -173,9 +174,7 @@ export function ManualWorkoutConfigScreen() {
         setSubmitting(true);
         try {
             await createManualWorkout(dto);
-            Alert.alert('Treino criado!', 'Seu treino manual foi adicionado ao calendário.', [
-                { text: 'OK', onPress: () => navigation.goBack() },
-            ]);
+            setShowSuccessPopup(true);
         } catch (e: any) {
             Alert.alert('Erro', e?.message || 'Não foi possível criar o treino manual');
         } finally {
@@ -183,9 +182,9 @@ export function ManualWorkoutConfigScreen() {
         }
     };
 
-    const onChangeDate = (_: unknown, selected?: Date) => {
-        if (Platform.OS === 'android') setShowPicker(false);
-        if (selected) setScheduledDate(selected);
+    const handleSuccessClose = () => {
+        setShowSuccessPopup(false);
+        navigation.goBack();
     };
 
     return (
@@ -300,16 +299,13 @@ export function ManualWorkoutConfigScreen() {
                         <Text style={styles.dateButtonText}>{formatDateLabel(scheduledDate)}</Text>
                         <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
                     </TouchableOpacity>
-                    {showPicker && (
-                        <DateTimePicker
-                            value={scheduledDate}
-                            mode="date"
-                            display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                            minimumDate={new Date()}
-                            onChange={onChangeDate}
-                            themeVariant="dark"
-                        />
-                    )}
+                    <CustomCalendar
+                        visible={showPicker}
+                        selectedDate={scheduledDate}
+                        onDateSelect={setScheduledDate}
+                        onClose={() => setShowPicker(false)}
+                        minDate={new Date()}
+                    />
                 </View>
 
                 {/* Resumo */}
@@ -343,6 +339,11 @@ export function ManualWorkoutConfigScreen() {
                     )}
                 </TouchableOpacity>
             </View>
+
+            <WorkoutCreatedPopup
+                visible={showSuccessPopup}
+                onClose={handleSuccessClose}
+            />
         </ScreenContainer>
     );
 }

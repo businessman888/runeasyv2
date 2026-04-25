@@ -340,16 +340,11 @@ export function RunningScreen() {
             <Ionicons name="chevron-back" size={22} color={T.textPrimary} />
           </Pressable>
 
-          {/* Card de info do treino — escondido no modo livre */}
-          {!isFreeMode ? (
+          {/* Card de info do treino — só aparece em treinos manuais e do plano */}
+          {!isFreeMode && (
             <View style={styles.workoutCard}>
               <Text style={styles.workoutDay}>{dayLabel}</Text>
               <Text style={styles.workoutTitle} numberOfLines={1}>{workoutTitle}</Text>
-            </View>
-          ) : (
-            <View style={styles.workoutCard}>
-              <Text style={styles.workoutDay}>{dayLabel}</Text>
-              <Text style={styles.workoutTitle} numberOfLines={1}>Treino livre</Text>
             </View>
           )}
 

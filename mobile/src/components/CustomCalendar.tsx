@@ -1,35 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     Modal,
     TouchableOpacity,
-    Platform,
+    Pressable,
 } from 'react-native';
-
-// SVG Icons
-function ChevronUpIcon({ size = 20, color = '#FFFFFF' }: { size?: number; color?: string }) {
-    if (Platform.OS === 'web') {
-        return (
-            <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-                <path d="M7.41 15.41L12 10.83L16.59 15.41L18 14L12 8L6 14L7.41 15.41Z" />
-            </svg>
-        );
-    }
-    return <Text style={{ fontSize: size, color }}>▲</Text>;
-}
-
-function ChevronDownIcon({ size = 20, color = '#FFFFFF' }: { size?: number; color?: string }) {
-    if (Platform.OS === 'web') {
-        return (
-            <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-                <path d="M7.41 8.59L12 13.17L16.59 8.59L18 10L12 16L6 10L7.41 8.59Z" />
-            </svg>
-        );
-    }
-    return <Text style={{ fontSize: size, color }}>▼</Text>;
-}
+import { Ionicons } from '@expo/vector-icons';
 
 interface CustomCalendarProps {
     visible: boolean;
@@ -40,6 +18,19 @@ interface CustomCalendarProps {
     maxDate?: Date;
 }
 
+const MONTHS_PT = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+];
+
+const WEEKDAYS_PT = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+
+function startOfDay(d: Date): Date {
+    const x = new Date(d);
+    x.setHours(0, 0, 0, 0);
+    return x;
+}
+
 export function CustomCalendar({
     visible,
     selectedDate,
@@ -48,301 +39,277 @@ export function CustomCalendar({
     minDate,
     maxDate,
 }: CustomCalendarProps) {
-    const [currentMonth, setCurrentMonth] = useState(new Date(selectedDate));
+    const [tempDate, setTempDate] = useState<Date>(selectedDate);
+    const [currentMonth, setCurrentMonth] = useState<Date>(new Date(selectedDate));
 
     useEffect(() => {
         if (visible) {
+            setTempDate(selectedDate);
             setCurrentMonth(new Date(selectedDate));
         }
     }, [visible, selectedDate]);
 
-    const monthNames = [
-        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-    ];
-
-    const weekDays = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
-
-    const getDaysInMonth = (date: Date) => {
-        const year = date.getFullYear();
-        const month = date.getMonth();
-        return new Date(year, month + 1, 0).getDate();
-    };
-
-    const getFirstDayOfMonth = (date: Date) => {
-        const year = date.getFullYear();
-        const month = date.getMonth();
-        return new Date(year, month, 1).getDay();
-    };
-
-    const generateCalendarDays = () => {
-        const daysInMonth = getDaysInMonth(currentMonth);
-        const firstDay = getFirstDayOfMonth(currentMonth);
+    const calendarDays = useMemo(() => {
+        const year = currentMonth.getFullYear();
+        const month = currentMonth.getMonth();
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
         const days: (number | null)[] = [];
-
-        // Add empty cells for days before the first day of the month
-        for (let i = 0; i < firstDay; i++) {
-            days.push(null);
-        }
-
-        // Add all days of the month
-        for (let day = 1; day <= daysInMonth; day++) {
-            days.push(day);
-        }
-
+        for (let i = 0; i < firstDay; i++) days.push(null);
+        for (let day = 1; day <= daysInMonth; day++) days.push(day);
         return days;
+    }, [currentMonth]);
+
+    const goPreviousMonth = () => {
+        const m = new Date(currentMonth);
+        m.setMonth(m.getMonth() - 1);
+        setCurrentMonth(m);
     };
 
-    const handlePreviousMonth = () => {
-        const newMonth = new Date(currentMonth);
-        newMonth.setMonth(newMonth.getMonth() - 1);
-        setCurrentMonth(newMonth);
+    const goNextMonth = () => {
+        const m = new Date(currentMonth);
+        m.setMonth(m.getMonth() + 1);
+        setCurrentMonth(m);
     };
 
-    const handleNextMonth = () => {
-        const newMonth = new Date(currentMonth);
-        newMonth.setMonth(newMonth.getMonth() + 1);
-        setCurrentMonth(newMonth);
+    const handleDayPress = (day: number) => {
+        const candidate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+        if (minDate && candidate < startOfDay(minDate)) return;
+        if (maxDate && candidate > startOfDay(maxDate)) return;
+        setTempDate(candidate);
     };
 
-    const handlePreviousYear = () => {
-        const newMonth = new Date(currentMonth);
-        newMonth.setFullYear(newMonth.getFullYear() - 1);
-        setCurrentMonth(newMonth);
-    };
-
-    const handleNextYear = () => {
-        const newMonth = new Date(currentMonth);
-        newMonth.setFullYear(newMonth.getFullYear() + 1);
-        setCurrentMonth(newMonth);
-    };
-
-    const handleDatePress = (day: number) => {
-        const newDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-
-        // Check if date is within allowed range
-        if (minDate && newDate < minDate) return;
-        if (maxDate && newDate > maxDate) return;
-
-        onDateSelect(newDate);
-        onClose();
-    };
-
-    const isDateSelected = (day: number) => {
-        return (
-            day === selectedDate.getDate() &&
-            currentMonth.getMonth() === selectedDate.getMonth() &&
-            currentMonth.getFullYear() === selectedDate.getFullYear()
-        );
-    };
-
-    const isDateDisabled = (day: number) => {
-        const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-        if (minDate && date < minDate) return true;
-        if (maxDate && date > maxDate) return true;
+    const isDayDisabled = (day: number) => {
+        const d = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+        if (minDate && d < startOfDay(minDate)) return true;
+        if (maxDate && d > startOfDay(maxDate)) return true;
         return false;
     };
 
-    const calendarDays = generateCalendarDays();
+    const isDaySelected = (day: number) =>
+        day === tempDate.getDate() &&
+        currentMonth.getMonth() === tempDate.getMonth() &&
+        currentMonth.getFullYear() === tempDate.getFullYear();
+
+    const handleConfirm = () => {
+        onDateSelect(tempDate);
+        onClose();
+    };
+
+    const monthLabel = `${MONTHS_PT[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`;
 
     return (
-        <Modal
-            visible={visible}
-            transparent
-            animationType="fade"
-            onRequestClose={onClose}
-        >
-            <TouchableOpacity
-                style={styles.modalOverlay}
-                activeOpacity={1}
-                onPress={onClose}
-            >
-                <TouchableOpacity
-                    activeOpacity={1}
+        <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+            <Pressable style={styles.overlay} onPress={onClose}>
+                <Pressable
+                    style={styles.card}
                     onPress={(e) => e.stopPropagation()}
+                    accessibilityRole="none"
                 >
-                    <View style={styles.calendarContainer}>
-                        {/* Header with Month/Year Selector and Navigation */}
-                        <View style={styles.header}>
-                            <View style={styles.monthYearSelector}>
-                                <Text style={styles.monthYear}>
-                                    {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-                                </Text>
-                                <View style={styles.yearNavigation}>
-                                    <TouchableOpacity
-                                        style={styles.yearNavButton}
-                                        onPress={handlePreviousYear}
-                                    >
-                                        <ChevronUpIcon size={16} color="#FFFFFF" />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={styles.yearNavButton}
-                                        onPress={handleNextYear}
-                                    >
-                                        <ChevronDownIcon size={16} color="#FFFFFF" />
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                            <View style={styles.monthNavigation}>
-                                <TouchableOpacity
-                                    style={styles.navButton}
-                                    onPress={handlePreviousMonth}
-                                >
-                                    <ChevronUpIcon size={20} color="#FFFFFF" />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.navButton}
-                                    onPress={handleNextMonth}
-                                >
-                                    <ChevronDownIcon size={20} color="#FFFFFF" />
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-
-                        {/* Weekday Headers */}
-                        <View style={styles.weekDaysContainer}>
-                            {weekDays.map((day, index) => (
-                                <View key={index} style={styles.weekDayCell}>
-                                    <Text style={styles.weekDayText}>{day}</Text>
-                                </View>
-                            ))}
-                        </View>
-
-                        {/* Calendar Grid */}
-                        <View style={styles.daysContainer}>
-                            {calendarDays.map((day, index) => (
-                                <View key={index} style={styles.dayCell}>
-                                    {day !== null ? (
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.dayButton,
-                                                isDateSelected(day) && styles.dayButtonSelected,
-                                                isDateDisabled(day) && styles.dayButtonDisabled,
-                                            ]}
-                                            onPress={() => handleDatePress(day)}
-                                            disabled={isDateDisabled(day)}
-                                        >
-                                            <Text
-                                                style={[
-                                                    styles.dayText,
-                                                    isDateSelected(day) && styles.dayTextSelected,
-                                                    isDateDisabled(day) && styles.dayTextDisabled,
-                                                ]}
-                                            >
-                                                {day}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ) : (
-                                        <View style={styles.emptyCell} />
-                                    )}
-                                </View>
-                            ))}
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <Text style={styles.monthYear} accessibilityRole="header">
+                            {monthLabel}
+                        </Text>
+                        <View style={styles.navRow}>
+                            <TouchableOpacity
+                                onPress={goPreviousMonth}
+                                style={styles.navBtn}
+                                accessibilityRole="button"
+                                accessibilityLabel="Mês anterior"
+                            >
+                                <Ionicons name="chevron-back" size={22} color="#EBEBF5" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={goNextMonth}
+                                style={styles.navBtn}
+                                accessibilityRole="button"
+                                accessibilityLabel="Próximo mês"
+                            >
+                                <Ionicons name="chevron-forward" size={22} color="#EBEBF5" />
+                            </TouchableOpacity>
                         </View>
                     </View>
-                </TouchableOpacity>
-            </TouchableOpacity>
+
+                    {/* Weekdays */}
+                    <View style={styles.weekRow}>
+                        {WEEKDAYS_PT.map((d, i) => (
+                            <View key={`wd-${i}`} style={styles.cell}>
+                                <Text style={styles.weekdayText}>{d}</Text>
+                            </View>
+                        ))}
+                    </View>
+
+                    {/* Days grid */}
+                    <View style={styles.grid}>
+                        {calendarDays.map((day, idx) => (
+                            <View key={`day-${idx}`} style={styles.cell}>
+                                {day !== null && (
+                                    <TouchableOpacity
+                                        onPress={() => handleDayPress(day)}
+                                        disabled={isDayDisabled(day)}
+                                        style={[
+                                            styles.dayBtn,
+                                            isDaySelected(day) && styles.dayBtnSelected,
+                                        ]}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={`Dia ${day}`}
+                                        accessibilityState={{
+                                            selected: isDaySelected(day),
+                                            disabled: isDayDisabled(day),
+                                        }}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.dayText,
+                                                isDaySelected(day) && styles.dayTextSelected,
+                                                isDayDisabled(day) && styles.dayTextDisabled,
+                                            ]}
+                                        >
+                                            {day}
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        ))}
+                    </View>
+
+                    {/* Action buttons */}
+                    <View style={styles.actions}>
+                        <TouchableOpacity
+                            onPress={onClose}
+                            style={styles.actionBtn}
+                            accessibilityRole="button"
+                            accessibilityLabel="Cancelar"
+                        >
+                            <Text style={styles.actionText}>Cancelar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={handleConfirm}
+                            style={styles.actionBtn}
+                            accessibilityRole="button"
+                            accessibilityLabel="Confirmar data"
+                        >
+                            <Text style={styles.actionText}>Ok</Text>
+                        </TouchableOpacity>
+                    </View>
+                </Pressable>
+            </Pressable>
         </Modal>
     );
 }
 
+const COLOR_BG = '#1C1C2E';
+const COLOR_ACCENT = '#00D4FF';
+const COLOR_TEXT = '#EBEBF5';
+const COLOR_TEXT_MUTED = 'rgba(235, 235, 245, 0.6)';
+const COLOR_TEXT_DARK = '#0E0E1F';
+
 const styles = StyleSheet.create({
-    modalOverlay: {
+    overlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.7)',
         justifyContent: 'center',
         alignItems: 'center',
+        paddingHorizontal: 16,
     },
-    calendarContainer: {
-        width: 300,
-        backgroundColor: '#1C1C2E',
-        borderRadius: 16,
-        padding: 16,
+    card: {
+        width: '100%',
+        maxWidth: 355,
+        backgroundColor: COLOR_BG,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: COLOR_ACCENT,
+        paddingHorizontal: 6,
+        paddingTop: 14,
+        paddingBottom: 8,
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 16,
-    },
-    monthYearSelector: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
+        paddingHorizontal: 10,
+        height: 62,
     },
     monthYear: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#FFFFFF',
+        fontFamily: 'Poppins',
+        fontSize: 20,
+        fontWeight: '500',
+        color: COLOR_TEXT,
     },
-    yearNavigation: {
-        flexDirection: 'row',
-        gap: 4,
-    },
-    yearNavButton: {
-        width: 24,
-        height: 24,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    monthNavigation: {
+    navRow: {
         flexDirection: 'row',
         gap: 8,
     },
-    navButton: {
+    navBtn: {
         width: 32,
         height: 32,
+        alignItems: 'center',
         justifyContent: 'center',
-        alignItems: 'center',
     },
-    weekDaysContainer: {
+    weekRow: {
         flexDirection: 'row',
-        marginBottom: 8,
+        marginTop: 4,
+        marginBottom: 2,
     },
-    weekDayCell: {
-        flex: 1,
-        alignItems: 'center',
-        paddingVertical: 8,
-    },
-    weekDayText: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: 'rgba(255, 255, 255, 0.6)',
-        textTransform: 'uppercase',
-    },
-    daysContainer: {
+    grid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
     },
-    dayCell: {
-        width: '14.28%', // 100% / 7 days
-        aspectRatio: 1,
-        padding: 2,
-    },
-    dayButton: {
-        flex: 1,
-        justifyContent: 'center',
+    cell: {
+        width: `${100 / 7}%`,
+        height: 48,
         alignItems: 'center',
-        borderRadius: 8,
+        justifyContent: 'center',
+        paddingHorizontal: 2,
     },
-    dayButtonSelected: {
-        backgroundColor: '#00D4FF',
-    },
-    dayButtonDisabled: {
-        opacity: 0.3,
-    },
-    emptyCell: {
-        flex: 1,
-    },
-    dayText: {
+    weekdayText: {
+        fontFamily: 'Poppins',
         fontSize: 14,
         fontWeight: '400',
-        color: '#FFFFFF',
+        color: COLOR_TEXT_MUTED,
+    },
+    dayBtn: {
+        width: 34,
+        height: 34,
+        borderRadius: 5,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    dayBtnSelected: {
+        backgroundColor: COLOR_ACCENT,
+    },
+    dayText: {
+        fontFamily: 'Poppins',
+        fontSize: 14,
+        fontWeight: '400',
+        color: COLOR_TEXT,
     },
     dayTextSelected: {
-        color: '#0A0A18',
+        color: COLOR_TEXT_DARK,
         fontWeight: '600',
     },
     dayTextDisabled: {
-        color: 'rgba(255, 255, 255, 0.4)',
+        color: 'rgba(235, 235, 245, 0.3)',
+    },
+    actions: {
+        height: 52,
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        paddingHorizontal: 10,
+        gap: 8,
+    },
+    actionBtn: {
+        paddingVertical: 6,
+        paddingHorizontal: 14,
+        minHeight: 44,
+        justifyContent: 'center',
+    },
+    actionText: {
+        fontFamily: 'Poppins',
+        fontSize: 14,
+        fontWeight: '500',
+        color: COLOR_ACCENT,
     },
 });
