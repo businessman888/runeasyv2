@@ -730,6 +730,44 @@ export class TrainingService {
             activity = act ?? null;
         }
 
+        // Fallback: when `activities.gps_route` is null/empty (legacy rows
+        // saved before the column existed, or activities ingested without
+        // raw points), the canonical route still lives in
+        // `workout_routes.raw_data` — populated for every completed workout
+        // by `completeWorkout` and consumed by the sharing service. We
+        // overlay it onto the activity so RunSummary always has a route to
+        // draw, regardless of which source was populated.
+        const activityGps = Array.isArray(activity?.gps_route) ? activity.gps_route : [];
+        if (activityGps.length === 0) {
+            const { data: routeRow } = await this.supabaseService
+                .from('workout_routes')
+                .select('raw_data')
+                .eq('workout_id', workoutId)
+                .limit(1)
+                .maybeSingle();
+
+            const fallbackPoints = Array.isArray(routeRow?.raw_data) ? routeRow!.raw_data : null;
+            if (fallbackPoints && fallbackPoints.length > 0) {
+                if (activity) {
+                    activity = { ...activity, gps_route: fallbackPoints };
+                } else {
+                    // No activity row at all (rare — workout completed but
+                    // activity insert failed). Synthesize a minimal activity
+                    // shell so the frontend can still render the route map.
+                    activity = {
+                        id: null,
+                        name: data.title ?? 'Corrida',
+                        distance: (data.distance_run ?? data.distance_km ?? 0) * 1000,
+                        moving_time: data.time_run_seconds ?? 0,
+                        average_pace: data.pace_seconds_per_km ? data.pace_seconds_per_km / 60 : null,
+                        elevation_gain: 0,
+                        start_date: data.completed_at ?? data.scheduled_date,
+                        gps_route: fallbackPoints,
+                    };
+                }
+            }
+        }
+
         return { ...data, activity };
     }
 

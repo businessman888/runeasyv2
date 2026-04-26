@@ -144,7 +144,9 @@ describe('TrainingService', () => {
             (mockSupabaseService.from as jest.Mock).mockReturnValue({
                 select: jest.fn().mockReturnThis(),
                 eq: jest.fn().mockReturnThis(),
+                limit: jest.fn().mockReturnThis(),
                 single: jest.fn().mockResolvedValue({ data: workoutWithPlan, error: null }),
+                maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
             });
 
             const result = await service.getWorkout('user-123', 'w1');
