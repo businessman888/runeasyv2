@@ -7,6 +7,7 @@ import {
   Share,
   Image,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
@@ -316,7 +317,16 @@ export function RunSummaryScreen() {
       : null;
 
   // ── Chart de pace (eixo Y invertido) ───────────────────────────────────
-  const chartCfg = useMemo(() => buildChartConfig(paceChart, summary.avgPaceSecondsPerKm), [paceChart, summary.avgPaceSecondsPerKm]);
+  // Largura disponível para o chart = largura da tela menos paddings:
+  //   sheetContent.paddingHorizontal (16) × 2  +  cardDark.paddingHorizontal (16) × 2
+  // O chart ocupa 100% do espaço interno do card, sem `paddingLeft` extra
+  // no chartWrap, para evitar overflow.
+  const { width: screenWidth } = useWindowDimensions();
+  const chartAvailableWidth = Math.max(220, screenWidth - 16 * 2 - 16 * 2);
+  const chartCfg = useMemo(
+    () => buildChartConfig(paceChart, summary.avgPaceSecondsPerKm, chartAvailableWidth),
+    [paceChart, summary.avgPaceSecondsPerKm, chartAvailableWidth],
+  );
 
   return (
     <View style={styles.container}>
@@ -529,7 +539,10 @@ export function RunSummaryScreen() {
 
           {/* Card Pace — sempre presente, com empty state se não houver dados */}
           <View style={styles.cardDark}>
-            <Text style={styles.cardTitle}>Pace</Text>
+            <View style={styles.paceCardHeader}>
+              <Text style={styles.cardTitle}>Pace</Text>
+              <Text style={styles.chartUnitInline}>min/km</Text>
+            </View>
 
             {paceChart.length > 1 ? (
               <>
@@ -546,19 +559,19 @@ export function RunSummaryScreen() {
                     endFillColor={T.cyan}
                     startOpacity={0.45}
                     endOpacity={0.05}
-                    initialSpacing={8}
-                    endSpacing={8}
+                    initialSpacing={CHART_INITIAL_SPACING}
+                    endSpacing={CHART_END_SPACING}
                     spacing={chartCfg.spacing}
                     yAxisColor="transparent"
                     xAxisColor={T.divider}
                     rulesType="solid"
                     rulesColor="rgba(235,235,245,0.06)"
                     yAxisTextStyle={styles.chartAxisText}
-                    xAxisLabelTextStyle={styles.chartAxisText}
+                    xAxisLabelTextStyle={styles.chartAxisLabelText}
                     yAxisLabelTexts={chartCfg.yAxisLabelTexts}
                     noOfSections={chartCfg.yAxisLabelTexts.length - 1}
                     maxValue={chartCfg.maxValue}
-                    yAxisLabelWidth={36}
+                    yAxisLabelWidth={CHART_Y_AXIS_LABEL_WIDTH}
                     yAxisLabelSuffix=""
                     xAxisLabelTexts={chartCfg.xLabels}
                     showVerticalLines={false}
@@ -575,7 +588,6 @@ export function RunSummaryScreen() {
                       thickness: 1,
                     }}
                   />
-                  <Text style={styles.chartUnit}>/km</Text>
                 </View>
 
                 <View style={styles.paceList}>
@@ -753,12 +765,20 @@ interface ChartConfig {
   spacing: number;
 }
 
+// Constantes do layout do chart — usadas tanto no buildChartConfig quanto no
+// próprio LineChart para garantir que largura, spacing e labels permaneçam
+// consistentes (sem o chart estourar a borda do card).
+const CHART_Y_AXIS_LABEL_WIDTH = 40;
+const CHART_INITIAL_SPACING = 8;
+const CHART_END_SPACING = 12;
+
 function buildChartConfig(
   paceChart: { distanceKm: number; paceSecondsPerKm: number }[],
   avgPace: number,
+  availableWidth: number,
 ): ChartConfig {
   if (paceChart.length === 0) {
-    return { data: [], yAxisLabelTexts: [], maxValue: 0, refValue: 0, xLabels: [], width: 280, spacing: 0 };
+    return { data: [], yAxisLabelTexts: [], maxValue: 0, refValue: 0, xLabels: [], width: availableWidth, spacing: 0 };
   }
 
   // Range em segundos arredondado para minutos cheios
@@ -787,19 +807,28 @@ function buildChartConfig(
   // Reference line do pace médio (no espaço invertido)
   const refValue = avgPace > 0 ? Math.max(0, paceMaxCeil - avgPace) : 0;
 
-  // X axis: ~5 labels em km
+  // X axis: ~4 labels em km. Sempre garantimos primeiro e último; os
+  // intermediários são selecionados por stride. Strings vazias suprimem o
+  // label naquele índice (gifted-charts não desenha texto vazio).
+  const targetLabels = 4;
+  const stride = Math.max(1, Math.round((paceChart.length - 1) / (targetLabels - 1)));
   const xLabels: string[] = paceChart.map((p, i) => {
-    const stride = Math.max(1, Math.ceil(paceChart.length / 5));
-    if (i === 0 || i === paceChart.length - 1 || i % stride === 0) {
+    const isLast = i === paceChart.length - 1;
+    if (i === 0 || isLast || i % stride === 0) {
       return `${p.distanceKm.toFixed(1)} km`;
     }
     return '';
   });
 
-  // Largura/spacing dinâmicos
-  const baseWidth = 280;
-  const spacing = Math.max(6, baseWidth / Math.max(paceChart.length - 1, 1));
-  const width = Math.max(baseWidth, spacing * Math.max(paceChart.length - 1, 1));
+  // Largura/spacing dinâmicos: o chart deve caber EXATAMENTE no card.
+  // gifted-charts mede `width` como a largura total (eixo Y + área de plot),
+  // então subtraímos yAxisLabelWidth + os paddings interno do chart para
+  // distribuir o espaçamento entre os pontos sem extrapolar.
+  const drawableWidth = Math.max(
+    1,
+    availableWidth - CHART_Y_AXIS_LABEL_WIDTH - CHART_INITIAL_SPACING - CHART_END_SPACING,
+  );
+  const spacing = drawableWidth / Math.max(paceChart.length - 1, 1);
 
   return {
     data,
@@ -807,7 +836,7 @@ function buildChartConfig(
     maxValue: range,
     refValue,
     xLabels,
-    width,
+    width: availableWidth,
     spacing,
   };
 }
@@ -1048,24 +1077,40 @@ const styles = StyleSheet.create({
   },
 
   // Pace card / chart
+  paceCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    // paddingBottom já vem do `cardTitle` (16px). Não somar aqui para não
+    // afastar demais o título do gráfico.
+  },
+  chartUnitInline: {
+    position: 'absolute',
+    right: 0,
+    top: 4,
+    color: T.textSecondary,
+    fontSize: 11,
+    fontWeight: '500',
+  },
   chartWrap: {
+    // Sem padding lateral: a largura passada ao LineChart já considera o
+    // espaço interno do card. Padding aqui causaria overflow horizontal.
     paddingTop: 4,
     paddingBottom: 8,
-    paddingLeft: 4,
     minHeight: 200,
+    overflow: 'hidden',
   },
   chartAxisText: {
-    color: T.textPrimary,
-    fontSize: 11,
+    color: T.textSecondary,
+    fontSize: 10,
   },
-  chartUnit: {
-    position: 'absolute',
-    top: 0,
-    left: 4,
-    color: T.textPrimary,
-    fontSize: 11,
-    fontWeight: '400',
-    opacity: 0.7,
+  chartAxisLabelText: {
+    color: T.textSecondary,
+    fontSize: 10,
+    width: 48,
+    textAlign: 'center',
+    marginLeft: -24,
   },
 
   paceList: {
