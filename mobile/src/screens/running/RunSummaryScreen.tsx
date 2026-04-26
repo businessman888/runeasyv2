@@ -121,17 +121,19 @@ export function RunSummaryScreen() {
     routeCoordinates: initialRouteCoords = [],
     routePoints: initialRoutePoints = [],
     savedLocally = false,
-    mode = 'free',
-    targetPaceSeconds,
-    targetDistanceKm,
-    workoutTitle,
+    mode: initialMode = 'free',
+    targetPaceSeconds: initialTargetPaceSeconds,
+    targetDistanceKm: initialTargetDistanceKm,
+    workoutTitle: initialWorkoutTitle,
   } = route.params || {};
 
   // ── Hidratação opcional via backend ─────────────────────────────────────
   // Quando a tela é aberta da Home/Histórico, os params vêm sem rota nem
-  // amostras GPS. Chamamos GET /training/workouts/:id (que devolve a activity
-  // com gps_route) e enriquecemos o estado local com os dados reais para que
-  // o mapa, splits e gráfico de pace fiquem fiéis ao treino executado.
+  // amostras GPS — e em alguns fluxos (Histórico) também sem mode/targets/
+  // title. Chamamos GET /training/workouts/:id (que devolve o workout +
+  // activity com gps_route) e enriquecemos TUDO o que está faltando, para
+  // que o mapa, splits, gráfico de pace e card de "Planejado vs Executado"
+  // funcionem identicamente nos 3 fluxos (pós-finalização, Home, Histórico).
   const fetchWorkoutDetails = useTrainingStore((s) => s.fetchWorkoutDetails);
   const hasInitialRoute = initialRoutePoints.length > 1;
 
@@ -140,6 +142,10 @@ export function RunSummaryScreen() {
     routeCoordinates: number[][];
     distance: number;
     timeMs: number;
+    mode?: RunMode;
+    targetPaceSeconds?: number;
+    targetDistanceKm?: number;
+    workoutTitle?: string;
   };
   const [enriched, setEnriched] = useState<Enriched | null>(null);
   const [enriching, setEnriching] = useState(false);
@@ -151,19 +157,37 @@ export function RunSummaryScreen() {
     (async () => {
       const details = await fetchWorkoutDetails(workoutId);
       if (cancelled) return;
-      const activity = details?.activity;
-      if (activity) {
-        const gps = (activity.gps_route ?? []) as RoutePoint[];
-        const coords = gps
-          .filter((p) => p && typeof p.longitude === 'number' && typeof p.latitude === 'number')
-          .map((p) => [p.longitude, p.latitude]);
-        setEnriched({
-          routePoints: gps,
-          routeCoordinates: coords,
-          distance: activity.distance ?? initialDistance,
-          timeMs: (activity.moving_time ?? Math.round(initialTimeMs / 1000)) * 1000,
-        });
+      if (!details) {
+        setEnriching(false);
+        return;
       }
+
+      // Mapeia o `source` do banco ('plan' | 'manual' | 'free') para o RunMode
+      // do app ('planned' | 'manual' | 'free'). Plan workouts não devem cair
+      // aqui (vão para CoachAnalysis), mas caímos no 'planned' por segurança.
+      const dbSource = (details as any).source as 'plan' | 'manual' | 'free' | null | undefined;
+      const enrichedMode: RunMode | undefined =
+        dbSource === 'plan' ? 'planned' :
+        dbSource === 'manual' ? 'manual' :
+        dbSource === 'free' ? 'free' :
+        undefined;
+
+      const activity = details.activity;
+      const gps = (activity?.gps_route ?? []) as RoutePoint[];
+      const coords = gps
+        .filter((p) => p && typeof p.longitude === 'number' && typeof p.latitude === 'number')
+        .map((p) => [p.longitude, p.latitude]);
+
+      setEnriched({
+        routePoints: gps,
+        routeCoordinates: coords,
+        distance: activity?.distance ?? initialDistance,
+        timeMs: ((activity?.moving_time ?? Math.round(initialTimeMs / 1000))) * 1000,
+        mode: enrichedMode,
+        targetPaceSeconds: details.target_pace_seconds ?? undefined,
+        targetDistanceKm: details.distance_km ?? undefined,
+        workoutTitle: details.title ?? undefined,
+      });
       setEnriching(false);
     })();
     return () => { cancelled = true; };
@@ -173,6 +197,10 @@ export function RunSummaryScreen() {
   const timeMs = enriched?.timeMs ?? initialTimeMs;
   const routeCoordinates = enriched?.routeCoordinates ?? initialRouteCoords;
   const routePoints = enriched?.routePoints ?? initialRoutePoints;
+  const mode: RunMode = enriched?.mode ?? initialMode;
+  const targetPaceSeconds = enriched?.targetPaceSeconds ?? initialTargetPaceSeconds;
+  const targetDistanceKm = enriched?.targetDistanceKm ?? initialTargetDistanceKm;
+  const workoutTitle = enriched?.workoutTitle ?? initialWorkoutTitle;
 
   // ── Usuário (avatar + nome) ────────────────────────────────────────────
   const user = useAuthStore((s) => s.user);

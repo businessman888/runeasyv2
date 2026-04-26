@@ -829,6 +829,10 @@ export class TrainingService {
                         objective: workout.objective,
                         instructions_json: workout.instructions_json,
                         tips: workout.tips,
+                        source: workout.source ?? null,
+                        title: workout.title ?? null,
+                        target_pace_seconds: workout.target_pace_seconds ?? null,
+                        target_duration_seconds: workout.target_duration_seconds ?? null,
                     },
                     is_today: isToday,
                     is_past: isPast,
@@ -898,6 +902,10 @@ export interface ScheduleDay {
         objective: string | null;
         instructions_json: any[];
         tips: string | null;
+        source: 'plan' | 'manual' | 'free' | null;
+        title: string | null;
+        target_pace_seconds: number | null;
+        target_duration_seconds: number | null;
     } | null;
     is_today: boolean;
     is_past: boolean;
