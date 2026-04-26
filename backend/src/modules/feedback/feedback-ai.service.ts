@@ -461,6 +461,12 @@ Regras:
         if (distanceMeters < 1000 || movingTimeSeconds < 300) {
             return { value: 0, isValid: false, method: 'insufficient_data' };
         }
+        // Pace ausente/zero (ex.: activity vinda do Strava sem average_speed
+        // ou treino só-telefone com bug no cálculo) explodiria a divisão
+        // abaixo em Infinity → 80 capado, gerando trend falso.
+        if (!averagePaceMinPerKm || averagePaceMinPerKm <= 0 || !isFinite(averagePaceMinPerKm)) {
+            return { value: 0, isValid: false, method: 'invalid_pace' };
+        }
 
         const velocityMPerMin = 1000 / averagePaceMinPerKm;
         const vo2FromPace = -4.60 + (0.182258 * velocityMPerMin) + (0.000104 * Math.pow(velocityMPerMin, 2));
@@ -489,37 +495,44 @@ Regras:
      * Get VO2 Max trend by comparing with previous estimates
      */
     async getVO2MaxTrend(userId: string, currentVO2: number): Promise<{ trend_percent: number; previous_value: number | null }> {
+        // Buscamos as últimas atividades válidas para corrida (>= 1km, >= 5min)
+        // e selecionamos a primeira anterior à atual cuja estimativa de VO²
+        // seja válida. Antes filtrávamos por average_heartrate IS NOT NULL,
+        // o que zerava a tendência para usuários só-telefone (sem monitor
+        // cardíaco) — agora calculamos pace_based quando HR não existe,
+        // exatamente como no cálculo do valor atual.
         const { data: previousActivities } = await this.supabaseService
             .from('activities')
             .select('average_pace, average_heartrate, distance, moving_time, start_date')
             .eq('user_id', userId)
-            .not('average_heartrate', 'is', null)
             .gte('distance', 1000)
+            .gte('moving_time', 300)
             .order('start_date', { ascending: false })
-            .limit(5);
+            .limit(10);
 
         if (!previousActivities || previousActivities.length < 2) {
             return { trend_percent: 0, previous_value: null };
         }
 
-        const prevActivity = previousActivities[1];
-        const prevVO2 = this.calculateVO2MaxEstimate(
-            prevActivity.average_pace,
-            prevActivity.average_heartrate,
-            prevActivity.distance,
-            prevActivity.moving_time
-        );
+        // [0] é a atividade atual; procuramos a próxima cuja estimativa seja válida.
+        for (let i = 1; i < previousActivities.length; i++) {
+            const prev = previousActivities[i];
+            const prevVO2 = this.calculateVO2MaxEstimate(
+                prev.average_pace,
+                prev.average_heartrate,
+                prev.distance,
+                prev.moving_time,
+            );
+            if (!prevVO2.isValid) continue;
 
-        if (!prevVO2.isValid) {
-            return { trend_percent: 0, previous_value: null };
+            const trendPercent = ((currentVO2 - prevVO2.value) / prevVO2.value) * 100;
+            return {
+                trend_percent: Math.round(trendPercent * 10) / 10,
+                previous_value: prevVO2.value,
+            };
         }
 
-        const trendPercent = ((currentVO2 - prevVO2.value) / prevVO2.value) * 100;
-
-        return {
-            trend_percent: Math.round(trendPercent * 10) / 10,
-            previous_value: prevVO2.value
-        };
+        return { trend_percent: 0, previous_value: null };
     }
 
     /**

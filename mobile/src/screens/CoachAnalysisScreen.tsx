@@ -1,10 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Image,
     Platform,
     Pressable,
-    Share,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -372,10 +371,10 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
 
     // ── Actions ────────────────────────────────────────────────────────────
     const handleClose = () => navigation.goBack();
-    const handleShare = useCallback(async () => {
-        const message = `${workoutTitle} 🏃\n\nDistância: ${distanceKmStr} km\nTempo: ${timeStr}\nPace médio: ${avgPaceStr} /km`;
-        try { await Share.share({ message }); } catch { /* canceled */ }
-    }, [workoutTitle, distanceKmStr, timeStr, avgPaceStr]);
+    const handleShare = () => {
+        if (!workoutId) return;
+        setSharingVisible(true);
+    };
 
     // ── Strength / improvement (Análise inteligente) ───────────────────────
     const strength = feedback?.strengths?.[0];
@@ -727,35 +726,55 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                         />
                     )}
 
-                    {/* VO² Máximo Estimado */}
-                    <View style={[styles.cardDark, styles.vo2Card]}>
-                        <View style={styles.vo2Header}>
-                            <Ionicons name="pulse" size={20} color={T.cyan} />
-                            <Text style={styles.vo2Title}>VO² Máximo Estimado</Text>
-                        </View>
-                        <View style={styles.vo2Body}>
-                            <View style={styles.vo2ValueWrap}>
-                                <Text style={styles.vo2Value}>
-                                    {vo2?.is_valid ? vo2.current_value.toFixed(1) : '--'}
-                                </Text>
-                                <Text style={styles.vo2Unit}>ml/kg/min</Text>
+                    {/* VO² Máximo Estimado — mesma lógica do conquest:
+                         só renderiza se temos VO² ou se ainda estamos carregando
+                         um latestActivity que pode trazê-lo. */}
+                    {(vo2 || (latestActivityLoading && latestExtrasMatch)) && (
+                        <View style={[styles.cardDark, styles.vo2Card]}>
+                            <View style={styles.vo2Header}>
+                                <Ionicons name="pulse" size={20} color={T.cyan} />
+                                <Text style={styles.vo2Title}>VO² Máximo Estimado</Text>
                             </View>
-                            {vo2?.is_valid && (
-                                <Vo2Trend
-                                    isInterrupted={vo2.is_interrupted}
-                                    trendPercent={vo2.trend_percent}
-                                />
+                            {!vo2 && latestActivityLoading ? (
+                                <View style={[styles.vo2Body, { paddingVertical: 8 }]}>
+                                    <ActivityIndicator size="small" color={T.cyan} />
+                                </View>
+                            ) : (
+                                <>
+                                    <View style={styles.vo2Body}>
+                                        <View style={styles.vo2ValueWrap}>
+                                            <Text style={styles.vo2Value}>
+                                                {vo2?.is_valid ? vo2.current_value.toFixed(1) : '--'}
+                                            </Text>
+                                            <Text style={styles.vo2Unit}>ml/kg/min</Text>
+                                        </View>
+                                        {vo2?.is_valid && (
+                                            <Vo2Trend
+                                                isInterrupted={vo2.is_interrupted}
+                                                trendPercent={vo2.trend_percent}
+                                            />
+                                        )}
+                                    </View>
+                                    {(vo2?.message || !vo2?.is_valid) && (
+                                        <Text style={styles.vo2Message}>
+                                            {vo2?.message || 'Dados insuficientes para cálculo'}
+                                        </Text>
+                                    )}
+                                </>
                             )}
                         </View>
-                        {(vo2?.message || !vo2?.is_valid) && (
-                            <Text style={styles.vo2Message}>
-                                {vo2?.message || 'Dados insuficientes para cálculo'}
-                            </Text>
-                        )}
-                    </View>
+                    )}
 
-                    {/* Conquista (XP / Badge) */}
-                    <ConquestCard conquest={conquest} />
+                    {/* Conquista (XP / Badge) — só renderiza se vamos ter dados.
+                         Quando o usuário abriu o histórico (feedbackId) e o latestActivity
+                         não bate com o workout em vista, o card é omitido para não ficar
+                         "Carregando..." eterno. */}
+                    {(conquest || (latestActivityLoading && latestExtrasMatch)) && (
+                        <ConquestCard
+                            conquest={conquest}
+                            loading={latestActivityLoading && !conquest}
+                        />
+                    )}
 
                     {/* Tip — monitor cardíaco */}
                     <View style={styles.tipCard}>
@@ -1007,18 +1026,24 @@ function Vo2Trend({
     );
 }
 
-function ConquestCard({ conquest }: { conquest: any }) {
-    if (!conquest) {
+function ConquestCard({ conquest, loading }: { conquest: any; loading?: boolean }) {
+    if (loading) {
         return (
             <View style={[styles.cardDark, styles.conquestCard]}>
                 <View style={styles.conquestHeader}>
                     <Ionicons name="trophy" size={26} color={T.warning} />
                     <Text style={styles.conquestLabel}>CONQUISTA</Text>
                 </View>
-                <Text style={styles.conquestTitle}>Carregando...</Text>
+                <View style={styles.conquestBody}>
+                    <View style={{ flex: 1 }}>
+                        <ActivityIndicator size="small" color={T.warning} style={{ alignSelf: 'flex-start' }} />
+                        <Text style={[styles.conquestSub, { marginTop: 8 }]}>Calculando sua conquista…</Text>
+                    </View>
+                </View>
             </View>
         );
     }
+    if (!conquest) return null;
 
     if (conquest.goal_met) {
         return (

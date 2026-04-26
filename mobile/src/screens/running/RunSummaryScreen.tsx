@@ -1,10 +1,9 @@
-import React, { useMemo, useRef, useCallback, useEffect, useState } from 'react';
+import React, { useMemo, useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
   Pressable,
   StyleSheet,
-  Share,
   Image,
   ActivityIndicator,
   useWindowDimensions,
@@ -18,6 +17,7 @@ import { LineChart } from 'react-native-gifted-charts';
 import * as Location from 'expo-location';
 import { useAuthStore, getDisplayName, getAvatarUrl } from '../../stores/authStore';
 import { useTrainingStore } from '../../stores';
+import { SharingModal } from '../sharing/SharingModal';
 import {
   calculateSplits,
   calculatePaceChart,
@@ -114,6 +114,7 @@ export function RunSummaryScreen() {
   const route = useRoute<RouteProp<RunSummaryRouteParams, 'RunSummary'>>();
   const insets = useSafeAreaInsets();
   const sheetRef = useRef<BottomSheet>(null);
+  const [sharingVisible, setSharingVisible] = useState(false);
 
   const {
     workoutId,
@@ -293,15 +294,10 @@ export function RunSummaryScreen() {
     });
   };
 
-  const handleShare = useCallback(async () => {
-    const titlePrefix = mode === 'free' ? autoTitle : workoutTitle ?? 'Treino';
-    const message = `${titlePrefix} 🏃\n\nDistância: ${distanceKm} km\nTempo: ${timeStr}\nPace médio: ${avgPaceStr} /km`;
-    try {
-      await Share.share({ message });
-    } catch {
-      /* user cancelou */
-    }
-  }, [mode, autoTitle, workoutTitle, distanceKm, timeStr, avgPaceStr]);
+  const handleShare = () => {
+    if (!workoutId) return;
+    setSharingVisible(true);
+  };
 
   // Snap points: 35% (vê mapa), 92% (full)
   const snapPoints = useMemo(() => ['35%', '92%'], []);
@@ -422,10 +418,11 @@ export function RunSummaryScreen() {
           style={styles.iconBtn}
           onPress={handleShare}
           hitSlop={10}
+          disabled={!workoutId}
           accessibilityRole="button"
           accessibilityLabel="Compartilhar"
         >
-          <Ionicons name="share-outline" size={20} color={T.textPrimary} />
+          <Ionicons name="share-outline" size={20} color={workoutId ? T.textPrimary : T.textMuted} />
         </Pressable>
       </SafeAreaView>
 
@@ -626,6 +623,14 @@ export function RunSummaryScreen() {
           </View>
         </BottomSheetScrollView>
       </BottomSheet>
+
+      {workoutId && (
+        <SharingModal
+          visible={sharingVisible}
+          onClose={() => setSharingVisible(false)}
+          workoutId={workoutId}
+        />
+      )}
     </View>
   );
 }
