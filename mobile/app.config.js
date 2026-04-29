@@ -25,9 +25,14 @@ export default {
       NSLocationWhenInUseUsageDescription: "RunEasy precisa de acesso à sua localização para rastrear sua corrida.",
       NSLocationAlwaysAndWhenInUseUsageDescription: "RunEasy rastreia sua corrida mesmo com a tela desligada.",
       NSLocationAlwaysUsageDescription: "RunEasy rastreia sua corrida mesmo em background.",
+      NSPhotoLibraryAddUsageDescription: "RunEasy precisa de acesso para salvar imagens dos seus treinos na galeria.",
       NSHealthShareUsageDescription: "Precisamos acessar seus dados de treino para sincronizar suas corridas do Apple Watch e personalizar seu plano de treino com IA.",
       NSHealthUpdateUsageDescription: "Precisamos salvar informações dos seus treinos realizados no RunEasy.",
-      UIBackgroundModes: ["fetch", "processing", "location", "remote-notification"]
+      UIBackgroundModes: ["fetch", "processing", "location", "remote-notification"],
+      LSApplicationQueriesSchemes: [
+        "instagram",
+        "instagram-stories"
+      ]
     }
   },
   android: {
@@ -47,6 +52,14 @@ export default {
       "ACCESS_BACKGROUND_LOCATION",
       "FOREGROUND_SERVICE",
       "FOREGROUND_SERVICE_LOCATION"
+    ],
+    queries: [
+      { package: "com.instagram.android" },
+      {
+        intent: {
+          action: "com.instagram.share.ADD_TO_STORY"
+        }
+      }
     ]
   },
   web: {
@@ -55,7 +68,8 @@ export default {
   extra: {
     eas: {
       projectId: "8a2dbe01-0124-4565-bf1d-ca858507e3ae"
-    }
+    },
+    facebookAppId: process.env.EXPO_PUBLIC_FACEBOOK_APP_ID || ""
   },
   plugins: [
     "expo-apple-authentication",

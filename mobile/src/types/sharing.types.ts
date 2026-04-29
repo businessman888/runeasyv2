@@ -28,9 +28,11 @@ export interface ShareCardData {
     totalPoints: number;
     currentStreak: number;
     recentBadges: Array<{
+      slug: string;
       name: string;
       icon: string;
-      tier: string;
+      type: string;
+      tier: number;
     }>;
   } | null;
 
@@ -40,12 +42,4 @@ export interface ShareCardData {
   city: string;
 }
 
-export type CardTemplateId =
-  | 'T01' | 'T02' | 'T03' | 'T04' | 'T05' | 'T06'
-  | 'T07' | 'T08' | 'T09' | 'T10' | 'T11' | 'T12';
-
-export type StickerTemplateId =
-  | 'S01' | 'S02' | 'S03' | 'S04' | 'S05' | 'S06'
-  | 'S07' | 'S08' | 'S09' | 'S10' | 'S11';
-
-export type SharingTab = 'cards' | 'stickers';
+export type CardTemplateId = 'compact' | 'pace' | 'achievement' | 'metrics_full';

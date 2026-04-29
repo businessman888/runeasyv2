@@ -90,9 +90,11 @@ export class SharingService {
             totalPoints: levelRow.total_points,
             currentStreak: levelRow.current_streak,
             recentBadges: (recentBadges || []).map((ub: any) => ({
+              slug: ub.badges?.slug || '',
               name: ub.badges?.name || '',
               icon: ub.badges?.icon || '',
-              tier: ub.badges?.tier || '',
+              type: ub.badges?.type || 'milestone',
+              tier: Number(ub.badges?.tier) || 1,
             })),
           }
         : null;

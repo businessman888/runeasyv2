@@ -7,14 +7,18 @@ interface CardBaseProps {
   height?: number;
 }
 
-/**
- * Base wrapper for all share cards.
- * Background is transparent — the dark gradient is rendered as a sibling
- * OUTSIDE the ViewShot capture area.
- */
-export function CardBase({ children, width = 300, height = 400 }: CardBaseProps) {
+export const CARD_WIDTH = 320;
+export const CARD_HEIGHT = 568;
+
+export function CardBase({ children, width = CARD_WIDTH, height = CARD_HEIGHT }: CardBaseProps) {
   return (
-    <View style={[styles.container, { width, height }]}>
+    <View
+      style={[
+        styles.container,
+        { width, height, backgroundColor: 'transparent' },
+      ]}
+      collapsable={false}
+    >
       {children}
     </View>
   );

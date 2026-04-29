@@ -32,9 +32,11 @@ export interface ShareCardData {
     totalPoints: number;
     currentStreak: number;
     recentBadges: Array<{
+      slug: string;
       name: string;
       icon: string;
-      tier: string;
+      type: string;
+      tier: number;
     }>;
   } | null;
 

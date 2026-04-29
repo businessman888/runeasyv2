@@ -9,29 +9,27 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
-  Animated,
-  PanResponder,
   ScrollView,
+  LayoutChangeEvent,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Sharing from 'expo-sharing';
-import * as MediaLibrary from 'expo-media-library';
-import * as FileSystem from 'expo-file-system';
-import * as Clipboard from 'expo-clipboard';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 import { useSharingStore } from '../../stores/sharingStore';
-import { ShareCardData, CardTemplateId, StickerTemplateId } from '../../types/sharing.types';
-import { CARD_TEMPLATES } from './components/cards';
-import { STICKER_TEMPLATES } from './components/stickers';
+import { CardTemplateId, ShareCardData } from '../../types/sharing.types';
+import { getAvailableCards, CardEntry } from './components/cards';
+import { CARD_WIDTH, CARD_HEIGHT } from './components/cards/CardBase';
+import {
+  shareToInstagramStories,
+  copyImageToClipboard,
+  downloadImageToGallery,
+  openSystemShareSheet,
+} from './utils/shareHandlers';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const MODAL_HEIGHT = SCREEN_HEIGHT * 0.88;
-const DISMISS_THRESHOLD = 150;
-const CARDS_PER_PAGE = 2;
-const CARD_THUMB_WIDTH = (SCREEN_WIDTH - 32 - 32 - 15) / 2; // modal padding 16*2 + inner padding 16*2 + gap
-const CARD_THUMB_HEIGHT = CARD_THUMB_WIDTH * 2.3; // ~aspect ratio from Figma (164x379)
-const STICKER_THUMB_SIZE = (SCREEN_WIDTH - 32 - 32 - 30) / 3; // 3 columns with gaps
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const PREVIEW_HORIZONTAL_PADDING = spacing.base;
+const PREVIEW_VERTICAL_PADDING = spacing.md;
 
 interface SharingModalProps {
   visible: boolean;
@@ -40,835 +38,491 @@ interface SharingModalProps {
 }
 
 export function SharingModal({ visible, onClose, workoutId }: SharingModalProps) {
-  const {
-    cardData,
-    isLoading,
-    error,
-    activeTab,
-    selectedCard,
-    selectedSticker,
-    fetchCardData,
-    setActiveTab,
-    setSelectedCard,
-    setSelectedSticker,
-    reset,
-  } = useSharingStore();
+  const { cardData, isLoading, error, selectedCard, fetchCardData, setSelectedCard, reset } =
+    useSharingStore();
 
-  const viewShotRef = useRef<any>(null);
-  const modalSlideAnim = useRef(new Animated.Value(0)).current;
-  const panY = useRef(new Animated.Value(0)).current;
-  const [modalActuallyVisible, setModalActuallyVisible] = useState(false);
-
-  // PanResponder for drag-to-dismiss
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gestureState) => gestureState.dy > 5,
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy > 0) {
-          panY.setValue(gestureState.dy);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > DISMISS_THRESHOLD) {
-          handleClose();
-        } else {
-          Animated.spring(panY, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 100,
-            friction: 10,
-          }).start();
-        }
-      },
-    })
-  ).current;
+  const viewShotRef = useRef<ViewShot>(null);
+  const carouselRef = useRef<FlatList<CardEntry>>(null);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [bodyHeight, setBodyHeight] = useState(0);
 
   useEffect(() => {
     if (visible && workoutId) {
       fetchCardData(workoutId);
-      setModalActuallyVisible(true);
-      Animated.spring(modalSlideAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-        tension: 65,
-        friction: 11,
-      }).start();
     }
-  }, [visible, workoutId]);
+  }, [visible, workoutId, fetchCardData]);
+
+  const cards = useMemo(() => getAvailableCards(cardData), [cardData]);
+
+  useEffect(() => {
+    if (cards.length > 0 && !cards.some((c) => c.id === selectedCard)) {
+      setSelectedCard(cards[0].id);
+    }
+  }, [cards, selectedCard, setSelectedCard]);
+
+  const currentIndex = useMemo(() => {
+    const idx = cards.findIndex((c) => c.id === selectedCard);
+    return idx === -1 ? 0 : idx;
+  }, [cards, selectedCard]);
 
   const handleClose = useCallback(() => {
-    Animated.timing(modalSlideAnim, {
-      toValue: 0,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => {
-      setModalActuallyVisible(false);
-      panY.setValue(0);
-      reset();
-      onClose();
-    });
+    reset();
+    onClose();
   }, [onClose, reset]);
 
-  // Capture and share
-  const handleShare = useCallback(async () => {
-    if (!viewShotRef.current) return;
+  const captureCurrent = useCallback(async (): Promise<string | null> => {
+    if (!viewShotRef.current) return null;
+    setIsCapturing(true);
     try {
       const uri = await captureRef(viewShotRef, {
         format: 'png',
         quality: 1,
         result: 'tmpfile',
       });
-      const isAvailable = await Sharing.isAvailableAsync();
-      if (isAvailable) {
-        await Sharing.shareAsync(uri, { mimeType: 'image/png', UTI: 'public.png' });
-      } else {
-        Alert.alert('Erro', 'Compartilhamento não disponível neste dispositivo');
-      }
+      return uri;
     } catch {
-      Alert.alert('Erro', 'Falha ao compartilhar imagem');
+      Alert.alert('Erro', 'Falha ao gerar imagem do card.');
+      return null;
+    } finally {
+      setIsCapturing(false);
     }
   }, []);
 
-  // Capture and save to gallery
-  const handleSave = useCallback(async () => {
-    if (!viewShotRef.current) return;
-    try {
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permissão necessária', 'Permita o acesso à galeria para salvar imagens.');
-        return;
-      }
-      const uri = await captureRef(viewShotRef, {
-        format: 'png',
-        quality: 1,
-        result: 'tmpfile',
-      });
-      await MediaLibrary.saveToLibraryAsync(uri);
-      Alert.alert('Salvo!', 'Imagem salva na galeria.');
-    } catch {
-      Alert.alert('Erro', 'Falha ao salvar imagem');
-    }
-  }, []);
+  const handleShareStories = useCallback(async () => {
+    const uri = await captureCurrent();
+    if (uri) await shareToInstagramStories(uri);
+  }, [captureCurrent]);
 
-  // Copy sticker to clipboard (long press)
-  const handleCopySticker = useCallback(async () => {
-    if (!viewShotRef.current) return;
-    try {
-      const uri = await captureRef(viewShotRef, {
-        format: 'png',
-        quality: 1,
-        result: 'tmpfile',
-      });
-      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
-      await Clipboard.setImageAsync(base64);
-      Alert.alert('Copiado!', 'Sticker copiado para a área de transferência.');
-    } catch {
-      Alert.alert('Erro', 'Falha ao copiar sticker');
-    }
-  }, []);
+  const handleClipboard = useCallback(async () => {
+    const uri = await captureCurrent();
+    if (uri) await copyImageToClipboard(uri);
+  }, [captureCurrent]);
 
-  // Card carousel data — 2 per page
-  const cardPages = useMemo(() => {
-    const pages: typeof CARD_TEMPLATES[number][][] = [];
-    for (let i = 0; i < CARD_TEMPLATES.length; i += CARDS_PER_PAGE) {
-      pages.push(CARD_TEMPLATES.slice(i, i + CARDS_PER_PAGE));
-    }
-    return pages;
-  }, []);
+  const handleDownload = useCallback(async () => {
+    const uri = await captureCurrent();
+    if (uri) await downloadImageToGallery(uri);
+  }, [captureCurrent]);
 
-  if (!visible && !modalActuallyVisible) return null;
-
-  return (
-    <Modal
-      visible={modalActuallyVisible}
-      transparent={true}
-      animationType="none"
-      statusBarTranslucent
-      onRequestClose={handleClose}
-    >
-      {/* Dark overlay */}
-      <View style={styles.overlay}>
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          activeOpacity={1}
-          onPress={handleClose}
-        />
-
-        {/* Modal bottom sheet */}
-        <Animated.View
-          style={[
-            styles.modalContainer,
-            {
-              transform: [
-                {
-                  translateY: Animated.add(
-                    modalSlideAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [SCREEN_HEIGHT, 0],
-                    }),
-                    panY
-                  ),
-                },
-              ],
-            },
-          ]}
-        >
-          <View style={styles.modalInner}>
-            {/* Drag handle */}
-            <View {...panResponder.panHandlers} style={styles.dragHandleArea}>
-              <View style={styles.dragHandle} />
-            </View>
-
-            {/* Header row: tabs + close button */}
-            <View style={styles.headerRow}>
-              <View style={styles.tabsContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.tabPill,
-                    activeTab === 'stickers' && styles.tabPillActive,
-                  ]}
-                  onPress={() => setActiveTab('stickers')}
-                >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      activeTab === 'stickers' && styles.tabTextActive,
-                    ]}
-                  >
-                    Stickers
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.tabPill,
-                    activeTab === 'cards' && styles.tabPillActive,
-                  ]}
-                  onPress={() => setActiveTab('cards')}
-                >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      activeTab === 'cards' && styles.tabTextActive,
-                    ]}
-                  >
-                    Cards
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <TouchableOpacity
-                onPress={handleClose}
-                style={styles.closeBtn}
-                accessibilityRole="button"
-                accessibilityLabel="Fechar modal"
-              >
-                <Ionicons name="close" size={24} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Content */}
-            {isLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={styles.loadingText}>Carregando dados...</Text>
-              </View>
-            ) : error ? (
-              <View style={styles.loadingContainer}>
-                <Ionicons name="alert-circle" size={40} color={colors.error} />
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : cardData ? (
-              activeTab === 'stickers' ? (
-                <StickersTab
-                  data={cardData}
-                  selectedSticker={selectedSticker}
-                  onSelectSticker={setSelectedSticker}
-                  onLongPress={handleCopySticker}
-                  onSave={handleSave}
-                  onShare={handleShare}
-                />
-              ) : (
-                <CardsTab
-                  data={cardData}
-                  selectedCard={selectedCard}
-                  onSelectCard={setSelectedCard}
-                  cardPages={cardPages}
-                  onSave={handleSave}
-                  onShare={handleShare}
-                />
-              )
-            ) : null}
-
-            {/* Hidden full-size ViewShot for capture (off-screen) */}
-            {cardData && (
-              <View style={styles.offScreenCapture} pointerEvents="none">
-                <ViewShot
-                  ref={viewShotRef}
-                  options={{ format: 'png', quality: 1 }}
-                  style={activeTab === 'stickers' ? styles.captureSticker : styles.captureCard}
-                >
-                  {activeTab === 'stickers' ? (
-                    <SelectedStickerComponent data={cardData} selectedSticker={selectedSticker} />
-                  ) : (
-                    <SelectedCardComponent data={cardData} selectedCard={selectedCard} />
-                  )}
-                </ViewShot>
-              </View>
-            )}
-          </View>
-        </Animated.View>
-      </View>
-    </Modal>
-  );
-}
-
-// ─── Hidden component resolvers for ViewShot capture ─────────
-function SelectedCardComponent({ data, selectedCard }: { data: ShareCardData; selectedCard: CardTemplateId }) {
-  const entry = CARD_TEMPLATES.find((c) => c.id === selectedCard) || CARD_TEMPLATES[0];
-  const Component = entry.Component;
-  return <Component data={data} />;
-}
-
-function SelectedStickerComponent({ data, selectedSticker }: { data: ShareCardData; selectedSticker: StickerTemplateId }) {
-  const entry = STICKER_TEMPLATES.find((s) => s.id === selectedSticker) || STICKER_TEMPLATES[0];
-  const Component = entry.Component;
-  return <Component data={data} />;
-}
-
-// ─── Stickers Tab ─────────────────────────────────────────────
-interface StickersTabProps {
-  data: ShareCardData;
-  selectedSticker: StickerTemplateId;
-  onSelectSticker: (id: StickerTemplateId) => void;
-  onLongPress: () => void;
-  onSave: () => void;
-  onShare: () => void;
-}
-
-function StickersTab({
-  data,
-  selectedSticker,
-  onSelectSticker,
-  onLongPress,
-  onSave,
-  onShare,
-}: StickersTabProps) {
-  return (
-    <ScrollView
-      style={styles.scrollContent}
-      contentContainerStyle={styles.scrollContentInner}
-      showsVerticalScrollIndicator={false}
-      bounces={false}
-      nestedScrollEnabled={true}
-    >
-      {/* Hint text */}
-      <View style={styles.hintRow}>
-        <Text style={styles.hintText}>Pressione e segure para copiar</Text>
-      </View>
-
-      {/* Stickers grid */}
-      <View style={styles.stickerGrid}>
-        {STICKER_TEMPLATES.map((item) => (
-          <TouchableOpacity
-            key={item.id}
-            style={[
-              styles.stickerThumb,
-              selectedSticker === item.id && styles.stickerThumbActive,
-            ]}
-            onPress={() => onSelectSticker(item.id)}
-            onLongPress={onLongPress}
-            delayLongPress={500}
-            accessibilityRole="button"
-            accessibilityLabel={item.label}
-          >
-            <View style={styles.stickerThumbInner}>
-              <item.Component data={data} />
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Actions */}
-      <View style={styles.actionsRow}>
-        <TouchableOpacity
-          style={styles.saveButton}
-          onPress={onSave}
-          accessibilityRole="button"
-          accessibilityLabel="Salvar no dispositivo"
-        >
-          <Ionicons name="save-outline" size={24} color="#0E0E1F" />
-          <Text style={styles.saveButtonText}>Salvar no dispositivo</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={{ height: 30 }} />
-    </ScrollView>
-  );
-}
-
-// ─── Cards Tab ────────────────────────────────────────────────
-interface CardsTabProps {
-  data: ShareCardData;
-  selectedCard: CardTemplateId;
-  onSelectCard: (id: CardTemplateId) => void;
-  cardPages: typeof CARD_TEMPLATES[number][][];
-  onSave: () => void;
-  onShare: () => void;
-}
-
-function CardsTab({
-  data,
-  selectedCard,
-  onSelectCard,
-  cardPages,
-  onSave,
-  onShare,
-}: CardsTabProps) {
-  const [currentPage, setCurrentPage] = useState(0);
-  const carouselWidth = SCREEN_WIDTH - 32; // modal horizontal padding
+  const handleShareMore = useCallback(async () => {
+    const uri = await captureCurrent();
+    if (uri) await openSystemShareSheet(uri);
+  }, [captureCurrent]);
 
   const handleScroll = useCallback(
     (event: any) => {
       const offsetX = event.nativeEvent.contentOffset.x;
-      const page = Math.round(offsetX / carouselWidth);
-      setCurrentPage(page);
+      const page = Math.round(offsetX / SCREEN_WIDTH);
+      const next = cards[page];
+      if (next && next.id !== selectedCard) setSelectedCard(next.id);
     },
-    [carouselWidth]
+    [cards, selectedCard, setSelectedCard],
   );
 
+  const onBodyLayout = useCallback((e: LayoutChangeEvent) => {
+    setBodyHeight(e.nativeEvent.layout.height);
+  }, []);
+
   return (
-    <ScrollView
-      style={styles.scrollContent}
-      contentContainerStyle={styles.scrollContentInner}
-      showsVerticalScrollIndicator={false}
-      bounces={false}
-      nestedScrollEnabled={true}
+    <Modal
+      visible={visible}
+      animationType="slide"
+      onRequestClose={handleClose}
+      statusBarTranslucent
+      presentationStyle="overFullScreen"
+      transparent
     >
-      {/* Cards carousel */}
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={handleClose}
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Voltar"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Ionicons name="chevron-back" size={26} color={colors.textLight} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Compartilhar treino</Text>
+          <View style={styles.backBtn} />
+        </View>
+
+        {/* Body */}
+        <View style={styles.body} onLayout={onBodyLayout}>
+          {isLoading ? (
+            <View style={styles.center}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.loadingText}>Carregando dados...</Text>
+            </View>
+          ) : error ? (
+            <View style={styles.center}>
+              <Ionicons name="alert-circle" size={40} color={colors.error} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : cardData && bodyHeight > 0 ? (
+            <CarouselBody
+              cards={cards}
+              data={cardData}
+              currentIndex={currentIndex}
+              onScroll={handleScroll}
+              carouselRef={carouselRef}
+              viewShotRef={viewShotRef}
+              isCapturing={isCapturing}
+              bodyHeight={bodyHeight}
+            />
+          ) : null}
+        </View>
+
+        {/* Bottom action bar */}
+        <View style={styles.actionBar}>
+          <Text style={styles.actionBarLabel}>Compartilhar com</Text>
+          <View style={styles.actionRow}>
+            <ActionButton
+              label="Stories"
+              icon={<Ionicons name="logo-instagram" size={28} color={colors.textLight} />}
+              onPress={handleShareStories}
+              disabled={!cardData || isCapturing}
+            />
+            <ActionButton
+              label="Clipboard"
+              icon={<MaterialCommunityIcons name="clipboard-outline" size={28} color={colors.textLight} />}
+              onPress={handleClipboard}
+              disabled={!cardData || isCapturing}
+            />
+            <ActionButton
+              label="Download"
+              icon={<MaterialCommunityIcons name="download-circle-outline" size={28} color={colors.textLight} />}
+              onPress={handleDownload}
+              disabled={!cardData || isCapturing}
+            />
+            <ActionButton
+              label="Mais"
+              icon={<Ionicons name="share-social-outline" size={28} color={colors.textLight} />}
+              onPress={handleShareMore}
+              disabled={!cardData || isCapturing}
+            />
+          </View>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+interface CarouselBodyProps {
+  cards: CardEntry[];
+  data: ShareCardData;
+  currentIndex: number;
+  onScroll: (e: any) => void;
+  carouselRef: React.RefObject<FlatList<CardEntry> | null>;
+  viewShotRef: React.RefObject<ViewShot | null>;
+  isCapturing: boolean;
+  bodyHeight: number;
+}
+
+function CarouselBody({
+  cards,
+  data,
+  currentIndex,
+  onScroll,
+  carouselRef,
+  viewShotRef,
+  isCapturing,
+  bodyHeight,
+}: CarouselBodyProps) {
+  const ActiveComponent = cards[currentIndex]?.Component ?? cards[0]?.Component;
+
+  // Available area for the preview within each carousel page
+  const availableW = SCREEN_WIDTH - PREVIEW_HORIZONTAL_PADDING * 2;
+  const dotsAndScrollMargin = 56; // dots row + breathing room
+  const availableH = Math.max(bodyHeight - dotsAndScrollMargin - PREVIEW_VERTICAL_PADDING * 2, 200);
+
+  const scaleW = availableW / CARD_WIDTH;
+  const scaleH = availableH / CARD_HEIGHT;
+  const scale = Math.min(scaleW, scaleH, 1);
+  const renderedW = CARD_WIDTH * scale;
+  const renderedH = CARD_HEIGHT * scale;
+
+  return (
+    <View style={styles.bodyInner}>
       <FlatList
-        data={cardPages}
+        ref={carouselRef}
+        data={cards}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        keyExtractor={(_, i) => `card-page-${i}`}
-        onMomentumScrollEnd={handleScroll}
-        scrollEnabled={true}
-        nestedScrollEnabled={true}
-        style={styles.carousel}
-        renderItem={({ item: page }) => (
-          <View style={[styles.carouselPage, { width: carouselWidth }]}>
-            {page.map((entry) => (
-              <TouchableOpacity
-                key={entry.id}
-                style={[
-                  styles.cardThumb,
-                  selectedCard === entry.id && styles.cardThumbActive,
-                ]}
-                onPress={() => onSelectCard(entry.id)}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel={entry.label}
-              >
-                <View style={styles.cardThumbContent}>
-                  <entry.Component data={data} />
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
+        keyExtractor={(item) => item.id}
+        onMomentumScrollEnd={onScroll}
+        renderItem={({ item }) => (
+          <ScrollView
+            style={{ width: SCREEN_WIDTH }}
+            contentContainerStyle={styles.pageScroll}
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+            bounces
+          >
+            <CardPreview renderedW={renderedW} renderedH={renderedH} scale={scale}>
+              <item.Component data={data} />
+            </CardPreview>
+          </ScrollView>
         )}
+        getItemLayout={(_, index) => ({
+          length: SCREEN_WIDTH,
+          offset: SCREEN_WIDTH * index,
+          index,
+        })}
       />
 
       {/* Pagination dots */}
-      <View style={styles.paginationDots}>
-        {cardPages.map((_, i) => (
+      <View style={styles.dotsRow}>
+        {cards.map((c, i) => (
           <View
-            key={`dot-${i}`}
-            style={[
-              styles.dot,
-              currentPage === i && styles.dotActive,
-            ]}
+            key={c.id}
+            style={[styles.dot, i === currentIndex && styles.dotActive]}
           />
         ))}
       </View>
 
-      {/* Share options row */}
-      <View style={styles.shareOptionsRow}>
-        <ShareOption
-          icon="logo-instagram"
-          label="Story"
-          onPress={onShare}
-        />
-        <ShareOption
-          icon="logo-whatsapp"
-          label="Whatsapp"
-          onPress={onShare}
-        />
-        <ShareOptionCustom
-          iconName="message-processing"
-          label="Mensagem"
-          onPress={onShare}
-        />
-        <ShareOption
-          icon="chatbubble-ellipses"
-          label="Messenger"
-          onPress={onShare}
-        />
-        <ShareOption
-          icon="ellipsis-horizontal-circle"
-          label="Mais"
-          onPress={onShare}
-        />
-      </View>
+      {/* Hidden capture surface — full size, off-screen */}
+      {ActiveComponent && (
+        <View style={styles.offScreen} pointerEvents="none">
+          <ViewShot
+            ref={viewShotRef}
+            options={{ format: 'png', quality: 1, result: 'tmpfile' }}
+            style={styles.captureSurface}
+          >
+            <ActiveComponent data={data} />
+          </ViewShot>
+        </View>
+      )}
 
-      {/* Save button */}
-      <View style={styles.actionsRow}>
-        <TouchableOpacity
-          style={styles.saveButton}
-          onPress={onSave}
-          accessibilityRole="button"
-          accessibilityLabel="Salvar no dispositivo"
-        >
-          <Ionicons name="save-outline" size={24} color="#0E0E1F" />
-          <Text style={styles.saveButtonText}>Salvar no dispositivo</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={{ height: 30 }} />
-    </ScrollView>
+      {isCapturing && (
+        <View style={styles.captureOverlay} pointerEvents="none">
+          <ActivityIndicator size="small" color={colors.primary} />
+        </View>
+      )}
+    </View>
   );
 }
 
-// ─── Share Option Button ──────────────────────────────────────
-function ShareOption({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
+interface CardPreviewProps {
+  children: React.ReactNode;
+  renderedW: number;
+  renderedH: number;
+  scale: number;
+}
+
+function CardPreview({ children, renderedW, renderedH, scale }: CardPreviewProps) {
+  return (
+    <View
+      style={[
+        styles.previewFrame,
+        {
+          width: renderedW,
+          height: renderedH,
+        },
+      ]}
+    >
+      <CheckerBackground width={renderedW} height={renderedH} />
+      <View
+        style={{
+          width: CARD_WIDTH,
+          height: CARD_HEIGHT,
+          position: 'absolute',
+          left: -(CARD_WIDTH - renderedW) / 2,
+          top: -(CARD_HEIGHT - renderedH) / 2,
+          transform: [{ scale }],
+        }}
+      >
+        {children}
+      </View>
+    </View>
+  );
+}
+
+function CheckerBackground({ width, height }: { width: number; height: number }) {
+  const cell = 14;
+  const cols = Math.ceil(width / cell);
+  const rows = Math.ceil(height / cell);
+  const cells: React.ReactNode[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const dark = (r + c) % 2 === 0;
+      cells.push(
+        <View
+          key={`${r}-${c}`}
+          style={{
+            position: 'absolute',
+            top: r * cell,
+            left: c * cell,
+            width: cell,
+            height: cell,
+            backgroundColor: dark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.13)',
+          }}
+        />,
+      );
+    }
+  }
+  return <View style={StyleSheet.absoluteFill}>{cells}</View>;
+}
+
+interface ActionButtonProps {
   label: string;
+  icon: React.ReactNode;
   onPress: () => void;
-}) {
+  disabled?: boolean;
+}
+
+function ActionButton({ label, icon, onPress, disabled }: ActionButtonProps) {
   return (
     <TouchableOpacity
-      style={styles.shareOption}
+      style={[styles.actionBtn, disabled && styles.actionBtnDisabled]}
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <View style={styles.shareOptionIcon}>
-        <Ionicons name={icon} size={28} color="#FFFFFF" />
-      </View>
-      <Text style={styles.shareOptionLabel}>{label}</Text>
+      <View style={styles.actionIcon}>{icon}</View>
+      <Text style={styles.actionLabel}>{label}</Text>
     </TouchableOpacity>
   );
 }
 
-function ShareOptionCustom({
-  iconName,
-  label,
-  onPress,
-}: {
-  iconName: string;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity
-      style={styles.shareOption}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      <View style={styles.shareOptionIcon}>
-        <MaterialCommunityIcons name={iconName as any} size={28} color="#FFFFFF" />
-      </View>
-      <Text style={styles.shareOptionLabel}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
-// ─── Styles ───────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  // Overlay
-  overlay: {
+  safe: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'flex-end',
+    backgroundColor: '#0E0E1F',
   },
-
-  // Modal container (bottom sheet)
-  modalContainer: {
-    backgroundColor: '#1C1C2E',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    overflow: 'hidden',
-    height: MODAL_HEIGHT,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 20,
-  },
-  modalInner: {
-    flex: 1,
-  },
-
-  // Drag handle
-  dragHandleArea: {
-    paddingVertical: 8,
-    alignItems: 'center',
-    backgroundColor: '#1C1C2E',
-  },
-  dragHandle: {
-    width: 40,
-    height: 5,
-    backgroundColor: 'rgba(235, 235, 245, 0.3)',
-    borderRadius: 3,
-    alignSelf: 'center',
-    marginTop: 4,
-    marginBottom: 8,
-  },
-
-  // Header row
-  headerRow: {
+  header: {
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  tabsContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#15152A',
-    borderRadius: 20,
-    padding: 3,
-    flex: 0,
-    alignSelf: 'center',
-  },
-  tabPill: {
-    paddingHorizontal: 20,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  tabPillActive: {
-    backgroundColor: '#0E0E1F',
+    paddingHorizontal: spacing.base,
+    backgroundColor: '#1C1C2E',
     shadowColor: '#000',
-    shadowOffset: { width: 1, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 4,
   },
-  tabText: {
-    fontFamily: 'Inter',
-    fontWeight: '600',
-    fontSize: 10,
-    color: 'rgba(235, 235, 245, 0.6)',
-  },
-  tabTextActive: {
-    color: '#00D4FF',
-  },
-  closeBtn: {
-    width: 24,
-    height: 24,
+  backBtn: {
+    width: 32,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
-
-  // Loading
-  loadingContainer: {
+  headerTitle: {
+    color: colors.textLight,
+    fontSize: typography.fontSizes.xl,
+    fontWeight: typography.fontWeights.semibold,
+    letterSpacing: -0.3,
+  },
+  center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+    gap: spacing.md,
   },
   loadingText: {
-    color: 'rgba(235, 235, 245, 0.6)',
-    fontSize: 14,
+    color: colors.textSecondary,
+    fontSize: typography.fontSizes.md,
   },
   errorText: {
     color: colors.error,
-    fontSize: 14,
+    fontSize: typography.fontSizes.md,
     textAlign: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.xl,
   },
-
-  // Scroll content
-  scrollContent: {
+  body: {
     flex: 1,
-    paddingHorizontal: 16,
   },
-  scrollContentInner: {
-    paddingBottom: 20,
+  bodyInner: {
+    flex: 1,
+  },
+  pageScroll: {
     flexGrow: 1,
-  },
-
-  // ─── Stickers ───────────────────────
-  hintRow: {
     alignItems: 'center',
-    paddingVertical: 12,
+    justifyContent: 'center',
+    paddingVertical: PREVIEW_VERTICAL_PADDING,
+    paddingHorizontal: PREVIEW_HORIZONTAL_PADDING,
   },
-  hintText: {
-    fontFamily: 'Inter',
-    fontWeight: '500',
-    fontSize: 11,
-    color: 'rgba(235, 235, 245, 0.6)',
-  },
-
-  stickerGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 15,
-    justifyContent: 'flex-start',
-  },
-  stickerThumb: {
-    width: STICKER_THUMB_SIZE,
-    height: STICKER_THUMB_SIZE,
-    borderRadius: 15,
-    backgroundColor: 'rgba(235, 235, 245, 0.1)',
-    borderWidth: 0.6,
-    borderColor: 'rgba(235, 235, 245, 0.6)',
+  previewFrame: {
+    borderRadius: borderRadius.xl,
     overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.25,
-    shadowRadius: 1,
-    elevation: 2,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
   },
-  stickerThumbActive: {
-    borderColor: '#00D4FF',
-    borderWidth: 2,
-  },
-  stickerThumbInner: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transform: [{ scale: 0.65 }],
-  },
-
-  // ─── Cards ──────────────────────────
-  carousel: {
-    flexGrow: 0,
-  },
-  carouselPage: {
+  dotsRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 15,
-    paddingVertical: 14,
-  },
-  cardThumb: {
-    width: CARD_THUMB_WIDTH,
-    height: CARD_THUMB_HEIGHT,
-    borderRadius: 15,
-    borderWidth: 0.6,
-    borderColor: 'rgba(235, 235, 245, 0.6)',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.25,
-    shadowRadius: 1,
-    elevation: 2,
-  },
-  cardThumbActive: {
-    borderColor: '#00D4FF',
-    borderWidth: 2,
-  },
-  cardThumbContent: {
-    flex: 1,
-    transform: [{ scale: 0.42 }],
-    width: 300,
-    height: 400,
-    alignSelf: 'center',
-  },
-
-  // Pagination
-  paginationDots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 14,
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
   },
   dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: 'rgba(235, 235, 245, 0.1)',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(235, 235, 245, 0.2)',
   },
   dotActive: {
-    backgroundColor: '#00D4FF',
+    backgroundColor: colors.primary,
+    width: 22,
   },
-
-  // Share options row
-  shareOptionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 16,
-  },
-  shareOption: {
-    alignItems: 'center',
-    width: 50,
-    gap: 8,
-  },
-  shareOptionIcon: {
-    width: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shareOptionLabel: {
-    fontFamily: 'Inter',
-    fontWeight: '500',
-    fontSize: 8,
-    color: '#EBEBF5',
-    textAlign: 'center',
-  },
-
-  // Off-screen ViewShot for capture
-  offScreenCapture: {
+  offScreen: {
     position: 'absolute',
     left: -9999,
     top: 0,
   },
-  captureCard: {
-    width: 300,
-    height: 400,
+  captureSurface: {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
     backgroundColor: 'transparent',
   },
-  captureSticker: {
-    width: 140,
-    height: 140,
-    backgroundColor: 'transparent',
+  captureOverlay: {
+    position: 'absolute',
+    top: spacing.base,
+    right: spacing.base,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: borderRadius.full,
+    padding: spacing.sm,
   },
-
-  // Actions
-  actionsRow: {
-    paddingVertical: 14,
-    alignItems: 'center',
+  actionBar: {
+    backgroundColor: '#1C1C2E',
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
   },
-  saveButton: {
+  actionBarLabel: {
+    color: colors.textLight,
+    fontSize: typography.fontSizes.md,
+    fontWeight: typography.fontWeights.semibold,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  actionRow: {
     flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingHorizontal: spacing.base,
+  },
+  actionBtn: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    minWidth: 60,
+  },
+  actionBtnDisabled: {
+    opacity: 0.4,
+  },
+  actionIcon: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#00D4FF',
-    paddingVertical: 10,
-    paddingHorizontal: 40,
-    borderRadius: 20,
-    shadowColor: '#00D4FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 6,
   },
-  saveButtonText: {
-    fontFamily: 'Inter',
-    fontWeight: '600',
-    fontSize: 14,
-    color: '#0E0E1F',
+  actionLabel: {
+    color: 'rgba(235, 235, 245, 0.65)',
+    fontSize: typography.fontSizes.sm,
+    fontWeight: typography.fontWeights.medium,
+    letterSpacing: 0.2,
   },
 });
