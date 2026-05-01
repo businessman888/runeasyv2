@@ -351,6 +351,11 @@ export class TrainingService {
 
     /**
      * Get workouts for a specific month
+     *
+     * Enriches each completed workout with `feedback_id` (when an
+     * `ai_feedbacks` row exists for the linked activity). The mobile
+     * Calendar uses this id to route plan workouts directly to the
+     * CoachAnalysis screen instead of opening the upcoming-workout modal.
      */
     async getWorkouts(userId: string, startDate: string, endDate: string) {
         const { data, error } = await this.supabaseService
@@ -362,7 +367,29 @@ export class TrainingService {
             .order('scheduled_date', { ascending: true });
 
         if (error) throw error;
-        return data;
+
+        const activityIds = (data || [])
+            .map((w: any) => w.activity_id)
+            .filter((id: string | null): id is string => Boolean(id));
+
+        if (activityIds.length === 0) {
+            return (data || []).map((w: any) => ({ ...w, feedback_id: null }));
+        }
+
+        const { data: feedbacks } = await this.supabaseService
+            .from('ai_feedbacks')
+            .select('id, activity_id')
+            .in('activity_id', activityIds);
+
+        const feedbackByActivity = new Map<string, string>();
+        (feedbacks || []).forEach((f: any) => {
+            if (f.activity_id) feedbackByActivity.set(f.activity_id, f.id);
+        });
+
+        return (data || []).map((w: any) => ({
+            ...w,
+            feedback_id: w.activity_id ? feedbackByActivity.get(w.activity_id) ?? null : null,
+        }));
     }
 
     /**
@@ -813,10 +840,32 @@ export class TrainingService {
 
         if (workoutsError) throw workoutsError;
 
-        // Create a map of workouts by date
+        // Resolve feedback_id by activity_id so the schedule's primary workout
+        // entry can route to CoachAnalysis when completed.
+        const activityIds = (workouts || [])
+            .map((w: any) => w.activity_id)
+            .filter((id: string | null): id is string => Boolean(id));
+        const feedbackByActivity = new Map<string, string>();
+        if (activityIds.length > 0) {
+            const { data: feedbacks } = await this.supabaseService
+                .from('ai_feedbacks')
+                .select('id, activity_id')
+                .in('activity_id', activityIds);
+            (feedbacks || []).forEach((f: any) => {
+                if (f.activity_id) feedbackByActivity.set(f.activity_id, f.id);
+            });
+        }
+
+        // Create a map of workouts by date. When multiple workouts exist for
+        // the same day (plan + manual + free), prefer the plan workout as the
+        // schedule's primary entry — the mobile Calendar fetches the full
+        // workouts array separately to render every card.
         const workoutsByDate = new Map<string, any>();
         for (const workout of workouts || []) {
-            workoutsByDate.set(workout.scheduled_date, workout);
+            const existing = workoutsByDate.get(workout.scheduled_date);
+            if (!existing || (existing.source !== 'plan' && workout.source === 'plan')) {
+                workoutsByDate.set(workout.scheduled_date, workout);
+            }
         }
 
         // Generate schedule for each day in range
@@ -871,6 +920,10 @@ export class TrainingService {
                         title: workout.title ?? null,
                         target_pace_seconds: workout.target_pace_seconds ?? null,
                         target_duration_seconds: workout.target_duration_seconds ?? null,
+                        activity_id: workout.activity_id ?? null,
+                        feedback_id: workout.activity_id
+                            ? feedbackByActivity.get(workout.activity_id) ?? null
+                            : null,
                     },
                     is_today: isToday,
                     is_past: isPast,
@@ -944,6 +997,8 @@ export interface ScheduleDay {
         title: string | null;
         target_pace_seconds: number | null;
         target_duration_seconds: number | null;
+        activity_id: string | null;
+        feedback_id: string | null;
     } | null;
     is_today: boolean;
     is_past: boolean;

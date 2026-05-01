@@ -9,10 +9,7 @@ import {
     Image,
     Animated,
     Modal,
-    Platform,
     Dimensions,
-    Linking,
-    Alert,
     PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -107,6 +104,19 @@ function LockIcon({ size = 60, color = '#00D4FF' }: { size?: number; color?: str
     return <Ionicons name="lock-closed" size={size} color={color} />;
 }
 
+/**
+ * Format raw `distance_km` for display.
+ *
+ * The native tracker persists distance as a float computed from GPS samples,
+ * so values like `0.299992798064442` are routine. Rendering them verbatim
+ * blows out the layout and reads as a bug to users — round to 2 decimals
+ * and strip trailing zeros so the cards show "0.3", "8.5", "21.1".
+ */
+const formatKm = (km: number | null | undefined): string => {
+    if (typeof km !== 'number' || !isFinite(km)) return '0';
+    return Number(km.toFixed(2)).toString();
+};
+
 // Workout data interface
 interface WorkoutBlock {
     id: string;
@@ -129,46 +139,8 @@ interface WorkoutData {
     insight: string;
 }
 
-// Mock workout data for testing modal
-const mockWorkoutData: WorkoutData = {
-    id: '1',
-    title: 'Intervalados - 8x400m',
-    distance: '8.5 km',
-    duration: '55 min',
-    rpe: 'RPE 7/10',
-    blocks: [
-        {
-            id: '1',
-            title: 'Aquecimento',
-            subtitle: 'Bloco 01',
-            type: 'warmup',
-            duration: '10 min',
-            description: 'Trote leve z1/z2 para ativar',
-        },
-        {
-            id: '2',
-            title: 'Tiros de 400m',
-            subtitle: 'Bloco 02 - PRINCIPAL',
-            type: 'main',
-            duration: '8x400m',
-            description: 'Ritmo forte, focado na técnica',
-            pace: '3:45/km',
-            recovery: 'Recuperação 1:30 min\nTrote ou caminhada leve',
-        },
-        {
-            id: '3',
-            title: 'Desaquecimento',
-            subtitle: 'Bloco 03',
-            type: 'cooldown',
-            duration: '10 min',
-            description: 'Trote muito leve + alongamento estático.',
-        },
-    ],
-    insight: 'Você descansou bem ontem. Sua prontidão está alta. Tente focar em aumentar a cadência nos últimos 2 tiros quando o cansaço bater.',
-};
-
 export function CalendarScreen({ navigation }: any) {
-    const { workouts, fetchWorkouts, upcomingWorkouts, fetchUpcomingWorkouts, plan, fetchPlan, generationStatus, checkPlanStatus, schedule, today, nextWorkout: storeNextWorkout, fetchSchedule } = useTrainingStore();
+    const { workouts, fetchWorkouts, fetchUpcomingWorkouts, plan, fetchPlan, generationStatus, checkPlanStatus, schedule, fetchSchedule } = useTrainingStore();
     const { summary, fetchSummary } = useStatsStore();
     const [selectedDate, setSelectedDate] = React.useState(new Date().getDate());
     const [currentMonth, setCurrentMonth] = React.useState(new Date());
@@ -177,14 +149,17 @@ export function CalendarScreen({ navigation }: any) {
     // Modal states
     const [modalVisible, setModalVisible] = React.useState(false);
     const [selectedWorkout, setSelectedWorkout] = React.useState<WorkoutData | null>(null);
+    /**
+     * Raw workout backing the open modal — needed by the start button so it
+     * can read source/instructions/target_pace/etc. for the *exact* workout
+     * the user tapped (the same date may now hold plan + manual + free).
+     */
+    const [selectedRawWorkout, setSelectedRawWorkout] = React.useState<any | null>(null);
     const [showStartButton, setShowStartButton] = React.useState(false);
-    const lastClickedDate = React.useRef<number | null>(null);
-    const lastClickTime = React.useRef<number>(0);
     const modalSlideAnim = React.useRef(new Animated.Value(0)).current;
     const panY = React.useRef(new Animated.Value(0)).current;
     const pollingInterval = React.useRef<NodeJS.Timeout | null>(null);
 
-    const DOUBLE_CLICK_DELAY = 400; // ms
     const POLLING_INTERVAL = 3000; // 3 seconds
     const SCREEN_HEIGHT = Dimensions.get('window').height;
     const DISMISS_THRESHOLD = 150;
@@ -305,7 +280,7 @@ export function CalendarScreen({ navigation }: any) {
             title: segment.type === 'warmup' ? 'Aquecimento' : segment.type === 'cooldown' ? 'Desaquecimento' : 'Principal',
             subtitle: `Bloco ${String(index + 1).padStart(2, '0')}${segment.type === 'main' ? ' - PRINCIPAL' : ''}`,
             type: segment.type,
-            duration: `${segment.distance_km} km`,
+            duration: `${formatKm(segment.distance_km)} km`,
             description: segment.type === 'warmup'
                 ? 'Trote leve z1/z2 para ativar'
                 : segment.type === 'cooldown'
@@ -322,56 +297,40 @@ export function CalendarScreen({ navigation }: any) {
             'intervals': 'Intervalados',
             'tempo': 'Tempo Run',
             'recovery': 'Recuperação',
+            'free_run': 'Corrida Livre',
         };
+
+        const distanceLabel = formatKm(workout.distance_km);
 
         return {
             id: workout.id,
-            title: `${workoutTypeLabels[workout.type] || workout.type} - ${workout.distance_km}km`,
-            distance: `${workout.distance_km} km`,
-            duration: `${Math.round(workout.distance_km * 6)} min`, // Estimate based on 6 min/km
+            title: `${workoutTypeLabels[workout.type] || workout.type} - ${distanceLabel}km`,
+            distance: `${distanceLabel} km`,
+            duration: `${Math.round((workout.distance_km || 0) * 6)} min`, // Estimate based on 6 min/km
             rpe: 'RPE 6/10',
             blocks,
             insight: workout.objective || 'Mantenha o foco e aproveite o treino!'
         };
     };
 
-    // Helper: Find workout for a specific day
-    const getWorkoutForDay = (day: number) => {
-        const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        return workouts.find(w => w.scheduled_date === dateStr);
+    // Helper: All workouts scheduled for a given day, deterministic order
+    // (plan > manual > free). The same day can now legitimately hold more
+    // than one entry (e.g. user followed today's plan workout, then logged
+    // a free run later in the afternoon), so the calendar renders one card
+    // per workout instead of collapsing to a single primary entry.
+    const getWorkoutsForDayStr = (dateStr: string) => {
+        const sourceRank = (s: string | undefined) =>
+            s === 'plan' ? 0 : s === 'manual' ? 1 : s === 'free' ? 2 : 3;
+        return workouts
+            .filter(w => w.scheduled_date === dateStr)
+            .sort((a, b) => sourceRank(a.source) - sourceRank(b.source));
     };
 
-    // Handle day press with double-click detection
+    // Day press: just select the day. The previous double-click-opens-modal
+    // shortcut was removed — modal entry is now exclusively via the
+    // "Ver detalhes do treino" button on a pending workout card.
     const handleDayPress = (day: number) => {
-        const now = Date.now();
-        const timeDiff = now - lastClickTime.current;
-
-        if (lastClickedDate.current === day && timeDiff < DOUBLE_CLICK_DELAY) {
-            // Double click detected - open modal without start button
-            openWorkoutModal(day, false);
-        } else {
-            // Single click - select the day
-            setSelectedDate(day);
-        }
-
-        lastClickedDate.current = day;
-        lastClickTime.current = now;
-    };
-
-    // Open workout modal
-    const openWorkoutModal = (day: number, withStartButton: boolean = false) => {
-        const workout = getWorkoutForDay(day);
-        if (workout) {
-            setSelectedWorkout(transformWorkoutToUI(workout));
-            setShowStartButton(withStartButton);
-            setModalVisible(true);
-            Animated.spring(modalSlideAnim, {
-                toValue: 1,
-                useNativeDriver: true,
-                tension: 65,
-                friction: 11,
-            }).start();
-        }
+        setSelectedDate(day);
     };
 
     // Close modal
@@ -383,80 +342,64 @@ export function CalendarScreen({ navigation }: any) {
         }).start(() => {
             setModalVisible(false);
             setSelectedWorkout(null);
+            setSelectedRawWorkout(null);
             panY.setValue(0); // Reset pan position
             setShowStartButton(false);
         });
     };
 
-    // Handle next workout card press (without start button) - shows tomorrow's event
-    const handleNextWorkoutPress = () => {
-        const tomorrowEntry = getTomorrowEntry();
+    /**
+     * Decide what happens when the user taps "Ver detalhes do treino" on a
+     * workout card.
+     *
+     * - Completed plan workout with feedback → CoachAnalysisScreen
+     * - Completed manual / free workout (or plan whose feedback hasn't
+     *   generated yet) → RunSummaryScreen
+     * - Pending workout → upcoming-workout modal (with the start button only
+     *   for today's pending plan/manual workouts)
+     */
+    const handleWorkoutCardPress = (workout: any) => {
+        const status = workout?.status;
+        const source: 'plan' | 'manual' | 'free' | undefined = workout?.source;
 
-        // If tomorrow is a workout day, find the full workout and show modal
-        if (tomorrowEntry?.type === 'workout' && tomorrowEntry.workout) {
-            const fullWorkout = workouts.find(w => w.id === tomorrowEntry.workout?.id);
-            if (fullWorkout) {
-                setSelectedWorkout(transformWorkoutToUI(fullWorkout));
-                setShowStartButton(false);
-                setModalVisible(true);
-                Animated.spring(modalSlideAnim, {
-                    toValue: 1,
-                    useNativeDriver: true,
-                    tension: 65,
-                    friction: 11,
-                }).start();
+        if (status === 'completed') {
+            if (source === 'plan' && workout.feedback_id) {
+                navigation.navigate('CoachAnalysis', {
+                    feedbackId: workout.feedback_id,
+                    activityId: workout.activity_id ?? undefined,
+                });
+                return;
             }
+
+            const mode = source === 'manual' ? 'manual'
+                : source === 'plan' ? 'planned'
+                    : 'free';
+            navigation.navigate('RunSummary', {
+                workoutId: workout.id,
+                distance: 0,
+                timeMs: 0,
+                routeCoordinates: [],
+                routePoints: [],
+                savedLocally: false,
+                mode,
+                workoutTitle: workout.title ?? undefined,
+                targetPaceSeconds: workout.target_pace_seconds ?? undefined,
+                targetDistanceKm: workout.distance_km ?? undefined,
+            });
+            return;
         }
-        // If tomorrow is recovery, the card display handles it (no modal needed for recovery)
-    };
 
-    // Handle selected date workout card press
-    const handleSelectedWorkoutPress = () => {
-        const selectedDateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`;
-        const scheduleDay = schedule.find(s => s.date === selectedDateStr);
+        // Pending → preview modal. Start button only for today's plan/manual
+        // workouts (free runs aren't started from the calendar).
+        const todayDate = new Date();
+        const selectedDateObj = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), selectedDate);
+        todayDate.setHours(0, 0, 0, 0);
+        selectedDateObj.setHours(0, 0, 0, 0);
+        const isToday = selectedDateObj.getTime() === todayDate.getTime();
 
-        if (scheduleDay?.workout) {
-            // Find full workout data from workouts array
-            const fullWorkout = workouts.find(w => w.id === scheduleDay.workout?.id);
-            if (fullWorkout) {
-                setSelectedWorkout(transformWorkoutToUI(fullWorkout));
-                // Show start button only if selected date is today and workout is pending
-                const todayDate = new Date();
-                const selectedDateObj = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), selectedDate);
-                todayDate.setHours(0, 0, 0, 0);
-                selectedDateObj.setHours(0, 0, 0, 0);
-                const isToday = selectedDateObj.getTime() === todayDate.getTime();
-                setShowStartButton(isToday && scheduleDay.status === 'pending');
-                setModalVisible(true);
-                Animated.spring(modalSlideAnim, {
-                    toValue: 1,
-                    useNativeDriver: true,
-                    tension: 65,
-                    friction: 11,
-                }).start();
-            }
-        }
-    };
-
-    // Handle today's workout card press (with start button) - kept for backward compatibility
-    const handleTodayWorkoutPress = () => {
-        if (upcomingWorkouts.length > 0) {
-            setSelectedWorkout(transformWorkoutToUI(upcomingWorkouts[0]));
-            setShowStartButton(true);
-            setModalVisible(true);
-            Animated.spring(modalSlideAnim, {
-                toValue: 1,
-                useNativeDriver: true,
-                tension: 65,
-                friction: 11,
-            }).start();
-        }
-    };
-
-    // DEBUG: Force open modal with mock data for testing
-    const handleTestModalPress = () => {
-        setSelectedWorkout(mockWorkoutData);
-        setShowStartButton(true);
+        setSelectedWorkout(transformWorkoutToUI(workout));
+        setSelectedRawWorkout(workout);
+        setShowStartButton(isToday && status === 'pending' && source !== 'free');
         setModalVisible(true);
         Animated.spring(modalSlideAnim, {
             toValue: 1,
@@ -464,6 +407,17 @@ export function CalendarScreen({ navigation }: any) {
             tension: 65,
             friction: 11,
         }).start();
+    };
+
+    // Handle next workout card press — same routing rules as the
+    // selected-day card so a "next" workout that is somehow already
+    // completed (e.g. user re-opens the calendar after finishing) goes
+    // straight to its summary.
+    const handleNextWorkoutPress = () => {
+        const tomorrowEntry = getTomorrowEntry();
+        if (tomorrowEntry?.type !== 'workout' || !tomorrowEntry.workout) return;
+        const fullWorkout = workouts.find(w => w.id === tomorrowEntry.workout?.id);
+        if (fullWorkout) handleWorkoutCardPress(fullWorkout);
     };
 
     const getDaysInMonth = () => {
@@ -505,20 +459,20 @@ export function CalendarScreen({ navigation }: any) {
         return null;
     };
 
-    // Get today's data from API schedule (authoritative source)
-    const todaySchedule = today;
-    const isTodayWithinPlan = todaySchedule?.type !== null && todaySchedule?.type !== undefined;
-    const isTodayRecovery = todaySchedule?.type === 'recovery';
-    const todayWorkout = todaySchedule?.type === 'workout' ? todaySchedule.workout : null;
-
     // Derived: Get schedule for selected date (reactive to selectedDate)
     const getSelectedDateStr = () => {
         return `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`;
     };
     const selectedDateSchedule = schedule.find(s => s.date === getSelectedDateStr()) || null;
     const isSelectedDateRecovery = selectedDateSchedule?.type === 'recovery';
-    const selectedDateWorkout = selectedDateSchedule?.type === 'workout' ? selectedDateSchedule.workout : null;
     const isSelectedDateWithinPlan = selectedDateSchedule?.type !== null && selectedDateSchedule?.type !== undefined;
+    // Every workout the user has logged or planned for the selected date —
+    // the source of truth for the "Treinos do dia" card list. Falls back to
+    // the schedule's primary workout (for plan days that the calendar
+    // hasn't fetched workouts for yet) so we never render an empty section
+    // when there's clearly something planned.
+    const selectedDateWorkouts = getWorkoutsForDayStr(getSelectedDateStr());
+    const selectedDateTotalKm = selectedDateWorkouts.reduce((sum, w) => sum + (w.distance_km || 0), 0);
 
     // Check if selected date is today
     const isSelectedDateToday = () => {
@@ -550,11 +504,6 @@ export function CalendarScreen({ navigation }: any) {
 
     // Get tomorrow's entry
     const tomorrowEntry = getTomorrowEntry();
-
-    // Calculate total volume and frequency
-    const totalVolume = workouts.reduce((sum, w) => sum + (w.distance_km || 0), 0);
-    const completedCount = workouts.filter(w => w.status === 'completed').length;
-    const totalCount = workouts.length;
 
     const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
         'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -732,16 +681,16 @@ export function CalendarScreen({ navigation }: any) {
                                 {!isSelectedDateWithinPlan ? 'Sem Plano Ativo' : isSelectedDateRecovery ? 'Dia de Recuperação' : 'Treinos do dia'}
                             </Text>
                         </View>
-                        {isSelectedDateWithinPlan && !isSelectedDateRecovery && selectedDateWorkout && (
+                        {isSelectedDateWithinPlan && !isSelectedDateRecovery && selectedDateWorkouts.length > 0 && (
                             <View style={styles.totalKm}>
-                                <Text style={styles.totalKmValue}>{selectedDateWorkout?.distance_km || 0} <Text style={styles.totalKmUnit}>km</Text></Text>
+                                <Text style={styles.totalKmValue}>{formatKm(selectedDateTotalKm)} <Text style={styles.totalKmUnit}>km</Text></Text>
                                 <Text style={styles.totalKmLabel}>total</Text>
                             </View>
                         )}
                     </View>
 
                     {/* Recovery Card - Shown when selected date is recovery */}
-                    {isSelectedDateRecovery ? (
+                    {isSelectedDateRecovery && selectedDateWorkouts.length === 0 ? (
                         <View key={`recovery-${getSelectedDateStr()}`} style={styles.recoveryCard}>
                             <View style={styles.recoveryCardHeader}>
                                 <MoonIcon size={48} color="#A78BFA" />
@@ -767,97 +716,114 @@ export function CalendarScreen({ navigation }: any) {
                                 </View>
                             </View>
                         </View>
-                    ) : selectedDateWorkout ? (
-                        /* Workout Detail Card - Shown when selected date has workout */
-                        <View key={`workout-${selectedDateWorkout.id}-${getSelectedDateStr()}`} style={styles.workoutDetailCard}>
-                            {/* Card Top Section */}
-                            <View style={styles.cardTopSection}>
-                                <View style={styles.workoutDetailHeader}>
-                                    <View style={styles.intensityBadge}>
-                                        <Text style={styles.intensityText}>
-                                            {selectedDateWorkout.type === 'intervals' || selectedDateWorkout.type === 'tempo' ? 'ALTA INTENSIDADE' : 'MODERADO'}
-                                        </Text>
-                                    </View>
-                                    {(() => {
-                                        const src = (selectedDateWorkout as any).source as ('plan' | 'manual' | 'free' | undefined);
-                                        if (!src || src === 'plan') {
-                                            return (
+                    ) : selectedDateWorkouts.length > 0 ? (
+                        /**
+                         * One card per workout for the selected date. The same
+                         * day can hold a planned workout, a manually scheduled
+                         * one, and one or more free runs the user logged later
+                         * — each with its own status badge and routing.
+                         */
+                        selectedDateWorkouts.map((w) => {
+                            const labels: Record<string, string> = {
+                                'easy_run': 'Rodagem Leve',
+                                'long_run': 'Longão',
+                                'intervals': 'Intervalados',
+                                'tempo': 'Tempo Run',
+                                'recovery': 'Recuperação',
+                                'free_run': 'Corrida Livre',
+                            };
+                            const distanceLabel = formatKm(w.distance_km);
+                            const titleText = `${labels[w.type] || w.type} - ${distanceLabel}km`;
+                            const intensityText =
+                                w.type === 'intervals' || w.type === 'tempo' ? 'ALTA INTENSIDADE' : 'MODERADO';
+                            const src = (w.source as ('plan' | 'manual' | 'free' | undefined)) ?? 'plan';
+
+                            const statusBadge = (() => {
+                                if (w.status === 'completed') {
+                                    return { color: '#32CD32', label: 'Concluído' };
+                                }
+                                if (w.status === 'missed') {
+                                    return { color: '#FF4444', label: 'Não realizado' };
+                                }
+                                if (w.status === 'skipped') {
+                                    return { color: 'rgba(235,235,245,0.4)', label: 'Ignorado' };
+                                }
+                                return { color: '#FFC107', label: 'Pendente' };
+                            })();
+
+                            return (
+                                <View
+                                    key={`workout-${w.id}-${getSelectedDateStr()}`}
+                                    style={styles.workoutDetailCard}
+                                >
+                                    {/* Card Top Section */}
+                                    <View style={styles.cardTopSection}>
+                                        <View style={styles.workoutDetailHeader}>
+                                            <View style={styles.intensityBadge}>
+                                                <Text style={styles.intensityText}>{intensityText}</Text>
+                                            </View>
+                                            {src === 'plan' ? (
                                                 <View style={[styles.sourceBadge, { borderColor: '#00D4FF' }]}>
                                                     <Ionicons name="flash" size={12} color="#00D4FF" />
                                                     <Text style={[styles.sourceBadgeText, { color: '#00D4FF' }]}>PLANO</Text>
                                                 </View>
-                                            );
-                                        }
-                                        if (src === 'manual') {
-                                            return (
+                                            ) : src === 'manual' ? (
                                                 <View style={[styles.sourceBadge, { borderColor: '#A78BFA' }]}>
                                                     <Ionicons name="create-outline" size={12} color="#A78BFA" />
                                                     <Text style={[styles.sourceBadgeText, { color: '#A78BFA' }]}>MANUAL</Text>
                                                 </View>
-                                            );
-                                        }
-                                        return (
-                                            <View style={[styles.sourceBadge, { borderColor: '#32CD32' }]}>
-                                                <MaterialCommunityIcons name="run" size={12} color="#32CD32" />
-                                                <Text style={[styles.sourceBadgeText, { color: '#32CD32' }]}>LIVRE</Text>
-                                            </View>
-                                        );
-                                    })()}
-                                    <View style={styles.pendingBadge}>
-                                        <View style={styles.pendingDot} />
-                                        <Text style={styles.pendingText}>
-                                            {selectedDateSchedule?.status === 'completed' ? 'Concluído' : 'Pendente'}
-                                        </Text>
-                                    </View>
-                                </View>
-
-                                <View style={styles.workoutDetailBody}>
-                                    <View style={styles.workoutInfo}>
-                                        <Text style={styles.workoutTitle}>
-                                            {(() => {
-                                                const labels: Record<string, string> = {
-                                                    'easy_run': 'Rodagem Leve',
-                                                    'long_run': 'Longão',
-                                                    'intervals': 'Intervalados',
-                                                    'tempo': 'Tempo Run',
-                                                    'recovery': 'Recuperação',
-                                                };
-                                                return `${labels[selectedDateWorkout.type] || selectedDateWorkout.type} - ${selectedDateWorkout.distance_km}km`;
-                                            })()}
-                                        </Text>
-                                        <Text style={styles.workoutDescription}>{selectedDateWorkout.objective || 'Treino do dia'}</Text>
-                                        <View style={styles.workoutMetrics}>
-                                            <View style={styles.metricItem}>
-                                                <TimerIcon size={20} color="#00D4FF" />
-                                                <Text style={styles.metricText}>{Math.round(selectedDateWorkout.distance_km * 6)} min</Text>
-                                            </View>
-                                            <View style={styles.metricItem}>
-                                                <PaceClockIcon size={20} color="#00D4FF" />
-                                                <Text style={styles.metricText}>
-                                                    {selectedDateWorkout.instructions_json?.[0]?.pace_min
-                                                        ? `${Math.floor(selectedDateWorkout.instructions_json[0].pace_min)}:${String(Math.round((selectedDateWorkout.instructions_json[0].pace_min % 1) * 60)).padStart(2, '0')} /km`
-                                                        : '6:00 /km'}
-                                                </Text>
+                                            ) : (
+                                                <View style={[styles.sourceBadge, { borderColor: '#32CD32' }]}>
+                                                    <MaterialCommunityIcons name="run" size={12} color="#32CD32" />
+                                                    <Text style={[styles.sourceBadgeText, { color: '#32CD32' }]}>LIVRE</Text>
+                                                </View>
+                                            )}
+                                            <View style={styles.pendingBadge}>
+                                                <View style={[styles.pendingDot, { backgroundColor: statusBadge.color }]} />
+                                                <Text style={styles.pendingText}>{statusBadge.label}</Text>
                                             </View>
                                         </View>
-                                    </View>
-                                    <Image
-                                        source={{ uri: 'https://images.unsplash.com/photo-1571008887538-b36bb32f4571?w=100&h=100&fit=crop' }}
-                                        style={styles.workoutImage}
-                                    />
-                                </View>
-                            </View>
 
-                            {/* View Details Button - Bottom Section of Card */}
-                            <TouchableOpacity
-                                style={styles.viewDetailsButton}
-                                onPress={handleSelectedWorkoutPress}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={styles.viewDetailsText}>Ver detalhes do treino</Text>
-                                <ArrowRightIcon size={20} color="#FFFFFF" />
-                            </TouchableOpacity>
-                        </View>
+                                        <View style={styles.workoutDetailBody}>
+                                            <View style={styles.workoutInfo}>
+                                                <Text style={styles.workoutTitle}>{titleText}</Text>
+                                                <Text style={styles.workoutDescription}>{w.objective || (src === 'free' ? 'Corrida livre registrada' : 'Treino do dia')}</Text>
+                                                <View style={styles.workoutMetrics}>
+                                                    <View style={styles.metricItem}>
+                                                        <TimerIcon size={20} color="#00D4FF" />
+                                                        <Text style={styles.metricText}>{Math.round((w.distance_km || 0) * 6)} min</Text>
+                                                    </View>
+                                                    <View style={styles.metricItem}>
+                                                        <PaceClockIcon size={20} color="#00D4FF" />
+                                                        <Text style={styles.metricText}>
+                                                            {w.instructions_json?.[0]?.pace_min
+                                                                ? `${Math.floor(w.instructions_json[0].pace_min)}:${String(Math.round((w.instructions_json[0].pace_min % 1) * 60)).padStart(2, '0')} /km`
+                                                                : '6:00 /km'}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                            </View>
+                                            <Image
+                                                source={{ uri: 'https://images.unsplash.com/photo-1571008887538-b36bb32f4571?w=100&h=100&fit=crop' }}
+                                                style={styles.workoutImage}
+                                            />
+                                        </View>
+                                    </View>
+
+                                    {/* View Details Button - Bottom Section of Card */}
+                                    <TouchableOpacity
+                                        style={styles.viewDetailsButton}
+                                        onPress={() => handleWorkoutCardPress(w)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Text style={styles.viewDetailsText}>
+                                            {w.status === 'completed' ? 'Ver resumo do treino' : 'Ver detalhes do treino'}
+                                        </Text>
+                                        <ArrowRightIcon size={20} color="#FFFFFF" />
+                                    </TouchableOpacity>
+                                </View>
+                            );
+                        })
                     ) : !isSelectedDateWithinPlan ? (
                         /* No Plan Active - Show informative message */
                         <View key={`no-plan-${getSelectedDateStr()}`} style={styles.workoutDetailCard}>
@@ -932,8 +898,9 @@ export function CalendarScreen({ navigation }: any) {
                                                     'intervals': 'Intervalados',
                                                     'tempo': 'Tempo Run',
                                                     'recovery': 'Recuperação',
+                                                    'free_run': 'Corrida Livre',
                                                 };
-                                                return `${labels[w.type] || w.type} - ${w.distance_km}km`;
+                                                return `${labels[w.type] || w.type} - ${formatKm(w.distance_km)}km`;
                                             })()}
                                         </Text>
                                         <Text style={styles.nextWorkoutSubtitle}>
@@ -1112,20 +1079,21 @@ export function CalendarScreen({ navigation }: any) {
                                                 ? `Hoje ${day}/${month}`
                                                 : `${day}/${month}`;
 
+                                            const raw = selectedRawWorkout;
                                             closeModal();
-                                            const src = (selectedDateWorkout as any)?.source as ('plan' | 'manual' | 'free' | undefined);
+                                            const src = raw?.source as ('plan' | 'manual' | 'free' | undefined);
                                             const mode = src === 'manual' ? 'manual' : 'planned';
                                             navigation.navigate('Running', {
-                                                workoutId: selectedWorkout?.id,
+                                                workoutId: raw?.id ?? selectedWorkout?.id,
                                                 dayLabel,
-                                                title: selectedWorkout?.title ?? 'Meu Treino',
-                                                workoutBlocks: selectedDateWorkout?.instructions_json ?? [],
+                                                title: raw?.title ?? selectedWorkout?.title ?? 'Meu Treino',
+                                                workoutBlocks: raw?.instructions_json ?? [],
                                                 mode,
                                                 targetPaceSeconds: src === 'manual'
-                                                    ? (selectedDateWorkout as any)?.target_pace_seconds
+                                                    ? raw?.target_pace_seconds
                                                     : undefined,
                                                 targetDistanceKm: src === 'manual'
-                                                    ? selectedDateWorkout?.distance_km
+                                                    ? raw?.distance_km
                                                     : undefined,
                                             });
                                         }}

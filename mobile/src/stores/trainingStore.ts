@@ -162,7 +162,9 @@ interface Workout {
     objective: string;
     tips: string[];
     status: 'pending' | 'completed' | 'skipped' | 'missed';
-    activity_id?: number;
+    activity_id?: string | null;
+    /** Set by the backend for completed plan workouts that already have a feedback row. */
+    feedback_id?: string | null;
     source?: WorkoutSource;
     title?: string | null;
     target_pace_seconds?: number | null;
@@ -217,6 +219,8 @@ export interface ScheduleDay {
         title?: string | null;
         target_pace_seconds?: number | null;
         target_duration_seconds?: number | null;
+        activity_id?: string | null;
+        feedback_id?: string | null;
     } | null;
     is_today: boolean;
     is_past: boolean;
