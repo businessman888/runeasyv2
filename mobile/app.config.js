@@ -104,7 +104,9 @@ export default {
         NSHealthShareUsageDescription: "Precisamos acessar seus dados de treino para sincronizar suas corridas do Apple Watch e personalizar seu plano de treino com IA.",
         NSHealthUpdateUsageDescription: "Precisamos salvar informações dos seus treinos realizados no RunEasy."
       }
-    ]
+    ],
+    "@bacons/apple-targets",
+    "./plugins/withAppleWatch"
   ],
   notification: {
     icon: "./assets/notification-icon.png",
