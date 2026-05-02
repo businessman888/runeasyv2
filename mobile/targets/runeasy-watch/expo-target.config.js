@@ -4,6 +4,6 @@ module.exports = {
   name: "RunEasyWatch",
   bundleIdentifier: "com.oytotec.runeasy.watchkitapp",
   icon: "../../assets/icon.png",
-  deploymentTarget: "9.0",
+  deploymentTarget: "10.0",
   frameworks: ["HealthKit", "WatchKit", "WatchConnectivity", "CoreLocation"],
 };
