@@ -16,13 +16,8 @@ struct StartView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("\(greeting),")
-                    .font(.caption2)
-                    .foregroundColor(.runEasyText60)
-                Text(userName)
-                    .font(.headline)
-                    .foregroundColor(.runEasyTextPrimary)
+            VStack(alignment: .leading, spacing: 8) {
+                header
 
                 if let workout = workout, workout.type != .rest {
                     workoutCard(workout)
@@ -30,89 +25,96 @@ struct StartView: View {
                     restCard
                 }
 
-                Button {
+                PrimaryActionButton(
+                    workout?.type == .rest ? "Corrida Livre" : "Iniciar",
+                    icon: "play.fill"
+                ) {
                     onStart(workout)
-                } label: {
-                    HStack {
-                        Image(systemName: "play.fill")
-                        Text(workout?.type == .rest ? "Corrida Livre" : "Iniciar")
-                            .fontWeight(.semibold)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.runEasyCyan)
-                .foregroundColor(.runEasyNavy)
-                .padding(.top, 4)
+                .padding(.top, 2)
             }
             .padding(.horizontal, 4)
+            .padding(.vertical, 4)
         }
         .background(Color.runEasyNavy.ignoresSafeArea())
     }
 
-    private func workoutCard(_ workout: PlannedWorkout) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(workout.type.displayName.uppercased())
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.runEasyCyan)
-            Text(workout.title)
-                .font(.subheadline)
-                .fontWeight(.semibold)
+    // MARK: - Sections
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(greeting)
+                .font(AppFont.captionMuted)
+                .foregroundColor(.runEasyText60)
+            Text(userName)
+                .font(AppFont.titleLarge)
                 .foregroundColor(.runEasyTextPrimary)
-            HStack(spacing: 10) {
-                metric(label: "Dist", value: String(format: "%.1f km", workout.distanceKm))
-                metric(label: "Pace", value: "\(workout.targetPace)/km")
+        }
+    }
+
+    private func workoutCard(_ workout: PlannedWorkout) -> some View {
+        RunEasyCard(isActive: true) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(workout.type.displayName.uppercased())
+                    .font(AppFont.labelSmall)
+                    .foregroundColor(.runEasyCyan)
+                    .tracking(0.6)
+
+                Text(workout.title)
+                    .font(AppFont.titleMedium)
+                    .foregroundColor(.runEasyTextPrimary)
+
+                Divider()
+                    .background(Color.runEasyDivider)
+                    .padding(.vertical, 1)
+
+                HStack(spacing: 14) {
+                    metric(label: "Dist", value: String(format: "%.1f km", workout.distanceKm))
+                    metric(label: "Pace", value: "\(workout.targetPace)/km")
+                }
             }
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.runEasyNavyLight)
-        .cornerRadius(10)
     }
 
     private var restCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("DIA DE DESCANSO")
-                .font(.system(size: 10, weight: .semibold))
+        RunEasyCard(isActive: false) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 4) {
+                    Image(systemName: "leaf.fill")
+                        .font(.system(size: 9, weight: .bold))
+                    Text("DIA DE DESCANSO")
+                        .font(AppFont.labelSmall)
+                        .tracking(0.6)
+                }
                 .foregroundColor(.runEasyGreen)
-            Text("Sem treino programado")
-                .font(.subheadline)
-                .foregroundColor(.runEasyTextPrimary)
-            Text("Pode rodar livre se quiser ✨")
-                .font(.caption2)
-                .foregroundColor(.runEasyText60)
+
+                Text("Sem treino programado")
+                    .font(AppFont.titleMedium)
+                    .foregroundColor(.runEasyTextPrimary)
+                Text("Pode rodar livre se quiser ✨")
+                    .font(AppFont.captionMuted)
+                    .foregroundColor(.runEasyText60)
+            }
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.runEasyNavyLight)
-        .cornerRadius(10)
     }
 
     private func metric(label: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(label)
-                .font(.system(size: 9))
+            Text(label.uppercased())
+                .font(AppFont.labelSmall)
                 .foregroundColor(.runEasyText40)
+                .tracking(0.4)
             Text(value)
-                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .font(AppFont.metricSmall)
                 .foregroundColor(.runEasyTextPrimary)
         }
     }
 }
 
 #Preview("With workout") {
-    StartView(
-        userName: "Matheus",
-        workout: .mock,
-        onStart: { _ in }
-    )
+    StartView(userName: "Matheus", workout: .mock, onStart: { _ in })
 }
 
 #Preview("Rest day") {
-    StartView(
-        userName: "Matheus",
-        workout: nil,
-        onStart: { _ in }
-    )
+    StartView(userName: "Matheus", workout: nil, onStart: { _ in })
 }

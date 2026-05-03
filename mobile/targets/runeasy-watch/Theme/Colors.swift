@@ -1,14 +1,39 @@
 import SwiftUI
 
+// Tokens alinhados com runeasyv2/mobile/src/theme/index.ts (iPhone como fonte canônica).
+// Watch app deve manter coerência visual com o iPhone.
 extension Color {
-    static let runEasyNavy        = Color(red: 0.04, green: 0.07, blue: 0.12) // #0A1220
-    static let runEasyNavyLight   = Color(red: 0.06, green: 0.10, blue: 0.18) // #111E33
-    static let runEasyCyan        = Color(red: 0.00, green: 0.83, blue: 1.00) // #00D4FF
-    static let runEasyGreen       = Color(red: 0.20, green: 0.82, blue: 0.35) // #34D058
-    static let runEasyYellow      = Color(red: 1.00, green: 0.78, blue: 0.20) // #FFC732
-    static let runEasyRed         = Color(red: 1.00, green: 0.30, blue: 0.30) // #FF4D4D
-    static let runEasyOrange      = Color(red: 1.00, green: 0.42, blue: 0.21) // #FF6B35
-    static let runEasyTextPrimary = Color(red: 0.94, green: 0.95, blue: 0.97) // #F0F2F8
-    static let runEasyText60      = Color.white.opacity(0.6)
-    static let runEasyText40      = Color.white.opacity(0.4)
+    // Backgrounds
+    static let runEasyNavy        = Color(hex: 0x0A0A18) // primary dark navy
+    static let runEasyNavyAlt     = Color(hex: 0x0E0E1F) // alt bg
+    static let runEasyCardBg      = Color(hex: 0x15152A) // card bg
+    static let runEasyBorder      = Color(hex: 0x2A2A3E) // border / skeleton
+
+    // Signature
+    static let runEasyCyan        = Color(hex: 0x00D4FF) // primary cyan neon
+    static let runEasyPurple      = Color(hex: 0x9747FF) // recovery / special
+    static let runEasyOrange      = Color(hex: 0xF59E0B) // streak
+
+    // Status
+    static let runEasySuccess     = Color(hex: 0x32CD32) // intense green (goal complete)
+    static let runEasyGreen       = Color(hex: 0x10B981) // primary green
+    static let runEasyWarning     = Color(hex: 0xFFC400) // yellow (paused, warning)
+    static let runEasyRed         = Color(hex: 0xEF4444) // error / stop
+
+    // Text
+    static let runEasyTextPrimary   = Color.white
+    static let runEasyTextSecondary = Color(hex: 0xEBEBF5)
+    static let runEasyTextMuted     = Color(hex: 0xA0A0B2)
+    static let runEasyText60        = Color(hex: 0xEBEBF5).opacity(0.60)
+    static let runEasyText40        = Color(hex: 0xEBEBF5).opacity(0.40)
+    static let runEasyDivider       = Color(hex: 0xEBEBF5).opacity(0.10)
+}
+
+extension Color {
+    init(hex: UInt32, opacity: Double = 1.0) {
+        let r = Double((hex >> 16) & 0xFF) / 255.0
+        let g = Double((hex >> 8) & 0xFF) / 255.0
+        let b = Double(hex & 0xFF) / 255.0
+        self.init(.sRGB, red: r, green: g, blue: b, opacity: opacity)
+    }
 }

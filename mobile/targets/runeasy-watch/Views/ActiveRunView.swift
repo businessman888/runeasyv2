@@ -1,4 +1,5 @@
 import SwiftUI
+import WatchKit
 
 struct ActiveRunView: View {
     let workout: PlannedWorkout?
@@ -7,20 +8,16 @@ struct ActiveRunView: View {
 
     @State private var metrics = RunMetrics()
     @State private var showStopConfirmation = false
-    @State private var startTimestamp: Date = Date()
-    @State private var pausedDuration: TimeInterval = 0
-    @State private var pauseStartedAt: Date? = nil
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
+    private var status: RunStatus { metrics.isPaused ? .paused : .running }
+
     var body: some View {
         TabView {
-            primaryMetricsPage
-                .tag(0)
-            secondaryMetricsPage
-                .tag(1)
-            controlsPage
-                .tag(2)
+            primaryMetricsPage.tag(0)
+            secondaryMetricsPage.tag(1)
+            controlsPage.tag(2)
         }
         .tabViewStyle(.verticalPage)
         .background(Color.runEasyNavy.ignoresSafeArea())
@@ -28,7 +25,10 @@ struct ActiveRunView: View {
         .onReceive(timer) { _ in tick() }
         .alert("Finalizar corrida?", isPresented: $showStopConfirmation) {
             Button("Cancelar", role: .cancel) { }
-            Button("Finalizar", role: .destructive) { onFinish(metrics) }
+            Button("Finalizar", role: .destructive) {
+                WKInterfaceDevice.current().play(.success)
+                onFinish(metrics)
+            }
         } message: {
             Text("Você não poderá retomar.")
         }
@@ -37,20 +37,27 @@ struct ActiveRunView: View {
     // MARK: - Pages
 
     private var primaryMetricsPage: some View {
-        VStack(spacing: 4) {
-            metricLarge(
+        VStack(spacing: 0) {
+            HStack {
+                StatusBanner(status: status)
+                Spacer()
+            }
+            .padding(.horizontal, 6)
+            .padding(.bottom, 4)
+
+            heroMetric(
                 value: MetricFormat.time(metrics.elapsedSeconds),
                 label: "Tempo",
                 color: .runEasyCyan
             )
-            Divider().background(Color.runEasyText40)
-            metricLarge(
+            divider
+            heroMetric(
                 value: MetricFormat.distance(metrics.distanceMeters),
-                label: "km",
+                label: "Km",
                 color: .runEasyTextPrimary
             )
-            Divider().background(Color.runEasyText40)
-            metricLarge(
+            divider
+            heroMetric(
                 value: MetricFormat.pace(metrics.currentPaceSecondsPerKm),
                 label: "Pace /km",
                 color: .runEasyGreen
@@ -61,7 +68,13 @@ struct ActiveRunView: View {
     }
 
     private var secondaryMetricsPage: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                StatusBanner(status: status)
+                Spacer()
+            }
+            .padding(.bottom, 2)
+
             secondaryRow(
                 icon: "heart.fill",
                 color: .runEasyRed,
@@ -80,38 +93,38 @@ struct ActiveRunView: View {
                 label: "Pace médio",
                 value: "\(MetricFormat.pace(metrics.avgPaceSecondsPerKm))/km"
             )
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var controlsPage: some View {
-        VStack(spacing: 10) {
-            Button {
-                togglePause()
-            } label: {
-                HStack {
-                    Image(systemName: metrics.isPaused ? "play.fill" : "pause.fill")
-                    Text(metrics.isPaused ? "Retomar" : "Pausar").fontWeight(.semibold)
-                }
-                .frame(maxWidth: .infinity)
+        VStack(spacing: 8) {
+            HStack {
+                StatusBanner(status: status)
+                Spacer()
             }
-            .buttonStyle(.borderedProminent)
-            .tint(metrics.isPaused ? .runEasyGreen : .runEasyYellow)
-            .foregroundColor(.runEasyNavy)
+            .padding(.bottom, 2)
 
-            Button {
-                showStopConfirmation = true
-            } label: {
-                HStack {
-                    Image(systemName: "stop.fill")
-                    Text("Finalizar").fontWeight(.semibold)
-                }
-                .frame(maxWidth: .infinity)
+            PrimaryActionButton(
+                metrics.isPaused ? "Retomar" : "Pausar",
+                icon: metrics.isPaused ? "play.fill" : "pause.fill",
+                tint: metrics.isPaused ? .runEasyGreen : .runEasyWarning,
+                foreground: .runEasyNavy
+            ) {
+                togglePause()
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.runEasyRed)
-            .foregroundColor(.runEasyTextPrimary)
+
+            PrimaryActionButton(
+                "Finalizar",
+                icon: "stop.fill",
+                tint: .runEasyRed,
+                foreground: .runEasyTextPrimary
+            ) {
+                WKInterfaceDevice.current().play(.notification)
+                showStopConfirmation = true
+            }
         }
         .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -119,31 +132,45 @@ struct ActiveRunView: View {
 
     // MARK: - Components
 
-    private func metricLarge(value: String, label: String, color: Color) -> some View {
-        VStack(spacing: 0) {
+    private var divider: some View {
+        Rectangle()
+            .fill(Color.runEasyDivider)
+            .frame(height: 1)
+            .padding(.vertical, 2)
+    }
+
+    private func heroMetric(value: String, label: String, color: Color) -> some View {
+        VStack(spacing: -2) {
             Text(value)
-                .font(.system(size: 32, weight: .semibold, design: .rounded))
+                .font(AppFont.metricLarge)
                 .foregroundColor(color)
-                .minimumScaleFactor(0.6)
+                .minimumScaleFactor(0.5)
                 .lineLimit(1)
             Text(label.uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .font(AppFont.labelSmall)
                 .foregroundColor(.runEasyText40)
+                .tracking(0.6)
         }
         .frame(maxWidth: .infinity)
     }
 
     private func secondaryRow(icon: String, color: Color, label: String, value: String) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: icon)
-                .foregroundColor(color)
-                .frame(width: 16)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(label)
-                    .font(.system(size: 9))
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.15))
+                    .frame(width: 26, height: 26)
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(color)
+            }
+            VStack(alignment: .leading, spacing: -1) {
+                Text(label.uppercased())
+                    .font(AppFont.labelSmall)
                     .foregroundColor(.runEasyText40)
+                    .tracking(0.4)
                 Text(value)
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .font(AppFont.metricMedium)
                     .foregroundColor(.runEasyTextPrimary)
             }
             Spacer()
@@ -156,24 +183,22 @@ struct ActiveRunView: View {
     private func tick() {
         guard !metrics.isPaused else { return }
         metrics.elapsedSeconds += 1
-        // Mock: ~2.78 m/s = ~6:00 /km running pace, with ±3% jitter
         let jitter = Double.random(in: 0.97...1.03)
         metrics.distanceMeters += 2.78 * jitter
         metrics.currentPaceSecondsPerKm = 360.0 / jitter
         if metrics.distanceMeters > 0 {
             metrics.avgPaceSecondsPerKm = Double(metrics.elapsedSeconds) / (metrics.distanceMeters / 1000.0)
         }
-        // Mock HR: oscillates 130-160 BPM
         let phase = Double(metrics.elapsedSeconds) / 8.0
         let hr = 145 + Int((sin(phase) * 15).rounded())
         metrics.heartRate = hr
         if hr > metrics.maxHeartRate { metrics.maxHeartRate = hr }
-        // Mock calories: ~10 kcal/min = ~0.167/sec
         metrics.calories = Int(Double(metrics.elapsedSeconds) * 0.167)
     }
 
     private func togglePause() {
         metrics.isPaused.toggle()
+        WKInterfaceDevice.current().play(metrics.isPaused ? .stop : .start)
     }
 }
 
