@@ -11,6 +11,15 @@ struct RoutePoint: Codable, Equatable {
     let speed: Double?        // m/s
     let accuracy: Double?     // metros (horizontal accuracy)
 
+    init(latitude: Double, longitude: Double, altitude: Double?, timestamp: Double, speed: Double?, accuracy: Double?) {
+        self.latitude = latitude
+        self.longitude = longitude
+        self.altitude = altitude
+        self.timestamp = timestamp
+        self.speed = speed
+        self.accuracy = accuracy
+    }
+
     init(from location: CLLocation) {
         self.latitude  = location.coordinate.latitude
         self.longitude = location.coordinate.longitude

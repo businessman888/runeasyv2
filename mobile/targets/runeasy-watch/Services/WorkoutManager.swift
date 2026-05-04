@@ -4,8 +4,8 @@ import CoreLocation
 import Combine
 
 // Orquestra HKWorkoutSession + HKLiveWorkoutBuilder + CLLocationManager + HKWorkoutRouteBuilder.
-// Expõe @Published metrics para a View binda direto.
-// Substitui o tick() mock da Phase 2.
+// Em simulator (#if targetEnvironment(simulator)), gera dados mock realistas
+// para permitir validação fim-a-fim sem device físico.
 @MainActor
 final class WorkoutManager: NSObject, ObservableObject {
 
@@ -32,6 +32,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     private(set) var heartRateSamples: [Int] = []
     private var workoutId: String?
     private var displayTask: Task<Void, Never>?
+    private var simulatorTickTask: Task<Void, Never>?
 
     // Tipos lidos/escritos
     private var typesToShare: Set<HKSampleType> {
@@ -60,18 +61,28 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     func requestAuthorization() async {
         guard HKHealthStore.isHealthDataAvailable() else {
+            #if targetEnvironment(simulator)
+            // Em alguns simuladores de Watch HealthKit não responde — concedemos mesmo assim
+            hasPermission = true
+            return
+            #else
             permissionError = "HealthKit indisponível neste dispositivo."
             return
+            #endif
         }
         do {
             try await healthStore.requestAuthorization(toShare: typesToShare, read: typesToRead)
-            // CLLocationManager — request when in use; o sistema pede ao chamar startUpdating
             locationManager.requestWhenInUseAuthorization()
             hasPermission = true
             permissionError = nil
         } catch {
+            #if targetEnvironment(simulator)
+            // Em simulator, não bloqueia se a permissão der erro
+            hasPermission = true
+            #else
             permissionError = "Permissão HealthKit negada."
             hasPermission = false
+            #endif
         }
     }
 
@@ -79,13 +90,21 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     func startWorkout(workoutId: String?) async {
         self.workoutId = workoutId
-        guard hasPermission else {
+        self.startDate = Date()
+
+        if !hasPermission {
             await requestAuthorization()
             guard hasPermission else { return }
-            await startWorkout(workoutId: workoutId)
-            return
         }
 
+        #if targetEnvironment(simulator)
+        await startSimulatedWorkout()
+        #else
+        await startRealWorkout()
+        #endif
+    }
+
+    private func startRealWorkout() async {
         let config = HKWorkoutConfiguration()
         config.activityType = .running
         config.locationType = .outdoor
@@ -99,8 +118,7 @@ final class WorkoutManager: NSObject, ObservableObject {
             session?.delegate = self
             builder?.delegate = self
 
-            let now = Date()
-            startDate = now
+            let now = startDate ?? Date()
             session?.startActivity(with: now)
             try await builder?.beginCollection(at: now)
 
@@ -127,28 +145,43 @@ final class WorkoutManager: NSObject, ObservableObject {
     }
 
     func pause() {
+        #if targetEnvironment(simulator)
+        metrics.isPaused = true
+        sessionState = .paused
+        #else
         session?.pause()
+        #endif
     }
 
     func resume() {
+        #if targetEnvironment(simulator)
+        metrics.isPaused = false
+        sessionState = .running
+        #else
         session?.resume()
+        #endif
     }
 
     /// Finaliza a sessão e retorna o payload pronto pra enviar ao iPhone.
     func endWorkout() async -> CompletedRun {
         displayTask?.cancel()
         displayTask = nil
+        simulatorTickTask?.cancel()
+        simulatorTickTask = nil
+
         let endDate = Date()
+
+        #if !targetEnvironment(simulator)
         session?.end()
         do {
             try await builder?.endCollection(at: endDate)
             _ = try await builder?.finishWorkout()
-            // routeBuilder.finishRoute exige um HKWorkout — feito acima
-            // Não precisamos do HKWorkoutRoute persistido localmente para o payload
         } catch {
             print("[WorkoutManager] erro ao finalizar: \(error)")
         }
         locationManager.stopUpdatingLocation()
+        #endif
+
         isRunning = false
 
         let avgHr = heartRateSamples.isEmpty
@@ -170,7 +203,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         return payload
     }
 
-    // MARK: - Helpers
+    // MARK: - Helpers (real device)
 
     private func updateMetrics(from statistics: HKStatistics?) {
         guard let statistics else { return }
@@ -201,6 +234,59 @@ final class WorkoutManager: NSObject, ObservableObject {
             break
         }
     }
+
+    // MARK: - Simulator mock
+
+    #if targetEnvironment(simulator)
+    private func startSimulatedWorkout() async {
+        isRunning = true
+        sessionState = .running
+        simulatorTickTask?.cancel()
+        simulatorTickTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard let self else { return }
+                guard !self.metrics.isPaused else { continue }
+                self.simulateTick()
+            }
+        }
+    }
+
+    private func simulateTick() {
+        metrics.elapsedSeconds += 1
+        // ~2.78 m/s ≈ 6:00/km, com jitter pequeno pra não ficar mecânico
+        let jitter = Double.random(in: 0.97...1.03)
+        let stride = 2.78 * jitter
+        metrics.distanceMeters += stride
+        metrics.currentPaceSecondsPerKm = 360.0 / jitter
+        if metrics.distanceMeters > 0 {
+            let km = metrics.distanceMeters / 1000.0
+            metrics.avgPaceSecondsPerKm = Double(metrics.elapsedSeconds) / km
+        }
+        // FC oscilando 130–160 BPM
+        let phase = Double(metrics.elapsedSeconds) / 8.0
+        let hr = 145 + Int((sin(phase) * 15).rounded())
+        metrics.heartRate = hr
+        if hr > metrics.maxHeartRate { metrics.maxHeartRate = hr }
+        heartRateSamples.append(hr)
+        // ~10 kcal/min
+        metrics.calories = Int(Double(metrics.elapsedSeconds) * 0.167)
+        // Rota fake (caminho NE em São Paulo, ~1m por segundo)
+        let baseLat = -23.5505
+        let baseLng = -46.6333
+        let lat = baseLat + Double(metrics.elapsedSeconds) * 0.0000099
+        let lng = baseLng + Double(metrics.elapsedSeconds) * 0.0000099
+        let point = RoutePoint(
+            latitude: lat,
+            longitude: lng,
+            altitude: 760.0,
+            timestamp: Date().timeIntervalSince1970 * 1000.0,
+            speed: stride,
+            accuracy: 5.0
+        )
+        routePoints.append(point)
+    }
+    #endif
 }
 
 // MARK: - HKWorkoutSessionDelegate
@@ -233,16 +319,12 @@ extension WorkoutManager: HKLiveWorkoutBuilderDelegate {
 
     nonisolated func workoutBuilder(_ workoutBuilder: HKLiveWorkoutBuilder, didCollectDataOf collectedTypes: Set<HKSampleType>) {
         Task { @MainActor in
-            // Atualiza tempo decorrido (builder lida com pause automaticamente)
             metrics.elapsedSeconds = Int(workoutBuilder.elapsedTime.rounded())
-
             for type in collectedTypes {
                 guard let quantityType = type as? HKQuantityType else { continue }
                 let stats = workoutBuilder.statistics(for: quantityType)
                 updateMetrics(from: stats)
             }
-
-            // Pace atual: derivado do speed mais recente da última location (se disponível)
             if let lastSpeed = routePoints.last?.speed, lastSpeed > 0 {
                 metrics.currentPaceSecondsPerKm = 1000.0 / lastSpeed
             } else {
@@ -263,15 +345,12 @@ extension WorkoutManager: CLLocationManagerDelegate {
         Task { @MainActor in
             self.routePoints.append(contentsOf: points)
         }
-
-        // Adiciona ao routeBuilder do HealthKit (rota persistida no Health)
         Task { [routeBuilder] in
             try? await routeBuilder?.insertRouteData(filtered)
         }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        // Silencioso — corrida continua mesmo sem GPS preciso
         print("[Location] erro: \(error.localizedDescription)")
     }
 }

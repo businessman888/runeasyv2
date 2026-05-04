@@ -10,6 +10,7 @@ import { SuperwallProvider } from 'expo-superwall';
 import { SuperwallBridge } from './src/components/paywall/SuperwallBridge';
 import { initializeRevenueCat, getSuperwallApiKey } from './src/services/paywall';
 import { initSubscriptionListener } from './src/stores/authStore';
+import { useAppleWatchStore } from './src/stores/appleWatchStore';
 
 // Registra Task de Rastreamento (Background GPS)
 import './src/tasks/locationTask';
@@ -87,6 +88,11 @@ export default function App() {
     initializeRevenueCat();
     const removeListener = initSubscriptionListener();
     return () => removeListener();
+  }, []);
+
+  // Inicializa bridge com Apple Watch (Phase 4)
+  useEffect(() => {
+    void useAppleWatchStore.getState().bootstrap();
   }, []);
 
   const superwallApiKey = getSuperwallApiKey();

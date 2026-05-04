@@ -65,6 +65,7 @@
     "react-native-share": "^12.2.6",
     "react-native-svg": "15.12.1",
     "react-native-view-shot": "^4.0.3",
+    "react-native-watch-connectivity": "^2.0.0",
     "react-native-web": "^0.21.0",
     "react-native-worklets-core": "^1.6.3",
     "zustand": "^5.0.9"

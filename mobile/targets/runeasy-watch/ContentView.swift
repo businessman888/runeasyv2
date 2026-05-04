@@ -6,17 +6,26 @@ enum AppRoute: Hashable {
 }
 
 struct ContentView: View {
-    // Mock state — substituído por dados reais do iPhone via WatchConnectivity na Fase 4
+    @EnvironmentObject private var phoneBridge: PhoneBridge
+
     @State private var path: [AppRoute] = []
-    @State private var userName: String = "Matheus"
-    @State private var todayWorkout: PlannedWorkout? = .mock
     @State private var lastCompletedRun: CompletedRun?
+
+    /// Fallback pra desenvolvimento: se o iPhone ainda não pareou e enviou um treino,
+    /// mostra um treino mock pra UI ficar testável. Em produção, sem treino → tela de descanso.
+    private var displayedWorkout: PlannedWorkout? {
+        #if DEBUG
+        return phoneBridge.todayWorkout ?? .mock
+        #else
+        return phoneBridge.todayWorkout
+        #endif
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
             StartView(
-                userName: userName,
-                workout: todayWorkout,
+                userName: phoneBridge.userName,
+                workout: displayedWorkout,
                 onStart: { workout in
                     path.append(.activeRun(workoutId: workout?.id))
                 }
@@ -25,11 +34,11 @@ struct ContentView: View {
                 switch route {
                 case .activeRun:
                     ActiveRunView(
-                        workout: todayWorkout,
+                        workout: displayedWorkout,
                         onFinish: { run in
                             lastCompletedRun = run
+                            phoneBridge.sendCompletedRun(run)
                             path.append(.summary)
-                            // TODO Fase 4: enviar `run` para o iPhone via WatchConnectivity aqui
                         },
                         onCancel: {
                             if !path.isEmpty { path.removeLast() }
@@ -44,7 +53,6 @@ struct ContentView: View {
                             }
                         )
                     } else {
-                        // Fallback defensivo — não deveria chegar aqui
                         Text("Sem dados").onAppear { path.removeAll() }
                     }
                 }
@@ -56,4 +64,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .environmentObject(PhoneBridge())
 }
