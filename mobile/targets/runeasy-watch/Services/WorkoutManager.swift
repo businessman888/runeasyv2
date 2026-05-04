@@ -31,6 +31,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     private(set) var routePoints: [RoutePoint] = []
     private(set) var heartRateSamples: [Int] = []
     private var workoutId: String?
+    private var displayTask: Task<Void, Never>?
 
     // Tipos lidos/escritos
     private var typesToShare: Set<HKSampleType> {
@@ -51,7 +52,8 @@ final class WorkoutManager: NSObject, ObservableObject {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.activityType = .fitness
-        locationManager.allowsBackgroundLocationUpdates = true
+        // Em watchOS, HKWorkoutSession ativa garante runtime estendido e captura de localização
+        // sem precisar de allowsBackgroundLocationUpdates (que exigiria entitlement extra).
     }
 
     // MARK: - Authorization
@@ -104,9 +106,23 @@ final class WorkoutManager: NSObject, ObservableObject {
 
             locationManager.startUpdatingLocation()
             isRunning = true
+            startDisplayTimer()
         } catch {
             permissionError = "Falha ao iniciar treino: \(error.localizedDescription)"
             isRunning = false
+        }
+    }
+
+    /// Atualiza metrics.elapsedSeconds a cada 1s independente de eventos do builder,
+    /// pra UI ficar fluida. builder.elapsedTime já desconta pausa automaticamente.
+    private func startDisplayTimer() {
+        displayTask?.cancel()
+        displayTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard let self, let builder = self.builder else { continue }
+                self.metrics.elapsedSeconds = Int(builder.elapsedTime.rounded())
+            }
         }
     }
 
@@ -120,6 +136,8 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     /// Finaliza a sessão e retorna o payload pronto pra enviar ao iPhone.
     func endWorkout() async -> CompletedRun {
+        displayTask?.cancel()
+        displayTask = nil
         let endDate = Date()
         session?.end()
         do {

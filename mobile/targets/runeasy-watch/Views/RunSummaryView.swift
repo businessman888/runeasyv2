@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct RunSummaryView: View {
-    let metrics: RunMetrics
+    let run: CompletedRun
     let onDone: () -> Void
 
     var body: some View {
@@ -49,18 +49,34 @@ struct RunSummaryView: View {
     private var summaryCard: some View {
         RunEasyCard(isActive: true, glowColor: .runEasyCyan) {
             VStack(spacing: 8) {
-                summaryRow(label: "Distância", value: "\(MetricFormat.distance(metrics.distanceMeters)) km", color: .runEasyTextPrimary)
+                summaryRow(
+                    label: "Distância",
+                    value: "\(MetricFormat.distance(run.totalDistanceMeters)) km",
+                    color: .runEasyTextPrimary
+                )
                 divider
-                summaryRow(label: "Tempo", value: MetricFormat.time(metrics.elapsedSeconds), color: .runEasyCyan)
+                summaryRow(
+                    label: "Tempo",
+                    value: MetricFormat.time(run.durationSeconds),
+                    color: .runEasyCyan
+                )
                 divider
-                summaryRow(label: "Pace médio", value: "\(MetricFormat.pace(metrics.avgPaceSecondsPerKm))/km", color: .runEasyGreen)
-                if metrics.maxHeartRate > 0 {
+                summaryRow(
+                    label: "Pace médio",
+                    value: "\(MetricFormat.pace(run.avgPaceSecondsPerKm))/km",
+                    color: .runEasyGreen
+                )
+                if let maxHr = run.maxHeartRate {
                     divider
-                    summaryRow(label: "FC máx", value: "\(metrics.maxHeartRate) bpm", color: .runEasyRed)
+                    summaryRow(label: "FC máx", value: "\(maxHr) bpm", color: .runEasyRed)
                 }
-                if metrics.calories > 0 {
+                if let avgHr = run.avgHeartRate {
                     divider
-                    summaryRow(label: "Calorias", value: "\(metrics.calories) kcal", color: .runEasyOrange)
+                    summaryRow(label: "FC média", value: "\(avgHr) bpm", color: .runEasyRed)
+                }
+                if let cal = run.calories {
+                    divider
+                    summaryRow(label: "Calorias", value: "\(cal) kcal", color: .runEasyOrange)
                 }
             }
         }
@@ -89,14 +105,17 @@ struct RunSummaryView: View {
 #Preview {
     NavigationStack {
         RunSummaryView(
-            metrics: RunMetrics(
-                elapsedSeconds: 1620,
-                distanceMeters: 4500,
-                currentPaceSecondsPerKm: 360,
+            run: CompletedRun(
+                workoutId: "mock-001",
+                totalDistanceMeters: 4500,
+                durationSeconds: 1620,
                 avgPaceSecondsPerKm: 360,
-                heartRate: 148,
+                avgHeartRate: 148,
                 maxHeartRate: 162,
-                calories: 270
+                calories: 270,
+                routePoints: [],
+                startedAt: ISO8601DateFormatter().string(from: Date()),
+                source: "apple_watch"
             ),
             onDone: { }
         )

@@ -3,35 +3,73 @@ import WatchKit
 
 struct ActiveRunView: View {
     let workout: PlannedWorkout?
-    let onFinish: (RunMetrics) -> Void
+    let onFinish: (CompletedRun) -> Void
     let onCancel: () -> Void
 
-    @State private var metrics = RunMetrics()
+    @StateObject private var workoutManager = WorkoutManager()
     @State private var showStopConfirmation = false
+    @State private var showPermissionError = false
 
-    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-
-    private var status: RunStatus { metrics.isPaused ? .paused : .running }
+    private var status: RunStatus { workoutManager.metrics.isPaused ? .paused : .running }
+    private var metrics: RunMetrics { workoutManager.metrics }
 
     var body: some View {
+        Group {
+            if workoutManager.isRunning {
+                runningContent
+            } else if workoutManager.permissionError != nil {
+                // Mostrado brevemente antes do alert ser exibido
+                loadingContent
+            } else {
+                loadingContent
+            }
+        }
+        .background(Color.runEasyNavy.ignoresSafeArea())
+        .navigationBarBackButtonHidden(true)
+        .task {
+            await startIfNeeded()
+        }
+        .alert("Finalizar corrida?", isPresented: $showStopConfirmation) {
+            Button("Cancelar", role: .cancel) { }
+            Button("Finalizar", role: .destructive) {
+                finalize()
+            }
+        } message: {
+            Text("Você não poderá retomar.")
+        }
+        .alert("Permissão necessária", isPresented: $showPermissionError) {
+            Button("OK", role: .cancel) {
+                onCancel()
+            }
+        } message: {
+            Text(workoutManager.permissionError ?? "Permita acesso a Saúde e Localização nas configurações do Apple Watch para usar esta função.")
+        }
+        .onChange(of: workoutManager.permissionError) { _, newValue in
+            if newValue != nil { showPermissionError = true }
+        }
+    }
+
+    // MARK: - States
+
+    private var loadingContent: some View {
+        VStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.large)
+                .tint(.runEasyCyan)
+            Text("Preparando…")
+                .font(AppFont.captionMuted)
+                .foregroundColor(.runEasyText60)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var runningContent: some View {
         TabView {
             primaryMetricsPage.tag(0)
             secondaryMetricsPage.tag(1)
             controlsPage.tag(2)
         }
         .tabViewStyle(.verticalPage)
-        .background(Color.runEasyNavy.ignoresSafeArea())
-        .navigationBarBackButtonHidden(true)
-        .onReceive(timer) { _ in tick() }
-        .alert("Finalizar corrida?", isPresented: $showStopConfirmation) {
-            Button("Cancelar", role: .cancel) { }
-            Button("Finalizar", role: .destructive) {
-                WKInterfaceDevice.current().play(.success)
-                onFinish(metrics)
-            }
-        } message: {
-            Text("Você não poderá retomar.")
-        }
     }
 
     // MARK: - Pages
@@ -85,13 +123,13 @@ struct ActiveRunView: View {
                 icon: "flame.fill",
                 color: .runEasyOrange,
                 label: "Calorias",
-                value: "\(metrics.calories) kcal"
+                value: metrics.calories > 0 ? "\(metrics.calories) kcal" : "--"
             )
             secondaryRow(
                 icon: "stopwatch",
                 color: .runEasyCyan,
                 label: "Pace médio",
-                value: "\(MetricFormat.pace(metrics.avgPaceSecondsPerKm))/km"
+                value: metrics.distanceMeters > 0 ? "\(MetricFormat.pace(metrics.avgPaceSecondsPerKm))/km" : "--"
             )
             Spacer(minLength: 0)
         }
@@ -177,28 +215,31 @@ struct ActiveRunView: View {
         }
     }
 
-    // MARK: - Mock data progression
-    // NOTE: substituido por HealthKitManager na Fase 3.
+    // MARK: - Actions
 
-    private func tick() {
-        guard !metrics.isPaused else { return }
-        metrics.elapsedSeconds += 1
-        let jitter = Double.random(in: 0.97...1.03)
-        metrics.distanceMeters += 2.78 * jitter
-        metrics.currentPaceSecondsPerKm = 360.0 / jitter
-        if metrics.distanceMeters > 0 {
-            metrics.avgPaceSecondsPerKm = Double(metrics.elapsedSeconds) / (metrics.distanceMeters / 1000.0)
-        }
-        let phase = Double(metrics.elapsedSeconds) / 8.0
-        let hr = 145 + Int((sin(phase) * 15).rounded())
-        metrics.heartRate = hr
-        if hr > metrics.maxHeartRate { metrics.maxHeartRate = hr }
-        metrics.calories = Int(Double(metrics.elapsedSeconds) * 0.167)
+    private func startIfNeeded() async {
+        guard !workoutManager.isRunning else { return }
+        await workoutManager.requestAuthorization()
+        guard workoutManager.hasPermission else { return }
+        await workoutManager.startWorkout(workoutId: workout?.id)
     }
 
     private func togglePause() {
-        metrics.isPaused.toggle()
-        WKInterfaceDevice.current().play(metrics.isPaused ? .stop : .start)
+        if metrics.isPaused {
+            workoutManager.resume()
+            WKInterfaceDevice.current().play(.start)
+        } else {
+            workoutManager.pause()
+            WKInterfaceDevice.current().play(.stop)
+        }
+    }
+
+    private func finalize() {
+        WKInterfaceDevice.current().play(.success)
+        Task {
+            let run = await workoutManager.endWorkout()
+            onFinish(run)
+        }
     }
 }
 

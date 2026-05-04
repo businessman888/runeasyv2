@@ -10,7 +10,7 @@ struct ContentView: View {
     @State private var path: [AppRoute] = []
     @State private var userName: String = "Matheus"
     @State private var todayWorkout: PlannedWorkout? = .mock
-    @State private var lastFinishedMetrics: RunMetrics = RunMetrics()
+    @State private var lastCompletedRun: CompletedRun?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -26,21 +26,27 @@ struct ContentView: View {
                 case .activeRun:
                     ActiveRunView(
                         workout: todayWorkout,
-                        onFinish: { metrics in
-                            lastFinishedMetrics = metrics
+                        onFinish: { run in
+                            lastCompletedRun = run
                             path.append(.summary)
+                            // TODO Fase 4: enviar `run` para o iPhone via WatchConnectivity aqui
                         },
                         onCancel: {
-                            path.removeLast()
+                            if !path.isEmpty { path.removeLast() }
                         }
                     )
                 case .summary:
-                    RunSummaryView(
-                        metrics: lastFinishedMetrics,
-                        onDone: {
-                            path.removeAll()
-                        }
-                    )
+                    if let run = lastCompletedRun {
+                        RunSummaryView(
+                            run: run,
+                            onDone: {
+                                path.removeAll()
+                            }
+                        )
+                    } else {
+                        // Fallback defensivo — não deveria chegar aqui
+                        Text("Sem dados").onAppear { path.removeAll() }
+                    }
                 }
             }
         }
