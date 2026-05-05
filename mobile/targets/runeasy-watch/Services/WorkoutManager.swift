@@ -18,12 +18,20 @@ final class WorkoutManager: NSObject, ObservableObject {
     @Published var isRunning: Bool = false
 
     // MARK: - HealthKit / GPS
+    // Lazy: alguns simulators de watchOS crasham na construção eager de HKHealthStore
+    // ou CLLocationManager. Inicializamos só quando precisar (= em device real).
 
-    private let healthStore = HKHealthStore()
+    private lazy var healthStore: HKHealthStore = HKHealthStore()
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
     private var routeBuilder: HKWorkoutRouteBuilder?
-    private let locationManager = CLLocationManager()
+    private lazy var locationManager: CLLocationManager = {
+        let lm = CLLocationManager()
+        lm.delegate = self
+        lm.desiredAccuracy = kCLLocationAccuracyBest
+        lm.activityType = .fitness
+        return lm
+    }()
 
     // MARK: - State acumulado
 
@@ -50,25 +58,22 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     override init() {
         super.init()
-        locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyBest
-        locationManager.activityType = .fitness
-        // Em watchOS, HKWorkoutSession ativa garante runtime estendido e captura de localização
-        // sem precisar de allowsBackgroundLocationUpdates (que exigiria entitlement extra).
+        // CLLocationManager + HKHealthStore inicializam lazy quando precisar.
     }
 
     // MARK: - Authorization
 
     func requestAuthorization() async {
+        #if targetEnvironment(simulator)
+        // Simulator: bypass total de HK/CL. Mock data não precisa de permissão.
+        print("[WorkoutManager] simulator: skip auth, granted automatically")
+        hasPermission = true
+        permissionError = nil
+        return
+        #else
         guard HKHealthStore.isHealthDataAvailable() else {
-            #if targetEnvironment(simulator)
-            // Em alguns simuladores de Watch HealthKit não responde — concedemos mesmo assim
-            hasPermission = true
-            return
-            #else
             permissionError = "HealthKit indisponível neste dispositivo."
             return
-            #endif
         }
         do {
             try await healthStore.requestAuthorization(toShare: typesToShare, read: typesToRead)
@@ -76,14 +81,10 @@ final class WorkoutManager: NSObject, ObservableObject {
             hasPermission = true
             permissionError = nil
         } catch {
-            #if targetEnvironment(simulator)
-            // Em simulator, não bloqueia se a permissão der erro
-            hasPermission = true
-            #else
             permissionError = "Permissão HealthKit negada."
             hasPermission = false
-            #endif
         }
+        #endif
     }
 
     // MARK: - Lifecycle
@@ -92,14 +93,17 @@ final class WorkoutManager: NSObject, ObservableObject {
         self.workoutId = workoutId
         self.startDate = Date()
 
+        #if targetEnvironment(simulator)
+        // Simulator: pula auth + HK + CL. Direto ao mock.
+        print("[WorkoutManager] starting simulated workout (workoutId: \(workoutId ?? "nil"))")
+        hasPermission = true
+        await startSimulatedWorkout()
+        return
+        #else
         if !hasPermission {
             await requestAuthorization()
             guard hasPermission else { return }
         }
-
-        #if targetEnvironment(simulator)
-        await startSimulatedWorkout()
-        #else
         await startRealWorkout()
         #endif
     }
@@ -149,7 +153,8 @@ final class WorkoutManager: NSObject, ObservableObject {
         metrics.isPaused = true
         sessionState = .paused
         #else
-        session?.pause()
+        guard let session else { return }
+        session.pause()
         #endif
     }
 
@@ -158,7 +163,8 @@ final class WorkoutManager: NSObject, ObservableObject {
         metrics.isPaused = false
         sessionState = .running
         #else
-        session?.resume()
+        guard let session else { return }
+        session.resume()
         #endif
     }
 
@@ -172,14 +178,18 @@ final class WorkoutManager: NSObject, ObservableObject {
         let endDate = Date()
 
         #if !targetEnvironment(simulator)
-        session?.end()
+        if let session {
+            session.end()
+        }
         do {
             try await builder?.endCollection(at: endDate)
             _ = try await builder?.finishWorkout()
         } catch {
             print("[WorkoutManager] erro ao finalizar: \(error)")
         }
-        locationManager.stopUpdatingLocation()
+        if session != nil {
+            locationManager.stopUpdatingLocation()
+        }
         #endif
 
         isRunning = false
@@ -239,14 +249,16 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     #if targetEnvironment(simulator)
     private func startSimulatedWorkout() async {
+        print("[WorkoutManager] startSimulatedWorkout: spinning mock tick")
         isRunning = true
         sessionState = .running
+        metrics.isPaused = false
         simulatorTickTask?.cancel()
         simulatorTickTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard let self else { return }
-                guard !self.metrics.isPaused else { continue }
+                if self.metrics.isPaused { continue }
                 self.simulateTick()
             }
         }
