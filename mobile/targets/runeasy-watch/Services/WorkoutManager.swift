@@ -344,9 +344,10 @@ extension WorkoutManager: CLLocationManagerDelegate {
         let points = filtered.map { RoutePoint(from: $0) }
         Task { @MainActor in
             self.routePoints.append(contentsOf: points)
-        }
-        Task { [routeBuilder] in
-            try? await routeBuilder?.insertRouteData(filtered)
+            // Acessar routeBuilder no MainActor (insertRouteData é async, await ok aqui)
+            if let builder = self.routeBuilder {
+                try? await builder.insertRouteData(filtered)
+            }
         }
     }
 

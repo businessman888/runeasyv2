@@ -11,6 +11,7 @@ import { SuperwallBridge } from './src/components/paywall/SuperwallBridge';
 import { initializeRevenueCat, getSuperwallApiKey } from './src/services/paywall';
 import { initSubscriptionListener } from './src/stores/authStore';
 import { useAppleWatchStore } from './src/stores/appleWatchStore';
+import { WatchBridgeDebugBanner } from './src/components/debug/WatchBridgeDebugBanner';
 
 // Registra Task de Rastreamento (Background GPS)
 import './src/tasks/locationTask';
@@ -114,6 +115,7 @@ export default function App() {
             {/* NotificationManager is safe to use here because it uses navigationRef */}
             <NotificationManager />
             <AppNavigator />
+            <WatchBridgeDebugBanner />
           </GestureHandlerRootView>
         </SuperwallProvider>
       </SafeAreaProvider>
