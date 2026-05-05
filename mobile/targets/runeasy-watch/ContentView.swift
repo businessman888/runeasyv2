@@ -59,6 +59,10 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .task {
+            // Ativa WCSession depois da scene estar pronta (watchOS 26 lifecycle).
+            phoneBridge.activate()
+        }
     }
 }
 

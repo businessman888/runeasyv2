@@ -26,8 +26,16 @@ final class PhoneBridge: NSObject, ObservableObject {
             self.session = nil
         }
         super.init()
-        session?.delegate = self
-        session?.activate()
+        // Activation adiada — chamar activate() depois da scene SwiftUI estar pronta,
+        // via .task no ContentView. Em watchOS 26 ativar no init() corre com a inicialização
+        // de scene e pode causar crash em NavigationStack push subsequente.
+    }
+
+    /// Deve ser chamado uma vez depois que a scene SwiftUI estiver pronta (.task em ContentView).
+    func activate() {
+        guard let session, session.activationState != .activated else { return }
+        session.delegate = self
+        session.activate()
     }
 
     // MARK: - Send (Watch → iPhone)
