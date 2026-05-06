@@ -59,6 +59,32 @@ export async function getSyncStatus(): Promise<SyncStatus> {
 }
 
 /**
+ * Connect a device manually (sem OAuth). Usado pelo Apple Watch — que não tem
+ * fluxo OAuth e basta registrar o pareamento como um connected_device para o
+ * resto do app reconhecer. Para Garmin/Fitbit/Polar continuamos usando o fluxo
+ * OAuth via `wearable-auth.ts`.
+ */
+export async function connectDeviceManual(
+    provider: string,
+    deviceName?: string,
+): Promise<ConnectedDevice> {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_API_URL}/devices/connect`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ provider, device_name: deviceName }),
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to connect device: ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.device;
+}
+
+/**
  * Disconnect a device by provider name.
  */
 export async function disconnectDevice(provider: string): Promise<void> {

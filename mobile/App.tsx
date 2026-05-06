@@ -12,6 +12,7 @@ import { initializeRevenueCat, getSuperwallApiKey } from './src/services/paywall
 import { initSubscriptionListener } from './src/stores/authStore';
 import { useAppleWatchStore } from './src/stores/appleWatchStore';
 import { WatchBridgeDebugBanner } from './src/components/debug/WatchBridgeDebugBanner';
+import { useWatchSync } from './src/hooks/useWatchSync';
 
 // Registra Task de Rastreamento (Background GPS)
 import './src/tasks/locationTask';
@@ -58,8 +59,19 @@ class ErrorBoundary extends React.Component<
 }
 
 /**
+ * WatchSyncManager Component
+ *
+ * Sincroniza treino do dia + nome do usuário do iPhone para o Apple Watch.
+ * Renderiza null — só executa o useWatchSync hook que assina os stores.
+ */
+function WatchSyncManager() {
+  useWatchSync();
+  return null;
+}
+
+/**
  * Notification Manager Component
- * 
+ *
  * Handles push notification lifecycle.
  * Safe to use anywhere - doesn't require NavigationContainer context
  * because useNotifications uses navigationRef internally.
@@ -114,6 +126,8 @@ export default function App() {
             <SuperwallBridge />
             {/* NotificationManager is safe to use here because it uses navigationRef */}
             <NotificationManager />
+            {/* WatchSyncManager: pushes today's workout + user name to Apple Watch */}
+            <WatchSyncManager />
             <AppNavigator />
             <WatchBridgeDebugBanner />
           </GestureHandlerRootView>

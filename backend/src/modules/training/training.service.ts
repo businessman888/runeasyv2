@@ -495,32 +495,46 @@ export class TrainingService {
             }
         }
 
-        // 1. Create the matching `activities` row (source='phone').
+        // 1. Create the matching `activities` row.
         // This is the canonical "executed run" record consumed by the feedback
         // generator, the HomeScreen coach card (getLatestActivityWithFeedback),
         // history, gamification, etc. Without it the entire downstream pipeline
         // is invisible to the user.
+        //
+        // `source` defaults to 'phone' (mantém comportamento histórico) mas pode
+        // vir como 'apple_watch' quando a corrida é finalizada no app do relógio
+        // e roteada via WatchConnectivity → completeWorkout.
         const completedAtIso = new Date().toISOString();
-        const startDateIso = new Date(
-            Date.now() - (payload.duration_seconds || 0) * 1000,
-        ).toISOString();
+        const source = payload.source || 'phone';
+        const startDateIso = payload.started_at
+            ? new Date(payload.started_at).toISOString()
+            : new Date(Date.now() - (payload.duration_seconds || 0) * 1000).toISOString();
+        const externalId = payload.external_id || `${source}_${workoutId}`;
+        // Pace recebido tem precedência (vem do builder do HealthKit no Watch);
+        // fallback é o cálculo local feito acima (paceMinPerKm).
+        const finalPaceMinPerKm = payload.avg_pace_seconds_per_km != null
+            ? payload.avg_pace_seconds_per_km / 60
+            : paceMinPerKm || null;
 
         const { data: insertedActivity, error: activityError } = await this.supabaseService
             .from('activities')
             .insert({
                 user_id: userId,
-                external_id: `phone_${workoutId}`,
-                source: 'phone',
+                external_id: externalId,
+                source,
                 name: workout.title || 'Corrida RunEasy',
                 type: 'Run',
                 start_date: startDateIso,
                 distance: finalDistanceKm * 1000, // meters
                 moving_time: payload.duration_seconds || 0,
                 elapsed_time: payload.duration_seconds || 0,
-                average_pace: paceMinPerKm || null,
-                max_pace: paceMinPerKm || null,
+                average_pace: finalPaceMinPerKm,
+                max_pace: finalPaceMinPerKm,
                 elevation_gain: elevationGain,
                 gps_route: payload.route_points || null,
+                average_heartrate: payload.average_heartrate ?? null,
+                max_heartrate: payload.max_heartrate ?? null,
+                calories: payload.calories ?? null,
             })
             .select()
             .single();
@@ -726,6 +740,13 @@ export class TrainingService {
             route_points: payload.route_points,
             total_distance_meters: payload.total_distance_meters,
             duration_seconds: payload.duration_seconds,
+            source: payload.source,
+            external_id: payload.external_id,
+            average_heartrate: payload.average_heartrate,
+            max_heartrate: payload.max_heartrate,
+            calories: payload.calories,
+            avg_pace_seconds_per_km: payload.avg_pace_seconds_per_km,
+            started_at: payload.started_at,
         });
     }
 
@@ -750,7 +771,7 @@ export class TrainingService {
             const { data: act } = await this.supabaseService
                 .from('activities')
                 .select(
-                    'id, name, distance, moving_time, elapsed_time, average_pace, average_speed, total_elevation_gain, elevation_gain, start_date, gps_route',
+                    'id, name, distance, moving_time, elapsed_time, average_pace, average_speed, total_elevation_gain, elevation_gain, start_date, gps_route, average_heartrate, max_heartrate, calories, source',
                 )
                 .eq('id', data.activity_id)
                 .single();

@@ -8,9 +8,15 @@ import {
     Dimensions,
     ActivityIndicator,
     Alert,
+    Platform,
 } from 'react-native';
 import Svg, { Path, Rect, Circle, G } from 'react-native-svg';
 import { connectWearable, WearableProvider } from '../../services/wearable-auth';
+import {
+    isWatchPaired as appleWatchIsPaired,
+    isWatchAppInstalled as appleWatchIsInstalled,
+} from '../../services/appleWatch';
+import { connectDeviceManual } from '../../services/devices';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -144,6 +150,57 @@ export function WearableSelectionModal({
     const handleConfirm = async () => {
         if (!localSelection) return;
 
+        // Apple Watch — sem OAuth. Detecta pareamento + instala via WatchConnectivity
+        // e registra em connected_devices. Permissões HealthKit já são solicitadas
+        // pelo app companion no relógio na primeira corrida.
+        if (localSelection === 'apple_watch') {
+            if (Platform.OS !== 'ios') {
+                Alert.alert(
+                    'Apple Watch indisponível',
+                    'Apple Watch só funciona em iPhones com iOS.',
+                );
+                return;
+            }
+            setIsConnecting(true);
+            try {
+                const [paired, installed] = await Promise.all([
+                    appleWatchIsPaired(),
+                    appleWatchIsInstalled(),
+                ]);
+
+                if (!paired) {
+                    Alert.alert(
+                        'Apple Watch não pareado',
+                        'Pareie seu Apple Watch com o iPhone (app Watch da Apple) e tente novamente.',
+                    );
+                    setIsConnecting(false);
+                    return;
+                }
+
+                if (!installed) {
+                    Alert.alert(
+                        'App não instalado no Watch',
+                        'Abra o app Watch no seu iPhone e instale o RunEasy. Depois volte aqui pra concluir.',
+                    );
+                    setIsConnecting(false);
+                    return;
+                }
+
+                // Registra em connected_devices (sem token — Apple Watch não tem OAuth)
+                await connectDeviceManual('apple_watch', 'Apple Watch');
+                onSelect(localSelection);
+            } catch (e) {
+                Alert.alert(
+                    'Erro ao conectar',
+                    e instanceof Error ? e.message : 'Tente novamente.',
+                );
+                setIsConnecting(false);
+                return;
+            }
+            setIsConnecting(false);
+            return;
+        }
+
         // For providers with OAuth support, start real flow
         if (localSelection === 'fitbit' || localSelection === 'polar') {
             setIsConnecting(true);
@@ -172,7 +229,7 @@ export function WearableSelectionModal({
             }
             setIsConnecting(false);
         } else {
-            // Garmin / Apple Watch — save preference only (OAuth coming later)
+            // Garmin — sem OAuth ainda; salva só preferência
             onSelect(localSelection);
         }
     };

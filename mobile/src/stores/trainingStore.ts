@@ -16,20 +16,41 @@ export interface RoutePoint {
     accuracy: number | null;
 }
 
-export interface WorkoutTrackingPayload {
+/**
+ * Campos opcionais passados pelo Watch (HKWorkoutSession + WatchConnectivity)
+ * via `appleWatchStore`. Quando ausentes, mantém-se o comportamento histórico
+ * (source='phone', sem HR/calorias, pace calculado pelo backend).
+ */
+export interface WorkoutSourceMetadata {
+    /** 'phone' (default) ou 'apple_watch' quando vier do relógio */
+    source?: 'phone' | 'apple_watch';
+    /** ISO 8601 do início da corrida — relevante quando source != 'phone' */
+    started_at?: string;
+    /** Identificador externo (ex.: HKWorkout UUID) para dedup */
+    external_id?: string;
+    /** FC média BPM */
+    average_heartrate?: number;
+    /** FC máxima BPM */
+    max_heartrate?: number;
+    /** Calorias ativas (kcal) */
+    calories?: number;
+    /** Pace médio em segundos por km */
+    avg_pace_seconds_per_km?: number;
+}
+
+export interface WorkoutTrackingPayload extends WorkoutSourceMetadata {
     workoutId: string;
     route_points: RoutePoint[];
     total_distance_meters: number;
     duration_seconds: number;
 }
 
-export interface FreeRunPayload {
+export interface FreeRunPayload extends WorkoutSourceMetadata {
     /** Local id (uuid) usado apenas para deduplicar pendentes — não é enviado pro backend */
     localId: string;
     route_points: RoutePoint[];
     total_distance_meters: number;
     duration_seconds: number;
-    started_at?: string;
     city?: string;
 }
 
@@ -200,6 +221,14 @@ export interface WorkoutDetails extends Workout {
             speed: number | null;
             accuracy: number | null;
         }> | null;
+        /** FC média em BPM. Populado quando vier de wearable (Apple Watch, Garmin, etc.) */
+        average_heartrate?: number | null;
+        /** FC máxima em BPM. Populado quando vier de wearable. */
+        max_heartrate?: number | null;
+        /** Calorias ativas em kcal. Populado quando vier de wearable. */
+        calories?: number | null;
+        /** Fonte da activity ('phone' | 'apple_watch' | 'garmin' | 'fitbit' | 'polar' | 'apple_health'). */
+        source?: string | null;
     } | null;
 }
 
@@ -463,6 +492,14 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
                         route_points: payload.route_points,
                         total_distance_meters: payload.total_distance_meters,
                         duration_seconds: payload.duration_seconds,
+                        // Metadata opcional (Apple Watch, etc.) — backend já aceita
+                        ...(payload.source            && { source: payload.source }),
+                        ...(payload.external_id       && { external_id: payload.external_id }),
+                        ...(payload.started_at        && { started_at: payload.started_at }),
+                        ...(payload.average_heartrate != null && { average_heartrate: payload.average_heartrate }),
+                        ...(payload.max_heartrate     != null && { max_heartrate: payload.max_heartrate }),
+                        ...(payload.calories          != null && { calories: payload.calories }),
+                        ...(payload.avg_pace_seconds_per_km != null && { avg_pace_seconds_per_km: payload.avg_pace_seconds_per_km }),
                     }),
                 },
             );
@@ -511,6 +548,13 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
                     duration_seconds: payload.duration_seconds,
                     started_at: payload.started_at,
                     city: payload.city,
+                    // Metadata opcional (Apple Watch, etc.)
+                    ...(payload.source            && { source: payload.source }),
+                    ...(payload.external_id       && { external_id: payload.external_id }),
+                    ...(payload.average_heartrate != null && { average_heartrate: payload.average_heartrate }),
+                    ...(payload.max_heartrate     != null && { max_heartrate: payload.max_heartrate }),
+                    ...(payload.calories          != null && { calories: payload.calories }),
+                    ...(payload.avg_pace_seconds_per_km != null && { avg_pace_seconds_per_km: payload.avg_pace_seconds_per_km }),
                 }),
             });
 

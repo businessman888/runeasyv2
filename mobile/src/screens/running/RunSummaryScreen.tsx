@@ -148,6 +148,12 @@ export function RunSummaryScreen() {
     targetPaceSeconds?: number;
     targetDistanceKm?: number;
     workoutTitle?: string;
+    /** Métricas de saúde quando vierem do wearable (Apple Watch / Garmin / etc.) */
+    avgHeartRate?: number | null;
+    maxHeartRate?: number | null;
+    calories?: number | null;
+    /** Fonte da activity — usado pra mostrar badge "Apple Watch" se relevante */
+    activitySource?: string | null;
   };
   const [enriched, setEnriched] = useState<Enriched | null>(null);
   const [enriching, setEnriching] = useState(false);
@@ -189,6 +195,10 @@ export function RunSummaryScreen() {
         targetPaceSeconds: details.target_pace_seconds ?? undefined,
         targetDistanceKm: details.distance_km ?? undefined,
         workoutTitle: details.title ?? undefined,
+        avgHeartRate: activity?.average_heartrate ?? null,
+        maxHeartRate: activity?.max_heartrate ?? null,
+        calories: activity?.calories ?? null,
+        activitySource: activity?.source ?? null,
       });
       setEnriching(false);
     })();
@@ -203,6 +213,14 @@ export function RunSummaryScreen() {
   const targetPaceSeconds = enriched?.targetPaceSeconds ?? initialTargetPaceSeconds;
   const targetDistanceKm = enriched?.targetDistanceKm ?? initialTargetDistanceKm;
   const workoutTitle = enriched?.workoutTitle ?? initialWorkoutTitle;
+  const avgHeartRate = enriched?.avgHeartRate ?? null;
+  const maxHeartRate = enriched?.maxHeartRate ?? null;
+  const calories = enriched?.calories ?? null;
+  const activitySource = enriched?.activitySource ?? null;
+  const hasHealthMetrics =
+    (avgHeartRate != null && avgHeartRate > 0) ||
+    (maxHeartRate != null && maxHeartRate > 0) ||
+    (calories != null && calories > 0);
 
   // ── Usuário (avatar + nome) ────────────────────────────────────────────
   const user = useAuthStore((s) => s.user);
@@ -473,6 +491,34 @@ export function RunSummaryScreen() {
             <MetricCell label="Elev. Gan" value={`${summary.totalElevationGainM} m`} />
             <MetricCell label="Elev Max" value={`${summary.maxAltitudeM} m`} />
           </View>
+
+          {/* Card Saúde — métricas vindas de wearable (FC + calorias). Só renderiza
+              quando há dados, então corridas sem Watch/Garmin/etc. seguem com o
+              layout original. */}
+          {hasHealthMetrics && (
+            <View style={styles.cardDark}>
+              <View style={styles.paceCardHeader}>
+                <Text style={styles.cardTitle}>Saúde</Text>
+                {activitySource === 'apple_watch' && (
+                  <View style={styles.sourceBadge}>
+                    <Ionicons name="watch-outline" size={11} color={T.cyan} />
+                    <Text style={styles.sourceBadgeText}>Apple Watch</Text>
+                  </View>
+                )}
+              </View>
+              <View style={{ marginTop: 4 }}>
+                {avgHeartRate != null && avgHeartRate > 0 && (
+                  <PaceStatRow label="FC média" value={`${avgHeartRate} bpm`} />
+                )}
+                {maxHeartRate != null && maxHeartRate > 0 && (
+                  <PaceStatRow label="FC máxima" value={`${maxHeartRate} bpm`} />
+                )}
+                {calories != null && calories > 0 && (
+                  <PaceStatRow label="Calorias" value={`${calories} kcal`} isLast />
+                )}
+              </View>
+            </View>
+          )}
 
           {/* Planejado vs Executado (modo manual) */}
           {showPlannedVsExecuted && (
@@ -1089,6 +1135,28 @@ const styles = StyleSheet.create({
     position: 'relative',
     // paddingBottom já vem do `cardTitle` (16px). Não somar aqui para não
     // afastar demais o título do gráfico.
+  },
+
+  // Badge de origem ("Apple Watch" no card de Saúde) — discreto à direita do título
+  sourceBadge: {
+    position: 'absolute',
+    right: 0,
+    top: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,212,255,0.10)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,212,255,0.30)',
+  },
+  sourceBadgeText: {
+    color: T.cyan,
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   chartUnitInline: {
     position: 'absolute',

@@ -1,5 +1,6 @@
 import {
     IsArray,
+    IsIn,
     IsISO8601,
     IsNumber,
     IsOptional,
@@ -32,4 +33,38 @@ export class CompleteFreeWorkoutDto {
     @IsString()
     @MaxLength(120)
     city?: string;
+
+    /**
+     * Origem do registro. Default 'phone'. 'apple_watch' indica corrida livre
+     * iniciada/finalizada no app companion do Apple Watch.
+     */
+    @IsOptional()
+    @IsIn(['phone', 'apple_watch'])
+    source?: 'phone' | 'apple_watch';
+
+    /** Identificador externo (ex.: HKWorkout UUID) para dedup cross-source. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(120)
+    external_id?: string;
+
+    /** FC média em BPM. */
+    @IsOptional()
+    @IsNumber()
+    average_heartrate?: number;
+
+    /** FC máxima em BPM. */
+    @IsOptional()
+    @IsNumber()
+    max_heartrate?: number;
+
+    /** Calorias ativas em kcal. */
+    @IsOptional()
+    @IsNumber()
+    calories?: number;
+
+    /** Pace médio em segundos por km. Quando ausente, calculado pelo backend. */
+    @IsOptional()
+    @IsNumber()
+    avg_pace_seconds_per_km?: number;
 }
