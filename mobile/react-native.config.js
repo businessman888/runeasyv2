@@ -1,0 +1,9 @@
+module.exports = {
+  dependencies: {
+    'react-native-watch-connectivity': {
+      platforms: {
+        android: null,
+      },
+    },
+  },
+};
