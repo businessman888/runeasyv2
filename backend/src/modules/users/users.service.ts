@@ -139,6 +139,85 @@ export class UsersService {
 
 
     /**
+     * Upload an avatar image to the `avatars` Supabase Storage bucket and persist
+     * the public URL to the user's profile (avatar_url + profile_pic).
+     * Path is `${userId}/avatar.${ext}` with upsert so previous avatars are replaced.
+     */
+    async uploadAvatar(
+        userId: string,
+        fileBuffer: Buffer,
+        mimeType: string,
+        originalName: string,
+    ) {
+        const ALLOWED_MIME = new Set([
+            'image/jpeg',
+            'image/png',
+            'image/webp',
+            'image/heic',
+            'image/heif',
+        ]);
+        if (!ALLOWED_MIME.has(mimeType)) {
+            throw new Error(`Unsupported avatar mime type: ${mimeType}`);
+        }
+
+        const extFromMime: Record<string, string> = {
+            'image/jpeg': 'jpg',
+            'image/png': 'png',
+            'image/webp': 'webp',
+            'image/heic': 'heic',
+            'image/heif': 'heif',
+        };
+        const ext =
+            extFromMime[mimeType] ||
+            (originalName.includes('.') ? originalName.split('.').pop()!.toLowerCase() : 'jpg');
+
+        // Cache-busting suffix prevents stale CDN responses after replacing the avatar.
+        const path = `${userId}/avatar-${Date.now()}.${ext}`;
+
+        const { error: uploadError } = await this.supabaseService.storage
+            .from('avatars')
+            .upload(path, fileBuffer, {
+                contentType: mimeType,
+                upsert: true,
+                cacheControl: '3600',
+            });
+
+        if (uploadError) {
+            this.logger.error(`Failed to upload avatar for ${userId}`, uploadError);
+            throw uploadError;
+        }
+
+        const { data: publicData } = this.supabaseService.storage
+            .from('avatars')
+            .getPublicUrl(path);
+
+        const publicUrl = publicData.publicUrl;
+
+        await this.updateProfile(userId, {
+            avatar_url: publicUrl,
+            profile_pic: publicUrl,
+        });
+
+        // Best-effort cleanup of older avatars in the user's folder.
+        try {
+            const { data: list } = await this.supabaseService.storage
+                .from('avatars')
+                .list(userId);
+            const stale = (list || [])
+                .map((f) => `${userId}/${f.name}`)
+                .filter((p) => p !== path);
+            if (stale.length > 0) {
+                await this.supabaseService.storage.from('avatars').remove(stale);
+            }
+        } catch (err) {
+            this.logger.warn(`Avatar cleanup skipped for ${userId}: ${(err as Error).message}`);
+        }
+
+        this.logger.log(`Avatar uploaded for user ${userId}: ${publicUrl}`);
+        return { avatar_url: publicUrl };
+    }
+
+    /**
      * Update user profile
      */
     async updateProfile(userId: string, profileUpdates: Record<string, any>) {

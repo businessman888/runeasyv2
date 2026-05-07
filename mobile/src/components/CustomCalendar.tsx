@@ -49,7 +49,7 @@ export function CustomCalendar({
         }
     }, [visible, selectedDate]);
 
-    const calendarDays = useMemo(() => {
+    const calendarRows = useMemo(() => {
         const year = currentMonth.getFullYear();
         const month = currentMonth.getMonth();
         const firstDay = new Date(year, month, 1).getDay();
@@ -57,7 +57,11 @@ export function CustomCalendar({
         const days: (number | null)[] = [];
         for (let i = 0; i < firstDay; i++) days.push(null);
         for (let day = 1; day <= daysInMonth; day++) days.push(day);
-        return days;
+        // Pad final row with nulls so every row has exactly 7 cells (keeps flex: 1 columns aligned)
+        while (days.length % 7 !== 0) days.push(null);
+        const rows: (number | null)[][] = [];
+        for (let i = 0; i < days.length; i += 7) rows.push(days.slice(i, i + 7));
+        return rows;
     }, [currentMonth]);
 
     const goPreviousMonth = () => {
@@ -142,34 +146,38 @@ export function CustomCalendar({
 
                     {/* Days grid */}
                     <View style={styles.grid}>
-                        {calendarDays.map((day, idx) => (
-                            <View key={`day-${idx}`} style={styles.cell}>
-                                {day !== null && (
-                                    <TouchableOpacity
-                                        onPress={() => handleDayPress(day)}
-                                        disabled={isDayDisabled(day)}
-                                        style={[
-                                            styles.dayBtn,
-                                            isDaySelected(day) && styles.dayBtnSelected,
-                                        ]}
-                                        accessibilityRole="button"
-                                        accessibilityLabel={`Dia ${day}`}
-                                        accessibilityState={{
-                                            selected: isDaySelected(day),
-                                            disabled: isDayDisabled(day),
-                                        }}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.dayText,
-                                                isDaySelected(day) && styles.dayTextSelected,
-                                                isDayDisabled(day) && styles.dayTextDisabled,
-                                            ]}
-                                        >
-                                            {day}
-                                        </Text>
-                                    </TouchableOpacity>
-                                )}
+                        {calendarRows.map((row, rowIdx) => (
+                            <View key={`row-${rowIdx}`} style={styles.dayRow}>
+                                {row.map((day, colIdx) => (
+                                    <View key={`day-${rowIdx}-${colIdx}`} style={styles.cell}>
+                                        {day !== null && (
+                                            <TouchableOpacity
+                                                onPress={() => handleDayPress(day)}
+                                                disabled={isDayDisabled(day)}
+                                                style={[
+                                                    styles.dayBtn,
+                                                    isDaySelected(day) && styles.dayBtnSelected,
+                                                ]}
+                                                accessibilityRole="button"
+                                                accessibilityLabel={`Dia ${day}`}
+                                                accessibilityState={{
+                                                    selected: isDaySelected(day),
+                                                    disabled: isDayDisabled(day),
+                                                }}
+                                            >
+                                                <Text
+                                                    style={[
+                                                        styles.dayText,
+                                                        isDaySelected(day) && styles.dayTextSelected,
+                                                        isDayDisabled(day) && styles.dayTextDisabled,
+                                                    ]}
+                                                >
+                                                    {day}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                ))}
                             </View>
                         ))}
                     </View>
@@ -253,11 +261,13 @@ const styles = StyleSheet.create({
         marginBottom: 2,
     },
     grid: {
+        flexDirection: 'column',
+    },
+    dayRow: {
         flexDirection: 'row',
-        flexWrap: 'wrap',
     },
     cell: {
-        width: `${100 / 7}%`,
+        flex: 1,
         height: 48,
         alignItems: 'center',
         justifyContent: 'center',

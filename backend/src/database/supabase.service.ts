@@ -60,6 +60,10 @@ export class SupabaseService implements OnModuleInit {
     return this.supabase.from(table);
   }
 
+  get storage() {
+    return this.supabase.storage;
+  }
+
   get auth() {
     return this.supabaseAuth.auth;
   }

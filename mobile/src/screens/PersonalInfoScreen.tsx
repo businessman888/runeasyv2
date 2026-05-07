@@ -9,6 +9,7 @@ import {
     TextInput,
     Platform,
     Alert,
+    ActivityIndicator,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -80,6 +81,7 @@ export function PersonalInfoScreen({ navigation }: any) {
     );
     const [profilePhoto, setProfilePhoto] = useState(getAvatarUrl(user));
     const [isSaving, setIsSaving] = useState(false);
+    const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
     const getInitials = (name: string) => {
         if (!name) return 'U';
@@ -90,7 +92,56 @@ export function PersonalInfoScreen({ navigation }: any) {
         return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     };
 
+    const uploadAvatarToBackend = async (asset: ImagePicker.ImagePickerAsset): Promise<string> => {
+        if (!user?.id) {
+            throw new Error('Usuário não identificado.');
+        }
+
+        const { BASE_API_URL } = require('../config/api.config');
+        const fileName = asset.fileName || `avatar-${Date.now()}.jpg`;
+        const inferredExt = (fileName.split('.').pop() || 'jpg').toLowerCase();
+        const mimeFromExt: Record<string, string> = {
+            jpg: 'image/jpeg',
+            jpeg: 'image/jpeg',
+            png: 'image/png',
+            webp: 'image/webp',
+            heic: 'image/heic',
+            heif: 'image/heif',
+        };
+        const mimeType = asset.mimeType || mimeFromExt[inferredExt] || 'image/jpeg';
+
+        const formData = new FormData();
+        // React Native FormData accepts { uri, name, type } for file fields
+        formData.append('file', {
+            uri: asset.uri,
+            name: fileName,
+            type: mimeType,
+        } as unknown as Blob);
+
+        const response = await fetch(`${BASE_API_URL}/users/${user.id}/profile/avatar`, {
+            method: 'POST',
+            headers: {
+                'x-user-id': user.id,
+                // Do NOT set Content-Type — fetch + FormData sets the correct multipart boundary.
+            },
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errBody = await response.text().catch(() => '');
+            throw new Error(errBody || 'Falha no upload da foto.');
+        }
+
+        const data = (await response.json()) as { avatar_url?: string };
+        if (!data.avatar_url) {
+            throw new Error('Resposta inválida do servidor.');
+        }
+        return data.avatar_url;
+    };
+
     const handleSelectPhoto = async () => {
+        if (isUploadingPhoto) return;
+
         try {
             const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -106,8 +157,34 @@ export function PersonalInfoScreen({ navigation }: any) {
                 quality: 0.8,
             });
 
-            if (!result.canceled && result.assets[0]) {
-                setProfilePhoto(result.assets[0].uri);
+            if (result.canceled || !result.assets[0]) return;
+
+            const asset = result.assets[0];
+            const previousPhoto = profilePhoto;
+            setIsUploadingPhoto(true);
+
+            try {
+                const uploadedUrl = await uploadAvatarToBackend(asset);
+
+                setProfilePhoto(uploadedUrl);
+
+                if (user) {
+                    useAuthStore.getState().setUser({
+                        ...user,
+                        profile: {
+                            ...user.profile,
+                            profile_pic: uploadedUrl,
+                            avatar_url: uploadedUrl,
+                        },
+                    });
+                }
+            } catch (uploadError) {
+                // Restore previous (working) photo so the old Google/Apple avatar isn't lost.
+                setProfilePhoto(previousPhoto);
+                const message = uploadError instanceof Error ? uploadError.message : 'Não foi possível enviar a foto.';
+                Alert.alert('Erro no upload', message);
+            } finally {
+                setIsUploadingPhoto(false);
             }
         } catch (error) {
             console.error('Error picking image:', error);
@@ -175,8 +252,8 @@ export function PersonalInfoScreen({ navigation }: any) {
                     weight_kg: weight ? parseFloat(weight) : undefined,
                     height: height ? parseFloat(height) : undefined,
                     height_cm: height ? parseFloat(height) : undefined,
-                    profile_pic: profilePhoto || user?.profile?.profile_pic || '',
-                    avatar_url: profilePhoto || user?.profile?.avatar_url || '',
+                    // profile_pic / avatar_url are persisted by the avatar upload endpoint,
+                    // which runs the moment the user picks a photo. Don't overwrite here.
                 },
             });
 
@@ -222,10 +299,9 @@ export function PersonalInfoScreen({ navigation }: any) {
                 {/* Profile Photo */}
                 <View style={styles.profilePhotoSection}>
                     <View style={styles.avatarContainer}>
-                        {(profilePhoto && profilePhoto.startsWith('http')) ||
-                            (user?.profile?.profile_pic && user.profile.profile_pic.startsWith('http')) ? (
+                        {profilePhoto && profilePhoto.startsWith('http') ? (
                             <Image
-                                source={{ uri: profilePhoto || user?.profile?.profile_pic }}
+                                source={{ uri: profilePhoto }}
                                 style={styles.avatar}
                             />
                         ) : (
@@ -233,9 +309,15 @@ export function PersonalInfoScreen({ navigation }: any) {
                                 <Text style={styles.initialsText}>{getInitials(fullName)}</Text>
                             </View>
                         )}
+                        {isUploadingPhoto && (
+                            <View style={styles.avatarUploadOverlay}>
+                                <ActivityIndicator size="large" color="#00D4FF" />
+                            </View>
+                        )}
                         <TouchableOpacity
-                            style={styles.editAvatarButton}
+                            style={[styles.editAvatarButton, isUploadingPhoto && styles.editAvatarButtonDisabled]}
                             onPress={handleSelectPhoto}
+                            disabled={isUploadingPhoto}
                         >
                             <EditIcon size={14} color="#0A0A18" />
                         </TouchableOpacity>
@@ -419,6 +501,20 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderWidth: 3,
         borderColor: '#0A0A18',
+    },
+    editAvatarButtonDisabled: {
+        opacity: 0.5,
+    },
+    avatarUploadOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: 'rgba(10,10,24,0.55)',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     formSection: {
         gap: spacing.lg,
