@@ -57,11 +57,12 @@ export interface RankingUser {
     profile: { firstname?: string; lastname?: string; profile_pic?: string };
     total_xp: number;
     current_streak: number;
+    current_level: number;
 }
 
 export interface RankingResponse {
     rankings: (RankingUser & { rank: number })[];
-    userPosition: { rank: number; total_xp: number; current_streak: number; profile: Record<string, unknown> };
+    userPosition: { rank: number; total_xp: number; current_streak: number; current_level: number; profile: Record<string, unknown> };
     totalParticipants: number;
     cohortInfo?: { month: number; year: number; totalCompetitors: number };
 }
@@ -361,19 +362,12 @@ export class GamificationService {
         referenceType?: string,
         referenceId?: string,
     ): Promise<{ newTotal: number; levelUp: boolean; newLevel: number }> {
-        const currentStats = await this.getUserStats(userId);
-        const currentPoints = currentStats?.total_points || 0;
-        const currentLevel = currentStats?.current_level || 1;
-        const newTotal = currentPoints + points;
-        const newLevel = this.calculateLevel(newTotal);
-        const levelUp = newLevel > currentLevel;
-
-        await this.supabaseService.from('user_levels').upsert({
-            user_id: userId,
-            total_points: newTotal,
-            current_level: newLevel,
-            updated_at: new Date().toISOString(),
-        });
+        // Capture pre-state for level-up detection. Source of truth for total_points
+        // and current_level is the DB trigger sync_points_to_user_xp, which atomically
+        // increments user_levels.total_points and recomputes current_level on every
+        // points_history INSERT (see migration 20260508_resync_user_xp_and_levels.sql).
+        const before = await this.getUserStats(userId);
+        const oldLevel = before?.current_level || 1;
 
         await this.supabaseService.from('points_history').insert({
             user_id: userId,
@@ -382,6 +376,11 @@ export class GamificationService {
             reference_type: referenceType,
             reference_id: referenceId,
         });
+
+        const after = await this.getUserStats(userId);
+        const newTotal = after?.total_points || 0;
+        const newLevel = after?.current_level || 1;
+        const levelUp = newLevel > oldLevel;
 
         if (levelUp) {
             this.logger.log(`User ${userId} leveled up to ${newLevel}!`);
@@ -550,13 +549,13 @@ export class GamificationService {
     async awardWorkoutXP(userId: string, workout: WorkoutXPData): Promise<number> {
         let totalAwarded = 0;
 
-        const { data: userData } = await this.supabaseService
-            .from('users')
-            .select('total_xp')
-            .eq('id', userId)
-            .single();
+        // user_levels.total_points is the canonical source of truth (synced atomically
+        // via trigger). Reading users.total_xp here previously caused the
+        // "Primeiro treino concluído!" bonus to fire repeatedly because that column
+        // had inconsistent state across legacy code paths.
+        const initialStats = await this.getUserStats(userId);
 
-        if ((userData?.total_xp || 0) === 0) {
+        if ((initialStats?.total_points || 0) === 0) {
             await this.addPoints(userId, 100, 'Primeiro treino concluído!', 'workout', workout.workoutId);
             totalAwarded += 100;
         }
@@ -610,40 +609,45 @@ export class GamificationService {
     async getGlobalRanking(userId: string, limit = 50): Promise<RankingResponse> {
         const [rankingsResult, userResult, countResult] = await Promise.all([
             this.supabaseService
-                .from('users')
-                .select('id, profile, total_xp, current_streak')
-                .gt('total_xp', 0)
-                .order('total_xp', { ascending: false })
+                .from('user_levels')
+                .select('total_points, current_level, current_streak, users!inner(id, profile)')
+                .gt('total_points', 0)
+                .order('total_points', { ascending: false })
                 .limit(limit),
             this.supabaseService
-                .from('users')
-                .select('id, profile, total_xp, current_streak')
-                .eq('id', userId)
+                .from('user_levels')
+                .select('total_points, current_level, current_streak, users!inner(id, profile)')
+                .eq('user_id', userId)
                 .single(),
             this.supabaseService
-                .from('users')
+                .from('user_levels')
                 .select('*', { count: 'exact', head: true })
-                .gt('total_xp', 0),
+                .gt('total_points', 0),
         ]);
 
-        const rankings = (rankingsResult.data || []).map((user: RankingUser, index: number) => ({
-            ...user,
+        const rankings = (rankingsResult.data || []).map((row: any, index: number) => ({
+            id: row.users?.id,
+            profile: row.users?.profile || {},
+            total_xp: row.total_points || 0,
+            current_streak: row.current_streak || 0,
+            current_level: row.current_level || 1,
             rank: index + 1,
         }));
 
-        const userXP = userResult.data?.total_xp || 0;
+        const userPoints = (userResult.data as any)?.total_points || 0;
         const { count: usersAbove } = await this.supabaseService
-            .from('users')
+            .from('user_levels')
             .select('*', { count: 'exact', head: true })
-            .gt('total_xp', userXP);
+            .gt('total_points', userPoints);
 
         return {
             rankings,
             userPosition: {
                 rank: (usersAbove || 0) + 1,
-                total_xp: userResult.data?.total_xp || 0,
-                current_streak: userResult.data?.current_streak || 0,
-                profile: userResult.data?.profile || {},
+                total_xp: userPoints,
+                current_streak: (userResult.data as any)?.current_streak || 0,
+                current_level: (userResult.data as any)?.current_level || 1,
+                profile: (userResult.data as any)?.users?.profile || {},
             },
             totalParticipants: countResult.count || 0,
         };
@@ -652,17 +656,23 @@ export class GamificationService {
     async getCohortRanking(userId: string, limit = 50): Promise<RankingResponse> {
         const { data: currentUser } = await this.supabaseService
             .from('users')
-            .select('id, profile, total_xp, current_streak, created_at')
+            .select('id, profile, created_at')
             .eq('id', userId)
             .single();
 
         if (!currentUser) {
             return {
                 rankings: [],
-                userPosition: { rank: 0, total_xp: 0, current_streak: 0, profile: {} },
+                userPosition: { rank: 0, total_xp: 0, current_streak: 0, current_level: 1, profile: {} },
                 totalParticipants: 0,
             };
         }
+
+        const { data: currentUserLevel } = await this.supabaseService
+            .from('user_levels')
+            .select('total_points, current_level, current_streak')
+            .eq('user_id', userId)
+            .single();
 
         const createdAt = new Date(currentUser.created_at);
         const cohortMonth = createdAt.getMonth() + 1;
@@ -675,11 +685,11 @@ export class GamificationService {
 
         const [rankingsResult, countResult] = await Promise.all([
             this.supabaseService
-                .from('users')
-                .select('id, profile, total_xp, current_streak')
-                .gte('created_at', startOfMonth)
-                .lt('created_at', endOfMonth)
-                .order('total_xp', { ascending: false })
+                .from('user_levels')
+                .select('total_points, current_level, current_streak, users!inner(id, profile, created_at)')
+                .gte('users.created_at', startOfMonth)
+                .lt('users.created_at', endOfMonth)
+                .order('total_points', { ascending: false })
                 .limit(limit),
             this.supabaseService
                 .from('users')
@@ -688,24 +698,30 @@ export class GamificationService {
                 .lt('created_at', endOfMonth),
         ]);
 
-        const rankings = (rankingsResult.data || []).map((user: RankingUser, index: number) => ({
-            ...user,
+        const rankings = (rankingsResult.data || []).map((row: any, index: number) => ({
+            id: row.users?.id,
+            profile: row.users?.profile || {},
+            total_xp: row.total_points || 0,
+            current_streak: row.current_streak || 0,
+            current_level: row.current_level || 1,
             rank: index + 1,
         }));
 
+        const userPoints = currentUserLevel?.total_points || 0;
         const { count: usersAboveInCohort } = await this.supabaseService
-            .from('users')
-            .select('*', { count: 'exact', head: true })
-            .gte('created_at', startOfMonth)
-            .lt('created_at', endOfMonth)
-            .gt('total_xp', currentUser.total_xp || 0);
+            .from('user_levels')
+            .select('users!inner(created_at)', { count: 'exact', head: true })
+            .gte('users.created_at', startOfMonth)
+            .lt('users.created_at', endOfMonth)
+            .gt('total_points', userPoints);
 
         return {
             rankings,
             userPosition: {
                 rank: (usersAboveInCohort || 0) + 1,
-                total_xp: currentUser.total_xp || 0,
-                current_streak: currentUser.current_streak || 0,
+                total_xp: userPoints,
+                current_streak: currentUserLevel?.current_streak || 0,
+                current_level: currentUserLevel?.current_level || 1,
                 profile: currentUser.profile || {},
             },
             totalParticipants: countResult.count || 0,

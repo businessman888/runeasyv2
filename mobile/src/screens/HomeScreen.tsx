@@ -22,6 +22,9 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import { HomeFixedHeader } from '../components/HomeFixedHeader';
 import { WorkoutCard } from '../components/WorkoutCard';
 import { HomeFab } from '../components/HomeFab';
+import { LevelCard } from '../components/level/LevelCard';
+import { Patent } from '../components/patents/Patent';
+import { getCurrentPatent } from '../utils/patents';
 import { useHealthKitStore } from '../stores/healthKitStore';
 
 import { BASE_API_URL } from '../config/api.config';
@@ -392,7 +395,6 @@ export function HomeScreen({ navigation }: any) {
     const totalPoints = stats?.total_points ?? 0;
     const pointsToNext = stats?.points_to_next_level ?? 100;
     const currentStreak = stats?.current_streak ?? 0;
-    const progress = pointsToNext > 0 ? Math.min((totalPoints / pointsToNext) * 100, 100) : 0;
 
     const hasCompletedWorkouts = (summary?.total_runs ?? 0) > 0;
 
@@ -545,42 +547,12 @@ export function HomeScreen({ navigation }: any) {
                 )}
 
                 {/* Level Card */}
-                <View style={styles.levelCard}>
-                    <View style={styles.levelHeader}>
-                        <View style={styles.eliteBadge}>
-                            <Text style={styles.eliteBadgeText}>Elite status</Text>
-                        </View>
-                        <View style={styles.diamondIcon}>
-                            <Text style={styles.diamondEmoji}>💎</Text>
-                        </View>
-                    </View>
-
-                    <Text style={styles.levelTitle}>Nível {currentLevel}</Text>
-
-                    <View style={styles.levelProgressRow}>
-                        <CircularProgress
-                            percentage={progress}
-                            size={70}
-                            strokeWidth={6}
-                            color={colors.primary}
-                            backgroundColor={colors.border}
-                        />
-                        <View style={styles.levelInfo}>
-                            <View style={styles.xpRow}>
-                                <Text style={styles.xpLabel}>Current XP</Text>
-                                <Text style={styles.xpValue}>
-                                    {totalPoints}<Text style={styles.xpTotal}> / {pointsToNext}</Text>
-                                </Text>
-                            </View>
-                            <View style={styles.horizontalProgressBar}>
-                                <View style={[styles.horizontalProgressFill, { width: `${progress}%` }]} />
-                            </View>
-                            <Text style={styles.xpNextGoal}>
-                                {pointsToNext - totalPoints} XP para desbloquear plano <Text style={styles.xpBold}>Maratona</Text>
-                            </Text>
-                        </View>
-                    </View>
-                </View>
+                <LevelCard
+                    stats={stats as any}
+                    variant="home"
+                    patentSlot={<Patent patent={getCurrentPatent(currentLevel)} size={50} />}
+                    patentName={getCurrentPatent(currentLevel).name}
+                />
 
                 {/* ── Seus treinos ─────────────────────────────────────────────── */}
                 <View>
@@ -865,91 +837,6 @@ const styles = StyleSheet.create({
         paddingTop: spacing.lg,
         paddingBottom: 120,
         gap: spacing.lg,
-    },
-
-    // Level Card
-    levelCard: {
-        backgroundColor: colors.card,
-        borderRadius: borderRadius['2xl'],
-        padding: spacing.lg,
-        gap: spacing.md,
-    },
-    levelHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    eliteBadge: {
-        backgroundColor: `${colors.primary}20`,
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.xs,
-        borderRadius: borderRadius.md,
-    },
-    eliteBadgeText: {
-        fontSize: typography.fontSizes.xs,
-        fontWeight: typography.fontWeights.semibold as any,
-        color: colors.primary,
-    },
-    diamondIcon: {
-        width: 32,
-        height: 32,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    diamondEmoji: {
-        fontSize: 24,
-    },
-    levelTitle: {
-        fontSize: typography.fontSizes['2xl'],
-        fontWeight: typography.fontWeights.bold as any,
-        color: colors.text,
-    },
-    levelProgressRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.lg,
-    },
-    levelInfo: {
-        flex: 1,
-        gap: spacing.xs,
-    },
-    xpRow: {
-        flexDirection: 'row',
-        alignItems: 'baseline',
-        gap: spacing.sm,
-    },
-    xpLabel: {
-        fontSize: typography.fontSizes.xs,
-        color: colors.textSecondary,
-    },
-    xpValue: {
-        fontSize: typography.fontSizes.base,
-        fontWeight: typography.fontWeights.bold as any,
-        color: colors.text,
-    },
-    xpTotal: {
-        fontSize: typography.fontSizes.sm,
-        fontWeight: typography.fontWeights.normal as any,
-        color: colors.textMuted,
-    },
-    xpNextGoal: {
-        fontSize: typography.fontSizes.xs,
-        color: colors.textSecondary,
-    },
-    xpBold: {
-        fontWeight: typography.fontWeights.bold as any,
-        color: colors.text,
-    },
-    horizontalProgressBar: {
-        height: 6,
-        backgroundColor: colors.border,
-        borderRadius: 3,
-        overflow: 'hidden',
-    },
-    horizontalProgressFill: {
-        height: '100%',
-        backgroundColor: colors.primary,
-        borderRadius: 3,
     },
 
     // Recovery Card

@@ -8,11 +8,16 @@ import {
     Modal,
     Pressable,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme';
 import { useGamificationStore } from '../stores';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { BadgeShield } from '../components/BadgeShield';
+import { LevelCard } from '../components/level/LevelCard';
+import { Patent } from '../components/patents/Patent';
+import { PatentCarousel } from '../components/patents/PatentCarousel';
+import { getCurrentPatent } from '../utils/patents';
 import {
     BADGE_STAT_LABELS,
     BADGE_TYPE_SECTION_LABELS,
@@ -100,24 +105,14 @@ export function BadgesScreen({ navigation }: any) {
     const { badges, stats, fetchBadges, fetchStats, isLoading } = useGamificationStore();
     const [selectedBadge, setSelectedBadge] = useState<BadgeItem | null>(null);
 
-    React.useEffect(() => {
-        fetchBadges();
-        fetchStats();
-    }, []);
+    useFocusEffect(
+        useCallback(() => {
+            fetchBadges();
+            fetchStats();
+        }, [fetchBadges, fetchStats]),
+    );
 
     const currentLevel = stats?.current_level ?? 1;
-    const totalXP = stats?.total_points ?? 0;
-    const currentStreak = stats?.current_streak ?? 0;
-    const xpToNext = stats?.points_to_next_level ?? 1000;
-    const progressPct = Math.min((totalXP / (totalXP + xpToNext)) * 100, 100);
-
-    const getLevelName = (level: number) => {
-        if (level === 1) return 'Iniciante';
-        if (level <= 3) return 'Corredor Amador';
-        if (level <= 5) return 'Corredor Nato';
-        if (level <= 10) return 'Atleta';
-        return 'Campeão';
-    };
 
     const earnedTotal = useMemo(() => badges.filter(b => b.earned).length, [badges]);
     const totalBadges = badges.length;
@@ -156,39 +151,17 @@ export function BadgesScreen({ navigation }: any) {
                     <View style={styles.headerSpacer} />
                 </View>
 
+                {/* Patent Carousel — drag to browse all patents */}
+                <PatentCarousel currentLevel={currentLevel} />
+
                 {/* Level Card */}
-                <View style={styles.levelCard}>
-                    <View style={styles.levelCardTopRow}>
-                        <View style={styles.levelBadgeChip}>
-                            <Text style={styles.levelBadgeChipText}>Nível Atual</Text>
-                        </View>
-                        <View style={styles.xpChip}>
-                            <Ionicons name="flash" size={18} color="#FFD700" />
-                            <View>
-                                <Text style={styles.xpValue}>{totalXP.toLocaleString('pt-BR')}</Text>
-                                <Text style={styles.xpLabel}>xp acumulado</Text>
-                            </View>
-                        </View>
-                    </View>
-
-                    <Text style={styles.levelName}>{getLevelName(currentLevel)}</Text>
-                    <Text style={styles.levelNumber}>{currentLevel}</Text>
-
-                    <View style={styles.streakRow}>
-                        <Ionicons name="flame" size={18} color={colors.completed} />
-                        <Text style={styles.streakText}>Combo: {currentStreak} dias</Text>
-                    </View>
-
-                    <View style={styles.progressSection}>
-                        <View style={styles.progressLabelRow}>
-                            <Text style={styles.progressLabel}>Nível {currentLevel}</Text>
-                            <Text style={styles.progressLabel}>Nível {currentLevel + 1}</Text>
-                            <Text style={styles.xpRemaining}>{xpToNext} XP restantes</Text>
-                        </View>
-                        <View style={styles.progressTrack}>
-                            <View style={[styles.progressFill, { width: `${progressPct}%` as any }]} />
-                        </View>
-                    </View>
+                <View style={styles.levelCardWrapper}>
+                    <LevelCard
+                        stats={stats as any}
+                        variant="badges"
+                        patentSlot={<Patent patent={getCurrentPatent(currentLevel)} size={50} />}
+                        patentName={getCurrentPatent(currentLevel).name}
+                    />
                 </View>
 
                 {/* Conquistas Header */}
@@ -298,106 +271,9 @@ const styles = StyleSheet.create({
     headerSpacer: { width: 44 },
 
     // ── Level Card ───────────────────────────────────────────────────────
-    levelCard: {
-        backgroundColor: '#1C1C2E',
+    levelCardWrapper: {
         marginHorizontal: spacing.lg,
         marginBottom: spacing.xl,
-        borderRadius: borderRadius['2xl'],
-        padding: spacing.lg,
-    },
-    levelCardTopRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: spacing.lg,
-    },
-    levelBadgeChip: {
-        borderWidth: 2,
-        borderColor: colors.primary,
-        paddingHorizontal: spacing.md,
-        paddingVertical: 6,
-        borderRadius: borderRadius.full,
-    },
-    levelBadgeChipText: {
-        fontSize: typography.fontSizes.sm,
-        fontWeight: typography.fontWeights.semibold,
-        color: colors.primary,
-    },
-    xpChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        borderWidth: 2,
-        borderColor: '#FFD700',
-        borderRadius: borderRadius.xl,
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-    },
-    xpValue: {
-        fontSize: 20,
-        fontWeight: typography.fontWeights.bold,
-        color: '#FFD700',
-        lineHeight: 24,
-        textAlign: 'right',
-    },
-    xpLabel: {
-        fontSize: 10,
-        color: '#FFD700',
-        textAlign: 'right',
-    },
-    levelName: {
-        fontSize: typography.fontSizes.xl,
-        fontWeight: typography.fontWeights.bold,
-        color: colors.text,
-        marginBottom: 2,
-    },
-    levelNumber: {
-        fontSize: 56,
-        fontWeight: typography.fontWeights.bold,
-        color: colors.primary,
-        lineHeight: 64,
-        marginBottom: spacing.sm,
-    },
-    streakRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        marginBottom: spacing.xl,
-    },
-    streakText: {
-        fontSize: typography.fontSizes.base,
-        color: colors.completed,
-        fontWeight: typography.fontWeights.semibold,
-    },
-    progressSection: { width: '100%' },
-    progressLabelRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.md,
-        marginBottom: spacing.sm,
-    },
-    progressLabel: {
-        fontSize: typography.fontSizes.sm,
-        color: colors.text,
-        fontWeight: typography.fontWeights.semibold,
-    },
-    xpRemaining: {
-        fontSize: typography.fontSizes.sm,
-        color: colors.primary,
-        fontWeight: typography.fontWeights.semibold,
-        marginLeft: 'auto',
-    },
-    progressTrack: {
-        width: '100%',
-        height: 10,
-        backgroundColor: `${colors.primary}30`,
-        borderRadius: borderRadius.full,
-        overflow: 'hidden',
-    },
-    progressFill: {
-        height: '100%',
-        backgroundColor: colors.primary,
-        borderRadius: borderRadius.full,
     },
 
     // ── Section Header ───────────────────────────────────────────────────

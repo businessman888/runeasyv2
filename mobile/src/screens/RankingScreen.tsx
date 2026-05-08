@@ -13,6 +13,8 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme';
 import { useGamificationStore, RankingUser } from '../stores/gamificationStore';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { Patent } from '../components/patents/Patent';
+import { getCurrentPatent } from '../utils/patents';
 
 const MONTH_NAMES_PT = [
     '', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -139,7 +141,10 @@ function RankingRow({ user }: { user: RankingUser }) {
             <Text style={styles.rankNumber}>{String(user.rank).padStart(2, '0')}</Text>
             <Avatar profile={user.profile} size={44} />
             <View style={styles.rankInfo}>
-                <Text style={styles.rankName} numberOfLines={1}>{getUserDisplayName(user.profile)}</Text>
+                <View style={styles.rankNameRow}>
+                    <Text style={styles.rankName} numberOfLines={1}>{getUserDisplayName(user.profile)}</Text>
+                    <Patent patent={getCurrentPatent(user.current_level || 1)} size={22} glow={false} />
+                </View>
                 <View style={styles.streakRow}>
                     <MaterialCommunityIcons name="fire" size={14} color={colors.primary} />
                     <Text style={styles.streakText}>
@@ -157,18 +162,22 @@ function RankingRow({ user }: { user: RankingUser }) {
 
 // ─── User Position Card ────────────────────────────────────────
 
-function UserPositionCard({ rank, totalXP, streak, profile }: {
+function UserPositionCard({ rank, totalXP, streak, profile, currentLevel }: {
     rank: number;
     totalXP: number;
     streak: number;
     profile: RankingUser['profile'];
+    currentLevel: number;
 }) {
     return (
         <View style={styles.userPositionCard}>
             <Text style={styles.rankNumber}>{String(rank).padStart(2, '0')}</Text>
             <Avatar profile={profile} size={44} borderColor={colors.primary} />
             <View style={styles.rankInfo}>
-                <Text style={[styles.rankName, { color: colors.text }]}>Você</Text>
+                <View style={styles.rankNameRow}>
+                    <Text style={[styles.rankName, { color: colors.text }]}>Você</Text>
+                    <Patent patent={getCurrentPatent(currentLevel)} size={22} glow={false} />
+                </View>
                 <View style={styles.streakRow}>
                     <MaterialCommunityIcons name="fire" size={14} color={colors.primary} />
                     <Text style={styles.streakText}>
@@ -372,6 +381,7 @@ export function RankingScreen({ navigation }: any) {
                                 totalXP={currentRanking.userPosition.total_xp}
                                 streak={currentRanking.userPosition.current_streak}
                                 profile={currentRanking.userPosition.profile as RankingUser['profile']}
+                                currentLevel={currentRanking.userPosition.current_level || 1}
                             />
                         )}
                     </>
@@ -532,10 +542,16 @@ const styles = StyleSheet.create({
         flex: 1,
         marginLeft: spacing.md,
     },
+    rankNameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+    },
     rankName: {
         fontSize: typography.fontSizes.md,
         fontWeight: typography.fontWeights.semibold,
         color: colors.text,
+        flexShrink: 1,
     },
     streakRow: {
         flexDirection: 'row',

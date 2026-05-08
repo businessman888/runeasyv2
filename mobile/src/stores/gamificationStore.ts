@@ -1,6 +1,13 @@
 import { create } from 'zustand';
+import { createMMKV } from 'react-native-mmkv';
 import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
+
+// MMKV-backed cache for stats and earnedBadges so the UI doesn't show zeros
+// during cold start (before fetch resolves).
+const gamificationCache = createMMKV({ id: 'gamification-cache' });
+const STATS_KEY = 'stats';
+const EARNED_BADGES_KEY = 'earned_badges';
 
 interface Badge {
     id: string;
@@ -21,6 +28,9 @@ interface UserStats {
     current_streak: number;
     best_streak: number;
     points_to_next_level: number;
+    points_in_current_level: number;
+    points_for_next_level: number;
+    progress_pct: number;
 }
 
 export interface RankingUser {
@@ -29,6 +39,7 @@ export interface RankingUser {
     profile: { firstname?: string; lastname?: string; full_name?: string; profile_pic?: string; avatar_url?: string };
     total_xp: number;
     current_streak: number;
+    current_level: number;
 }
 
 export interface RankingData {
@@ -37,6 +48,7 @@ export interface RankingData {
         rank: number;
         total_xp: number;
         current_streak: number;
+        current_level: number;
         profile: { firstname?: string; lastname?: string; full_name?: string; profile_pic?: string; avatar_url?: string };
     };
     totalParticipants: number;
@@ -71,10 +83,44 @@ const getUserId = async () => {
     return await Storage.getItemAsync('user_id');
 };
 
+function readCachedStats(): UserStats | null {
+    try {
+        const raw = gamificationCache.getString(STATS_KEY);
+        return raw ? (JSON.parse(raw) as UserStats) : null;
+    } catch {
+        return null;
+    }
+}
+
+function readCachedEarnedBadges(): Badge[] {
+    try {
+        const raw = gamificationCache.getString(EARNED_BADGES_KEY);
+        return raw ? (JSON.parse(raw) as Badge[]) : [];
+    } catch {
+        return [];
+    }
+}
+
+function writeCachedStats(stats: UserStats) {
+    try {
+        gamificationCache.set(STATS_KEY, JSON.stringify(stats));
+    } catch {
+        // best-effort cache; ignore failures
+    }
+}
+
+function writeCachedEarnedBadges(earned: Badge[]) {
+    try {
+        gamificationCache.set(EARNED_BADGES_KEY, JSON.stringify(earned));
+    } catch {
+        // best-effort cache; ignore failures
+    }
+}
+
 export const useGamificationStore = create<GamificationState>((set) => ({
-    stats: null,
+    stats: readCachedStats(),
     badges: [],
-    earnedBadges: [],
+    earnedBadges: readCachedEarnedBadges(),
     isLoading: false,
 
     globalRanking: null,
@@ -94,8 +140,9 @@ export const useGamificationStore = create<GamificationState>((set) => ({
             });
 
             if (response.ok) {
-                const data = await response.json();
+                const data = (await response.json()) as UserStats;
                 set({ stats: data });
+                writeCachedStats(data);
             }
         } catch (error) {
             console.error('Fetch stats error:', error);
@@ -117,10 +164,12 @@ export const useGamificationStore = create<GamificationState>((set) => ({
 
             if (response.ok) {
                 const data = await response.json();
+                const earned = (data.badges as Badge[]).filter((b) => b.earned);
                 set({
                     badges: data.badges,
-                    earnedBadges: data.badges.filter((b: Badge) => b.earned),
+                    earnedBadges: earned,
                 });
+                writeCachedEarnedBadges(earned);
             }
         } catch (error) {
             console.error('Fetch badges error:', error);

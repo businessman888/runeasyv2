@@ -22,6 +22,15 @@ export class GamificationController {
         }
 
         const stats = await this.gamificationService.getUserStats(userId);
+        const level = stats?.current_level || 1;
+        const totalPoints = stats?.total_points || 0;
+
+        const pointsForNextLevel = 1000 + (level - 1) * 100;
+        const pointsToNextLevel = this.gamificationService.getPointsForNextLevel(level, totalPoints);
+        const pointsInCurrentLevel = pointsForNextLevel - pointsToNextLevel;
+        const progressPct = pointsForNextLevel > 0
+            ? Math.max(0, Math.min(100, (pointsInCurrentLevel / pointsForNextLevel) * 100))
+            : 0;
 
         if (!stats) {
             return {
@@ -29,15 +38,19 @@ export class GamificationController {
                 total_points: 0,
                 current_streak: 0,
                 best_streak: 0,
-                points_to_next_level: this.gamificationService.getPointsForNextLevel(1, 0),
+                points_to_next_level: pointsToNextLevel,
+                points_in_current_level: 0,
+                points_for_next_level: pointsForNextLevel,
+                progress_pct: 0,
             };
         }
-
-        const pointsToNextLevel = this.gamificationService.getPointsForNextLevel(stats.current_level, stats.total_points);
 
         return {
             ...stats,
             points_to_next_level: pointsToNextLevel,
+            points_in_current_level: pointsInCurrentLevel,
+            points_for_next_level: pointsForNextLevel,
+            progress_pct: progressPct,
         };
     }
 
