@@ -1,120 +1,73 @@
 import SwiftUI
 
+/// Tela inicial do app — espelha a Home do app mobile (Figma 1058-1239 / 1109-1239).
+/// Header com avatar + 3 stats da semana, label "Seus treinos" e card do dia
+/// (treino programado OU descanso).
 struct StartView: View {
     let userName: String
+    let avatarUrl: String?
     let workout: PlannedWorkout?
+    let weekStats: WeekStats
+    let nextWorkout: NextWorkoutInfo?
     let onStart: (PlannedWorkout?) -> Void
-
-    private var greeting: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        switch hour {
-        case 5..<12:  return "Bom dia"
-        case 12..<18: return "Boa tarde"
-        default:      return "Boa noite"
-        }
-    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                header
+                HeaderView(avatarUrl: avatarUrl, stats: weekStats)
+                    .padding(.bottom, 2)
+
+                Text("Seus treinos")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.runEasyTextPrimary)
+                    .padding(.horizontal, 2)
 
                 if let workout = workout, workout.type != .rest {
-                    workoutCard(workout)
+                    WorkoutDayCard(workout: workout) {
+                        onStart(workout)
+                    }
                 } else {
-                    restCard
+                    RestDayCard(nextWorkout: nextWorkout)
                 }
-
-                PrimaryActionButton(
-                    workout?.type == .rest ? "Corrida Livre" : "Iniciar",
-                    icon: "play.fill"
-                ) {
-                    onStart(workout)
-                }
-                .padding(.top, 2)
             }
             .padding(.horizontal, 4)
             .padding(.vertical, 4)
         }
         .background(Color.runEasyNavy.ignoresSafeArea())
     }
-
-    // MARK: - Sections
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(greeting)
-                .font(AppFont.captionMuted)
-                .foregroundColor(.runEasyText60)
-            Text(userName)
-                .font(AppFont.titleLarge)
-                .foregroundColor(.runEasyTextPrimary)
-        }
-    }
-
-    private func workoutCard(_ workout: PlannedWorkout) -> some View {
-        RunEasyCard(isActive: true) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(workout.type.displayName.uppercased())
-                    .font(AppFont.labelSmall)
-                    .foregroundColor(.runEasyCyan)
-                    .tracking(0.6)
-
-                Text(workout.title)
-                    .font(AppFont.titleMedium)
-                    .foregroundColor(.runEasyTextPrimary)
-
-                Divider()
-                    .background(Color.runEasyDivider)
-                    .padding(.vertical, 1)
-
-                HStack(spacing: 14) {
-                    metric(label: "Dist", value: String(format: "%.1f km", workout.distanceKm))
-                    metric(label: "Pace", value: "\(workout.targetPace)/km")
-                }
-            }
-        }
-    }
-
-    private var restCard: some View {
-        RunEasyCard(isActive: false) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 4) {
-                    Image(systemName: "leaf.fill")
-                        .font(.system(size: 9, weight: .bold))
-                    Text("DIA DE DESCANSO")
-                        .font(AppFont.labelSmall)
-                        .tracking(0.6)
-                }
-                .foregroundColor(.runEasyGreen)
-
-                Text("Sem treino programado")
-                    .font(AppFont.titleMedium)
-                    .foregroundColor(.runEasyTextPrimary)
-                Text("Pode rodar livre se quiser ✨")
-                    .font(AppFont.captionMuted)
-                    .foregroundColor(.runEasyText60)
-            }
-        }
-    }
-
-    private func metric(label: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(label.uppercased())
-                .font(AppFont.labelSmall)
-                .foregroundColor(.runEasyText40)
-                .tracking(0.4)
-            Text(value)
-                .font(AppFont.metricSmall)
-                .foregroundColor(.runEasyTextPrimary)
-        }
-    }
 }
 
-#Preview("With workout") {
-    StartView(userName: "Matheus", workout: .mock, onStart: { _ in })
+#Preview("Workout day") {
+    StartView(
+        userName: "Matheus",
+        avatarUrl: nil,
+        workout: .mock,
+        weekStats: .mock,
+        nextWorkout: nil,
+        onStart: { _ in }
+    )
+}
+
+#Preview("Workout completed") {
+    var w = PlannedWorkout.mock
+    w.status = .completed
+    return StartView(
+        userName: "Matheus",
+        avatarUrl: nil,
+        workout: w,
+        weekStats: .mock,
+        nextWorkout: nil,
+        onStart: { _ in }
+    )
 }
 
 #Preview("Rest day") {
-    StartView(userName: "Matheus", workout: nil, onStart: { _ in })
+    StartView(
+        userName: "Matheus",
+        avatarUrl: nil,
+        workout: nil,
+        weekStats: .mock,
+        nextWorkout: .mock,
+        onStart: { _ in }
+    )
 }

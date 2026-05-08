@@ -50,6 +50,36 @@ export interface TodayWorkoutForWatch {
     distanceKm: number;
     targetPace: string;
     instructions: string;
+    /** Duração-alvo em segundos (para o card mostrar "Tempo: 51:35") */
+    targetDurationSeconds?: number | null;
+    /** "Moderada" | "Leve" | "Alta" — usado no subtítulo do card */
+    intensity?: string;
+    /** "Hoje, 14/06" — string formatada de data pra header do card */
+    dateLabel?: string;
+    /**
+     * Status do treino — quando 'completed', o Watch desabilita o botão Iniciar
+     * (espelha o comportamento do app mobile: card desativado pós-finalização).
+     */
+    status?: 'pending' | 'completed';
+}
+
+export interface WeekStatsForWatch {
+    /** Sequência atual de dias com treino (de gamificationStore) */
+    streak: number;
+    /** Treinos completados na semana corrente */
+    workoutsDone: number;
+    /** Total de treinos planejados para a semana corrente */
+    workoutsTotal: number;
+    /** Dias de descanso já passados/concluídos na semana */
+    restDone: number;
+    /** Total de dias de descanso planejados para a semana */
+    restTotal: number;
+}
+
+export interface NextWorkoutForWatch {
+    title: string;
+    /** ISO date "2026-04-05" — Watch formata pra display ("domingo, 5 de abr.") */
+    date: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -116,28 +146,37 @@ export function initAppleWatch(): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Envia o treino do dia para o Watch via applicationContext (estado durável).
- * Se o Watch não estiver alcançável agora, ele recebe quando reconectar.
+ * Contexto unificado enviado ao Watch via `updateApplicationContext`.
+ * Inclui usuário (nome + avatar), treino do dia, stats da semana, próximo treino.
+ * Watch reflete fielmente o que o iPhone tem.
  */
+export interface WatchContext {
+    userName: string;
+    avatarUrl?: string | null;
+    todayWorkout: TodayWorkoutForWatch | null;
+    weekStats?: WeekStatsForWatch;
+    nextWorkout?: NextWorkoutForWatch | null;
+}
+
 export function sendTodayWorkout(workout: TodayWorkoutForWatch | null, userName: string): void {
+    sendWatchContext({ todayWorkout: workout, userName });
+}
+
+export function sendWatchContext(ctx: WatchContext): void {
     if (Platform.OS !== 'ios') return;
     try {
-        if (workout) {
-            updateApplicationContext({
-                type: 'today_workout',
-                payload: { ...workout },
-                user_name: userName,
-                sent_at: new Date().toISOString(),
-            });
-        } else {
-            updateApplicationContext({
-                type: 'today_rest',
-                user_name: userName,
-                sent_at: new Date().toISOString(),
-            });
-        }
+        const payloadType = ctx.todayWorkout ? 'today_workout' : 'today_rest';
+        updateApplicationContext({
+            type: payloadType,
+            payload: ctx.todayWorkout ? { ...ctx.todayWorkout } : null,
+            user_name: ctx.userName,
+            avatar_url: ctx.avatarUrl ?? null,
+            week_stats: ctx.weekStats ?? null,
+            next_workout: ctx.nextWorkout ?? null,
+            sent_at: new Date().toISOString(),
+        });
     } catch (e) {
-        console.warn('[AppleWatch] sendTodayWorkout error:', e);
+        console.warn('[AppleWatch] sendWatchContext error:', e);
     }
 }
 

@@ -11,22 +11,17 @@ struct ContentView: View {
     @State private var path: [AppRoute] = []
     @State private var lastCompletedRun: CompletedRun?
 
-    /// Fallback pra desenvolvimento: se o iPhone ainda não pareou e enviou um treino,
-    /// mostra um treino mock pra UI ficar testável. Em produção, sem treino → tela de descanso.
-    private var displayedWorkout: PlannedWorkout? {
-        #if DEBUG
-        return phoneBridge.todayWorkout ?? .mock
-        #else
-        return phoneBridge.todayWorkout
-        #endif
-    }
-
     var body: some View {
         NavigationStack(path: $path) {
             StartView(
                 userName: phoneBridge.userName,
-                workout: displayedWorkout,
+                avatarUrl: phoneBridge.avatarUrl,
+                workout: phoneBridge.todayWorkout,
+                weekStats: phoneBridge.weekStats,
+                nextWorkout: phoneBridge.nextWorkout,
                 onStart: { workout in
+                    // Bloqueia se treino já completado (botão deveria estar disabled, mas por segurança)
+                    if workout?.isCompleted == true { return }
                     path.append(.activeRun(workoutId: workout?.id))
                 }
             )
@@ -34,7 +29,7 @@ struct ContentView: View {
                 switch route {
                 case .activeRun:
                     ActiveRunView(
-                        workout: displayedWorkout,
+                        workout: phoneBridge.todayWorkout,
                         onFinish: { run in
                             lastCompletedRun = run
                             phoneBridge.sendCompletedRun(run)
@@ -60,7 +55,6 @@ struct ContentView: View {
         }
         .preferredColorScheme(.dark)
         .task {
-            // Ativa WCSession depois da scene estar pronta (watchOS 26 lifecycle).
             phoneBridge.activate()
         }
     }

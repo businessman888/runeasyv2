@@ -1,6 +1,13 @@
 import SwiftUI
 import WatchKit
 
+/// Tela de corrida ativa — matching Figma node 1074-1239 (running) e 1089-1282 (paused).
+/// Layout single-page:
+///   - Topo: label "Tempo" + timer grande (cyan quando rodando, amarelo quando pausado)
+///   - Meio: Distância (esquerda) + Pace (direita) com ícones
+///   - Base: botões circulares
+///       Rodando → 1 botão cyan (stop = pausar)
+///       Pausado → 2 botões (resume outline + finish cyan)
 struct ActiveRunView: View {
     let workout: PlannedWorkout?
     let onFinish: (CompletedRun) -> Void
@@ -10,39 +17,29 @@ struct ActiveRunView: View {
     @State private var showStopConfirmation = false
     @State private var showPermissionError = false
 
-    private var status: RunStatus { workoutManager.metrics.isPaused ? .paused : .running }
     private var metrics: RunMetrics { workoutManager.metrics }
 
     var body: some View {
         Group {
             if workoutManager.isRunning {
                 runningContent
-            } else if workoutManager.permissionError != nil {
-                // Mostrado brevemente antes do alert ser exibido
-                loadingContent
             } else {
                 loadingContent
             }
         }
         .background(Color.runEasyNavy.ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
-        .task {
-            await startIfNeeded()
-        }
+        .task { await startIfNeeded() }
         .alert("Finalizar corrida?", isPresented: $showStopConfirmation) {
             Button("Cancelar", role: .cancel) { }
-            Button("Finalizar", role: .destructive) {
-                finalize()
-            }
+            Button("Finalizar", role: .destructive) { finalize() }
         } message: {
             Text("Você não poderá retomar.")
         }
         .alert("Permissão necessária", isPresented: $showPermissionError) {
-            Button("OK", role: .cancel) {
-                onCancel()
-            }
+            Button("OK", role: .cancel) { onCancel() }
         } message: {
-            Text(workoutManager.permissionError ?? "Permita acesso a Saúde e Localização nas configurações do Apple Watch para usar esta função.")
+            Text(workoutManager.permissionError ?? "Permita acesso a Saúde e Localização nas configurações do Apple Watch.")
         }
         .onChange(of: workoutManager.permissionError) { _, newValue in
             if newValue != nil { showPermissionError = true }
@@ -57,159 +54,135 @@ struct ActiveRunView: View {
                 .controlSize(.large)
                 .tint(.runEasyCyan)
             Text("Preparando…")
-                .font(AppFont.captionMuted)
+                .font(.system(size: 11))
                 .foregroundColor(.runEasyText60)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var runningContent: some View {
-        TabView {
-            primaryMetricsPage.tag(0)
-            secondaryMetricsPage.tag(1)
-            controlsPage.tag(2)
-        }
-        .tabViewStyle(.verticalPage)
-    }
-
-    // MARK: - Pages
-
-    private var primaryMetricsPage: some View {
-        VStack(spacing: 0) {
-            HStack {
-                StatusBanner(status: status)
-                Spacer()
-            }
-            .padding(.horizontal, 6)
-            .padding(.bottom, 4)
-
-            heroMetric(
-                value: MetricFormat.time(metrics.elapsedSeconds),
-                label: "Tempo",
-                color: .runEasyCyan
-            )
-            divider
-            heroMetric(
-                value: MetricFormat.distance(metrics.distanceMeters),
-                label: "Km",
-                color: .runEasyTextPrimary
-            )
-            divider
-            heroMetric(
-                value: MetricFormat.pace(metrics.currentPaceSecondsPerKm),
-                label: "Pace /km",
-                color: .runEasyGreen
-            )
-        }
-        .padding(.horizontal, 4)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var secondaryMetricsPage: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                StatusBanner(status: status)
-                Spacer()
-            }
-            .padding(.bottom, 2)
-
-            secondaryRow(
-                icon: "heart.fill",
-                color: .runEasyRed,
-                label: "FC",
-                value: metrics.heartRate.map { "\($0) bpm" } ?? "--"
-            )
-            secondaryRow(
-                icon: "flame.fill",
-                color: .runEasyOrange,
-                label: "Calorias",
-                value: metrics.calories > 0 ? "\(metrics.calories) kcal" : "--"
-            )
-            secondaryRow(
-                icon: "stopwatch",
-                color: .runEasyCyan,
-                label: "Pace médio",
-                value: metrics.distanceMeters > 0 ? "\(MetricFormat.pace(metrics.avgPaceSecondsPerKm))/km" : "--"
-            )
+        VStack(spacing: 6) {
+            timerSection
+            metricsSection
             Spacer(minLength: 0)
+            controlsSection
         }
         .padding(.horizontal, 8)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private var controlsPage: some View {
-        VStack(spacing: 8) {
-            HStack {
-                StatusBanner(status: status)
-                Spacer()
-            }
-            .padding(.bottom, 2)
-
-            PrimaryActionButton(
-                metrics.isPaused ? "Retomar" : "Pausar",
-                icon: metrics.isPaused ? "play.fill" : "pause.fill",
-                tint: metrics.isPaused ? .runEasyGreen : .runEasyWarning,
-                foreground: .runEasyNavy
-            ) {
-                togglePause()
-            }
-
-            PrimaryActionButton(
-                "Finalizar",
-                icon: "stop.fill",
-                tint: .runEasyRed,
-                foreground: .runEasyTextPrimary
-            ) {
-                WKInterfaceDevice.current().play(.notification)
-                showStopConfirmation = true
-            }
-        }
-        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Components
+    // MARK: - Sections
 
-    private var divider: some View {
-        Rectangle()
-            .fill(Color.runEasyDivider)
-            .frame(height: 1)
-            .padding(.vertical, 2)
-    }
-
-    private func heroMetric(value: String, label: String, color: Color) -> some View {
-        VStack(spacing: -2) {
-            Text(value)
-                .font(AppFont.metricLarge)
-                .foregroundColor(color)
-                .minimumScaleFactor(0.5)
+    private var timerSection: some View {
+        VStack(spacing: 1) {
+            Text("Tempo")
+                .font(.system(size: 10, weight: .regular))
+                .foregroundColor(.runEasyText60)
+            Text(MetricFormat.time(metrics.elapsedSeconds))
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .foregroundColor(metrics.isPaused ? .runEasyWarning : .runEasyCyan)
+                .monospacedDigit()
                 .lineLimit(1)
-            Text(label.uppercased())
-                .font(AppFont.labelSmall)
-                .foregroundColor(.runEasyText40)
-                .tracking(0.6)
+                .minimumScaleFactor(0.6)
         }
         .frame(maxWidth: .infinity)
     }
 
-    private func secondaryRow(icon: String, color: Color, label: String, value: String) -> some View {
-        HStack(spacing: 8) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.15))
-                    .frame(width: 26, height: 26)
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(color)
-            }
-            VStack(alignment: .leading, spacing: -1) {
-                Text(label.uppercased())
-                    .font(AppFont.labelSmall)
-                    .foregroundColor(.runEasyText40)
-                    .tracking(0.4)
+    private var metricsSection: some View {
+        HStack(spacing: 4) {
+            metricBlock(
+                icon: "figure.run",
+                label: "Distance",
+                value: "\(MetricFormat.distance(metrics.distanceMeters)) Km"
+            )
+            metricBlock(
+                icon: "stopwatch.fill",
+                label: "Pace",
+                value: paceLabel
+            )
+        }
+    }
+
+    private var paceLabel: String {
+        let s = metrics.currentPaceSecondsPerKm
+        guard s.isFinite, s > 0 else { return "— Min" }
+        let min = s / 60.0
+        return String(format: "%.1f Min", min)
+    }
+
+    private func metricBlock(icon: String, label: String, value: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.runEasyCyan)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(label)
+                    .font(.system(size: 8, weight: .regular))
+                    .foregroundColor(.runEasyText60)
                 Text(value)
-                    .font(AppFont.metricMedium)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundColor(.runEasyTextPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var controlsSection: some View {
+        Group {
+            if metrics.isPaused {
+                pausedControls
+            } else {
+                runningControls
+            }
+        }
+        .padding(.bottom, 2)
+    }
+
+    /// Rodando — 1 botão central cyan (= pausar)
+    private var runningControls: some View {
+        HStack {
+            Spacer()
+            CircleIconButton(
+                icon: "pause.fill",
+                fillColor: .runEasyCyan,
+                iconColor: .runEasyNavy,
+                size: 44
+            ) {
+                togglePause()
+            }
+            Spacer()
+        }
+    }
+
+    /// Pausado — 2 botões: resume (outline) + finish (cyan filled)
+    private var pausedControls: some View {
+        HStack(spacing: 14) {
+            Spacer()
+            CircleIconButton(
+                icon: "play.fill",
+                fillColor: .runEasyCardBg,
+                iconColor: .runEasyCyan,
+                strokeColor: .runEasyCyan,
+                strokeWidth: 1.5,
+                size: 44
+            ) {
+                togglePause()
+            }
+            CircleIconButton(
+                icon: "flag.fill",
+                fillColor: .runEasyCyan,
+                iconColor: .runEasyNavy,
+                size: 44
+            ) {
+                WKInterfaceDevice.current().play(.notification)
+                showStopConfirmation = true
             }
             Spacer()
         }
@@ -240,6 +213,46 @@ struct ActiveRunView: View {
             let run = await workoutManager.endWorkout()
             onFinish(run)
         }
+    }
+}
+
+// MARK: - CircleIconButton (componente local)
+
+private struct CircleIconButton: View {
+    let icon: String
+    let fillColor: Color
+    let iconColor: Color
+    var strokeColor: Color? = nil
+    var strokeWidth: CGFloat = 0
+    let size: CGFloat
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: {
+            WKInterfaceDevice.current().play(.click)
+            action()
+        }) {
+            ZStack {
+                Circle().fill(fillColor)
+                if let strokeColor, strokeWidth > 0 {
+                    Circle().strokeBorder(strokeColor, lineWidth: strokeWidth)
+                }
+                Image(systemName: icon)
+                    .font(.system(size: size * 0.40, weight: .bold))
+                    .foregroundColor(iconColor)
+            }
+            .frame(width: size, height: size)
+            .neonGlow(color: fillColor == .runEasyCyan ? .runEasyCyan : .clear, radius: 8, opacity: 0.35)
+        }
+        .buttonStyle(PressScaleStyleLocal())
+    }
+}
+
+private struct PressScaleStyleLocal: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 

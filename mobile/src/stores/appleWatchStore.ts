@@ -8,8 +8,10 @@ import {
     onReachabilityChange,
     onPairedChange,
     sendTodayWorkout,
+    sendWatchContext,
     type CompletedRunFromWatch,
     type TodayWorkoutForWatch,
+    type WatchContext,
 } from '../services/appleWatch';
 import {
     useTrainingStore,
@@ -30,6 +32,7 @@ interface AppleWatchState {
     // actions
     bootstrap: () => Promise<void>;
     sendTodayWorkoutToWatch: (workout: TodayWorkoutForWatch | null, userName: string) => void;
+    sendContextToWatch: (ctx: WatchContext) => void;
     clearLastReceivedRun: () => void;
 }
 
@@ -160,6 +163,10 @@ export const useAppleWatchStore = create<AppleWatchState>((set, _get) => ({
 
     sendTodayWorkoutToWatch: (workout, userName) => {
         sendTodayWorkout(workout, userName);
+    },
+
+    sendContextToWatch: (ctx) => {
+        sendWatchContext(ctx);
     },
 
     clearLastReceivedRun: () => set({ lastReceivedRun: null, lastReceivedAt: null, lastRoutingResult: null }),

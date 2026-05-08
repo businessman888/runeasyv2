@@ -3,7 +3,7 @@ import WatchConnectivity
 import Combine
 
 /// Bridge WatchConnectivity entre o Apple Watch e o iPhone.
-/// - iPhone → Watch: `applicationContext` com o treino do dia (sempre disponível, último valor)
+/// - iPhone → Watch: `applicationContext` com contexto unificado (user, workout, stats, next)
 /// - Watch → iPhone: `transferUserInfo` com a corrida finalizada (durável, retry automático)
 @MainActor
 final class PhoneBridge: NSObject, ObservableObject {
@@ -12,6 +12,9 @@ final class PhoneBridge: NSObject, ObservableObject {
 
     @Published var todayWorkout: PlannedWorkout?
     @Published var userName: String = "Atleta"
+    @Published var avatarUrl: String?
+    @Published var weekStats: WeekStats = .zero
+    @Published var nextWorkout: NextWorkoutInfo?
     @Published var isReachable: Bool = false
     @Published var pendingTransfers: Int = 0
     @Published var lastSentAt: Date?
@@ -52,7 +55,6 @@ final class PhoneBridge: NSObject, ObservableObject {
                 lastError = "Falha ao serializar payload"
                 return
             }
-            // Adiciona um envelope com tipo da mensagem pra o iPhone rotear
             let envelope: [String: Any] = [
                 "type": "completed_run",
                 "payload": dict,
@@ -68,32 +70,69 @@ final class PhoneBridge: NSObject, ObservableObject {
     }
 
     // MARK: - Receive (iPhone → Watch)
-    // Tratado nos delegates. Roteamos por `type` no envelope.
 
     private func handleReceived(_ context: [String: Any]) {
-        guard let type = context["type"] as? String else { return }
-        switch type {
-        case "today_workout":
+        guard !context.isEmpty else { return }
+        let type = context["type"] as? String
+
+        // Treino do dia (ou rest)
+        if type == "today_workout" {
             handleTodayWorkout(context["payload"])
-            if let name = context["user_name"] as? String { userName = name }
-        case "today_rest":
+        } else if type == "today_rest" {
             todayWorkout = nil
-            if let name = context["user_name"] as? String { userName = name }
-        case "user_info":
-            if let name = context["user_name"] as? String { userName = name }
-        default:
-            break
+        }
+
+        // Sempre tenta atualizar campos auxiliares (eles vêm em todos os contextos)
+        if let name = context["user_name"] as? String, !name.isEmpty {
+            userName = name
+        }
+        if let url = context["avatar_url"] as? String, !url.isEmpty {
+            avatarUrl = url
+        } else if context.keys.contains("avatar_url") {
+            // explicit null → limpa
+            avatarUrl = nil
+        }
+        if let statsDict = context["week_stats"] as? [String: Any] {
+            weekStats = decodeWeekStats(statsDict) ?? weekStats
+        }
+        if let nextDict = context["next_workout"] as? [String: Any] {
+            nextWorkout = decodeNextWorkout(nextDict)
+        } else if context.keys.contains("next_workout") {
+            nextWorkout = nil
         }
     }
 
     private func handleTodayWorkout(_ rawPayload: Any?) {
-        guard let dict = rawPayload as? [String: Any] else { return }
+        guard let dict = rawPayload as? [String: Any] else {
+            todayWorkout = nil
+            return
+        }
         do {
             let data = try JSONSerialization.data(withJSONObject: dict)
             let workout = try JSONDecoder().decode(PlannedWorkout.self, from: data)
             todayWorkout = workout
         } catch {
             print("[PhoneBridge] falha ao decodificar treino:", error)
+        }
+    }
+
+    private func decodeWeekStats(_ dict: [String: Any]) -> WeekStats? {
+        do {
+            let data = try JSONSerialization.data(withJSONObject: dict)
+            return try JSONDecoder().decode(WeekStats.self, from: data)
+        } catch {
+            print("[PhoneBridge] falha ao decodificar week_stats:", error)
+            return nil
+        }
+    }
+
+    private func decodeNextWorkout(_ dict: [String: Any]) -> NextWorkoutInfo? {
+        do {
+            let data = try JSONSerialization.data(withJSONObject: dict)
+            return try JSONDecoder().decode(NextWorkoutInfo.self, from: data)
+        } catch {
+            print("[PhoneBridge] falha ao decodificar next_workout:", error)
+            return nil
         }
     }
 }
@@ -105,7 +144,6 @@ extension PhoneBridge: WCSessionDelegate {
         Task { @MainActor in
             self.isReachable = session.isReachable
             if activationState == .activated {
-                // Aplica último context recebido (estado durável)
                 self.handleReceived(session.receivedApplicationContext)
             }
             if let error {
@@ -121,7 +159,6 @@ extension PhoneBridge: WCSessionDelegate {
     }
 
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String : Any]) {
-        // Reservado para mensagens em tempo real (não usado em V1)
         Task { @MainActor in
             self.handleReceived(message)
         }
