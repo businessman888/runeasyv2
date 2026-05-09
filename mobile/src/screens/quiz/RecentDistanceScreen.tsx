@@ -3,10 +3,10 @@ import {
     View,
     Text,
     StyleSheet,
-    TouchableOpacity,
 } from 'react-native';
-import { colors, typography, borderRadius, shadows } from '../../theme';
-import Svg, { Path, Rect } from 'react-native-svg';
+import { colors, typography, borderRadius } from '../../theme';
+import Svg, { Path } from 'react-native-svg';
+import { OptionCard } from '../../components/onboarding/OptionCard';
 
 const DISTANCES = [
     { id: '3k', value: 3, label: '3 km', description: 'Iniciante' },
@@ -62,14 +62,13 @@ export function RecentDistanceScreen({ value, onChange }: RecentDistanceScreenPr
             {/* Distance Options */}
             <View style={styles.optionsContainer}>
                 {DISTANCES.map((distance) => (
-                    <TouchableOpacity
+                    <OptionCard
                         key={distance.id}
-                        style={[
-                            styles.optionCard,
-                            selectedDistance === distance.value && styles.optionCardSelected
-                        ]}
+                        selected={selectedDistance === distance.value}
                         onPress={() => handleDistanceSelect(distance.value)}
-                        activeOpacity={0.7}
+                        accessibilityLabel={`${distance.label}, ${distance.description}`}
+                        style={styles.optionCard}
+                        selectedStyle={styles.optionCardSelected}
                     >
                         <View style={[
                             styles.iconContainer,
@@ -96,7 +95,7 @@ export function RecentDistanceScreen({ value, onChange }: RecentDistanceScreenPr
                                 <View style={styles.radioInner} />
                             )}
                         </View>
-                    </TouchableOpacity>
+                    </OptionCard>
                 ))}
             </View>
 

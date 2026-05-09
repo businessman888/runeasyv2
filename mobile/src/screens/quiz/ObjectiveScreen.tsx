@@ -3,10 +3,10 @@ import {
     View,
     Text,
     StyleSheet,
-    TouchableOpacity,
 } from 'react-native';
-import { colors, typography, borderRadius, shadows } from '../../theme';
+import { colors, typography, borderRadius } from '../../theme';
 import Svg, { Path, Rect } from 'react-native-svg';
+import { OptionCard } from '../../components/onboarding/OptionCard';
 
 // Option Icons - Dark cards with theme colors
 const Icon5K = () => (
@@ -99,14 +99,13 @@ export function ObjectiveScreen({ value, onChange }: ObjectiveScreenProps) {
             {/* Options */}
             <View style={styles.optionsContainer}>
                 {objectives.map((option) => (
-                    <TouchableOpacity
+                    <OptionCard
                         key={option.id}
-                        style={[
-                            styles.optionCard,
-                            selectedObjective === option.storeValue && styles.optionCardSelected
-                        ]}
+                        selected={selectedObjective === option.storeValue}
                         onPress={() => handleSelect(option)}
-                        activeOpacity={0.7}
+                        accessibilityLabel={`${option.title}, ${option.subtitle}`}
+                        style={styles.optionCard}
+                        selectedStyle={styles.optionCardSelected}
                     >
                         {option.icon}
                         <View style={styles.optionTextContainer}>
@@ -114,7 +113,7 @@ export function ObjectiveScreen({ value, onChange }: ObjectiveScreenProps) {
                             <Text style={styles.optionSubtitle}>{option.subtitle}</Text>
                         </View>
                         <RadioButton selected={selectedObjective === option.storeValue} />
-                    </TouchableOpacity>
+                    </OptionCard>
                 ))}
             </View>
         </>

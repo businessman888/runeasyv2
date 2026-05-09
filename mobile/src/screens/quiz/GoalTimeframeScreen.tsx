@@ -3,9 +3,9 @@ import {
     View,
     Text,
     StyleSheet,
-    TouchableOpacity,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { OptionCard } from '../../components/onboarding/OptionCard';
 
 // Design System Colors (Figma)
 const DS = {
@@ -85,14 +85,13 @@ export function GoalTimeframeScreen({ value, onChange }: GoalTimeframeScreenProp
             {/* Timeframe Options */}
             <View style={styles.optionsContainer}>
                 {TIMEFRAME_OPTIONS.map((option) => (
-                    <TouchableOpacity
+                    <OptionCard
                         key={option.id}
-                        style={[
-                            styles.optionCard,
-                            selectedMonths === option.id && styles.optionCardSelected,
-                        ]}
+                        selected={selectedMonths === option.id}
                         onPress={() => handleSelect(option.id)}
-                        activeOpacity={0.7}
+                        accessibilityLabel={`${option.label}, ${option.description}`}
+                        style={styles.optionCard}
+                        selectedStyle={styles.optionCardSelected}
                     >
                         <CircularCheckbox selected={selectedMonths === option.id} />
                         <View style={styles.optionContent}>
@@ -114,7 +113,7 @@ export function GoalTimeframeScreen({ value, onChange }: GoalTimeframeScreenProp
                             </Text>
                         </View>
                         <CalendarIcon />
-                    </TouchableOpacity>
+                    </OptionCard>
                 ))}
             </View>
 

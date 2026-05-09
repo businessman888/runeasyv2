@@ -19,6 +19,7 @@ import { TrainingAIService } from './training-ai.service';
 import { SupabaseService } from '../../database';
 import { SupabaseAuthGuard } from '../../common/guards/supabase-auth.guard';
 import { UsersService } from '../users/users.service';
+import { GamificationService } from '../gamification/gamification.service';
 import { CreateManualWorkoutDto } from './dto/create-manual-workout.dto';
 import { CompleteFreeWorkoutDto } from './dto/complete-free-workout.dto';
 
@@ -54,6 +55,9 @@ interface CreatePlanDto {
     distance_time: { hours: number; minutes: number; seconds: number } | null;
     calculated_pace: number | null; // min/km
     start_date: string | null; // ISO string
+
+    // Onboarding XP (credited once on successful completion)
+    onboarding_xp?: number;
 }
 
 interface SkipWorkoutDto {
@@ -69,7 +73,48 @@ export class TrainingController {
         private readonly retrospectiveService: RetrospectiveService,
         private readonly supabaseService: SupabaseService,
         private readonly usersService: UsersService,
+        private readonly gamificationService: GamificationService,
     ) { }
+
+    /**
+     * Credit onboarding XP idempotently. Uses points_history.reference_type='onboarding'
+     * + reference_id=userId as the dedupe key — safe to call on retries.
+     */
+    private async creditOnboardingXP(userId: string, amount: number) {
+        const safeAmount = Math.max(0, Math.min(500, Math.round(amount || 0)));
+        if (safeAmount === 0) return;
+
+        const { data: existing } = await this.supabaseService
+            .from('points_history')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('reference_type', 'onboarding')
+            .eq('reference_id', userId)
+            .limit(1);
+
+        if (existing && existing.length > 0) {
+            this.logger.log(`[OnboardingXP] User ${userId} already credited, skipping`);
+            return;
+        }
+
+        try {
+            const result = await this.gamificationService.addPoints(
+                userId,
+                safeAmount,
+                'Onboarding concluído',
+                'onboarding',
+                userId,
+            );
+            this.logger.log(
+                `[OnboardingXP] +${safeAmount} XP for user ${userId} ` +
+                `(newTotal=${result.newTotal}, level=${result.newLevel}, levelUp=${result.levelUp})`,
+            );
+        } catch (err: any) {
+            this.logger.warn(
+                `[OnboardingXP] Failed to credit XP for user ${userId}: ${err?.message ?? err}`,
+            );
+        }
+    }
 
     /**
      * Save onboarding data and create training plan (FAST - uses Prompt Chaining)
@@ -142,6 +187,9 @@ export class TrainingController {
             // This unlocks the user from the Onboarding screen
             await this.usersService.markOnboardingComplete(userId);
             this.logger.log(`Onboarding marked complete for user ${userId}`);
+
+            // Credit XP earned during the onboarding quiz (idempotent)
+            await this.creditOnboardingXP(userId, dto.onboarding_xp ?? 0);
 
             // Create QUICK training plan (Prompt 1 only - fast ~3-5s)
             // Background process will generate remaining weeks (Prompt 2)
@@ -242,6 +290,9 @@ export class TrainingController {
             // Mark onboarding as complete (unlocks user from onboarding screens)
             await this.usersService.markOnboardingComplete(userId);
             this.logger.log(`[save] Onboarding marked complete for user ${userId}`);
+
+            // Credit onboarding XP earned during the quiz (idempotent)
+            await this.creditOnboardingXP(userId, dto.onboarding_xp ?? 0);
 
             return { success: true };
         } catch (error) {

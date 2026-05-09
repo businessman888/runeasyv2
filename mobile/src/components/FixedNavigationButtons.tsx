@@ -4,44 +4,87 @@ import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-nati
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ============================================
-// FORCED COLORS (Figma exact values from node 428-464)
+// FORCED COLORS (Figma exact values)
 // ============================================
 const FORCED_BG_DARK = '#0F0F1E';     // Dark background for text on cyan
-const FORCED_BACK_BG = '#1C1C2E';     // Back button background
-const FORCED_CYAN = '#00D4FF';        // Accent cyan - MAIN HIGHLIGHT
-const FORCED_TEXT_SECONDARY = 'rgba(235, 235, 245, 0.6)'; // Back button text
+const FORCED_BACK_BG = '#1C1C2E';     // Back / "Sim" button background
+const FORCED_CYAN = '#00D4FF';        // Accent cyan
+const FORCED_CYAN_MUTED = 'rgba(0, 127, 153, 0.3)'; // "Não" translucent cyan
+const FORCED_TEXT = '#EBEBF5';
+const FORCED_TEXT_SECONDARY = 'rgba(235, 235, 245, 0.6)';
+
+type Variant = 'default' | 'yesNo';
 
 interface FixedNavigationButtonsProps {
+    variant?: Variant;
+    // default variant
     onBack?: () => void;
-    onContinue: () => void;
+    onContinue?: () => void;
     showBack?: boolean;
     continueDisabled?: boolean;
     isLastStep?: boolean;
+    // yesNo variant (Figma 867:645)
+    onYes?: () => void;
+    onNo?: () => void;
+    yesLabel?: string;
+    noLabel?: string;
 }
 
 export const FixedNavigationButtons: React.FC<FixedNavigationButtonsProps> = ({
+    variant = 'default',
     onBack,
     onContinue,
     showBack = true,
     continueDisabled = false,
     isLastStep = false,
+    onYes,
+    onNo,
+    yesLabel = 'Sim',
+    noLabel = 'Não',
 }) => {
+    if (variant === 'yesNo') {
+        const buttonWidth = (SCREEN_WIDTH - 48) / 2 - 6;
+        return (
+            <View style={styles.container}>
+                <TouchableOpacity
+                    style={[styles.yesButton, { width: buttonWidth }]}
+                    onPress={onYes}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={yesLabel}
+                >
+                    <Text style={styles.yesText}>{yesLabel}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.noButton, { width: buttonWidth }]}
+                    onPress={onNo}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={noLabel}
+                >
+                    <Text style={styles.noText}>{noLabel}</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
     const buttonWidth = showBack ? (SCREEN_WIDTH - 48) / 2 - 6 : SCREEN_WIDTH - 48;
 
     return (
         <View style={styles.container}>
-            {/* Back Button - Only show if showBack is true */}
             {showBack && (
                 <TouchableOpacity
                     style={[styles.backButton, { width: buttonWidth }]}
                     onPress={onBack}
                     activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel="Voltar"
                 >
                     <Text style={styles.backText}>Voltar</Text>
                 </TouchableOpacity>
             )}
 
-            {/* Continue Button */}
             <TouchableOpacity
                 style={[
                     styles.continueButton,
@@ -51,6 +94,9 @@ export const FixedNavigationButtons: React.FC<FixedNavigationButtonsProps> = ({
                 onPress={onContinue}
                 disabled={continueDisabled}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={isLastStep ? 'Finalizar' : 'Continuar'}
+                accessibilityState={{ disabled: continueDisabled }}
             >
                 <Text style={[
                     styles.continueText,
@@ -87,12 +133,10 @@ const styles = StyleSheet.create({
     },
     continueButton: {
         height: 55,
-        // CYAN BACKGROUND for contrast (main highlight)
         backgroundColor: FORCED_CYAN,
         borderRadius: 40,
         justifyContent: 'center',
         alignItems: 'center',
-        // Neon shadow effect
         shadowColor: FORCED_CYAN,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.6,
@@ -108,10 +152,38 @@ const styles = StyleSheet.create({
         fontFamily: 'Poppins-Medium',
         fontSize: 18,
         fontWeight: '500',
-        // DARK TEXT on cyan background for contrast
         color: FORCED_BG_DARK,
     },
     continueTextDisabled: {
         color: FORCED_TEXT_SECONDARY,
+    },
+    // yesNo variant (Figma 867:645)
+    yesButton: {
+        height: 44,
+        backgroundColor: FORCED_BACK_BG,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    yesText: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 18,
+        fontWeight: '500',
+        color: FORCED_TEXT_SECONDARY,
+    },
+    noButton: {
+        height: 44,
+        backgroundColor: FORCED_CYAN_MUTED,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: FORCED_CYAN,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    noText: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 18,
+        fontWeight: '500',
+        color: FORCED_TEXT,
     },
 });

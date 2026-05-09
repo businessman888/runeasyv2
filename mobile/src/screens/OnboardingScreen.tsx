@@ -9,11 +9,19 @@ import {
     Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withTiming,
+    withSequence,
+    withDelay,
+    Easing,
+    runOnJS,
+} from 'react-native-reanimated';
 import { useOnboardingStore } from '../stores/onboardingStore';
-import { colors, typography, borderRadius } from '../theme';
-import Svg, { Path } from 'react-native-svg';
 
-// Import individual question components
+// Question screens
 import { ObjectiveScreen } from './quiz/ObjectiveScreen';
 import { LevelScreen } from './quiz/LevelScreen';
 import { FrequencyScreen } from './quiz/FrequencyScreen';
@@ -30,77 +38,460 @@ import { StartDateScreen } from './quiz/StartDateScreen';
 import { GoalTimeframeScreen } from './quiz/GoalTimeframeScreen';
 import { WearableConnectionScreen } from './quiz/WearableConnectionScreen';
 
-// Import navigation buttons
-import { FixedNavigationButtons } from '../components/FixedNavigationButtons';
+// Interstitial screens
+import { GoalAchievableScreen } from './quiz/GoalAchievableScreen';
+import { AssessoriaCompareScreen } from './quiz/AssessoriaCompareScreen';
+import { TimeCompareScreen } from './quiz/TimeCompareScreen';
 
-const TOTAL_STEPS = 15;
+import { FixedNavigationButtons } from '../components/FixedNavigationButtons';
+import { AnimatedXP } from '../components/AnimatedXP';
+
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ============================================
 // FORCED COLORS (Figma exact values)
 // ============================================
-const FORCED_BG = '#0F0F1E';         // Dark background - NEVER transparent
-const FORCED_CYAN = '#00D4FF';       // Accent cyan
-const FORCED_TEXT = '#EBEBF5';       // Primary text
-const FORCED_TEXT_SECONDARY = 'rgba(235, 235, 245, 0.6)'; // Secondary text
-const FORCED_GLASS_STROKE = 'rgba(235, 235, 245, 0.1)';   // Progress bar bg
+const FORCED_BG = '#0F0F1E';
+const FORCED_BG_DEEP = '#0A0A18';
+const FORCED_CYAN = '#00D4FF';
+const FORCED_TEXT = '#EBEBF5';
+const FORCED_TEXT_SECONDARY = 'rgba(235, 235, 245, 0.6)';
+const FORCED_GLASS_STROKE = 'rgba(235, 235, 245, 0.1)';
+
+// XP economy
+const XP_PER_QUESTION = 5;        // 15 questions × 5 = 75
+const XP_COMPLETION_BONUS = 25;   // total = 100
+const PROGRESS_TRACK_WIDTH = SCREEN_WIDTH - 48;
 
 // ============================================
-// FLASH ICON COMPONENT
+// ANIMATED PROGRESS BAR
 // ============================================
-const FlashIcon = () => (
-    <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
-        <Path
-            d="M13 2L4 14H11V22L20 10H13V2Z"
-            fill={FORCED_CYAN}
-        />
-    </Svg>
-);
-
-// ============================================
-// HEADER COMPONENT (Figma node 389-465)
-// ============================================
-interface ProgressHeaderProps {
-    currentStep: number;
-    totalSteps: number;
+interface AnimatedProgressBarProps {
+    fraction: number; // 0..1
 }
 
-const ProgressHeader: React.FC<ProgressHeaderProps> = ({ currentStep, totalSteps }) => {
-    const progressPercent = Math.round((currentStep / totalSteps) * 100);
-    const progressWidth = (currentStep / totalSteps) * (SCREEN_WIDTH - 48);
+const AnimatedProgressBar: React.FC<AnimatedProgressBarProps> = ({ fraction }) => {
+    const widthSv = useSharedValue(0);
+    const shimmerX = useSharedValue(-PROGRESS_TRACK_WIDTH);
+
+    useEffect(() => {
+        widthSv.value = withTiming(
+            Math.max(0, Math.min(1, fraction)) * PROGRESS_TRACK_WIDTH,
+            { duration: 600, easing: Easing.out(Easing.cubic) },
+        );
+    }, [fraction, widthSv]);
+
+    useEffect(() => {
+        // Shimmer loops left → right indefinitely
+        const loop = () => {
+            shimmerX.value = -PROGRESS_TRACK_WIDTH;
+            shimmerX.value = withTiming(
+                PROGRESS_TRACK_WIDTH,
+                { duration: 2200, easing: Easing.inOut(Easing.cubic) },
+                (finished) => {
+                    if (finished) runOnJS(loop)();
+                },
+            );
+        };
+        loop();
+    }, [shimmerX]);
+
+    const fillStyle = useAnimatedStyle(() => ({ width: widthSv.value }));
+    const shimmerStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: shimmerX.value }],
+    }));
 
     return (
-        <View style={headerStyles.container}>
-            {/* Top row: Pontuação + XP Badge */}
-            <View style={headerStyles.topRow}>
-                <Text style={headerStyles.pontuacaoText}>Pontuação</Text>
-                <View style={headerStyles.xpBadge}>
-                    <FlashIcon />
-                    <Text style={headerStyles.xpText}>50XP</Text>
-                </View>
-            </View>
-
-            {/* Progress bar */}
-            <View style={headerStyles.progressBarContainer}>
-                <View style={[headerStyles.progressBarFill, { width: progressWidth }]} />
-            </View>
-
-            {/* Progress percentage */}
-            <View style={headerStyles.progressTextRow}>
-                <Text style={headerStyles.progressLabel}>Progresso:</Text>
-                <Text style={headerStyles.progressPercent}>{progressPercent}%</Text>
-            </View>
+        <View style={progressStyles.track}>
+            <Animated.View style={[progressStyles.fill, fillStyle]}>
+                <Animated.View style={[progressStyles.shimmer, shimmerStyle]} />
+            </Animated.View>
         </View>
     );
 };
 
-const headerStyles = StyleSheet.create({
-    container: {
-        width: '100%',
-        alignItems: 'center',
-        gap: 9,
-        paddingHorizontal: 12,
+const progressStyles = StyleSheet.create({
+    track: {
+        width: PROGRESS_TRACK_WIDTH,
+        height: 4,
+        backgroundColor: FORCED_GLASS_STROKE,
+        borderRadius: 20,
+        overflow: 'hidden',
     },
+    fill: {
+        height: 4,
+        backgroundColor: FORCED_CYAN,
+        borderRadius: 20,
+        overflow: 'hidden',
+    },
+    shimmer: {
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        width: 60,
+        backgroundColor: 'rgba(255,255,255,0.4)',
+        opacity: 0.5,
+    },
+});
+
+// ============================================
+// QUIZ STEPS
+// ============================================
+interface QuizStep {
+    key: string;
+    keys?: string[];
+    Component: React.ComponentType<any>;
+    isInterstitial?: boolean;
+    isWearableStep?: boolean;
+    extraPropsKey?: string;
+}
+
+export function OnboardingScreen({ navigation, route }: any) {
+    const userId = route?.params?.userId;
+    const { data, updateData, xpEarned, addXP } = useOnboardingStore();
+    const [currentStep, setCurrentStep] = useState(0);
+    const [wearableModalOpen, setWearableModalOpen] = useState(false);
+    const scrollViewRef = useRef<ScrollView>(null);
+    const insets = useSafeAreaInsets();
+
+    const QUIZ_STEPS: QuizStep[] = [
+        { key: 'birthDate', Component: BirthDateScreen },                                          // 0
+        { key: 'weight', Component: WeightScreen },                                                // 1
+        { key: 'height', Component: HeightScreen },                                                // 2
+        { key: 'goal', Component: ObjectiveScreen },                                               // 3
+        { key: 'experience_level', Component: LevelScreen },                                       // 4
+        { key: '__i1_goal_achievable', Component: GoalAchievableScreen, isInterstitial: true },    // 5 (I1)
+        { key: 'daysPerWeek', Component: FrequencyScreen },                                        // 6
+        { key: '__i2_assessoria_compare', Component: AssessoriaCompareScreen, isInterstitial: true }, // 7 (I2)
+        { key: 'availableDays', Component: AvailableDaysScreen, extraPropsKey: 'availableDays' },  // 8
+        { key: 'intenseDayIndex', Component: IntenseDayScreen, extraPropsKey: 'intenseDay' },      // 9
+        { key: 'recentDistance', Component: RecentDistanceScreen },                                // 10
+        { key: 'distanceTime', Component: DistanceTimeScreen, extraPropsKey: 'distanceTime' },     // 11
+        { key: '__i3_time_compare', Component: TimeCompareScreen, isInterstitial: true },          // 12 (I3)
+        { keys: ['paceMinutes', 'paceSeconds', 'dontKnowPace'], key: 'pace', Component: PaceConfirmScreen }, // 13
+        { key: 'startDate', Component: StartDateScreen },                                          // 14
+        { key: 'limitations', Component: LimitationsScreen },                                      // 15
+        { key: 'goalTimeframe', Component: GoalTimeframeScreen },                                  // 16
+        { key: 'preferredWearable', Component: WearableConnectionScreen, isWearableStep: true },   // 17
+    ];
+
+    const TOTAL_QUESTIONS = QUIZ_STEPS.filter(s => !s.isInterstitial).length; // 15
+    const TOTAL_INDICES = QUIZ_STEPS.length;                                  // 18
+
+    const currentStepData = QUIZ_STEPS[currentStep];
+
+    // displayedStep counts only real questions up to (and including) the current one.
+    const displayedStep = QUIZ_STEPS.slice(0, currentStep + 1)
+        .filter(s => !s.isInterstitial).length;
+    const progressFraction = displayedStep / TOTAL_QUESTIONS;
+
+    // Track previous step to know transition direction (forward/back)
+    const prevStepRef = useRef(currentStep);
+    const direction = currentStep >= prevStepRef.current ? 1 : -1; // 1 = forward, -1 = back
+
+    // Step content fade+slide animation
+    const contentOpacity = useSharedValue(1);
+    const contentTranslateX = useSharedValue(0);
+
+    useEffect(() => {
+        if (prevStepRef.current === currentStep) return;
+        const dirSign = direction;
+        // Out then in (same Animated.View — content updates while opacity is 0)
+        contentOpacity.value = withSequence(
+            withTiming(0, { duration: 160, easing: Easing.in(Easing.cubic) }),
+            withDelay(20, withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) })),
+        );
+        contentTranslateX.value = withSequence(
+            withTiming(-20 * dirSign, { duration: 160, easing: Easing.in(Easing.cubic) }),
+            withTiming(20 * dirSign, { duration: 0 }),
+            withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic) }),
+        );
+        prevStepRef.current = currentStep;
+    }, [currentStep, direction, contentOpacity, contentTranslateX]);
+
+    const contentAnimStyle = useAnimatedStyle(() => ({
+        opacity: contentOpacity.value,
+        transform: [{ translateX: contentTranslateX.value }],
+    }));
+
+    useEffect(() => {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    }, [currentStep]);
+
+    const canContinue = (): boolean => {
+        if (currentStepData.isInterstitial) return true;
+        switch (currentStepData.key) {
+            case 'birthDate': return !!data.birthDate;
+            case 'weight': return !!data.weight && data.weight > 0;
+            case 'height': return !!data.height && data.height > 0;
+            case 'goal': return !!data.goal;
+            case 'experience_level': return !!data.experience_level;
+            case 'daysPerWeek':
+                return typeof data.daysPerWeek === 'number'
+                    && data.daysPerWeek >= 2
+                    && data.daysPerWeek <= 7;
+            case 'availableDays':
+                return Array.isArray(data.availableDays) && data.availableDays.length > 0;
+            case 'intenseDayIndex':
+                return data.intenseDayIndex !== null && data.intenseDayIndex !== undefined;
+            case 'recentDistance': return !!data.recentDistance;
+            case 'distanceTime':
+                return !!data.distanceTime
+                    && (data.distanceTime.hours > 0
+                        || data.distanceTime.minutes > 0
+                        || data.distanceTime.seconds > 0);
+            case 'pace':
+                return data.dontKnowPace === true
+                    || (!!data.paceMinutes && !!data.paceSeconds);
+            case 'startDate': return !!data.startDate;
+            case 'limitations':
+                return !!data.limitations
+                    && typeof data.limitations.hasLimitation === 'boolean';
+            case 'goalTimeframe':
+                return typeof data.goalTimeframe === 'number' && data.goalTimeframe > 0;
+            case 'preferredWearable': return true;
+            default: return false;
+        }
+    };
+
+    // Track XP credited per step index, so back-and-forth doesn't double-pay
+    const xpCreditedRef = useRef<Set<number>>(new Set());
+
+    const handleContinue = () => {
+        // Pace calculation when leaving DistanceTime (key-based — interstitials shifted indices)
+        if (currentStepData.key === 'distanceTime' && data.distanceTime && data.recentDistance) {
+            const { hours, minutes, seconds } = data.distanceTime;
+            const totalMinutes = hours * 60 + minutes + seconds / 60;
+            let pacePerKm = totalMinutes / data.recentDistance;
+
+            if (pacePerKm > 15) {
+                console.warn(`[Pace] ${pacePerKm.toFixed(2)} min/km is unrealistic, defaulting to 7.0`);
+                pacePerKm = 7.0;
+            } else if (pacePerKm < 2) {
+                console.warn(`[Pace] ${pacePerKm.toFixed(2)} min/km is impossibly fast, clamping to 3.0`);
+                pacePerKm = 3.0;
+            }
+
+            updateData({ calculatedPace: pacePerKm });
+            const wholeMinutes = Math.floor(pacePerKm);
+            const remainderSeconds = Math.round((pacePerKm - wholeMinutes) * 60);
+            updateData({
+                paceMinutes: String(wholeMinutes).padStart(2, '0'),
+                paceSeconds: String(remainderSeconds).padStart(2, '0'),
+                dontKnowPace: false,
+            });
+        }
+
+        // Award XP for completing this question (idempotent per index)
+        if (!currentStepData.isInterstitial && !xpCreditedRef.current.has(currentStep)) {
+            addXP(XP_PER_QUESTION);
+            xpCreditedRef.current.add(currentStep);
+        }
+
+        // Last index → completion bonus + navigate
+        if (currentStep === TOTAL_INDICES - 1) {
+            if (!xpCreditedRef.current.has(-1)) {
+                addXP(XP_COMPLETION_BONUS);
+                xpCreditedRef.current.add(-1);
+            }
+            navigation.navigate('Quiz_PlanLoading', { userId });
+            return;
+        }
+
+        setCurrentStep(currentStep + 1);
+    };
+
+    const handleBack = () => {
+        if (currentStep > 0) {
+            setCurrentStep(currentStep - 1);
+        } else {
+            navigation.goBack();
+        }
+    };
+
+    const handleWearableYes = () => {
+        setWearableModalOpen(true);
+    };
+
+    const handleWearableNo = () => {
+        updateData({ preferredWearable: null });
+        if (!xpCreditedRef.current.has(currentStep)) {
+            addXP(XP_PER_QUESTION);
+            xpCreditedRef.current.add(currentStep);
+        }
+        if (!xpCreditedRef.current.has(-1)) {
+            addXP(XP_COMPLETION_BONUS);
+            xpCreditedRef.current.add(-1);
+        }
+        navigation.navigate('Quiz_PlanLoading', { userId });
+    };
+
+    const handleWearableConnect = () => {
+        // User picked a provider in the modal → award XP and advance
+        if (!xpCreditedRef.current.has(currentStep)) {
+            addXP(XP_PER_QUESTION);
+            xpCreditedRef.current.add(currentStep);
+        }
+        if (!xpCreditedRef.current.has(-1)) {
+            addXP(XP_COMPLETION_BONUS);
+            xpCreditedRef.current.add(-1);
+        }
+        navigation.navigate('Quiz_PlanLoading', { userId });
+    };
+
+    const handleWearableModalClose = () => {
+        setWearableModalOpen(false);
+    };
+
+    const handleChange = useCallback((value: any) => {
+        if (currentStepData.keys) {
+            updateData(value);
+        } else if (currentStepData.key) {
+            updateData({ [currentStepData.key]: value });
+        }
+    }, [currentStepData, updateData]);
+
+    const getValue = () => {
+        if (currentStepData.keys) {
+            const result: any = {};
+            for (const k of currentStepData.keys) {
+                result[k] = data[k as keyof typeof data];
+            }
+            return result;
+        } else if (currentStepData.key) {
+            return data[currentStepData.key as keyof typeof data];
+        }
+        return undefined;
+    };
+
+    const getExtraProps = (): Record<string, any> => {
+        switch (currentStepData.extraPropsKey) {
+            case 'availableDays':
+                return { maxDays: data.daysPerWeek || 3 };
+            case 'intenseDay':
+                return { availableDays: data.availableDays || [] };
+            case 'distanceTime':
+                return {
+                    distance: data.recentDistance || 5,
+                    recentDistance: data.recentDistance || 5,
+                };
+            default:
+                return {};
+        }
+    };
+
+    const isWearableStep = !!currentStepData.isWearableStep;
+    const isInterstitial = !!currentStepData.isInterstitial;
+    const showBackButton = currentStep > 0;
+    const continueDisabled = !canContinue();
+    const isLastStep = currentStep === TOTAL_INDICES - 1;
+
+    const StepComponent = currentStepData.Component;
+    const extraProps = getExtraProps();
+
+    const wearableProps = isWearableStep
+        ? {
+            openModal: wearableModalOpen,
+            onModalClose: handleWearableModalClose,
+            onConnect: handleWearableConnect,
+        }
+        : {};
+
+    const FOOTER_RESERVED_HEIGHT = 100;
+    const bottomInset = Math.max(insets.bottom, 12);
+    const topInset = Math.max(
+        insets.top,
+        Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 12,
+    );
+
+    return (
+        <View style={styles.container}>
+            <StatusBar
+                barStyle="light-content"
+                translucent
+                backgroundColor="transparent"
+            />
+
+            {/* Vertical premium gradient — base */}
+            <LinearGradient
+                colors={[FORCED_BG, FORCED_BG_DEEP, FORCED_BG]}
+                locations={[0, 0.5, 1]}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+                style={StyleSheet.absoluteFillObject}
+            />
+            {/* Subtle radial-feel cyan glow at the top */}
+            <LinearGradient
+                colors={['rgba(0,212,255,0.07)', 'transparent']}
+                locations={[0, 1]}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+                style={styles.topGlow}
+                pointerEvents="none"
+            />
+
+            <View style={[styles.headerContainer, { paddingTop: topInset + 8 }]}>
+                <View style={headerStyles.container}>
+                    <View style={headerStyles.topRow}>
+                        <Text style={headerStyles.pontuacaoText}>Pontuação</Text>
+                        <AnimatedXP value={xpEarned} />
+                    </View>
+                    <AnimatedProgressBar fraction={progressFraction} />
+                    <View style={headerStyles.progressTextRow}>
+                        <Text style={headerStyles.progressLabel}>Progresso:</Text>
+                        <Text style={headerStyles.progressPercent}>
+                            {Math.round(progressFraction * 100)}%
+                        </Text>
+                    </View>
+                </View>
+            </View>
+
+            <ScrollView
+                ref={scrollViewRef}
+                style={styles.scrollView}
+                contentContainerStyle={[
+                    styles.scrollContent,
+                    { paddingBottom: FOOTER_RESERVED_HEIGHT + bottomInset },
+                ]}
+                showsVerticalScrollIndicator={false}
+            >
+                <Animated.View style={contentAnimStyle}>
+                    {isInterstitial ? (
+                        <StepComponent />
+                    ) : (
+                        <StepComponent
+                            {...(currentStepData.keys ? getValue() : { value: getValue() })}
+                            onChange={handleChange}
+                            {...extraProps}
+                            {...wearableProps}
+                        />
+                    )}
+                </Animated.View>
+            </ScrollView>
+
+            <View style={[styles.buttonContainer, { paddingBottom: bottomInset }]}>
+                {isWearableStep ? (
+                    <FixedNavigationButtons
+                        variant="yesNo"
+                        onYes={handleWearableYes}
+                        onNo={handleWearableNo}
+                    />
+                ) : (
+                    <FixedNavigationButtons
+                        onBack={handleBack}
+                        onContinue={handleContinue}
+                        showBack={showBackButton}
+                        continueDisabled={continueDisabled}
+                        isLastStep={isLastStep}
+                    />
+                )}
+            </View>
+        </View>
+    );
+}
+
+const headerStyles = StyleSheet.create({
+    container: { width: '100%', alignItems: 'center', gap: 9, paddingHorizontal: 12 },
     topRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -108,50 +499,11 @@ const headerStyles = StyleSheet.create({
         width: '100%',
         height: 43,
     },
-    pontuacaoText: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 14,
-        color: FORCED_TEXT,
-    },
-    xpBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#0A0A14',
-        borderWidth: 2,
-        borderColor: FORCED_CYAN,
-        borderRadius: 20,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        gap: 6,
-        // Subtle glow
-        shadowColor: FORCED_CYAN,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    xpText: {
-        fontFamily: 'Inter-SemiBold',
-        fontSize: 14,
-        fontWeight: '600',
-        color: FORCED_CYAN,
-    },
-    progressBarContainer: {
-        width: SCREEN_WIDTH - 48,
-        height: 4,
-        backgroundColor: FORCED_GLASS_STROKE,
-        borderRadius: 20,
-        overflow: 'hidden',
-    },
-    progressBarFill: {
-        height: 4,
-        backgroundColor: FORCED_CYAN,
-        borderRadius: 20,
-    },
+    pontuacaoText: { fontFamily: 'Poppins-Regular', fontSize: 14, color: FORCED_TEXT },
     progressTextRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        width: SCREEN_WIDTH - 48,
+        width: PROGRESS_TRACK_WIDTH,
         height: 28,
         gap: 4,
     },
@@ -168,245 +520,26 @@ const headerStyles = StyleSheet.create({
     },
 });
 
-// ============================================
-// MAIN ONBOARDING SCREEN
-// ============================================
-
-export function OnboardingScreen({ navigation, route }: any) {
-    const userId = route?.params?.userId;
-    const { data, updateData } = useOnboardingStore();
-    const [currentStep, setCurrentStep] = useState(0);
-    const scrollViewRef = useRef<ScrollView>(null);
-    const insets = useSafeAreaInsets();
-
-    // Define all quiz steps — 14 total (0-13)
-    const QUIZ_STEPS: any[] = [
-        { key: 'birthDate', Component: BirthDateScreen, title: 'Qual a sua data de nascimento?' },           // 0
-        { key: 'weight', Component: WeightScreen, title: 'Qual é o seu peso atual?' },                        // 1
-        { key: 'height', Component: HeightScreen, title: 'Qual é a sua altura?' },                            // 2
-        { key: 'goal', Component: ObjectiveScreen, title: 'Qual é o seu objetivo?' },                         // 3
-        { key: 'experience_level', Component: LevelScreen, title: 'Qual é o seu nível?' },                    // 4
-        { key: 'daysPerWeek', Component: FrequencyScreen, title: 'Quantos dias por semana?' },                // 5
-        { key: 'availableDays', Component: AvailableDaysScreen, title: 'Quais dias você tem disponíveis?', extraProps: { maxDays: data.daysPerWeek || 3 } }, // 6
-        { key: 'intenseDayIndex', Component: IntenseDayScreen, title: 'Qual dia para treino intenso?', extraProps: { availableDays: data.availableDays || [] } }, // 7
-        { key: 'recentDistance', Component: RecentDistanceScreen, title: 'Maior distância recente?' },        // 8
-        { key: 'distanceTime', Component: DistanceTimeScreen, title: 'Em quanto tempo?', extraProps: { distance: data.recentDistance || 5 } }, // 9
-        { keys: ['paceMinutes', 'paceSeconds', 'dontKnowPace'], Component: PaceConfirmScreen, title: 'Qual é o seu Pace?' }, // 10
-        { key: 'startDate', Component: StartDateScreen, title: 'Quando quer começar?' },                      // 11
-        { key: 'limitations', Component: LimitationsScreen, title: 'Alguma limitação física?' },              // 12
-        { key: 'goalTimeframe', Component: GoalTimeframeScreen, title: 'Quando deseja atingir sua meta?' },   // 13
-        { key: 'preferredWearable', Component: WearableConnectionScreen, title: 'Conectar dispositivo', isWearableStep: true }, // 14
-    ];
-
-    const currentStepData = QUIZ_STEPS[currentStep];
-
-    // Scroll to top when step changes
-    useEffect(() => {
-        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-    }, [currentStep]);
-
-    // Check if current step has valid data
-    const canContinue = () => {
-        switch (currentStep) {
-            case 0: return !!data.birthDate;                                                                    // birthDate
-            case 1: return !!data.weight && data.weight > 0;                                                    // weight
-            case 2: return !!data.height && data.height > 0;                                                    // height
-            case 3: return !!data.goal;                                                                         // goal
-            case 4: return !!data.experience_level;                                                             // level
-            case 5: return typeof data.daysPerWeek === 'number' && data.daysPerWeek >= 2 && data.daysPerWeek <= 7; // frequency
-            case 6: return Array.isArray(data.availableDays) && data.availableDays.length > 0;                  // availableDays
-            case 7: return data.intenseDayIndex !== null && data.intenseDayIndex !== undefined;                 // intenseDayIndex
-            case 8: return !!data.recentDistance;                                                               // recentDistance
-            case 9: return !!data.distanceTime && (data.distanceTime.hours > 0 || data.distanceTime.minutes > 0 || data.distanceTime.seconds > 0); // distanceTime
-            case 10: return data.dontKnowPace === true || (!!data.paceMinutes && !!data.paceSeconds);           // pace
-            case 11: return !!data.startDate;                                                                   // startDate
-            case 12: return data.limitations && typeof data.limitations.hasLimitation === 'boolean';            // limitations
-            case 13: return typeof data.goalTimeframe === 'number' && data.goalTimeframe > 0;                   // goalTimeframe
-            case 14: return true;                                                                              // wearable (optional)
-            default: return false;
-        }
-    };
-
-    const handleContinue = () => {
-        // Calculate pace before continuing from distance time screen (step 9)
-        if (currentStep === 9 && data.distanceTime && data.recentDistance) {
-            const { hours, minutes, seconds } = data.distanceTime;
-            const totalMinutes = (hours * 60) + minutes + (seconds / 60);
-            let pacePerKm = totalMinutes / data.recentDistance;
-
-            // Validate: clamp unrealistic pace values
-            // > 15 min/km is slower than walking → assume beginner default
-            // < 2 min/km is faster than world record → clamp to realistic minimum
-            if (pacePerKm > 15) {
-                console.warn(`[Pace] Calculated ${pacePerKm.toFixed(2)} min/km is unrealistic, defaulting to 7.0`);
-                pacePerKm = 7.0;
-            } else if (pacePerKm < 2) {
-                console.warn(`[Pace] Calculated ${pacePerKm.toFixed(2)} min/km is impossibly fast, clamping to 3.0`);
-                pacePerKm = 3.0;
-            }
-
-            console.log(`[Pace] Time: ${hours}h ${minutes}m ${seconds}s = ${totalMinutes.toFixed(2)} min total`);
-            console.log(`[Pace] Distance: ${data.recentDistance} km → Pace: ${pacePerKm.toFixed(2)} min/km`);
-            updateData({ calculatedPace: pacePerKm });
-
-            // Pre-fill PaceConfirmScreen (step 10) with formatted MM:SS from calculatedPace
-            const wholeMinutes = Math.floor(pacePerKm);
-            const remainderSeconds = Math.round((pacePerKm - wholeMinutes) * 60);
-            updateData({
-                paceMinutes: String(wholeMinutes).padStart(2, '0'),
-                paceSeconds: String(remainderSeconds).padStart(2, '0'),
-                dontKnowPace: false,
-            });
-        }
-
-        // If on last step, navigate to PlanLoadingScreen
-        if (currentStep === TOTAL_STEPS - 1) {
-            navigation.navigate('Quiz_PlanLoading', { userId });
-            return;
-        }
-
-        // Otherwise, move to next step
-        setCurrentStep(currentStep + 1);
-    };
-
-    const handleBack = () => {
-        if (currentStep > 0) {
-            setCurrentStep(currentStep - 1);
-        } else {
-            navigation.goBack();
-        }
-    };
-
-    // Handle onChange — memoized to prevent reference instability
-    const handleChange = useCallback((value: any) => {
-        if (currentStepData.keys) {
-            updateData(value);
-        } else if (currentStepData.key) {
-            updateData({ [currentStepData.key]: value });
-        }
-    }, [currentStepData]);
-
-    // Get value(s) for current step — multi-key returns individual props
-    const getValue = () => {
-        if (currentStepData.keys) {
-            const result: any = {};
-            for (const k of currentStepData.keys) {
-                result[k] = data[k as keyof typeof data];
-            }
-            return result;
-        } else if (currentStepData.key) {
-            return data[currentStepData.key as keyof typeof data];
-        }
-        return undefined;
-    };
-
-    // Determine button states
-    const isWearableStep = !!(currentStepData as any).isWearableStep;
-    const showBackButton = currentStep > 0;
-    const continueDisabled = !canContinue();
-    const isLastStep = currentStep === TOTAL_STEPS - 1;
-
-    // Wearable step navigation callbacks
-    const handleWearableConnect = () => {
-        navigation.navigate('Quiz_PlanLoading', { userId });
-    };
-
-    const handleWearableSkip = () => {
-        navigation.navigate('Quiz_PlanLoading', { userId });
-    };
-
-    // Render the current step's component
-    const StepComponent = currentStepData.Component;
-    const extraProps = (currentStepData as any).extraProps || {};
-
-    // Extra props for wearable step
-    const wearableProps = isWearableStep
-        ? { onConnect: handleWearableConnect, onSkip: handleWearableSkip }
-        : {};
-
-    // Reserved height at the bottom of the ScrollView so the fixed buttons
-    // never overlap the last item of each step. Mirrors the physical footer:
-    //   FixedNavigationButtons: 55 (button) + 12*2 (inner padding) = 79
-    //   + buttonContainer paddingTop (8) + bottomInset applied below.
-    const FOOTER_RESERVED_HEIGHT = 100;
-    const bottomInset = Math.max(insets.bottom, 12);
-    const topInset = Math.max(
-        insets.top,
-        Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 12,
-    );
-
-    return (
-        <View style={styles.container}>
-            {/* Force light-content status bar with dark background */}
-            <StatusBar
-                barStyle="light-content"
-                translucent
-                backgroundColor="transparent"
-            />
-
-            {/* HEADER — top inset applied manually so it works under
-                Android Edge-to-Edge (newArchEnabled) where SafeAreaView padding
-                is bypassed by absolute children. */}
-            <View style={[styles.headerContainer, { paddingTop: topInset + 8 }]}>
-                <ProgressHeader
-                    currentStep={currentStep + 1}
-                    totalSteps={TOTAL_STEPS}
-                />
-            </View>
-
-            {/* Scrollable Content Area */}
-            <ScrollView
-                ref={scrollViewRef}
-                style={styles.scrollView}
-                contentContainerStyle={[
-                    styles.scrollContent,
-                    { paddingBottom: FOOTER_RESERVED_HEIGHT + bottomInset },
-                ]}
-                showsVerticalScrollIndicator={false}
-            >
-                <StepComponent
-                    {...(currentStepData.keys ? getValue() : { value: getValue() })}
-                    onChange={handleChange}
-                    {...extraProps}
-                    {...wearableProps}
-                />
-            </ScrollView>
-
-            {/* Fixed Navigation Buttons — bottom inset applied directly so the
-                buttons never escape under the Android gesture bar / iOS home
-                indicator. Hidden on wearable step (has its own buttons). */}
-            {!isWearableStep && (
-                <View style={[styles.buttonContainer, { paddingBottom: bottomInset }]}>
-                    <FixedNavigationButtons
-                        onBack={handleBack}
-                        onContinue={handleContinue}
-                        showBack={showBackButton}
-                        continueDisabled={continueDisabled}
-                        isLastStep={isLastStep}
-                    />
-                </View>
-            )}
-        </View>
-    );
-}
-
-// ============================================
-// STYLES
-// ============================================
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        // FORCED DARK BACKGROUND - Never transparent!
         backgroundColor: FORCED_BG,
+    },
+    topGlow: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 280,
     },
     headerContainer: {
         paddingHorizontal: 12,
         paddingBottom: 16,
-        backgroundColor: FORCED_BG,
+        backgroundColor: 'transparent',
     },
     scrollView: {
         flex: 1,
-        backgroundColor: FORCED_BG,
+        backgroundColor: 'transparent',
     },
     scrollContent: {
         paddingHorizontal: 20,
@@ -419,8 +552,6 @@ const styles = StyleSheet.create({
         backgroundColor: FORCED_BG,
         paddingHorizontal: 12,
         paddingTop: 8,
-        // Hairline top border so scrolling content has a visual boundary
-        // behind the fixed footer area.
         borderTopWidth: StyleSheet.hairlineWidth,
         borderTopColor: FORCED_GLASS_STROKE,
     },

@@ -80,6 +80,7 @@ interface OnboardingState {
     error: string | null;
     errorCode: typeof ONBOARDING_ERRORS[keyof typeof ONBOARDING_ERRORS] | null;
     lastGenerationStatus: number | null;
+    xpEarned: number;
 
     // Actions
     setStep: (step: number) => void;
@@ -88,6 +89,7 @@ interface OnboardingState {
     updateData: (data: Partial<OnboardingData>) => void;
     reset: () => void;
     complete: () => void;
+    addXP: (delta: number) => void;
     submitOnboarding: () => Promise<GeneratedPlanResult | null>;
     saveOnboardingOnly: () => Promise<boolean>;
     triggerPlanGeneration: () => Promise<string | null>;
@@ -141,6 +143,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
     error: null,
     errorCode: null,
     lastGenerationStatus: null,
+    xpEarned: 0,
 
     setStep: (step) => set({ currentStep: step }),
 
@@ -164,14 +167,17 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
         error: null,
         errorCode: null,
         lastGenerationStatus: null,
+        xpEarned: 0,
     }),
 
     complete: () => set({ isComplete: true }),
 
+    addXP: (delta) => set((state) => ({ xpEarned: state.xpEarned + delta })),
+
     clearError: () => set({ error: null, errorCode: null }),
 
     submitOnboarding: async () => {
-        const { data } = get();
+        const { data, xpEarned } = get();
 
         set({ isGenerating: true, error: null, errorCode: null });
 
@@ -263,6 +269,9 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                 distance_time: data.distanceTime ?? null,
                 calculated_pace: data.calculatedPace ?? null,
                 start_date: sanitizedStartDate,
+
+                // Onboarding XP (credited to user upon successful submission)
+                onboarding_xp: xpEarned ?? 0,
             };
 
             const requestUrl = `${API_URL}/training/onboarding`;
@@ -371,7 +380,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
      * Called after paywall subscription is confirmed.
      */
     saveOnboardingOnly: async () => {
-        const { data } = get();
+        const { data, xpEarned } = get();
 
         try {
             const userId = await Storage.getItemAsync('user_id');
@@ -431,6 +440,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                 distance_time: data.distanceTime ?? null,
                 calculated_pace: data.calculatedPace ?? null,
                 start_date: sanitizedStartDate,
+                onboarding_xp: xpEarned ?? 0,
             };
 
             console.log('[saveOnboardingOnly] Saving onboarding data (no AI)...');

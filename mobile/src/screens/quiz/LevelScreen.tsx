@@ -3,10 +3,10 @@ import {
     View,
     Text,
     StyleSheet,
-    TouchableOpacity,
 } from 'react-native';
 import { colors, typography, borderRadius } from '../../theme';
 import Svg, { Path, Rect } from 'react-native-svg';
+import { OptionCard } from '../../components/onboarding/OptionCard';
 
 // Option Icons using theme colors
 const IconIniciante = () => (
@@ -86,14 +86,13 @@ export function LevelScreen({ value, onChange }: LevelScreenProps) {
             {/* Options */}
             <View style={styles.optionsContainer}>
                 {levels.map((option) => (
-                    <TouchableOpacity
+                    <OptionCard
                         key={option.id}
-                        style={[
-                            styles.optionCard,
-                            selectedLevel === option.id && styles.optionCardSelected
-                        ]}
+                        selected={selectedLevel === option.id}
                         onPress={() => handleSelect(option)}
-                        activeOpacity={0.7}
+                        accessibilityLabel={`${option.title}, ${option.subtitle}`}
+                        style={styles.optionCard}
+                        selectedStyle={styles.optionCardSelected}
                     >
                         {option.icon}
                         <View style={styles.optionTextContainer}>
@@ -101,7 +100,7 @@ export function LevelScreen({ value, onChange }: LevelScreenProps) {
                             <Text style={styles.optionSubtitle}>{option.subtitle}</Text>
                         </View>
                         <RadioButton selected={selectedLevel === option.id} />
-                    </TouchableOpacity>
+                    </OptionCard>
                 ))}
             </View>
         </>
