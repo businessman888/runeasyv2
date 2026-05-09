@@ -14,10 +14,9 @@ import Animated, {
     useSharedValue,
     useAnimatedStyle,
     withTiming,
-    withSequence,
-    withDelay,
     Easing,
     runOnJS,
+    FadeIn,
 } from 'react-native-reanimated';
 import { useOnboardingStore } from '../stores/onboardingStore';
 
@@ -184,35 +183,6 @@ export function OnboardingScreen({ navigation, route }: any) {
     const displayedStep = QUIZ_STEPS.slice(0, currentStep + 1)
         .filter(s => !s.isInterstitial).length;
     const progressFraction = displayedStep / TOTAL_QUESTIONS;
-
-    // Track previous step to know transition direction (forward/back)
-    const prevStepRef = useRef(currentStep);
-    const direction = currentStep >= prevStepRef.current ? 1 : -1; // 1 = forward, -1 = back
-
-    // Step content fade+slide animation
-    const contentOpacity = useSharedValue(1);
-    const contentTranslateX = useSharedValue(0);
-
-    useEffect(() => {
-        if (prevStepRef.current === currentStep) return;
-        const dirSign = direction;
-        // Out then in (same Animated.View — content updates while opacity is 0)
-        contentOpacity.value = withSequence(
-            withTiming(0, { duration: 160, easing: Easing.in(Easing.cubic) }),
-            withDelay(20, withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) })),
-        );
-        contentTranslateX.value = withSequence(
-            withTiming(-20 * dirSign, { duration: 160, easing: Easing.in(Easing.cubic) }),
-            withTiming(20 * dirSign, { duration: 0 }),
-            withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic) }),
-        );
-        prevStepRef.current = currentStep;
-    }, [currentStep, direction, contentOpacity, contentTranslateX]);
-
-    const contentAnimStyle = useAnimatedStyle(() => ({
-        opacity: contentOpacity.value,
-        transform: [{ translateX: contentTranslateX.value }],
-    }));
 
     useEffect(() => {
         scrollViewRef.current?.scrollTo({ y: 0, animated: true });
@@ -455,7 +425,15 @@ export function OnboardingScreen({ navigation, route }: any) {
                 ]}
                 showsVerticalScrollIndicator={false}
             >
-                <Animated.View style={contentAnimStyle}>
+                {/*
+                    Key change forces remount on step transition. Reanimated's
+                    `entering` runs only on mount, so the new step fades in cleanly
+                    from opacity 0 — no blink-to-empty-then-back like withSequence.
+                */}
+                <Animated.View
+                    key={`step-${currentStep}`}
+                    entering={FadeIn.duration(260).easing(Easing.out(Easing.cubic))}
+                >
                     {isInterstitial ? (
                         <StepComponent />
                     ) : (

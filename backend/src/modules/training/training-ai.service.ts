@@ -136,6 +136,22 @@ export class TrainingAIService {
     'advanced': 'Corredor Avançado',
   };
 
+  // Convention shared with mobile (AvailableDaysScreen): 0=Dom ... 6=Sáb,
+  // matching JavaScript Date.getDay().
+  private readonly dayNames = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+
+  /**
+   * Build a human-readable description of the user's selected weekdays for
+   * the AI prompt. Returns an empty string when no days were provided so
+   * older callers without preferredDays don't get malformed instructions.
+   */
+  private describePreferredDays(preferredDays: number[] | undefined | null): string {
+    if (!preferredDays || preferredDays.length === 0) return '';
+    const sorted = [...preferredDays].filter(d => d >= 0 && d <= 6).sort((a, b) => a - b);
+    const named = sorted.map(d => `${d}=${this.dayNames[d]}`).join(', ');
+    return `\nDIAS DA SEMANA OBRIGATÓRIOS: ${sorted.join(', ')} (${named}). Use SOMENTE estes valores no campo day_of_week — não invente outros dias.`;
+  }
+
   /**
    * PROMPT 1 (FAST): Generate only the first workout and plan header
    * Target response time: ~3-5 seconds
@@ -209,7 +225,7 @@ P2. Nível: ${this.levelDescriptions[request.level] || request.level}
 P3. Frequência disponível: ${request.daysPerWeek} dias/semana
 P4. Pace atual 5K: ${safePace ? `${safePace.toFixed(2)} min/km` : 'Não sei (iniciante)'}
 P5. Prazo para objetivo: ${request.targetWeeks} semanas
-P6. Limitações/Lesões: ${request.limitations || 'Nenhuma'}
+P6. Limitações/Lesões: ${request.limitations || 'Nenhuma'}${this.describePreferredDays(request.preferredDays)}
 
 VALORES PARA O JSON:
 - objectiveShort: "${this.goalLabels[request.goal] || request.goal}"
@@ -296,7 +312,7 @@ PERFIL DO CORREDOR:
 - Frequência: ${request.daysPerWeek} dias/semana
 - Pace 5K: ${request.currentPace5k ? `${request.currentPace5k.toFixed(2)} min/km` : 'Iniciante (usar 7:00)'}
 - Total de semanas: ${request.targetWeeks}
-- Limitações: ${request.limitations || 'Nenhuma'}
+- Limitações: ${request.limitations || 'Nenhuma'}${this.describePreferredDays(request.preferredDays)}
 
 Gere as SEMANAS 2 até ${request.targetWeeks} seguindo esta progressão:
 1. ${request.daysPerWeek} treinos por semana
@@ -402,7 +418,7 @@ PERFIL DO CORREDOR:
 - Frequência: ${request.daysPerWeek} dias/semana
 - Pace 5K: ${safePace ? `${safePace.toFixed(2)} min/km` : 'Não sei (iniciante — usar 7:00 min/km como base)'}
 - Prazo: ${request.targetWeeks} semanas
-- Limitações: ${request.limitations || 'Nenhuma'}
+- Limitações: ${request.limitations || 'Nenhuma'}${this.describePreferredDays(request.preferredDays)}
 
 VALORES PRÉ-DEFINIDOS:
 - objectiveShort: "${this.goalLabels[request.goal] || request.goal}"

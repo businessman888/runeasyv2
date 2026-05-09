@@ -193,6 +193,12 @@ export class TrainingController {
 
             // Create QUICK training plan (Prompt 1 only - fast ~3-5s)
             // Background process will generate remaining weeks (Prompt 2)
+            // The user's actual day selection lives in `available_days`
+            // (set on AvailableDaysScreen). `preferred_days` is a legacy field
+            // the mobile never populates — fall back to it only if available_days
+            // is missing.
+            const selectedDays = (dto.available_days?.length ? dto.available_days : dto.preferred_days) || [];
+
             const result = await this.trainingService.createQuickPlan(userId, {
                 goal: dto.goal,
                 level: dto.level,
@@ -200,7 +206,7 @@ export class TrainingController {
                 currentPace5k: dto.current_pace_5k,
                 targetWeeks: dto.target_weeks,
                 limitations: dto.limitations,
-                preferredDays: dto.preferred_days,
+                preferredDays: selectedDays,
                 startDate: dto.start_date,
             });
 
@@ -360,6 +366,15 @@ export class TrainingController {
             // Reconstruct plan request from saved data
             const dto = onboardingData.responses_json || onboardingData;
 
+            // Prefer the user's actual selection (available_days) over the
+            // legacy preferred_days field, which the mobile never populates.
+            const selectedDays =
+                (dto.available_days?.length ? dto.available_days : null) ||
+                (onboardingData.available_days?.length ? onboardingData.available_days : null) ||
+                dto.preferred_days ||
+                onboardingData.preferred_days ||
+                [];
+
             const result = await this.trainingService.createQuickPlan(userId, {
                 goal: dto.goal || onboardingData.goal,
                 level: dto.level || onboardingData.level,
@@ -367,7 +382,7 @@ export class TrainingController {
                 currentPace5k: dto.current_pace_5k || onboardingData.current_pace_5k,
                 targetWeeks: dto.target_weeks || onboardingData.target_weeks,
                 limitations: dto.limitations || onboardingData.limitations,
-                preferredDays: dto.preferred_days || onboardingData.preferred_days,
+                preferredDays: selectedDays,
                 startDate: dto.start_date || onboardingData.start_date,
             });
 

@@ -168,8 +168,17 @@ export class TrainingService {
             const planStartDate = onboardingData.startDate ? new Date(onboardingData.startDate) : new Date();
             const allWorkoutsToInsert: any[] = [];
 
+            // Defense-in-depth: even when the prompt asks for specific days, the
+            // AI sometimes returns its own defaults (Mon/Tue/Thu/Sat). Force the
+            // workouts onto the user's actual selection so the calendar matches
+            // what they picked in onboarding.
+            const enforcedDays = this.normalizePreferredDays(
+                onboardingData.preferredDays,
+                onboardingData.daysPerWeek,
+            );
+
             for (const week of fullPlan.weeks) {
-                const weekWorkouts = this.createWorkoutsForWeek(planId, userId, week, planStartDate);
+                const weekWorkouts = this.createWorkoutsForWeek(planId, userId, week, planStartDate, enforcedDays);
                 allWorkoutsToInsert.push(...weekWorkouts);
             }
 
@@ -233,24 +242,64 @@ export class TrainingService {
     }
 
     /**
-     * Helper: Create workout records for a single week
+     * Sanitize the user's selected weekdays. Returns sorted, deduped values
+     * in [0..6] (0=Sunday ... 6=Saturday, matching JS Date.getDay()), or null
+     * when the input is missing/invalid so callers fall back to the AI's
+     * own day_of_week assignment (legacy behaviour).
+     */
+    private normalizePreferredDays(
+        preferredDays: number[] | undefined | null,
+        daysPerWeek: number,
+    ): number[] | null {
+        if (!preferredDays || !Array.isArray(preferredDays)) return null;
+        const cleaned = Array.from(
+            new Set(
+                preferredDays
+                    .map((d) => Number(d))
+                    .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6),
+            ),
+        ).sort((a, b) => a - b);
+        if (cleaned.length === 0) return null;
+        if (cleaned.length !== daysPerWeek) {
+            this.logger.warn(
+                `[Plan] preferredDays length (${cleaned.length}) does not match daysPerWeek (${daysPerWeek}); using provided selection anyway`,
+            );
+        }
+        return cleaned;
+    }
+
+    /**
+     * Helper: Create workout records for a single week.
+     *
+     * When `enforcedDays` is provided, each workout's day_of_week is overridden
+     * by the user's selected days (in sorted order, paired by index). This is
+     * the deterministic guarantee that the calendar matches the onboarding
+     * selection — the AI is asked nicely in the prompt, but here we make sure.
      */
     private createWorkoutsForWeek(
         planId: string,
         userId: string,
         week: GeneratedWeek,
         baseDate: Date,
+        enforcedDays?: number[] | null,
     ): any[] {
         const workoutsToInsert = [];
 
-        for (const workout of week.workouts) {
+        for (let i = 0; i < week.workouts.length; i++) {
+            const workout = week.workouts[i];
+
             // Calculate workout date based on week number and day of week
             const weekStart = new Date(baseDate);
             weekStart.setDate(baseDate.getDate() + (week.week_number - 1) * 7);
 
             const workoutDate = new Date(weekStart);
             const currentDay = workoutDate.getDay();
-            const targetDay = workout.day_of_week;
+            // Prefer the user's selected day at this index; fall back to the
+            // AI's choice when no selection is available or there are more
+            // workouts than selected days.
+            const targetDay = enforcedDays && enforcedDays.length > 0
+                ? enforcedDays[i % enforcedDays.length]
+                : workout.day_of_week;
             const daysToAdd = (targetDay - currentDay + 7) % 7;
             workoutDate.setDate(workoutDate.getDate() + daysToAdd);
 

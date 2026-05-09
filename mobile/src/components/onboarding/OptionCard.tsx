@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Pressable, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import { Pressable, Platform, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -34,20 +34,15 @@ export function OptionCard({
     pulseOnSelect = true,
 }: OptionCardProps) {
     const scale = useSharedValue(1);
-    const selectedT = useSharedValue(selected ? 1 : 0);
 
     useEffect(() => {
-        selectedT.value = withTiming(selected ? 1 : 0, {
-            duration: 220,
-            easing: Easing.out(Easing.cubic),
-        });
         if (selected && pulseOnSelect) {
             scale.value = withSequence(
                 withTiming(1.03, { duration: 120, easing: Easing.out(Easing.cubic) }),
                 withSpring(1, { damping: 16, stiffness: 220 }),
             );
         }
-    }, [selected, pulseOnSelect, scale, selectedT]);
+    }, [selected, pulseOnSelect, scale]);
 
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [{ scale: scale.value }],
@@ -83,14 +78,20 @@ export function OptionCard({
     );
 }
 
+// iOS-only soft glow. On Android, `elevation` produces a rectangular halo that
+// doesn't respect borderRadius on many devices (Samsung One UI in particular),
+// so we rely on the existing border + cyan-tinted background for the selected
+// signal there.
 const styles = StyleSheet.create({
-    selectedShadow: {
-        shadowColor: FORCED_CYAN,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.45,
-        shadowRadius: 14,
-        elevation: 8,
-    },
+    selectedShadow: Platform.select({
+        ios: {
+            shadowColor: FORCED_CYAN,
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.4,
+            shadowRadius: 12,
+        },
+        default: {},
+    }) as ViewStyle,
     pressed: {
         opacity: 0.95,
     },
