@@ -199,6 +199,11 @@ export class TrainingController {
             // is missing.
             const selectedDays = (dto.available_days?.length ? dto.available_days : dto.preferred_days) || [];
 
+            this.logger.log(
+                `[onboarding] Resolved selectedDays=${JSON.stringify(selectedDays)} for user ${userId} ` +
+                `(dto.available_days=${JSON.stringify(dto.available_days)}, dto.preferred_days=${JSON.stringify(dto.preferred_days)}, days_per_week=${dto.days_per_week})`,
+            );
+
             const result = await this.trainingService.createQuickPlan(userId, {
                 goal: dto.goal,
                 level: dto.level,
@@ -284,7 +289,27 @@ export class TrainingController {
                 );
             }
 
-            this.logger.log(`[save] Onboarding data saved for user ${userId}`);
+            this.logger.log(
+                `[save] Onboarding data saved for user ${userId} ` +
+                `(days_per_week=${dto.days_per_week}, available_days=${JSON.stringify(dto.available_days)}, preferred_days=${JSON.stringify(dto.preferred_days)})`,
+            );
+
+            // Re-onboarding implies "I want a new plan". Cancel any prior
+            // active plan so the subsequent /onboarding/generate call doesn't
+            // short-circuit on a stale plan generated before the user changed
+            // their answers (e.g. picking different available_days).
+            const { data: cancelled, error: cancelError } = await this.supabaseService
+                .from('training_plans')
+                .update({ status: 'cancelled' })
+                .eq('user_id', userId)
+                .eq('status', 'active')
+                .select('id');
+
+            if (cancelError) {
+                this.logger.warn(`[save] Failed to cancel prior active plans: ${cancelError.message}`);
+            } else if (cancelled && cancelled.length > 0) {
+                this.logger.log(`[save] Cancelled ${cancelled.length} prior active plan(s) so /generate will produce a fresh one`);
+            }
 
             // Sync biometrics to users.profile
             await this.usersService.updateProfile(userId, {
@@ -374,6 +399,13 @@ export class TrainingController {
                 dto.preferred_days ||
                 onboardingData.preferred_days ||
                 [];
+
+            this.logger.log(
+                `[generate] Resolved selectedDays=${JSON.stringify(selectedDays)} for user ${userId} ` +
+                `(dto.available_days=${JSON.stringify(dto.available_days)}, ` +
+                `onboarding.available_days=${JSON.stringify(onboardingData.available_days)}, ` +
+                `dto.preferred_days=${JSON.stringify(dto.preferred_days)})`,
+            );
 
             const result = await this.trainingService.createQuickPlan(userId, {
                 goal: dto.goal || onboardingData.goal,

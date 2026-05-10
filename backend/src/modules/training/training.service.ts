@@ -133,7 +133,11 @@ export class TrainingService {
     ): Promise<void> {
         try {
             this.logger.log(`[FullGen] Starting full plan generation for plan ${planId} (${onboardingData.targetWeeks} weeks)`);
-            this.logger.log(`[FullGen] Onboarding data: goal=${onboardingData.goal}, level=${onboardingData.level}, daysPerWeek=${onboardingData.daysPerWeek}, pace=${onboardingData.currentPace5k}`);
+            this.logger.log(
+                `[FullGen] Onboarding data: goal=${onboardingData.goal}, level=${onboardingData.level}, ` +
+                `daysPerWeek=${onboardingData.daysPerWeek}, pace=${onboardingData.currentPace5k}, ` +
+                `preferredDays=${JSON.stringify(onboardingData.preferredDays)}`,
+            );
             const startTime = Date.now();
 
             // STEP 1: Call AI to generate the full plan
@@ -175,6 +179,9 @@ export class TrainingService {
             const enforcedDays = this.normalizePreferredDays(
                 onboardingData.preferredDays,
                 onboardingData.daysPerWeek,
+            );
+            this.logger.log(
+                `[FullGen] STEP 3: enforcedDays=${JSON.stringify(enforcedDays)} (from preferredDays=${JSON.stringify(onboardingData.preferredDays)})`,
             );
 
             for (const week of fullPlan.weeks) {
