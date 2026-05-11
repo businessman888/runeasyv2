@@ -169,7 +169,10 @@ export class TrainingService {
 
             // STEP 3: Create ALL workouts at once
             this.logger.log(`[FullGen] STEP 3: Creating workout rows...`);
-            const planStartDate = onboardingData.startDate ? new Date(onboardingData.startDate) : new Date();
+            const planStartDate = this.parsePlanStartAsUTC(onboardingData.startDate);
+            this.logger.log(
+                `[FullGen] STEP 3: planStartDate=${planStartDate.toISOString()} (input startDate=${onboardingData.startDate ?? 'null'})`,
+            );
             const allWorkoutsToInsert: any[] = [];
 
             // Defense-in-depth: even when the prompt asks for specific days, the
@@ -249,6 +252,28 @@ export class TrainingService {
     }
 
     /**
+     * Parse a date input into a UTC-midnight Date. Critical for scheduling:
+     * `new Date("YYYY-MM-DD")` already parses as UTC midnight, but a Date built
+     * from `new Date()` (the "no startDate" fallback) carries the server's
+     * wall-clock time, which makes `.getDay()` and `.setDate()` return values
+     * that depend on the deployment's TZ. Anchoring everything at UTC midnight
+     * lets us use the UTC getters/setters and `toISOString()` consistently,
+     * making the math timezone-independent.
+     */
+    private parsePlanStartAsUTC(startDate: string | null | undefined): Date {
+        if (startDate && /^\d{4}-\d{2}-\d{2}/.test(startDate)) {
+            // "YYYY-MM-DD" or full ISO — keep the calendar date the user picked
+            const datePart = startDate.slice(0, 10);
+            return new Date(`${datePart}T00:00:00Z`);
+        }
+        // Fallback: today in São Paulo — what the rest of the app considers
+        // "today" via getSaoPauloToday(). Use the same YYYY-MM-DD so the AI
+        // schedule and the calendar agree on the start day.
+        const { dateStr } = this.getSaoPauloToday();
+        return new Date(`${dateStr}T00:00:00Z`);
+    }
+
+    /**
      * Sanitize the user's selected weekdays. Returns sorted, deduped values
      * in [0..6] (0=Sunday ... 6=Saturday, matching JS Date.getDay()), or null
      * when the input is missing/invalid so callers fall back to the AI's
@@ -292,15 +317,18 @@ export class TrainingService {
     ): any[] {
         const workoutsToInsert = [];
 
+        // CRITICAL: every getter and setter here MUST be the UTC variant.
+        // `baseDate` is anchored at UTC midnight by parsePlanStartAsUTC; mixing
+        // local-time methods (.getDay/.getDate/.setDate) with .toISOString()
+        // (UTC) reintroduces the +1-day shift this code path historically had.
         for (let i = 0; i < week.workouts.length; i++) {
             const workout = week.workouts[i];
 
-            // Calculate workout date based on week number and day of week
             const weekStart = new Date(baseDate);
-            weekStart.setDate(baseDate.getDate() + (week.week_number - 1) * 7);
+            weekStart.setUTCDate(baseDate.getUTCDate() + (week.week_number - 1) * 7);
 
             const workoutDate = new Date(weekStart);
-            const currentDay = workoutDate.getDay();
+            const currentDay = workoutDate.getUTCDay();
             // Prefer the user's selected day at this index; fall back to the
             // AI's choice when no selection is available or there are more
             // workouts than selected days.
@@ -308,7 +336,7 @@ export class TrainingService {
                 ? enforcedDays[i % enforcedDays.length]
                 : workout.day_of_week;
             const daysToAdd = (targetDay - currentDay + 7) % 7;
-            workoutDate.setDate(workoutDate.getDate() + daysToAdd);
+            workoutDate.setUTCDate(workoutDate.getUTCDate() + daysToAdd);
 
             workoutsToInsert.push({
                 plan_id: planId,
@@ -355,7 +383,7 @@ export class TrainingService {
 
             // Create individual workouts
             const workoutsToInsert = [];
-            const today = new Date();
+            const today = this.parsePlanStartAsUTC(onboardingData.startDate);
 
             for (const week of generatedPlan.weeks) {
                 const weekWorkouts = this.createWorkoutsForWeek(plan.id, userId, week, today);
