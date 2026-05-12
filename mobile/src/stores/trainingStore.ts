@@ -161,7 +161,25 @@ export type WorkoutType =
     | 'recovery'
     | 'fartlek'
     | 'progressive'
+    | 'repetition'
+    | 'hill_repeats'
+    | 'race_simulation'
     | 'free_run';
+
+export type TrainingZone = 'Z1' | 'Z2' | 'Z3' | 'Z4' | 'Z5';
+export type WorkoutPhase = 'base' | 'build' | 'peak' | 'taper';
+
+export interface WorkoutMetadata {
+    zone?: TrainingZone | null;
+    perceived_effort?: string | null;       // ex.: "7/10"
+    scientific_note?: string | null;        // 1 frase, PT-BR
+    week_phase?: WorkoutPhase | null;
+    segment_descriptions?: Array<{
+        type: 'warmup' | 'main' | 'cooldown';
+        zone?: TrainingZone | null;
+        description?: string | null;
+    }> | null;
+}
 
 export interface ManualWorkoutDto {
     title: string;
@@ -196,6 +214,9 @@ interface Workout {
         pace_min: number;
         pace_max: number;
     }>;
+    /** Daniels-based enrichment. Null/undefined for legacy workouts created
+     *  before the scientific refinement — the UI must render gracefully. */
+    metadata?: WorkoutMetadata | null;
 }
 
 /** Returned by GET /training/workouts/:id — workout row enriched with the

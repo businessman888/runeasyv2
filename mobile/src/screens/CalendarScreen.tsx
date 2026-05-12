@@ -15,7 +15,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
+import { ZONE_COLORS, ZONE_LABELS, PHASE_LABELS, getZoneColor } from '../theme/zoneColors';
 import { useTrainingStore, useStatsStore, ScheduleDay } from '../stores';
+import type { TrainingZone, WorkoutPhase } from '../stores/trainingStore';
 import { ScreenContainer } from '../components/ScreenContainer';
 
 
@@ -127,6 +129,7 @@ interface WorkoutBlock {
     description?: string;
     pace?: string;
     recovery?: string;
+    zone?: TrainingZone | null;
 }
 
 interface WorkoutData {
@@ -137,6 +140,9 @@ interface WorkoutData {
     rpe: string;
     blocks: WorkoutBlock[];
     insight: string;
+    zone?: TrainingZone | null;
+    phase?: WorkoutPhase | null;
+    weekNumber?: number | null;
 }
 
 export function CalendarScreen({ navigation }: any) {
@@ -273,23 +279,39 @@ export function CalendarScreen({ navigation }: any) {
         return schedule.find(s => s.date === tomorrowStr) || null;
     };
 
-    // Helper: Transform API workout to UI WorkoutData format
+    // Helper: Transform API workout to UI WorkoutData format.
+    //
+    // When the backend ships the new `metadata` payload (Daniels enrichment),
+    // we surface its zone/effort/scientific note plus per-segment zones and
+    // descriptions. For workouts created before the refinement (`metadata`
+    // null), we fall back to the original hardcoded copy so nothing breaks.
     const transformWorkoutToUI = (workout: any): WorkoutData => {
-        const blocks: WorkoutBlock[] = (workout.instructions_json || []).map((segment: any, index: number) => ({
-            id: String(index + 1),
-            title: segment.type === 'warmup' ? 'Aquecimento' : segment.type === 'cooldown' ? 'Desaquecimento' : 'Principal',
-            subtitle: `Bloco ${String(index + 1).padStart(2, '0')}${segment.type === 'main' ? ' - PRINCIPAL' : ''}`,
-            type: segment.type,
-            duration: `${formatKm(segment.distance_km)} km`,
-            description: segment.type === 'warmup'
-                ? 'Trote leve z1/z2 para ativar'
-                : segment.type === 'cooldown'
-                    ? 'Trote muito leve + alongamento estático.'
-                    : 'Ritmo forte, focado na técnica',
-            pace: segment.pace_min && segment.pace_max
-                ? `${segment.pace_min.toFixed(0)}:${((segment.pace_min % 1) * 60).toFixed(0).padStart(2, '0')}/km`
-                : undefined,
-        }));
+        const metadata = workout?.metadata ?? null;
+        const segmentDescriptions: Array<{ zone?: string | null; description?: string | null }> =
+            metadata?.segment_descriptions ?? [];
+
+        const blocks: WorkoutBlock[] = (workout.instructions_json || []).map((segment: any, index: number) => {
+            const md = segmentDescriptions[index];
+            const fallbackDescription =
+                segment.type === 'warmup'
+                    ? 'Trote leve z1/z2 para ativar'
+                    : segment.type === 'cooldown'
+                        ? 'Trote muito leve + alongamento estático.'
+                        : 'Ritmo forte, focado na técnica';
+
+            return {
+                id: String(index + 1),
+                title: segment.type === 'warmup' ? 'Aquecimento' : segment.type === 'cooldown' ? 'Desaquecimento' : 'Principal',
+                subtitle: `Bloco ${String(index + 1).padStart(2, '0')}${segment.type === 'main' ? ' - PRINCIPAL' : ''}`,
+                type: segment.type,
+                duration: `${formatKm(segment.distance_km)} km`,
+                description: md?.description || fallbackDescription,
+                pace: segment.pace_min && segment.pace_max
+                    ? `${segment.pace_min.toFixed(0)}:${((segment.pace_min % 1) * 60).toFixed(0).padStart(2, '0')}/km`
+                    : undefined,
+                zone: (md?.zone as TrainingZone | undefined) ?? null,
+            };
+        });
 
         const workoutTypeLabels: Record<string, string> = {
             'easy_run': 'Rodagem Leve',
@@ -297,19 +319,34 @@ export function CalendarScreen({ navigation }: any) {
             'intervals': 'Intervalados',
             'tempo': 'Tempo Run',
             'recovery': 'Recuperação',
+            'fartlek': 'Fartlek',
+            'progressive': 'Progressivo',
+            'repetition': 'Repetições',
+            'hill_repeats': 'Subidas',
+            'race_simulation': 'Simulado',
             'free_run': 'Corrida Livre',
         };
 
         const distanceLabel = formatKm(workout.distance_km);
+        const rpeFromMetadata = metadata?.perceived_effort
+            ? `RPE ${metadata.perceived_effort}`
+            : 'RPE 6/10';
+        const insight =
+            metadata?.scientific_note ||
+            workout.objective ||
+            'Mantenha o foco e aproveite o treino!';
 
         return {
             id: workout.id,
             title: `${workoutTypeLabels[workout.type] || workout.type} - ${distanceLabel}km`,
             distance: `${distanceLabel} km`,
             duration: `${Math.round((workout.distance_km || 0) * 6)} min`, // Estimate based on 6 min/km
-            rpe: 'RPE 6/10',
+            rpe: rpeFromMetadata,
             blocks,
-            insight: workout.objective || 'Mantenha o foco e aproveite o treino!'
+            insight,
+            zone: (metadata?.zone as TrainingZone | undefined) ?? null,
+            phase: (metadata?.week_phase as WorkoutPhase | undefined) ?? null,
+            weekNumber: workout.week_number ?? null,
         };
     };
 
@@ -988,6 +1025,40 @@ export function CalendarScreen({ navigation }: any) {
                                 onStartShouldSetResponder={() => true}
                                 onMoveShouldSetResponder={() => true}
                             >
+                                {/* Zone + phase chips (only when backend ships enriched metadata) */}
+                                {(selectedWorkout?.zone || selectedWorkout?.phase) && (
+                                    <View style={styles.zoneChipsRow}>
+                                        {selectedWorkout?.zone && (
+                                            <View
+                                                style={[
+                                                    styles.zoneChip,
+                                                    { borderColor: ZONE_COLORS[selectedWorkout.zone] },
+                                                ]}
+                                            >
+                                                <View
+                                                    style={[
+                                                        styles.zoneChipDot,
+                                                        { backgroundColor: ZONE_COLORS[selectedWorkout.zone] },
+                                                    ]}
+                                                />
+                                                <Text style={styles.zoneChipText}>
+                                                    {selectedWorkout.zone} · {ZONE_LABELS[selectedWorkout.zone]}
+                                                </Text>
+                                            </View>
+                                        )}
+                                        {selectedWorkout?.phase && (
+                                            <View style={styles.phaseChip}>
+                                                <Text style={styles.phaseChipText}>
+                                                    Fase: {PHASE_LABELS[selectedWorkout.phase]}
+                                                    {selectedWorkout?.weekNumber
+                                                        ? ` · Semana ${selectedWorkout.weekNumber}`
+                                                        : ''}
+                                                </Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                )}
+
                                 {/* Metrics Badges */}
                                 <View style={styles.modalBadges}>
                                     <View style={styles.modalBadge}>
@@ -1013,6 +1084,16 @@ export function CalendarScreen({ navigation }: any) {
                                             block.type === 'main' && styles.workoutBlockMain
                                         ]}
                                     >
+                                        {/* Zone strip (only when backend ships zone per segment) */}
+                                        {block.zone && getZoneColor(block.zone) && (
+                                            <View
+                                                style={[
+                                                    styles.blockZoneStrip,
+                                                    { backgroundColor: getZoneColor(block.zone)! },
+                                                ]}
+                                            />
+                                        )}
+
                                         {/* Block Header */}
                                         <View style={styles.blockHeader}>
                                             <View>
@@ -1585,6 +1666,54 @@ const styles = StyleSheet.create({
         color: '#EBEBF5',
         textAlign: 'center',
         marginBottom: spacing.lg,
+    },
+    zoneChipsRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        gap: spacing.sm,
+        marginBottom: spacing.md,
+    },
+    zoneChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: spacing.md,
+        paddingVertical: 6,
+        borderRadius: 20,
+        borderWidth: 1,
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    },
+    zoneChipDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    zoneChipText: {
+        fontSize: typography.fontSizes.xs,
+        color: colors.textLight,
+        fontWeight: typography.fontWeights.semibold,
+        letterSpacing: 0.3,
+    },
+    phaseChip: {
+        paddingHorizontal: spacing.md,
+        paddingVertical: 6,
+        borderRadius: 20,
+        backgroundColor: 'rgba(151, 71, 255, 0.12)',
+        borderWidth: 1,
+        borderColor: 'rgba(151, 71, 255, 0.3)',
+    },
+    phaseChipText: {
+        fontSize: typography.fontSizes.xs,
+        color: colors.textLight,
+        fontWeight: typography.fontWeights.medium,
+    },
+    blockZoneStrip: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: 3,
     },
     modalBadges: {
         flexDirection: 'row',

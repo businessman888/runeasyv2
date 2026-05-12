@@ -13,6 +13,9 @@ import { AIModule } from './common/ai';
 // Encryption (Global)
 import { EncryptionModule } from './common/encryption';
 
+// Pace Calculator (Global)
+import { PaceCalculatorModule } from './common/pace-calculator';
+
 // Feature Modules
 import { TrainingModule } from './modules/training';
 import { GamificationModule } from './modules/gamification';
@@ -77,6 +80,9 @@ import { AuthModule } from './modules/auth';
 
     // Encryption (Global — available to all modules)
     EncryptionModule,
+
+    // Pace Calculator (Global — Daniels VDOT, training paces)
+    PaceCalculatorModule,
 
     // Feature Modules
     TrainingModule,

@@ -338,6 +338,26 @@ export class TrainingService {
             const daysToAdd = (targetDay - currentDay + 7) % 7;
             workoutDate.setUTCDate(workoutDate.getUTCDate() + daysToAdd);
 
+            const hasEnrichedFields =
+                workout.zone !== undefined ||
+                workout.perceived_effort !== undefined ||
+                workout.scientific_note !== undefined ||
+                workout.segments.some(s => s.zone !== undefined || s.description !== undefined);
+
+            const metadata = hasEnrichedFields
+                ? {
+                    zone: workout.zone ?? null,
+                    perceived_effort: workout.perceived_effort ?? null,
+                    scientific_note: workout.scientific_note ?? null,
+                    week_phase: week.phase ?? null,
+                    segment_descriptions: workout.segments.map(s => ({
+                        type: s.type,
+                        zone: s.zone ?? null,
+                        description: s.description ?? null,
+                    })),
+                }
+                : null;
+
             workoutsToInsert.push({
                 plan_id: planId,
                 user_id: userId,
@@ -349,6 +369,7 @@ export class TrainingService {
                 objective: workout.objective,
                 tips: workout.tips,
                 status: 'pending',
+                metadata,
             });
         }
 
