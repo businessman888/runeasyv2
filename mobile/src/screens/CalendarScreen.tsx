@@ -391,11 +391,23 @@ export function CalendarScreen({ navigation }: any) {
 
         // Pending → preview modal. Start button only for today's plan/manual
         // workouts (free runs aren't started from the calendar).
+        //
+        // Anchor "today" to the workout's own scheduled_date, NOT the calendar's
+        // currently selected day. Entry points like the "Próximo" card open the
+        // modal for tomorrow's workout without changing selectedDate, which used
+        // to make isToday=true and incorrectly enable the start button for
+        // future workouts.
         const todayDate = new Date();
-        const selectedDateObj = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), selectedDate);
         todayDate.setHours(0, 0, 0, 0);
-        selectedDateObj.setHours(0, 0, 0, 0);
-        const isToday = selectedDateObj.getTime() === todayDate.getTime();
+
+        let isToday = false;
+        if (workout?.scheduled_date) {
+            // Parse "YYYY-MM-DD" as local midnight so the comparison matches
+            // the user's wall-clock day (same convention as isSelectedDateToday).
+            const workoutDateObj = new Date(`${workout.scheduled_date}T00:00:00`);
+            workoutDateObj.setHours(0, 0, 0, 0);
+            isToday = workoutDateObj.getTime() === todayDate.getTime();
+        }
 
         setSelectedWorkout(transformWorkoutToUI(workout));
         setSelectedRawWorkout(workout);
