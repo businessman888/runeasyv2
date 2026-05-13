@@ -5,36 +5,15 @@ import {
     StyleSheet,
     ScrollView,
     TouchableOpacity,
-    TextInput,
     Linking,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
 import { ScreenContainer } from '../components/ScreenContainer';
 
 // Icon components using @expo/vector-icons
 function BackIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
     return <Ionicons name="chevron-back" size={size} color={color} />;
-}
-
-function SearchIcon({ size = 20, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <Ionicons name="search-outline" size={size} color={color} />;
-}
-
-function ContaIcon({ size = 27, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <Ionicons name="person-outline" size={size} color={color} />;
-}
-
-function PagamentosIcon({ size = 27, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <Ionicons name="card-outline" size={size} color={color} />;
-}
-
-function IADadosIcon({ size = 27, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="brain" size={size} color={color} />;
-}
-
-function TreinosIcon({ size = 27, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <Ionicons name="sync-outline" size={size} color={color} />;
 }
 
 function ChevronDownIcon({ size = 20, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -49,25 +28,11 @@ function ExternalLinkIcon({ size = 18, color = 'rgba(235,235,245,0.4)' }: { size
     return <Ionicons name="open-outline" size={size} color={color} />;
 }
 
-interface Category {
-    id: string;
-    title: string;
-    iconName: string;
-    iconType: 'ionicons' | 'material';
-}
-
 interface FAQ {
     id: string;
     question: string;
     answer: string;
 }
-
-const categories: Category[] = [
-    { id: 'conta', title: 'Conta', iconName: 'person-outline', iconType: 'ionicons' },
-    { id: 'pagamentos', title: 'Pagamentos', iconName: 'card-outline', iconType: 'ionicons' },
-    { id: 'ia_dados', title: 'IA & Dados', iconName: 'brain', iconType: 'material' },
-    { id: 'treinos', title: 'Treinos', iconName: 'sync-outline', iconType: 'ionicons' },
-];
 
 const faqs: FAQ[] = [
     {
@@ -87,15 +52,7 @@ const faqs: FAQ[] = [
     },
 ];
 
-const renderCategoryIcon = (category: Category) => {
-    if (category.iconType === 'material') {
-        return <MaterialCommunityIcons name={category.iconName as any} size={27} color="#00D4FF" />;
-    }
-    return <Ionicons name={category.iconName as any} size={27} color="#00D4FF" />;
-};
-
 export function HelpScreen({ navigation }: any) {
-    const [searchQuery, setSearchQuery] = useState('');
     const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
 
     const toggleFaq = (id: string) => {
@@ -121,37 +78,6 @@ export function HelpScreen({ navigation }: any) {
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Search Bar */}
-                <View style={styles.searchContainer}>
-                    <SearchIcon size={20} color="#00D4FF" />
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Como podemos ajudar?"
-                        placeholderTextColor="rgba(235,235,245,0.4)"
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                    />
-                </View>
-
-                {/* Categories */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Categorias</Text>
-                    <View style={styles.categoriesGrid}>
-                        {categories.map((category) => (
-                            <TouchableOpacity
-                                key={category.id}
-                                style={styles.categoryCard}
-                                activeOpacity={0.7}
-                            >
-                                <View style={styles.categoryIconContainer}>
-                                    {renderCategoryIcon(category)}
-                                </View>
-                                <Text style={styles.categoryTitle}>{category.title}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </View>
-
                 {/* FAQs */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Dúvidas frequentes</Text>
@@ -290,22 +216,7 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         paddingHorizontal: spacing.lg,
-    },
-    // Search
-    searchContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#1C1C2E',
-        borderRadius: 16,
-        paddingHorizontal: spacing.md,
-        height: 48,
-        gap: spacing.sm,
-        marginBottom: spacing.xl,
-    },
-    searchInput: {
-        flex: 1,
-        fontSize: 14,
-        color: '#FFFFFF',
+        paddingTop: spacing.md,
     },
     // Sections
     section: {
@@ -316,36 +227,6 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#FFFFFF',
         marginBottom: spacing.md,
-    },
-    // Categories
-    categoriesGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.md,
-    },
-    categoryCard: {
-        width: '47%',
-        backgroundColor: '#1C1C2E',
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(235,235,245,0.1)',
-        paddingVertical: spacing.lg,
-        paddingHorizontal: spacing.md,
-        alignItems: 'center',
-    },
-    categoryIconContainer: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        backgroundColor: 'rgba(0,212,255,0.15)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: spacing.sm,
-    },
-    categoryTitle: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: '#FFFFFF',
     },
     // FAQs
     faqContainer: {
