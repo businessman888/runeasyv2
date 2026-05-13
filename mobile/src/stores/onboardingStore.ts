@@ -38,7 +38,7 @@ interface OnboardingData {
     targetWeeks: number;
     limitations: { hasLimitation: boolean; details: string } | null; // Limitations screen - physical limitations
     preferredDays: number[];
-    goalTimeframe: number | null; // Goal timeframe in months (1, 3, 6, 12)
+    goalTimeframe: number | null; // Goal timeframe in months (1, 3, 6)
     preferredWearable: string | null; // 'garmin' | 'polar' | 'fitbit' | 'apple_watch' | null
 }
 

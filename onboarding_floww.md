@@ -296,7 +296,7 @@ Se o usuário não estiver autenticado ao chegar no `PlanLoadingScreen`, ele é 
 | `dontKnowPace` | 10 | `boolean` | Usuário não sabe o pace |
 | `startDate` | 11 | `string` | Data ISO (YYYY-MM-DD) |
 | `limitations` | 12 | `{ hasLimitation: boolean, details: string }` | Limitação física |
-| `goalTimeframe` | 13 | `number` | Prazo em meses (1, 3, 6, 12) |
+| `goalTimeframe` | 13 | `number` | Prazo em meses (1, 3, 6) |
 | `preferredWearable` | 14 | `string \| null` | Provider do dispositivo ou null |
 
 ---

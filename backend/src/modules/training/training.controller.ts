@@ -45,7 +45,7 @@ interface CreatePlanDto {
     dont_know_pace: boolean;
 
     // Goal duration
-    goal_timeframe: number | null; // months (1, 3, 6, 12)
+    goal_timeframe: number | null; // months (1, 3, 6)
     target_weeks: number;
     limitations: string | null;
     preferred_days: number[];

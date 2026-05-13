@@ -50,7 +50,6 @@ const TIMEFRAME_OPTIONS = [
     { id: 1, label: '1 mês', description: 'Objetivo de curto prazo', recommended: false },
     { id: 3, label: '3 meses', description: 'Tempo ideal para iniciantes', recommended: true },
     { id: 6, label: '6 meses', description: 'Planejamento moderado', recommended: false },
-    { id: 12, label: '12 meses', description: 'Objetivo de longo prazo', recommended: false },
 ];
 
 export function GoalTimeframeScreen({ value, onChange }: GoalTimeframeScreenProps) {
