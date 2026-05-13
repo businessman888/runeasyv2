@@ -20,6 +20,9 @@ export function useTracking(workoutId?: string) {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const accumulatedTimeRef = useRef<number>(0);
+  // Última versão do MMKV já refletida no estado React. Permite "dirty-check":
+  // só re-parseamos route_points quando a locationTask escreveu um ponto novo.
+  const lastRouteVersionRef = useRef<number>(0);
 
   // Carrega estado anterior se houver (recuperação de crash)
   useEffect(() => {
@@ -110,23 +113,30 @@ export function useTracking(workoutId?: string) {
   }, []);
 
   // Sync reativo de foreground lendo o state do MMKV periodicamente.
-  // Pace também é calculado aqui para evitar o bug de re-criação de interval
-  // causado por dependências [distance, timeMs] no useEffect separado.
+  // Intervalo curto (500ms) para que o traçado acompanhe o corredor com o mínimo
+  // de lag perceptível, e dirty-check via last_update_ts para evitar JSON.parse
+  // + setState repetidos quando nada mudou (a locationTask filtra agressivamente
+  // pontos por precisão/distância, então a maioria dos ticks não tem novidade).
   useEffect(() => {
     let syncTimer: NodeJS.Timeout;
 
     if (sessionState === 'training') {
       syncTimer = setInterval(() => {
-        // Sync Distance & Route
+        // Sync Distance (barato: leitura numérica direta do MMKV)
         const currentDist = trackingStorage.getNumber('current_distance') || 0;
         setDistance(currentDist);
 
-        const savedRouteStr = trackingStorage.getString('route_points');
-        if (savedRouteStr) {
-          try {
-            const parsed = JSON.parse(savedRouteStr);
-            setRouteCoordinates(parsed.map((p: any) => [p.longitude, p.latitude]));
-          } catch(e) {}
+        // Só re-parseia a rota se houve novo ponto desde o último tick.
+        const updateTs = trackingStorage.getNumber('last_update_ts') || 0;
+        if (updateTs !== lastRouteVersionRef.current) {
+          lastRouteVersionRef.current = updateTs;
+          const savedRouteStr = trackingStorage.getString('route_points');
+          if (savedRouteStr) {
+            try {
+              const parsed = JSON.parse(savedRouteStr);
+              setRouteCoordinates(parsed.map((p: any) => [p.longitude, p.latitude]));
+            } catch(e) {}
+          }
         }
 
         // Calcula pace usando refs (evita closure stale sobre timeMs/distance)
@@ -140,7 +150,7 @@ export function useTracking(workoutId?: string) {
             setCurrentPace(pace);
           }
         }
-      }, 1000);
+      }, 500);
     }
 
     return () => {

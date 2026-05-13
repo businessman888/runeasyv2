@@ -308,18 +308,17 @@ export function RunningScreen() {
             centerCoordinate: initialPosition,
           }}
         />
-        {/* Indicador de localização customizado (componentizado) */}
-        <MapLocationPuck onGPSFix={() => { if (!hasGPSFix) setHasGPSFix(true); }} />
-
-        {/* Rastro da corrida — glow + linha principal */}
+        {/* Rastro da corrida — declarado ANTES do puck para que o traçado fique
+            ABAIXO do indicador do corredor (Mapbox empilha na ordem de declaração).
+            Halo + linha principal no cyan da marca, estilo Strava. */}
         {routeCoordinates.length > 1 && (
           <Mapbox.ShapeSource id="routeSource" shape={geoJsonSource as any}>
             <Mapbox.LineLayer
               id="routeGlow"
               style={{
                 lineColor: T.routeColor,
-                lineWidth: 16,
-                lineOpacity: 0.35,
+                lineWidth: 14,
+                lineOpacity: 0.5,
                 lineJoin: 'round',
                 lineCap: 'round',
               }}
@@ -328,7 +327,7 @@ export function RunningScreen() {
               id="routeFill"
               style={{
                 lineColor: T.routeColor,
-                lineWidth: 7,
+                lineWidth: 6,
                 lineOpacity: 1,
                 lineJoin: 'round',
                 lineCap: 'round',
@@ -336,6 +335,10 @@ export function RunningScreen() {
             />
           </Mapbox.ShapeSource>
         )}
+
+        {/* Indicador de localização customizado — declarado por último para
+            renderizar SEMPRE por cima do traçado. */}
+        <MapLocationPuck onGPSFix={() => { if (!hasGPSFix) setHasGPSFix(true); }} />
       </Mapbox.MapView>
 
       {/* ── HEADER OVERLAY ──────────────────────────────────────────────── */}
