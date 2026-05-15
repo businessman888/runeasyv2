@@ -30,6 +30,10 @@ function BellIcon({ size = 24, color = '#EBEBF5' }: { size?: number; color?: str
     return <Ionicons name="notifications" size={size} color={color} />;
 }
 
+function GoalsIcon({ size = 24, color = '#EBEBF5' }: { size?: number; color?: string }) {
+    return <MaterialCommunityIcons name="target" size={size} color={color} />;
+}
+
 function CheckIcon({ size = 16, color = '#32CD32' }: { size?: number; color?: string }) {
     return <Ionicons name="checkmark" size={size} color={color} />;
 }
@@ -596,9 +600,11 @@ export function CalendarScreen({ navigation }: any) {
                     </View>
                     <TouchableOpacity
                         style={styles.notificationButton}
-                        onPress={() => navigation.navigate('Notifications')}
+                        onPress={() => navigation.navigate('PlanGoals')}
+                        accessibilityRole="button"
+                        accessibilityLabel="Abrir metas do plano"
                     >
-                        <BellIcon size={24} color="#EBEBF5" />
+                        <GoalsIcon size={24} color="#EBEBF5" />
                     </TouchableOpacity>
                 </View>
 

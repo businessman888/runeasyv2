@@ -20,6 +20,9 @@ export * from './RetrospectiveScreen';
 export * from './CustomizeGoalScreen';
 export * from './ManualWorkoutConfigScreen';
 
+// Plan Goals (visão do plano completo + detalhe semanal)
+export * from './plan-goals';
+
 // Quiz Screens
 export * from './quiz';
 

@@ -481,6 +481,33 @@ export class TrainingController {
     }
 
     /**
+     * Consolidated overview consumed by the Goals screen. Returns the active
+     * plan summary + all weeks (with phase) + workouts grouped by week. Returns
+     * 404 when the user has no active plan.
+     */
+    @Get('plan/overview')
+    async getPlanOverview(@Headers('x-user-id') userId: string) {
+        if (!userId) {
+            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+        }
+
+        try {
+            const overview = await this.trainingService.getPlanOverview(userId);
+            if (!overview) {
+                throw new HttpException('No active plan', HttpStatus.NOT_FOUND);
+            }
+            return overview;
+        } catch (error) {
+            if (error instanceof HttpException) throw error;
+            this.logger.error('Failed to load plan overview', error);
+            throw new HttpException(
+                error.message || 'Failed to load plan overview',
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    /**
      * Get workouts for calendar view
      */
     @Get('workouts')

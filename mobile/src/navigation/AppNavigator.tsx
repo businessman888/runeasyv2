@@ -37,6 +37,8 @@ import {
     ManualWorkoutConfigScreen,
     RunningScreen,
     RunSummaryScreen,
+    PlanGoalsScreen,
+    WeekDetailScreen,
 } from '../screens';
 import { PlanPreviewScreen as QuizPlanPreviewScreen } from '../screens/quiz/PlanPreviewScreen';
 import { PlanLoadingScreen } from '../screens/quiz/PlanLoadingScreen';
@@ -415,6 +417,22 @@ export function AppNavigator() {
                         <Stack.Screen
                             name="ManualWorkoutConfig"
                             component={ManualWorkoutConfigScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'card',
+                            }}
+                        />
+                        <Stack.Screen
+                            name="PlanGoals"
+                            component={PlanGoalsScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'card',
+                            }}
+                        />
+                        <Stack.Screen
+                            name="WeekDetail"
+                            component={WeekDetailScreen}
                             options={{
                                 headerShown: false,
                                 presentation: 'card',

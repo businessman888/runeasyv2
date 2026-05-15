@@ -30,12 +30,24 @@ export interface WorkoutData {
   status?: 'pending' | 'completed' | 'skipped' | 'missed';
 }
 
+interface ExecutedOverride {
+  distanceKm: number;
+  durationSeconds: number;
+  paceSecondsPerKm: number;
+}
+
 interface WorkoutCardProps {
   workout: WorkoutData;
   isToday: boolean;
   isCompleted: boolean;
   onStartWorkout: () => void;
   allBadges: BadgeData[];
+  /**
+   * When provided AND the workout is completed, the stats row renders these
+   * actual executed metrics instead of the planned distance/time/pace.
+   * Lets the Goals screen show real values without forking the component.
+   */
+  executedOverride?: ExecutedOverride;
 }
 
 // ─── Figma design tokens ──────────────────────────────────────────────────────
@@ -111,6 +123,24 @@ function formatEstimatedTime(workout: WorkoutData): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+function formatDurationFromSeconds(totalSeconds: number): string {
+  const safe = Math.max(0, Math.round(totalSeconds));
+  const hours = Math.floor(safe / 3600);
+  const mins = Math.floor((safe % 3600) / 60);
+  const secs = safe % 60;
+  if (hours > 0) {
+    return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function formatPaceFromSecondsPerKm(secondsPerKm: number): string {
+  const safe = Math.max(0, Math.round(secondsPerKm));
+  const min = Math.floor(safe / 60);
+  const sec = safe % 60;
+  return `${min}:${sec.toString().padStart(2, '0')}`;
+}
+
 function formatCardDate(dateStr?: string): string {
   if (!dateStr) return 'Hoje';
   const date = new Date(dateStr + 'T00:00:00');
@@ -171,13 +201,22 @@ function getEarnableSlugs(workout: WorkoutData): string[] {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const WorkoutCard = memo(
-  ({ workout, isToday, isCompleted, onStartWorkout, allBadges }: WorkoutCardProps) => {
+  ({ workout, isToday, isCompleted, onStartWorkout, allBadges, executedOverride }: WorkoutCardProps) => {
     const pace = getPaceMinutes(workout);
-    const paceStr = formatPace(pace);
-    const estimatedTime = formatEstimatedTime(workout);
     const dateLabel = formatCardDate(workout.scheduled_date);
     const intensityLabel = getIntensityLabel(workout.type);
     const workoutName = getWorkoutTypeName(workout.type);
+
+    const useExecuted = !!executedOverride && isCompleted;
+    const distanceLabel = useExecuted
+      ? `${executedOverride!.distanceKm.toFixed(2)} Km`
+      : `${workout.distance_km.toFixed(2)} Km`;
+    const timeLabel = useExecuted
+      ? formatDurationFromSeconds(executedOverride!.durationSeconds)
+      : formatEstimatedTime(workout);
+    const paceLabel = useExecuted
+      ? `${formatPaceFromSecondsPerKm(executedOverride!.paceSecondsPerKm)} /km`
+      : `${formatPace(pace)} /km`;
 
     // Resolve earnable badges against the user's real badge list
     const earnableBadges = useMemo(() => {
@@ -219,17 +258,15 @@ export const WorkoutCard = memo(
           <View style={styles.statsRow}>
             <View style={styles.statCol}>
               <Text style={styles.statLabel}>Distância</Text>
-              <Text style={styles.statValue}>
-                {workout.distance_km.toFixed(2)} Km
-              </Text>
+              <Text style={styles.statValue}>{distanceLabel}</Text>
             </View>
             <View style={[styles.statCol, styles.statColMiddle]}>
               <Text style={styles.statLabel}>Tempo</Text>
-              <Text style={styles.statValue}>{estimatedTime}</Text>
+              <Text style={styles.statValue}>{timeLabel}</Text>
             </View>
             <View style={styles.statCol}>
               <Text style={styles.statLabel}>Pace</Text>
-              <Text style={styles.statValue}>{paceStr} /km</Text>
+              <Text style={styles.statValue}>{paceLabel}</Text>
             </View>
           </View>
 

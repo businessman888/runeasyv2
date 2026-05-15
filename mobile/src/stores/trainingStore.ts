@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createMMKV } from 'react-native-mmkv';
 import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
+import type { PlanOverviewResponse } from '../types/plan-overview.types';
 
 // ─── Persistência offline para workouts pendentes ────────────────────────────
 const pendingWorkoutsStorage = createMMKV({ id: 'pending-workouts' });
@@ -295,6 +296,9 @@ interface TrainingState {
     schedule: ScheduleDay[];
     today: ScheduleDay | null;
     nextWorkout: Workout | null;
+    planOverview: PlanOverviewResponse | null;
+    planOverviewLoading: boolean;
+    planOverviewError: string | null;
     isLoading: boolean;
     error: string | null;
     generationStatus: GenerationStatus;
@@ -305,6 +309,8 @@ interface TrainingState {
     fetchWorkoutDetails: (workoutId: string) => Promise<WorkoutDetails | null>;
     fetchUpcomingWorkouts: () => Promise<void>;
     fetchSchedule: (startDate: string, endDate: string) => Promise<void>;
+    fetchPlanOverview: () => Promise<void>;
+    clearPlanOverview: () => void;
     skipWorkout: (workoutId: string, reason: string) => Promise<void>;
     completeWorkout: (payload: WorkoutTrackingPayload) => Promise<{ success: boolean; savedLocally: boolean }>;
     completeFreeRun: (payload: FreeRunPayload) => Promise<{ success: boolean; savedLocally: boolean; workout?: Workout }>;
@@ -330,6 +336,9 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
     schedule: [],
     today: null,
     nextWorkout: null,
+    planOverview: null,
+    planOverviewLoading: false,
+    planOverviewError: null,
     isLoading: false,
     error: null,
     generationStatus: null,
@@ -337,6 +346,41 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
     setGenerationStatus: (status) => set({ generationStatus: status }),
 
     clearScheduleData: () => set({ today: null, nextWorkout: null, schedule: [] }),
+
+    clearPlanOverview: () => set({ planOverview: null, planOverviewError: null }),
+
+    fetchPlanOverview: async () => {
+        try {
+            set({ planOverviewLoading: true, planOverviewError: null });
+            const userId = await getUserId();
+            if (!userId) {
+                set({ planOverviewError: 'Usuário não autenticado' });
+                return;
+            }
+
+            const response = await fetch(`${API_URL}/training/plan/overview`, {
+                headers: { 'x-user-id': userId },
+            });
+
+            if (response.status === 404) {
+                set({ planOverview: null, planOverviewError: 'Nenhum plano ativo' });
+                return;
+            }
+
+            if (!response.ok) {
+                set({ planOverviewError: 'Falha ao carregar plano' });
+                return;
+            }
+
+            const data = (await response.json()) as PlanOverviewResponse;
+            set({ planOverview: data });
+        } catch (e) {
+            console.error('[fetchPlanOverview] erro:', e);
+            set({ planOverviewError: 'Falha ao carregar plano' });
+        } finally {
+            set({ planOverviewLoading: false });
+        }
+    },
 
     fetchWorkoutDetails: async (workoutId: string) => {
         try {
