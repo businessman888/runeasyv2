@@ -4,6 +4,12 @@ import { Queue } from 'bullmq';
 import { SupabaseService } from '../../database';
 import { TrainingAIService, TrainingPlanRequest, GeneratedPlan, GeneratedWeek } from './training-ai.service';
 import { GamificationService } from '../gamification/gamification.service';
+import {
+    PlanOverviewResponseDto,
+    PlanWeekDto,
+    PlanWorkoutDto,
+    WeekPhase,
+} from './dto/plan-overview.dto';
 
 // Generation status types
 export type GenerationStatus = 'partial' | 'generating' | 'complete' | 'failed';
@@ -1105,6 +1111,228 @@ export class TrainingService {
         this.logger.debug(`[getNextWorkout] Found: ${data ? data.scheduled_date : 'none'}`);
         return data || null;
     }
+
+    /**
+     * Build the consolidated plan overview consumed by the mobile Goals screen.
+     * Returns the active plan summary + all weeks (with phase) + workouts
+     * grouped by week_number with per-week progress stats.
+     */
+    async getPlanOverview(userId: string): Promise<PlanOverviewResponseDto | null> {
+        const { date: today, dateStr: todayStr } = this.getSaoPauloToday();
+        const dowLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+
+        const [planRes, workoutsRes] = await Promise.all([
+            this.supabaseService
+                .from('training_plans')
+                .select('*')
+                .eq('user_id', userId)
+                .eq('status', 'active')
+                .single(),
+            (async () => {
+                const { data: planRow } = await this.supabaseService
+                    .from('training_plans')
+                    .select('id')
+                    .eq('user_id', userId)
+                    .eq('status', 'active')
+                    .single();
+                if (!planRow) return { data: [] as any[], error: null };
+                return this.supabaseService
+                    .from('workouts')
+                    .select('*')
+                    .eq('user_id', userId)
+                    .eq('plan_id', planRow.id)
+                    .order('week_number', { ascending: true })
+                    .order('scheduled_date', { ascending: true });
+            })(),
+        ]);
+
+        if (planRes.error && planRes.error.code !== 'PGRST116') throw planRes.error;
+        const plan = planRes.data;
+        if (!plan) return null;
+
+        const workouts: any[] = workoutsRes.data ?? [];
+
+        const planJson = plan.plan_json ?? {};
+        const generatedWeeks: GeneratedWeek[] = Array.isArray(planJson.weeks)
+            ? planJson.weeks
+            : [];
+
+        const phaseByWeek = new Map<number, WeekPhase>();
+        for (const gw of generatedWeeks) {
+            if (typeof gw.week_number === 'number' && gw.phase) {
+                phaseByWeek.set(gw.week_number, gw.phase);
+            }
+        }
+
+        const totalWeeks: number = plan.duration_weeks ?? generatedWeeks.length ?? 0;
+        const planStart = new Date(plan.created_at);
+        planStart.setHours(0, 0, 0, 0);
+        const planEnd = new Date(planStart);
+        planEnd.setDate(planEnd.getDate() + totalWeeks * 7 - 1);
+
+        const phaseLabelMap: Record<string, string> = {
+            base: 'base',
+            build: 'desenvolvimento',
+            peak: 'específico',
+            taper: 'polimento',
+        };
+
+        const workoutsByWeek = new Map<number, any[]>();
+        for (const w of workouts) {
+            const wn = w.week_number;
+            if (typeof wn !== 'number') continue;
+            if (!workoutsByWeek.has(wn)) workoutsByWeek.set(wn, []);
+            workoutsByWeek.get(wn)!.push(w);
+        }
+
+        const weekNumbers = new Set<number>([
+            ...Array.from(workoutsByWeek.keys()),
+            ...Array.from(phaseByWeek.keys()),
+        ]);
+        for (let i = 1; i <= totalWeeks; i++) weekNumbers.add(i);
+
+        const sortedWeekNumbers = Array.from(weekNumbers).sort((a, b) => a - b);
+
+        const weeks: PlanWeekDto[] = sortedWeekNumbers.map((weekNumber) => {
+            const wkWorkouts = (workoutsByWeek.get(weekNumber) ?? []).slice();
+            const phase = phaseByWeek.get(weekNumber)
+                ?? (wkWorkouts[0]?.metadata?.week_phase as WeekPhase | undefined)
+                ?? 'base';
+
+            // Derived week boundaries: prefer actual scheduled_dates; fall back
+            // to plan-relative calculation so unhydrated future weeks still
+            // render a coherent period in the UI.
+            let startDate: string;
+            let endDate: string;
+            if (wkWorkouts.length > 0) {
+                const dates = wkWorkouts
+                    .map((w) => w.scheduled_date)
+                    .filter(Boolean)
+                    .sort();
+                startDate = dates[0] ?? '';
+                endDate = dates[dates.length - 1] ?? startDate;
+            }
+            if (!wkWorkouts.length || !startDate!) {
+                const ws = new Date(planStart);
+                ws.setDate(ws.getDate() + (weekNumber - 1) * 7);
+                const we = new Date(ws);
+                we.setDate(we.getDate() + 6);
+                startDate = ws.toISOString().split('T')[0];
+                endDate = we.toISOString().split('T')[0];
+            }
+
+            const completedWorkouts = wkWorkouts.filter(
+                (w) => w.status === 'completed',
+            ).length;
+
+            const totalWorkouts = wkWorkouts.length;
+
+            const weekEnd = new Date(endDate + 'T00:00:00');
+            const weekStart = new Date(startDate + 'T00:00:00');
+            const isCurrent = today >= weekStart && today <= weekEnd;
+
+            const workoutDtos: PlanWorkoutDto[] = wkWorkouts.map((w) => {
+                const dow = w.scheduled_date
+                    ? new Date(w.scheduled_date + 'T00:00:00').getDay()
+                    : 0;
+
+                const executed =
+                    w.status === 'completed' &&
+                        (w.distance_run != null || w.time_run_seconds != null)
+                        ? {
+                            distance_km: Number(w.distance_run ?? w.distance_km ?? 0),
+                            duration_seconds: Number(w.time_run_seconds ?? 0),
+                            pace_seconds_per_km: Number(w.pace_seconds_per_km ?? 0),
+                        }
+                        : null;
+
+                const title = w.title ?? getWorkoutTitlePtBr(w.type);
+
+                return {
+                    id: w.id,
+                    day_of_week: dowLabels[dow] ?? '',
+                    scheduled_date: w.scheduled_date,
+                    type: w.type,
+                    title,
+                    distance_km: Number(w.distance_km ?? 0),
+                    target_pace_seconds_per_km: w.target_pace_seconds ?? null,
+                    instructions_json: Array.isArray(w.instructions_json)
+                        ? w.instructions_json
+                        : [],
+                    status: w.status as PlanWorkoutDto['status'],
+                    executed_data: executed,
+                };
+            });
+
+            return {
+                week_number: weekNumber,
+                phase,
+                phase_label: phaseLabelMap[phase] ?? phase,
+                start_date: startDate,
+                end_date: endDate,
+                total_workouts: totalWorkouts,
+                completed_workouts: completedWorkouts,
+                is_current: isCurrent,
+                workouts: workoutDtos,
+            };
+        });
+
+        // currentWeek = first week whose end_date >= today (São Paulo); fall
+        // back to the last week if the plan already finished.
+        let currentWeek = weeks.find((w) => w.end_date >= todayStr)?.week_number
+            ?? (weeks.length > 0 ? weeks[weeks.length - 1].week_number : 1);
+
+        const completedWeeks = weeks.filter(
+            (w) => w.total_workouts > 0 && w.completed_workouts === w.total_workouts,
+        ).length;
+
+        const totalDistanceKm = workouts.reduce(
+            (sum, w) => sum + Number(w.distance_km ?? 0),
+            0,
+        );
+
+        const targetDistance = extractTargetDistanceLabel(plan.goal);
+        const title = `Plano de treino ${targetDistance}`;
+
+        return {
+            overview: {
+                plan_id: plan.id,
+                title,
+                target_distance: targetDistance,
+                end_date: planEnd.toISOString().split('T')[0],
+                total_weeks: totalWeeks,
+                completed_weeks: completedWeeks,
+                current_week: currentWeek,
+                total_distance_km: Math.round(totalDistanceKm * 10) / 10,
+                generation_status: plan.generation_status ?? null,
+            },
+            weeks,
+        };
+    }
+}
+
+function getWorkoutTitlePtBr(type: string): string {
+    const map: Record<string, string> = {
+        easy_run: 'Rodagem Leve',
+        long_run: 'Longão',
+        intervals: 'Intervalado',
+        tempo: 'Tempo Run',
+        recovery: 'Recuperação',
+        fartlek: 'Fartlek',
+        progressive: 'Progressivo',
+        repetition: 'Repetições',
+        hill_repeats: 'Subidas',
+        race_simulation: 'Simulação de Prova',
+        free_run: 'Corrida Livre',
+    };
+    return map[type] ?? type;
+}
+
+function extractTargetDistanceLabel(goal: string | null | undefined): string {
+    if (!goal) return '—';
+    const match = goal.match(/(\d+(?:[.,]\d+)?)\s*k?m?/i);
+    if (match) return `${match[1].replace(',', '.')} Km`;
+    return goal;
 }
 
 // Type definitions
