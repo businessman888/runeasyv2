@@ -48,13 +48,16 @@ export interface PlanWeekDto {
 
 export interface PlanOverviewSummaryDto {
     plan_id: string;
-    title: string;                       // "Plano de treino 10 Km"
-    target_distance: string;             // "10 Km"
+    title: string;                       // "Plano de treino Meia Maratona"
+    target_distance: string;             // "Meia Maratona" | "10 Km"
     end_date: string;
     total_weeks: number;
     completed_weeks: number;
     current_week: number;
+    /** REAL distance the user has actually run (sum of distance_run on completed workouts). Accumulates as they finish workouts. */
     total_distance_km: number;
+    /** Planned total distance across the whole plan (sum of planned distance_km on every workout). Stays constant. */
+    target_total_km: number;
     generation_status: 'partial' | 'generating' | 'complete' | 'failed' | null;
 }
 

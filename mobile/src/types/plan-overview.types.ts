@@ -47,7 +47,10 @@ export interface PlanOverviewSummary {
     total_weeks: number;
     completed_weeks: number;
     current_week: number;
+    /** Real km the user has run (sum of distance_run on completed workouts). Accumulates. */
     total_distance_km: number;
+    /** Planned km across the whole plan. Used to render "X / Y Km" progress. */
+    target_total_km: number;
     generation_status: 'partial' | 'generating' | 'complete' | 'failed' | null;
 }
 

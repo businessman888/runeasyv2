@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import {
     View,
     Text,
@@ -7,20 +7,28 @@ import {
     FlatList,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import Animated, {
+    FadeInDown,
+    FadeInUp,
+    useSharedValue,
+    useAnimatedStyle,
+    withTiming,
+    Easing,
+} from 'react-native-reanimated';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { WorkoutCard } from '../../components/WorkoutCard';
 import { useTrainingStore, useGamificationStore } from '../../stores';
 import type { PlanWorkout } from '../../types/plan-overview.types';
+import { getPhaseStyle } from './phaseTokens';
 
 // ─── Figma tokens ────────────────────────────────────────────────────────────
 const BG = '#0E0E1F';
-const CARD_BG = '#1C1C2E';
 const TEXT_PRIMARY = '#FFFFFF';
 const TEXT_TITLE = '#EBEBF5';
-const TEXT_SECONDARY = 'rgba(235, 235, 245, 0.6)';
-const PROGRESS_TRACK = 'rgba(235, 235, 245, 0.1)';
-const PROGRESS_FILL = '#00D4FF';
+const TEXT_SECONDARY = 'rgba(235, 235, 245, 0.65)';
+const PROGRESS_TRACK = 'rgba(235, 235, 245, 0.08)';
+const CYAN = '#00D4FF';
 
 const MONTH_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -30,13 +38,11 @@ function formatRange(start: string, end: string): string {
     const e = new Date(end + 'T00:00:00');
     const sLabel = `${MONTH_PT[s.getMonth()]} ${s.getDate().toString().padStart(2, '0')}`;
     const eLabel = `${MONTH_PT[e.getMonth()]} ${e.getDate().toString().padStart(2, '0')}`;
-    return `${sLabel} - ${eLabel}`;
+    return `${sLabel} – ${eLabel}`;
 }
 
 function getTodayStrSaoPaulo(): string {
     const now = new Date();
-    // UTC-3 mirrors the backend's SAO_PAULO_OFFSET_HOURS so completed/today
-    // states match across server and client.
     const offsetMs = now.getTimezoneOffset() * 60 * 1000;
     const utc = now.getTime() + offsetMs;
     const sp = new Date(utc + -3 * 60 * 60 * 1000);
@@ -69,7 +75,13 @@ export function WeekDetailScreen() {
     const { weekNumber } = route.params;
 
     const planOverview = useTrainingStore((s) => s.planOverview);
+    const fetchPlanOverview = useTrainingStore((s) => s.fetchPlanOverview);
     const badges = useGamificationStore((s) => s.badges) ?? [];
+
+    // Safety net: if user deep-links or refreshes, hydrate the overview.
+    useEffect(() => {
+        if (!planOverview) fetchPlanOverview();
+    }, [planOverview, fetchPlanOverview]);
 
     const week = useMemo(
         () => planOverview?.weeks.find((w) => w.week_number === weekNumber) ?? null,
@@ -96,7 +108,7 @@ export function WeekDetailScreen() {
     );
 
     const renderItem = useCallback(
-        ({ item }: { item: PlanWorkout }) => {
+        ({ item, index }: { item: PlanWorkout; index: number }) => {
             const isToday = item.scheduled_date === todayStr;
             const isCompleted = item.status === 'completed';
             const executedOverride = item.executed_data
@@ -108,21 +120,23 @@ export function WeekDetailScreen() {
                 : undefined;
 
             return (
-                <WorkoutCard
-                    workout={{
-                        id: item.id,
-                        type: item.type,
-                        distance_km: item.distance_km,
-                        scheduled_date: item.scheduled_date,
-                        instructions_json: item.instructions_json,
-                        status: item.status,
-                    }}
-                    isToday={isToday}
-                    isCompleted={isCompleted}
-                    onStartWorkout={() => handleStartWorkout(item)}
-                    allBadges={badges}
-                    executedOverride={executedOverride}
-                />
+                <Animated.View entering={FadeInUp.delay(120 + index * 60).duration(380)}>
+                    <WorkoutCard
+                        workout={{
+                            id: item.id,
+                            type: item.type,
+                            distance_km: item.distance_km,
+                            scheduled_date: item.scheduled_date,
+                            instructions_json: item.instructions_json,
+                            status: item.status,
+                        }}
+                        isToday={isToday}
+                        isCompleted={isCompleted}
+                        onStartWorkout={() => handleStartWorkout(item)}
+                        allBadges={badges}
+                        executedOverride={executedOverride}
+                    />
+                </Animated.View>
             );
         },
         [todayStr, badges, handleStartWorkout],
@@ -135,6 +149,11 @@ export function WeekDetailScreen() {
             <ScreenContainer style={styles.screen}>
                 <Header onBack={() => navigation.goBack()} subtitle="" />
                 <View style={styles.centered}>
+                    <MaterialCommunityIcons
+                        name="calendar-question"
+                        size={48}
+                        color="rgba(235,235,245,0.4)"
+                    />
                     <Text style={styles.centeredText}>Semana não encontrada.</Text>
                 </View>
             </ScreenContainer>
@@ -158,16 +177,26 @@ export function WeekDetailScreen() {
                 contentContainerStyle={styles.listContent}
                 ItemSeparatorComponent={ItemSeparator}
                 ListHeaderComponent={
-                    <WeekSummaryCard
-                        weekNumber={week.week_number}
-                        phaseLabel={week.phase_label}
-                        progressPct={progressPct}
-                        totalWorkouts={week.total_workouts}
-                    />
+                    <Animated.View entering={FadeInDown.duration(380)}>
+                        <WeekSummaryCard
+                            weekNumber={week.week_number}
+                            phase={week.phase}
+                            isCurrent={week.is_current}
+                            progressPct={progressPct}
+                            totalWorkouts={week.total_workouts}
+                            completedWorkouts={week.completed_workouts}
+                        />
+                    </Animated.View>
                 }
                 ListEmptyComponent={
                     <View style={styles.emptyWrap}>
+                        <MaterialCommunityIcons
+                            name="weather-night"
+                            size={42}
+                            color="rgba(235,235,245,0.35)"
+                        />
                         <Text style={styles.emptyText}>Sem treinos nesta semana.</Text>
+                        <Text style={styles.emptySubtext}>Semana de descanso 💤</Text>
                     </View>
                 }
                 showsVerticalScrollIndicator={false}
@@ -177,7 +206,7 @@ export function WeekDetailScreen() {
 }
 
 function ItemSeparator() {
-    return <View style={{ height: 13 }} />;
+    return <View style={{ height: 14 }} />;
 }
 
 function Header({ onBack, subtitle }: { onBack: () => void; subtitle: string }) {
@@ -190,7 +219,7 @@ function Header({ onBack, subtitle }: { onBack: () => void; subtitle: string }) 
                 accessibilityLabel="Voltar"
                 hitSlop={12}
             >
-                <Ionicons name="chevron-back" size={24} color="#00D4FF" />
+                <Ionicons name="chevron-back" size={24} color={CYAN} />
             </Pressable>
             <View style={styles.headerCenter}>
                 <Text style={styles.headerTitle}>Seu Plano</Text>
@@ -203,31 +232,92 @@ function Header({ onBack, subtitle }: { onBack: () => void; subtitle: string }) 
 
 interface WeekSummaryCardProps {
     weekNumber: number;
-    phaseLabel: string;
+    phase: string;
+    isCurrent: boolean;
     progressPct: number;
     totalWorkouts: number;
+    completedWorkouts: number;
 }
 
 function WeekSummaryCard({
     weekNumber,
-    phaseLabel,
+    phase,
+    isCurrent,
     progressPct,
     totalWorkouts,
+    completedWorkouts,
 }: WeekSummaryCardProps) {
+    const phaseStyle = getPhaseStyle(phase);
+
+    const progressWidth = useSharedValue(0);
+    React.useEffect(() => {
+        progressWidth.value = withTiming(progressPct * 100, {
+            duration: 800,
+            easing: Easing.out(Easing.cubic),
+        });
+    }, [progressPct, progressWidth]);
+
+    const fillStyle = useAnimatedStyle(() => ({
+        width: `${progressWidth.value}%` as `${number}%`,
+    }));
+
     return (
-        <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>
-                Semana {weekNumber} - {phaseLabel}
-            </Text>
-            <View style={styles.progressTrack}>
+        <View
+            style={[
+                styles.summaryCard,
+                isCurrent && { borderColor: phaseStyle.accent },
+            ]}
+        >
+            <View style={styles.summaryTopRow}>
+                <View style={{ flex: 1 }}>
+                    <Text style={styles.summaryWeek}>Semana {weekNumber}</Text>
+                    <Text style={styles.summaryTotal}>
+                        {completedWorkouts} de {totalWorkouts} treinos concluídos
+                    </Text>
+                </View>
+
                 <View
                     style={[
+                        styles.phasePill,
+                        { backgroundColor: phaseStyle.pillBg },
+                    ]}
+                >
+                    <View
+                        style={[styles.phaseDot, { backgroundColor: phaseStyle.accent }]}
+                    />
+                    <Text style={[styles.phaseLabel, { color: phaseStyle.accent }]}>
+                        {phaseStyle.label}
+                    </Text>
+                </View>
+            </View>
+
+            <View style={styles.progressTrack}>
+                <Animated.View
+                    style={[
                         styles.progressFill,
-                        { width: `${Math.round(progressPct * 100)}%` },
+                        { backgroundColor: phaseStyle.accent },
+                        fillStyle,
                     ]}
                 />
             </View>
-            <Text style={styles.totalLabel}>Total Treinos: {totalWorkouts}</Text>
+
+            <View style={styles.summaryFootRow}>
+                <Text style={styles.percentLabel}>
+                    {Math.round(progressPct * 100)}% completo
+                </Text>
+                {isCurrent && (
+                    <View style={styles.currentChip}>
+                        <MaterialCommunityIcons
+                            name="play-circle"
+                            size={12}
+                            color={phaseStyle.accent}
+                        />
+                        <Text style={[styles.currentChipText, { color: phaseStyle.accent }]}>
+                            Semana atual
+                        </Text>
+                    </View>
+                )}
+            </View>
         </View>
     );
 }
@@ -241,7 +331,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 18,
-        paddingVertical: 16,
+        paddingVertical: 14,
     },
     headerSideBtn: {
         width: 48,
@@ -254,13 +344,13 @@ const styles = StyleSheet.create({
         gap: 2,
     },
     headerTitle: {
-        fontSize: 16,
-        fontWeight: '400',
+        fontSize: 17,
+        fontWeight: '600',
         color: TEXT_TITLE,
     },
     headerSubtitle: {
         fontSize: 12,
-        fontWeight: '400',
+        fontWeight: '500',
         color: TEXT_SECONDARY,
     },
     centered: {
@@ -268,50 +358,105 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         padding: 24,
+        gap: 12,
     },
     centeredText: {
         color: TEXT_TITLE,
         fontSize: 14,
     },
     listContent: {
-        paddingHorizontal: 10,
-        paddingBottom: 100,
+        paddingHorizontal: 14,
+        paddingBottom: 120,
     },
+
+    // summary card
     summaryCard: {
-        backgroundColor: CARD_BG,
-        borderRadius: 15,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        gap: 12,
-        marginBottom: 15,
+        backgroundColor: '#15152A',
+        borderRadius: 20,
+        paddingHorizontal: 18,
+        paddingVertical: 16,
+        gap: 14,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(235, 235, 245, 0.06)',
     },
-    summaryTitle: {
-        fontSize: 20,
-        fontWeight: '700',
+    summaryTopRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 12,
+    },
+    summaryWeek: {
+        fontSize: 22,
+        fontWeight: '800',
         color: TEXT_PRIMARY,
     },
+    summaryTotal: {
+        fontSize: 12,
+        fontWeight: '500',
+        color: TEXT_SECONDARY,
+        marginTop: 4,
+    },
+    phasePill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 11,
+        paddingVertical: 6,
+        borderRadius: 999,
+    },
+    phaseDot: {
+        width: 7,
+        height: 7,
+        borderRadius: 3.5,
+    },
+    phaseLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        letterSpacing: 0.3,
+    },
     progressTrack: {
-        height: 5,
+        height: 7,
         backgroundColor: PROGRESS_TRACK,
-        borderRadius: 20,
+        borderRadius: 999,
         overflow: 'hidden',
     },
     progressFill: {
-        height: 5,
-        backgroundColor: PROGRESS_FILL,
-        borderRadius: 20,
+        height: 7,
+        borderRadius: 999,
     },
-    totalLabel: {
-        fontSize: 10,
-        fontWeight: '400',
-        color: TEXT_SECONDARY,
-    },
-    emptyWrap: {
-        paddingVertical: 40,
+    summaryFootRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
         alignItems: 'center',
     },
-    emptyText: {
+    percentLabel: {
+        fontSize: 12,
+        fontWeight: '600',
         color: TEXT_SECONDARY,
-        fontSize: 14,
+    },
+    currentChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+    },
+    currentChipText: {
+        fontSize: 11,
+        fontWeight: '700',
+    },
+
+    // empty
+    emptyWrap: {
+        paddingVertical: 50,
+        alignItems: 'center',
+        gap: 10,
+    },
+    emptyText: {
+        color: TEXT_TITLE,
+        fontSize: 15,
+        fontWeight: '600',
+    },
+    emptySubtext: {
+        color: TEXT_SECONDARY,
+        fontSize: 13,
     },
 });

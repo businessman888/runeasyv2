@@ -31,7 +31,7 @@ function BellIcon({ size = 24, color = '#EBEBF5' }: { size?: number; color?: str
 }
 
 function GoalsIcon({ size = 24, color = '#EBEBF5' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="target" size={size} color={color} />;
+    return <MaterialCommunityIcons name="clipboard-list-outline" size={size} color={color} />;
 }
 
 function CheckIcon({ size = 16, color = '#32CD32' }: { size?: number; color?: string }) {

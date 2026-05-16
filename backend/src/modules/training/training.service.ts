@@ -1286,7 +1286,18 @@ export class TrainingService {
             (w) => w.total_workouts > 0 && w.completed_workouts === w.total_workouts,
         ).length;
 
-        const totalDistanceKm = workouts.reduce(
+        // Real distance the user has actually run (accumulates as workouts
+        // are completed). Prefer distance_run (the GPS-measured value);
+        // fall back to distance_km only when the legacy column wasn't set.
+        const completedDistanceKm = workouts.reduce((sum, w) => {
+            if (w.status !== 'completed') return sum;
+            const run = Number(w.distance_run ?? w.distance_km ?? 0);
+            return sum + (isFinite(run) ? run : 0);
+        }, 0);
+
+        // Planned total — sum of every workout's distance_km. Used by the UI
+        // to render "X / Y Km" progress instead of a bare number.
+        const targetTotalKm = workouts.reduce(
             (sum, w) => sum + Number(w.distance_km ?? 0),
             0,
         );
@@ -1303,7 +1314,8 @@ export class TrainingService {
                 total_weeks: totalWeeks,
                 completed_weeks: completedWeeks,
                 current_week: currentWeek,
-                total_distance_km: Math.round(totalDistanceKm * 10) / 10,
+                total_distance_km: Math.round(completedDistanceKm * 10) / 10,
+                target_total_km: Math.round(targetTotalKm * 10) / 10,
                 generation_status: plan.generation_status ?? null,
             },
             weeks,
@@ -1330,7 +1342,31 @@ function getWorkoutTitlePtBr(type: string): string {
 
 function extractTargetDistanceLabel(goal: string | null | undefined): string {
     if (!goal) return '—';
-    const match = goal.match(/(\d+(?:[.,]\d+)?)\s*k?m?/i);
+    const g = goal.trim().toLowerCase();
+
+    // Named-goal shortcuts that the onboarding stores in plan.goal
+    // ('5k', '10k', 'half_marathon', 'marathon'…). Map them to the
+    // distance label the user expects to see on the Goals screen.
+    const namedGoals: Record<string, string> = {
+        '5k': '5 Km',
+        '10k': '10 Km',
+        '15k': '15 Km',
+        '21k': '21 Km',
+        'half_marathon': 'Meia Maratona',
+        'half-marathon': 'Meia Maratona',
+        'halfmarathon': 'Meia Maratona',
+        'meia_maratona': 'Meia Maratona',
+        'meia-maratona': 'Meia Maratona',
+        'marathon': 'Maratona',
+        'maratona': 'Maratona',
+        '42k': 'Maratona',
+        'fitness': 'Condicionamento',
+        'weight_loss': 'Emagrecimento',
+        'start_running': 'Começar a Correr',
+    };
+    if (namedGoals[g]) return namedGoals[g];
+
+    const match = g.match(/(\d+(?:[.,]\d+)?)\s*k?m?/i);
     if (match) return `${match[1].replace(',', '.')} Km`;
     return goal;
 }
