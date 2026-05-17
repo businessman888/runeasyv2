@@ -12,10 +12,18 @@ export interface PerformanceCardProps {
     sparkline: number[];
     /** If true, lower values are better (e.g. pace). Flips delta color. */
     invertDelta?: boolean;
-    iconName: keyof typeof Ionicons.glyphMap;
-    iconColor?: string;
+    /** Accent color used for the sparkline and delta arrow. */
+    accentColor?: string;
 }
 
+/**
+ * Strava/Runna-inspired metric card:
+ *  - No icon bubble (the label tells the story).
+ *  - Big number is the focal point — value dominates the card.
+ *  - Sparkline lives at the bottom as a calm horizontal trace.
+ *  - Delta is a discreet inline indicator next to the label.
+ *  - Subtle border, no decorative gradients.
+ */
 export const PerformanceCard = memo(function PerformanceCard({
     label,
     value,
@@ -23,55 +31,42 @@ export const PerformanceCard = memo(function PerformanceCard({
     deltaPct,
     sparkline,
     invertDelta,
-    iconName,
-    iconColor = colors.primary,
+    accentColor = colors.primary,
 }: PerformanceCardProps) {
     let deltaColor = colors.textMuted;
-    let deltaArrow: 'arrow-up' | 'arrow-down' | 'remove' = 'remove';
-    let deltaText = '—';
-    if (deltaPct !== null) {
+    let deltaArrow: 'arrow-up' | 'arrow-down' | null = null;
+    let deltaText = '';
+    if (deltaPct !== null && deltaPct !== 0) {
         const isPositive = deltaPct > 0;
-        const isNegative = deltaPct < 0;
-        const isGood = invertDelta ? isNegative : isPositive;
-        const isBad = invertDelta ? isPositive : isNegative;
-        if (isGood) {
-            deltaColor = colors.success;
-            deltaArrow = invertDelta ? 'arrow-down' : 'arrow-up';
-        } else if (isBad) {
-            deltaColor = colors.error;
-            deltaArrow = invertDelta ? 'arrow-up' : 'arrow-down';
-        }
-        deltaText = `${Math.abs(deltaPct).toFixed(1)}%`;
+        const isGood = invertDelta ? !isPositive : isPositive;
+        deltaColor = isGood ? colors.success : colors.error;
+        deltaArrow = isPositive ? 'arrow-up' : 'arrow-down';
+        deltaText = `${Math.abs(deltaPct).toFixed(0)}%`;
     }
 
     return (
         <View style={styles.card}>
-            <View style={styles.header}>
-                <View style={[styles.iconBubble, { backgroundColor: `${iconColor}1A` }]}>
-                    <Ionicons name={iconName} size={14} color={iconColor} />
-                </View>
+            <View style={styles.topRow}>
                 <Text style={styles.label} numberOfLines={1}>
                     {label}
                 </Text>
+                {deltaArrow && (
+                    <View style={styles.deltaBox}>
+                        <Ionicons name={deltaArrow} size={10} color={deltaColor} />
+                        <Text style={[styles.deltaText, { color: deltaColor }]}>
+                            {deltaText}
+                        </Text>
+                    </View>
+                )}
             </View>
 
-            <View style={styles.valueRow}>
-                <Text style={styles.value} numberOfLines={1}>
-                    {value}
-                    {unit ? <Text style={styles.unit}> {unit}</Text> : null}
-                </Text>
-            </View>
+            <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
+                {value}
+                {unit ? <Text style={styles.unit}>{unit}</Text> : null}
+            </Text>
 
-            <View style={styles.footer}>
-                <View style={styles.deltaBox}>
-                    {deltaPct !== null && (
-                        <Ionicons name={deltaArrow} size={11} color={deltaColor} />
-                    )}
-                    <Text style={[styles.deltaText, { color: deltaColor }]}>
-                        {deltaText}
-                    </Text>
-                </View>
-                <Sparkline data={sparkline} color={iconColor} width={56} height={20} />
+            <View style={styles.sparkRow}>
+                <Sparkline data={sparkline} color={accentColor} width={84} height={18} />
             </View>
         </View>
     );
@@ -82,58 +77,54 @@ const styles = StyleSheet.create({
         width: '48%',
         backgroundColor: colors.card,
         borderRadius: borderRadius.xl,
-        padding: spacing.md,
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.base,
         borderWidth: 1,
-        borderColor: colors.border,
-        gap: spacing.xs,
+        borderColor: 'rgba(255,255,255,0.04)',
+        minHeight: 108,
+        justifyContent: 'space-between',
     },
-    header: {
+    topRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.xs,
-    },
-    iconBubble: {
-        width: 22,
-        height: 22,
-        borderRadius: 11,
-        alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: 'space-between',
     },
     label: {
         flex: 1,
         fontSize: typography.fontSizes.xs,
         color: colors.textSecondary,
-        fontWeight: typography.fontWeights.medium,
+        fontWeight: typography.fontWeights.semibold,
+        letterSpacing: 0.6,
         textTransform: 'uppercase',
-        letterSpacing: 0.4,
-    },
-    valueRow: {
-        marginTop: 2,
-    },
-    value: {
-        fontSize: typography.fontSizes['2xl'],
-        fontWeight: typography.fontWeights.bold,
-        color: colors.text,
-        lineHeight: typography.fontSizes['2xl'] * 1.1,
-    },
-    unit: {
-        fontSize: typography.fontSizes.sm,
-        color: colors.textSecondary,
-        fontWeight: typography.fontWeights.medium,
-    },
-    footer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginTop: spacing.xs,
     },
     deltaBox: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 2,
+        marginLeft: spacing.xs,
     },
     deltaText: {
-        fontSize: typography.fontSizes.xs,
-        fontWeight: typography.fontWeights.semibold,
+        fontSize: 10,
+        fontWeight: typography.fontWeights.bold,
+        letterSpacing: 0.2,
+    },
+    value: {
+        fontSize: 30,
+        fontWeight: typography.fontWeights.bold,
+        color: colors.text,
+        letterSpacing: -0.5,
+        marginTop: spacing.xs,
+        lineHeight: 34,
+    },
+    unit: {
+        fontSize: typography.fontSizes.sm,
+        color: colors.textSecondary,
+        fontWeight: typography.fontWeights.medium,
+        letterSpacing: 0,
+    },
+    sparkRow: {
+        marginTop: spacing.xs,
+        opacity: 0.85,
+        alignItems: 'flex-start',
     },
 });

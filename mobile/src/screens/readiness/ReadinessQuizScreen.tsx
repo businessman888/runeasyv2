@@ -5,14 +5,13 @@ import {
     StyleSheet,
     StatusBar,
     TouchableOpacity,
-    Platform,
     ScrollView,
     ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { colors, typography, spacing } from '../../theme';
 import { BASE_API_URL, API_URL, API_ENDPOINTS } from '../../config/api.config';
 import * as Storage from '../../utils/storage';
 import { useReadinessStore } from '../../stores/readinessStore';
@@ -48,6 +47,11 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
     const [questions, setQuestions] = useState<Question[]>([]);
     const [questionSetNumber, setQuestionSetNumber] = useState<number | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(true);
+    // Defensive lock-out — the readiness check-in is only unlocked after the
+    // user completes their first workout. Used to be enforced exclusively by
+    // EvolutionScreen (now removed from the tab bar). Keeping it here ensures
+    // deep links and other entry points can't bypass the gate either.
+    const [lockReason, setLockReason] = useState<'first_workout' | null>(null);
     const insets = useSafeAreaInsets();
 
     // Fetch questions from backend EVERY time screen is focused (not just on mount)
@@ -94,6 +98,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
                         setQuestions([]); // Force empty state
                         setQuestionSetNumber(undefined);
                         setAnswers({});
+                        setLockReason(null);
                     }
 
                     // 1. Limpeza de Cache (Solicitada)
@@ -126,7 +131,20 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
 
                     if (statusRes.ok) {
                         const statusData = await statusRes.json();
-                        console.log('[ReadinessQuiz] 📊 Status received. Completed today?', statusData.hasCompletedToday);
+                        console.log(
+                            '[ReadinessQuiz] 📊 Status received. CompletedToday?',
+                            statusData.hasCompletedToday,
+                            'FirstWorkout?',
+                            statusData.hasCompletedFirstWorkout,
+                        );
+
+                        // GATE: must have completed first workout to access the quiz.
+                        // This protects deep links and any future entry point.
+                        if (!statusData.hasCompletedFirstWorkout) {
+                            console.warn('[ReadinessQuiz] 🔒 Locked — no completed workouts yet.');
+                            if (isMounted) setLockReason('first_workout');
+                            return; // do NOT fetch questions
+                        }
 
                         // "Garanta que o fetchQuestions() seja chamado explicitamente dentro do bloco if (!hasCompleted)"
                         if (!statusData.hasCompletedToday) {
@@ -204,6 +222,34 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
         );
     }
 
+    // Gate: user hasn't completed first workout yet
+    if (lockReason === 'first_workout') {
+        return (
+            <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
+                <StatusBar barStyle="light-content" backgroundColor="#0E0E1F" />
+                <View style={styles.lockedContainer}>
+                    <View style={styles.lockedIconWrap}>
+                        <Ionicons name="footsteps-outline" size={36} color={colors.primary} />
+                    </View>
+                    <Text style={styles.lockedHeading}>Complete seu primeiro treino</Text>
+                    <Text style={styles.lockedBody}>
+                        O check-in diário e o score de prontidão são liberados
+                        assim que você concluir sua primeira corrida. Vamos lá!
+                    </Text>
+                    <TouchableOpacity
+                        style={styles.lockedCta}
+                        onPress={() => navigation.navigate('Home')}
+                        accessibilityRole="button"
+                        accessibilityLabel="Voltar para a Home"
+                    >
+                        <Text style={styles.lockedCtaText}>Voltar para a Home</Text>
+                        <Ionicons name="arrow-forward" size={16} color="#0E0E1F" />
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
+    }
+
     if (!currentQuestion || questions.length === 0) {
         return (
             <View style={[styles.container, { paddingTop: insets.top + 20, justifyContent: 'center', alignItems: 'center' }]}>
@@ -229,96 +275,122 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
     }
 
     return (
-        <View style={{ paddingTop: insets.top + 20, backgroundColor: '#0E0E1F', flex: 1 }}>
-            <StatusBar barStyle="light-content" backgroundColor="#0E0E1F" />
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+            <StatusBar barStyle="light-content" backgroundColor="#0A0A18" />
+
+            {/* Top bar — back + step counter */}
+            <View style={styles.topBar}>
+                <TouchableOpacity
+                    onPress={() => navigation.goBack()}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel="Voltar"
+                    style={styles.backBtn}
+                >
+                    <Ionicons name="chevron-back" size={22} color={colors.white} />
+                </TouchableOpacity>
+                <Text style={styles.topBarTitle}>Prontidão diária</Text>
+                <Text style={styles.topBarCounter}>
+                    {currentStep + 1}/{totalSteps}
+                </Text>
+            </View>
+
+            {/* Progress bar — full width, clean */}
+            <View style={styles.progressBar}>
+                <View
+                    style={[styles.progressFill, { width: `${progress * 100}%` }]}
+                />
+            </View>
 
             <ScrollView
-                style={styles.scrollView}
+                style={styles.scroll}
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Header */}
-                <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Prontidão diária</Text>
-                    <Text style={styles.stepIndicator}>{currentStep + 1}/{totalSteps}</Text>
-                </View>
+                {/* Question — no wrapping card, breathes naturally on the canvas */}
+                <Text style={styles.question}>{currentQuestion.question}</Text>
 
-                {/* Progress Bar */}
-                <View style={styles.progressBarContainer}>
-                    <View style={styles.progressBar}>
-                        <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-                    </View>
-                </View>
-
-                {/* Question Card */}
-                <View style={styles.questionCard}>
-                    <Text style={{
-                        fontSize: 26,
-                        fontWeight: '700',
-                        color: colors.white,
-                        textAlign: 'center',
-                        marginTop: 40,
-                        marginBottom: 32,
-                        lineHeight: 34,
-                    }}>
-                        {currentQuestion.question}
-                    </Text>
-
-                    {/* Options with inline gap and padding */}
-                    <View style={{ gap: 20, paddingHorizontal: 20 }}>
-                        {currentQuestion.options.map((option) => {
-                            const isSelected = selectedValue === option.value;
-                            return (
-                                <TouchableOpacity
-                                    key={option.value}
-                                    style={[
-                                        styles.optionCard,
-                                        { minHeight: 56, paddingVertical: 16 },
-                                        isSelected && styles.optionCardSelected,
-                                    ]}
-                                    onPress={() => handleSelectOption(option.value)}
-                                    activeOpacity={0.8}
-                                >
-                                    <Text style={[
-                                        styles.optionLabel,
-                                        isSelected && styles.optionLabelSelected,
-                                    ]}>
+                {/* Options — list-style, clean, Linear/Apple Health vibe */}
+                <View style={styles.optionList}>
+                    {currentQuestion.options.map((option) => {
+                        const isSelected = selectedValue === option.value;
+                        return (
+                            <TouchableOpacity
+                                key={option.value}
+                                style={[
+                                    styles.option,
+                                    isSelected && styles.optionSelected,
+                                ]}
+                                onPress={() => handleSelectOption(option.value)}
+                                activeOpacity={0.85}
+                                accessibilityRole="radio"
+                                accessibilityState={{ selected: isSelected }}
+                                accessibilityLabel={option.label}
+                            >
+                                <View style={styles.optionTextWrap}>
+                                    <Text
+                                        style={[
+                                            styles.optionLabel,
+                                            isSelected && styles.optionLabelSelected,
+                                        ]}
+                                    >
                                         {option.label}
                                     </Text>
-                                    <View style={[
-                                        styles.radioOuter,
-                                        isSelected && styles.radioOuterSelected,
-                                    ]}>
-                                        {isSelected && <View style={styles.radioInner} />}
-                                    </View>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </View>
-                </View>
-
-                {/* Continue Button - with bottom padding for navbar */}
-                <View style={{ paddingBottom: insets.bottom + 20, paddingHorizontal: 20, marginTop: 24 }}>
-                    <TouchableOpacity
-                        style={[
-                            styles.continueButton,
-                            !selectedValue && { backgroundColor: '#1A1A2E', opacity: 0.7 },
-                        ]}
-                        onPress={handleContinue}
-                        disabled={!selectedValue}
-                    >
-                        <Text style={[
-                            styles.continueButtonText,
-                            !selectedValue && { color: 'rgba(255,255,255,0.4)' },
-                        ]}>Continuar</Text>
-                        <Ionicons
-                            name="arrow-forward"
-                            size={20}
-                            color={selectedValue ? '#0E0E1F' : 'rgba(255,255,255,0.3)'}
-                        />
-                    </TouchableOpacity>
+                                    {option.description ? (
+                                        <Text
+                                            style={[
+                                                styles.optionDescription,
+                                                isSelected && styles.optionDescriptionSelected,
+                                            ]}
+                                        >
+                                            {option.description}
+                                        </Text>
+                                    ) : null}
+                                </View>
+                                <View
+                                    style={[
+                                        styles.radio,
+                                        isSelected && styles.radioSelected,
+                                    ]}
+                                >
+                                    {isSelected && (
+                                        <Ionicons name="checkmark" size={14} color="#0A0A18" />
+                                    )}
+                                </View>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </View>
             </ScrollView>
+
+            {/* Sticky bottom continue button */}
+            <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 }]}>
+                <TouchableOpacity
+                    style={[
+                        styles.continueBtn,
+                        !selectedValue && styles.continueBtnDisabled,
+                    ]}
+                    onPress={handleContinue}
+                    disabled={!selectedValue}
+                    accessibilityRole="button"
+                    accessibilityLabel="Continuar"
+                    accessibilityState={{ disabled: !selectedValue }}
+                >
+                    <Text
+                        style={[
+                            styles.continueBtnText,
+                            !selectedValue && styles.continueBtnTextDisabled,
+                        ]}
+                    >
+                        {currentStep === totalSteps - 1 ? 'Finalizar' : 'Continuar'}
+                    </Text>
+                    <Ionicons
+                        name="arrow-forward"
+                        size={18}
+                        color={selectedValue ? '#0A0A18' : 'rgba(255,255,255,0.3)'}
+                    />
+                </TouchableOpacity>
+            </View>
         </View>
     );
 }
@@ -326,134 +398,151 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0E0E1F',
+        backgroundColor: '#0A0A18',
     },
-    scrollView: {
-        flex: 1,
-    },
-    scrollContent: {
-        paddingHorizontal: spacing.lg,
-        paddingBottom: 40,
-    },
-    header: {
+    // ---------- top bar
+    topBar: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: spacing.md,
+        paddingHorizontal: spacing.base,
+        paddingTop: spacing.md,
+        paddingBottom: spacing.md,
     },
-    headerTitle: {
-        fontSize: typography.fontSizes.md,
-        color: 'rgba(255, 255, 255, 0.7)',
+    backBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(255,255,255,0.04)',
+    },
+    topBarTitle: {
+        flex: 1,
+        textAlign: 'center',
+        fontSize: typography.fontSizes.sm,
+        color: colors.textSecondary,
         fontWeight: '600',
+        letterSpacing: 0.3,
     },
-    stepIndicator: {
-        fontSize: typography.fontSizes.md,
+    topBarCounter: {
+        width: 44,
+        textAlign: 'right',
+        fontSize: typography.fontSizes.sm,
         color: colors.primary,
         fontWeight: '700',
     },
-    progressBarContainer: {
-        marginBottom: spacing.xl,
-    },
+    // ---------- progress
     progressBar: {
-        height: 6,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        borderRadius: 3,
+        marginHorizontal: spacing.base,
+        height: 3,
+        borderRadius: 2,
+        backgroundColor: 'rgba(255,255,255,0.06)',
         overflow: 'hidden',
     },
     progressFill: {
         height: '100%',
-        borderRadius: 3,
-        ...Platform.select({
-            web: {
-                backgroundImage: 'linear-gradient(90deg, #00D4FF, #00FFFF)',
-            },
-            default: {
-                backgroundColor: colors.primary,
-            },
-        }),
+        borderRadius: 2,
+        backgroundColor: colors.primary,
     },
-    questionCard: {
-        backgroundColor: '#1A1A2E',
-        borderRadius: 24,
-        padding: 24,
-        paddingTop: 32,
-        marginBottom: 24,
+    // ---------- content
+    scroll: {
+        flex: 1,
+    },
+    scrollContent: {
+        paddingHorizontal: spacing.base,
+        paddingTop: spacing['2xl'],
+        paddingBottom: spacing['2xl'],
     },
     question: {
-        fontSize: 26,
+        fontSize: 28,
         fontWeight: '700',
         color: colors.white,
-        textAlign: 'center',
-        marginBottom: 32,
+        letterSpacing: -0.5,
         lineHeight: 36,
+        marginBottom: spacing.xl,
     },
-    optionsContainer: {
-        gap: 16,
+    // ---------- options (Linear/Apple Health style)
+    optionList: {
+        gap: spacing.sm,
     },
-    optionCard: {
+    option: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#1A1A2E',
-        paddingVertical: 18,
-        paddingHorizontal: 20,
+        backgroundColor: colors.card,
+        paddingVertical: spacing.base,
+        paddingHorizontal: spacing.lg,
         borderRadius: 16,
-        borderWidth: 2,
-        borderColor: 'rgba(255, 255, 255, 0.08)',
-        marginVertical: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.04)',
+        minHeight: 56,
     },
-    optionCardSelected: {
+    optionSelected: {
         borderColor: colors.primary,
-        backgroundColor: 'rgba(0, 212, 255, 0.12)',
+        backgroundColor: 'rgba(0,212,255,0.06)',
+    },
+    optionTextWrap: {
+        flex: 1,
+        gap: 2,
     },
     optionLabel: {
-        fontSize: 16,
-        fontWeight: '500',
-        color: 'rgba(255, 255, 255, 0.85)',
+        fontSize: typography.fontSizes.lg,
+        fontWeight: '600',
+        color: colors.text,
+        letterSpacing: -0.2,
     },
     optionLabelSelected: {
         color: colors.primary,
-        fontWeight: '600',
     },
-    radioOuter: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        borderWidth: 2,
-        borderColor: 'rgba(255, 255, 255, 0.3)',
+    optionDescription: {
+        fontSize: typography.fontSizes.xs,
+        color: colors.textSecondary,
+    },
+    optionDescriptionSelected: {
+        color: 'rgba(0,212,255,0.7)',
+    },
+    radio: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        borderWidth: 1.5,
+        borderColor: 'rgba(255,255,255,0.2)',
         alignItems: 'center',
         justifyContent: 'center',
+        marginLeft: spacing.md,
     },
-    radioOuterSelected: {
+    radioSelected: {
         borderColor: colors.primary,
         backgroundColor: colors.primary,
     },
-    radioInner: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: '#0E0E1F',
+    // ---------- sticky bottom bar
+    bottomBar: {
+        paddingHorizontal: spacing.base,
+        paddingTop: spacing.md,
+        backgroundColor: '#0A0A18',
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255,255,255,0.04)',
     },
-    continueButton: {
+    continueBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+        gap: 8,
         backgroundColor: colors.primary,
-        paddingVertical: 18,
-        borderRadius: 32,
-        gap: 10,
-        marginTop: 16,
+        paddingVertical: 16,
+        borderRadius: 28,
     },
-    continueButtonDisabled: {
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    continueBtnDisabled: {
+        backgroundColor: 'rgba(255,255,255,0.06)',
     },
-    continueButtonText: {
+    continueBtnText: {
         fontSize: typography.fontSizes.md,
         fontWeight: '700',
-        color: '#0E0E1F',
+        color: '#0A0A18',
+        letterSpacing: 0.2,
     },
-    continueButtonTextDisabled: {
-        color: 'rgba(255, 255, 255, 0.4)',
+    continueBtnTextDisabled: {
+        color: 'rgba(255,255,255,0.4)',
     },
     retryButton: {
         backgroundColor: colors.primary,
@@ -466,6 +555,51 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         color: '#0A0A14',
+    },
+    lockedContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: spacing['2xl'],
+        gap: spacing.lg,
+    },
+    lockedIconWrap: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0,212,255,0.10)',
+        borderWidth: 1,
+        borderColor: 'rgba(0,212,255,0.25)',
+    },
+    lockedHeading: {
+        fontSize: typography.fontSizes['2xl'],
+        fontWeight: '700',
+        color: colors.white,
+        textAlign: 'center',
+    },
+    lockedBody: {
+        fontSize: typography.fontSizes.md,
+        color: 'rgba(255,255,255,0.65)',
+        textAlign: 'center',
+        lineHeight: 22,
+        maxWidth: 320,
+    },
+    lockedCta: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: colors.primary,
+        paddingVertical: 14,
+        paddingHorizontal: 28,
+        borderRadius: 28,
+        marginTop: spacing.sm,
+    },
+    lockedCtaText: {
+        fontSize: typography.fontSizes.md,
+        fontWeight: '700',
+        color: '#0E0E1F',
     },
 });
 

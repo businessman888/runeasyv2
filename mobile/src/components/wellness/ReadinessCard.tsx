@@ -15,6 +15,12 @@ import type { ReadinessBlock } from '../../types/wellness.types';
 
 interface ReadinessCardProps {
     readiness: ReadinessBlock;
+    /**
+     * True when the user has completed at least one workout. The check-in
+     * remains gated behind a first run to avoid noisy data and reinforce
+     * the connection between training and recovery readings.
+     */
+    isUnlocked: boolean;
     onPressQuiz: () => void;
 }
 
@@ -46,9 +52,16 @@ const STATUS_COLOR: Record<'red' | 'yellow' | 'green', string> = {
     red: colors.error,
 };
 
-export function ReadinessCard({ readiness, onPressQuiz }: ReadinessCardProps) {
+export function ReadinessCard({
+    readiness,
+    isUnlocked,
+    onPressQuiz,
+}: ReadinessCardProps) {
     if (readiness.hasCompletedToday) {
         return <ReadinessCardDone readiness={readiness} />;
+    }
+    if (!isUnlocked) {
+        return <ReadinessCardLocked />;
     }
     return <ReadinessCardPending onPress={onPressQuiz} />;
 }
@@ -223,6 +236,46 @@ function ReadinessCardPending({ onPress }: { onPress: () => void }) {
 }
 
 // =============================================================================
+// LOCKED VARIANT — gated behind first workout
+// =============================================================================
+
+function ReadinessCardLocked() {
+    return (
+        <LinearGradient
+            colors={['#15152A', '#1A1A2E', '#0F1A35']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.lockedCard}
+        >
+            <View style={styles.lockedHeader}>
+                <View style={styles.lockedChip}>
+                    <Ionicons name="lock-closed" size={11} color={colors.textSecondary} />
+                    <Text style={styles.lockedChipText}>Check-in bloqueado</Text>
+                </View>
+                <View style={styles.lockedIconBubble}>
+                    <Ionicons name="footsteps-outline" size={20} color={colors.textSecondary} />
+                </View>
+            </View>
+
+            <Text style={styles.lockedTitle}>
+                Complete seu primeiro treino
+            </Text>
+            <Text style={styles.lockedSubtitle}>
+                O check-in diário e o score de prontidão são liberados assim
+                que você concluir sua primeira corrida.
+            </Text>
+
+            <View style={styles.lockedFootnote}>
+                <Ionicons name="information-circle-outline" size={12} color={colors.textMuted} />
+                <Text style={styles.lockedFootnoteText}>
+                    Precisamos de pelo menos 1 treino para calibrar suas análises.
+                </Text>
+            </View>
+        </LinearGradient>
+    );
+}
+
+// =============================================================================
 // COMPLETED VARIANT — calm summary
 // =============================================================================
 
@@ -378,6 +431,75 @@ const styles = StyleSheet.create({
         fontWeight: typography.fontWeights.bold,
         color: '#0A0A18',
         letterSpacing: 0.3,
+    },
+
+    // ============ LOCKED ============
+    lockedCard: {
+        borderRadius: borderRadius['2xl'],
+        padding: spacing.lg,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.05)',
+        overflow: 'hidden',
+        gap: spacing.sm,
+        ...shadows.md,
+    },
+    lockedHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: spacing.xs,
+    },
+    lockedChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: 'rgba(255,255,255,0.04)',
+        paddingHorizontal: spacing.md,
+        paddingVertical: 6,
+        borderRadius: borderRadius.full,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.08)',
+    },
+    lockedChipText: {
+        fontSize: typography.fontSizes.xs,
+        fontWeight: typography.fontWeights.semibold,
+        color: colors.textSecondary,
+        letterSpacing: 0.4,
+    },
+    lockedIconBubble: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(255,255,255,0.04)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.06)',
+    },
+    lockedTitle: {
+        fontSize: typography.fontSizes.xl,
+        fontWeight: typography.fontWeights.bold,
+        color: colors.text,
+        marginBottom: 2,
+    },
+    lockedSubtitle: {
+        fontSize: typography.fontSizes.sm,
+        color: colors.textSecondary,
+        lineHeight: typography.fontSizes.sm * typography.lineHeights.relaxed,
+    },
+    lockedFootnote: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: spacing.sm,
+        paddingTop: spacing.sm,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255,255,255,0.04)',
+    },
+    lockedFootnoteText: {
+        flex: 1,
+        fontSize: typography.fontSizes.xs,
+        color: colors.textMuted,
     },
 
     // ============ DONE ============

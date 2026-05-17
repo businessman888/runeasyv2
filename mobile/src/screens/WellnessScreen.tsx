@@ -14,6 +14,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, typography, spacing } from '../theme';
 import { useWellnessStore } from '../stores/wellnessStore';
 import { useHealthKitStore } from '../stores/healthKitStore';
+import { useReadinessStore } from '../stores/readinessStore';
 import { ReadinessCard } from '../components/wellness/ReadinessCard';
 import { PerformanceGrid } from '../components/wellness/PerformanceGrid';
 import { HealthSection } from '../components/wellness/HealthSection';
@@ -32,14 +33,17 @@ export function WellnessScreen() {
     const evolutionTab = useWellnessStore((s) => s.evolutionTab);
     const setEvolutionTab = useWellnessStore((s) => s.setEvolutionTab);
     const syncHealthKit = useHealthKitStore((s) => s.syncRecentIfConnected);
+    const readinessStatus = useReadinessStore((s) => s.readinessStatus);
+    const fetchReadinessStatus = useReadinessStore((s) => s.fetchReadinessStatus);
 
     useFocusEffect(
         useCallback(() => {
             fetchSummary();
+            fetchReadinessStatus();
             // Trigger a fresh HealthKit sync on focus — store will invalidate
             // wellness cache if new activities are imported.
             syncHealthKit(7).catch(() => undefined);
-        }, [fetchSummary, syncHealthKit]),
+        }, [fetchSummary, fetchReadinessStatus, syncHealthKit]),
     );
 
     const onRefresh = useCallback(() => {
@@ -50,7 +54,9 @@ export function WellnessScreen() {
         navigation.navigate('ReadinessQuiz');
     }, [navigation]);
 
-    const showSkeleton = !summary && loading;
+    // Wait for BOTH summary and readiness status to land so the readiness
+    // card doesn't flash the wrong variant (locked → pending or vice versa).
+    const showSkeleton = (!summary && loading) || (summary && readinessStatus === null);
 
     return (
         <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -89,6 +95,7 @@ export function WellnessScreen() {
                     <View style={styles.sections}>
                         <ReadinessCard
                             readiness={summary.readiness}
+                            isUnlocked={readinessStatus?.isUnlocked ?? false}
                             onPressQuiz={handleOpenQuiz}
                         />
 

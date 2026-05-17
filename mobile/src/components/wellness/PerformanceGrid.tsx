@@ -21,65 +21,57 @@ export function PerformanceGrid({ performance, frequencyPlanned }: PerformanceGr
         <View style={styles.section}>
             <View style={styles.header}>
                 <Text style={styles.heading}>Performance</Text>
-                <View style={styles.badge}>
-                    <Text style={styles.badgeText}>Esta semana</Text>
-                </View>
+                <Text style={styles.subheading}>Esta semana</Text>
             </View>
 
             <View style={styles.grid}>
                 <PerformanceCard
                     label="Distância"
                     value={performance.distance.value.toFixed(1)}
-                    unit="km"
+                    unit=" km"
                     deltaPct={performance.distance.deltaPct}
                     sparkline={performance.distance.sparkline}
-                    iconName="map-outline"
-                    iconColor={colors.primary}
+                    accentColor={colors.primary}
                 />
                 <PerformanceCard
                     label="Treinos"
                     value={`${performance.frequency.value}${frequencyPlanned > 0 ? `/${frequencyPlanned}` : ''}`}
                     deltaPct={performance.frequency.deltaPct}
                     sparkline={performance.frequency.sparkline}
-                    iconName="bar-chart-outline"
-                    iconColor={colors.success}
+                    accentColor={colors.success}
                 />
                 <PerformanceCard
                     label="Pace médio"
                     value={formatPace(performance.pace.value)}
-                    unit="/km"
+                    unit=" /km"
                     deltaPct={performance.pace.deltaPct}
                     sparkline={performance.pace.sparkline}
                     invertDelta
-                    iconName="speedometer-outline"
-                    iconColor={colors.warning}
+                    accentColor={colors.warning}
                 />
                 <PerformanceCard
                     label="Volume"
                     value={String(performance.duration.value)}
-                    unit="min"
+                    unit=" min"
                     deltaPct={performance.duration.deltaPct}
                     sparkline={performance.duration.sparkline}
-                    iconName="time-outline"
-                    iconColor={colors.primaryLight}
+                    accentColor={colors.primaryLight}
                 />
                 <PerformanceCard
                     label="Calorias"
                     value={performance.calories.value.toLocaleString('pt-BR')}
-                    unit="cal"
+                    unit=" cal"
                     deltaPct={performance.calories.deltaPct}
                     sparkline={performance.calories.sparkline}
-                    iconName="flame-outline"
-                    iconColor={colors.accent}
+                    accentColor={colors.accent}
                 />
                 <PerformanceCard
                     label="Elevação"
                     value={String(performance.elevation.value)}
-                    unit="m"
+                    unit=" m"
                     deltaPct={performance.elevation.deltaPct}
                     sparkline={performance.elevation.sparkline}
-                    iconName="trending-up-outline"
-                    iconColor={colors.recovery}
+                    accentColor={colors.recovery}
                 />
             </View>
         </View>
@@ -92,27 +84,21 @@ const styles = StyleSheet.create({
     },
     header: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'baseline',
         justifyContent: 'space-between',
     },
     heading: {
         fontSize: typography.fontSizes.xl,
         fontWeight: typography.fontWeights.bold,
         color: colors.text,
+        letterSpacing: -0.3,
     },
-    badge: {
-        paddingHorizontal: spacing.md,
-        paddingVertical: 4,
-        borderRadius: 999,
-        backgroundColor: 'rgba(0,212,255,0.10)',
-        borderWidth: 1,
-        borderColor: 'rgba(0,212,255,0.25)',
-    },
-    badgeText: {
+    subheading: {
         fontSize: typography.fontSizes.xs,
-        color: colors.primary,
-        fontWeight: typography.fontWeights.semibold,
-        letterSpacing: 0.3,
+        color: colors.textMuted,
+        fontWeight: typography.fontWeights.medium,
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
     },
     grid: {
         flexDirection: 'row',
