@@ -7,4 +7,5 @@ export * from './statsStore';
 export * from './readinessStore';
 export * from './notificationStore';
 export * from './sharingStore';
+export * from './wellnessStore';
 

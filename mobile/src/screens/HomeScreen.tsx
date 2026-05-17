@@ -23,6 +23,7 @@ import { HomeFixedHeader } from '../components/HomeFixedHeader';
 import { WorkoutCard } from '../components/WorkoutCard';
 import { HomeFab } from '../components/HomeFab';
 import { LevelCard } from '../components/level/LevelCard';
+import { OverviewSection } from '../components/home/OverviewSection';
 import { Patent } from '../components/patents/Patent';
 import { getCurrentPatent } from '../utils/patents';
 import { useHealthKitStore } from '../stores/healthKitStore';
@@ -553,6 +554,9 @@ export function HomeScreen({ navigation }: any) {
                     patentSlot={<Patent patent={getCurrentPatent(currentLevel)} size={50} />}
                     patentName={getCurrentPatent(currentLevel).name}
                 />
+
+                {/* ── Overview semanal ──────────────────────────────────────────── */}
+                <OverviewSection />
 
                 {/* ── Seus treinos ─────────────────────────────────────────────── */}
                 <View>

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Platform } from 'react-native';
 import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
+import { useWellnessStore } from './wellnessStore';
 
 // Types matching backend response
 export interface ReadinessVerdict {
@@ -176,6 +177,7 @@ export const useReadinessStore = create<ReadinessState>((set, get) => ({
             const verdict: ReadinessVerdict = await response.json();
             console.log('Verdict received:', verdict);
             set({ verdict, isLoading: false });
+            useWellnessStore.getState().reset();
         } catch (error) {
             console.error('Fetch verdict error:', error);
             const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';

@@ -42,7 +42,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                         case 'Home': return 'home';
                         case 'Calendar': return 'calendar';
                         case 'Ranking': return 'trophy';
-                        case 'Evolution': return 'brain';
+                        case 'Wellness': return 'brain';
                         case 'Settings': return 'profile';
                         default: return 'home';
                     }

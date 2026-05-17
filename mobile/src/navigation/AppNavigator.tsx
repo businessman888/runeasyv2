@@ -16,7 +16,7 @@ import {
     BadgesScreen,
     RankingScreen,
     FeedbackScreen,
-    EvolutionScreen,
+    WellnessScreen,
     SettingsScreen,
     CoachAnalysisScreen,
     NotificationsScreen,
@@ -138,11 +138,11 @@ function MainTabs({ route, navigation }: any) {
                 }}
             />
             <Tab.Screen
-                name="Evolution"
-                component={EvolutionScreen}
+                name="Wellness"
+                component={WellnessScreen}
                 options={{
-                    title: 'Evolução',
-                    headerTitle: 'Minha Evolução',
+                    title: 'Wellness',
+                    headerTitle: 'Wellness',
                     headerShown: false,
                 }}
             />

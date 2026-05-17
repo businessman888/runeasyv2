@@ -3,6 +3,7 @@ import { createMMKV } from 'react-native-mmkv';
 import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
 import type { PlanOverviewResponse } from '../types/plan-overview.types';
+import { useWellnessStore } from './wellnessStore';
 
 // ─── Persistência offline para workouts pendentes ────────────────────────────
 const pendingWorkoutsStorage = createMMKV({ id: 'pending-workouts' });
@@ -580,6 +581,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
             console.log(`[completeWorkout] Workout ${payload.workoutId} salvo no backend com sucesso`);
             removePendingWorkout(payload.workoutId);
             get().fetchUpcomingWorkouts();
+            useWellnessStore.getState().reset();
             return { success: true, savedLocally: false };
         } catch (error) {
             console.error('[completeWorkout] Erro de rede:', error);
@@ -633,6 +635,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
             console.log(`[completeFreeRun] Free run salvo no backend. id=${data.workout?.id}`);
             removePendingFreeRun(payload.localId);
             get().fetchUpcomingWorkouts();
+            useWellnessStore.getState().reset();
             return { success: true, savedLocally: false, workout: data.workout };
         } catch (error) {
             console.error('[completeFreeRun] Erro de rede:', error);

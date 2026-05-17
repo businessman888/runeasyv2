@@ -1,0 +1,383 @@
+import React from 'react';
+import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, typography, spacing, borderRadius } from '../../theme';
+import { useHealthKitStore } from '../../stores/healthKitStore';
+import type { HealthBlock } from '../../types/wellness.types';
+
+interface HealthSectionProps {
+    health: HealthBlock;
+}
+
+function classifyResting(hr: number | null): { label: string; color: string } | null {
+    if (hr === null) return null;
+    if (hr < 60) return { label: 'Excelente', color: colors.success };
+    if (hr < 70) return { label: 'Bom', color: colors.primary };
+    return { label: 'Regular', color: colors.warning };
+}
+
+export function HealthSection({ health }: HealthSectionProps) {
+    const isIOS = Platform.OS === 'ios';
+    const hkConnected = useHealthKitStore((s) => s.isConnected);
+    const hkConnect = useHealthKitStore((s) => s.connect);
+    const hkIsConnecting = useHealthKitStore((s) => s.isConnecting);
+    const connected = isIOS && hkConnected && health.isConnected;
+
+    return (
+        <View style={styles.section}>
+            <View style={styles.header}>
+                <Text style={styles.heading}>Saúde</Text>
+                {connected && (
+                    <View style={styles.deviceTag}>
+                        <Ionicons name="watch-outline" size={12} color={colors.primary} />
+                        <Text style={styles.deviceTagText}>
+                            {health.deviceName ?? 'via Apple Health'}
+                        </Text>
+                    </View>
+                )}
+            </View>
+
+            {!isIOS ? (
+                <AndroidSoonCard />
+            ) : !connected ? (
+                <ConnectCard onConnect={hkConnect} loading={hkIsConnecting} />
+            ) : (
+                <ConnectedGrid health={health} />
+            )}
+        </View>
+    );
+}
+
+function ConnectedGrid({ health }: { health: HealthBlock }) {
+    const restingClass = classifyResting(health.restingHr);
+
+    return (
+        <View style={styles.grid}>
+            <HealthCard
+                icon="heart-outline"
+                label="FC repouso"
+                value={health.restingHr !== null ? String(health.restingHr) : '--'}
+                unit={health.restingHr !== null ? 'bpm' : undefined}
+                accent={restingClass?.color ?? colors.textMuted}
+                badge={restingClass?.label}
+            />
+            <HealthCard
+                icon="pulse-outline"
+                label="FC média 7d"
+                value={health.avgHr7d !== null ? String(health.avgHr7d) : '--'}
+                unit={health.avgHr7d !== null ? 'bpm' : undefined}
+                accent={colors.primary}
+            />
+            <HealthCard
+                icon="speedometer-outline"
+                label="FC máxima 7d"
+                value={health.maxHr7d !== null ? String(health.maxHr7d) : '--'}
+                unit={health.maxHr7d !== null ? 'bpm' : undefined}
+                accent={colors.warning}
+            />
+            <HealthCard
+                icon="flame-outline"
+                label="Calorias 7d"
+                value={
+                    health.calories7d !== null
+                        ? health.calories7d.toLocaleString('pt-BR')
+                        : '--'
+                }
+                unit={health.calories7d !== null ? 'cal' : undefined}
+                accent={colors.accent}
+            />
+        </View>
+    );
+}
+
+function HealthCard({
+    icon,
+    label,
+    value,
+    unit,
+    accent,
+    badge,
+}: {
+    icon: keyof typeof Ionicons.glyphMap;
+    label: string;
+    value: string;
+    unit?: string;
+    accent: string;
+    badge?: string;
+}) {
+    return (
+        <View style={styles.card}>
+            <View style={styles.cardHeader}>
+                <View style={[styles.cardIcon, { backgroundColor: `${accent}1A` }]}>
+                    <Ionicons name={icon} size={14} color={accent} />
+                </View>
+                <Text style={styles.cardLabel}>{label}</Text>
+            </View>
+            <Text style={styles.cardValue}>
+                {value}
+                {unit ? <Text style={styles.cardUnit}> {unit}</Text> : null}
+            </Text>
+            {badge && (
+                <View style={[styles.cardBadge, { backgroundColor: `${accent}1A`, borderColor: `${accent}55` }]}>
+                    <Text style={[styles.cardBadgeText, { color: accent }]}>{badge}</Text>
+                </View>
+            )}
+        </View>
+    );
+}
+
+function ConnectCard({
+    onConnect,
+    loading,
+}: {
+    onConnect: () => Promise<unknown>;
+    loading: boolean;
+}) {
+    return (
+        <Pressable
+            onPress={() => onConnect()}
+            disabled={loading}
+            style={styles.ctaCard}
+            accessibilityRole="button"
+            accessibilityLabel="Conectar HealthKit"
+        >
+            <View style={styles.ctaIcon}>
+                <Ionicons name="heart-outline" size={28} color={colors.primary} />
+            </View>
+            <View style={styles.ctaContent}>
+                <Text style={styles.ctaTitle}>
+                    Conecte seu relógio
+                </Text>
+                <Text style={styles.ctaSubtitle}>
+                    Apple Watch, Garmin, Polar, Fitbit — tudo via Apple Health.
+                </Text>
+            </View>
+            <View style={styles.ctaButton}>
+                <Text style={styles.ctaButtonText}>
+                    {loading ? 'Conectando...' : 'Conectar'}
+                </Text>
+                <Ionicons name="arrow-forward" size={14} color="#0A0A18" />
+            </View>
+        </Pressable>
+    );
+}
+
+function AndroidSoonCard() {
+    return (
+        <View style={styles.soonCard}>
+            <View style={styles.soonHeader}>
+                <View style={styles.soonIcon}>
+                    <Ionicons name="watch-outline" size={22} color={colors.primary} />
+                </View>
+                <View style={styles.soonBadge}>
+                    <Text style={styles.soonBadgeText}>Em breve no Android</Text>
+                </View>
+            </View>
+            <Text style={styles.soonTitle}>
+                Métricas de saúde do seu relógio
+            </Text>
+            <Text style={styles.soonSubtitle}>
+                Integração com Google Fit e Health Connect chegando em breve para
+                trazer FC, calorias e mais.
+            </Text>
+            <View style={styles.soonDeviceRow}>
+                {['watch-outline', 'fitness-outline', 'heart-outline'].map((n, i) => (
+                    <View key={i} style={styles.soonDeviceIcon}>
+                        <Ionicons name={n as any} size={14} color={colors.textSecondary} />
+                    </View>
+                ))}
+            </View>
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({
+    section: {
+        gap: spacing.md,
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    heading: {
+        fontSize: typography.fontSizes.xl,
+        fontWeight: typography.fontWeights.bold,
+        color: colors.text,
+    },
+    deviceTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: spacing.sm,
+        paddingVertical: 4,
+        borderRadius: borderRadius.full,
+        backgroundColor: 'rgba(0,212,255,0.10)',
+        borderWidth: 1,
+        borderColor: 'rgba(0,212,255,0.25)',
+    },
+    deviceTagText: {
+        fontSize: typography.fontSizes.xs,
+        color: colors.primary,
+        fontWeight: typography.fontWeights.semibold,
+    },
+    grid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing.sm,
+    },
+    card: {
+        width: '48%',
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.xl,
+        padding: spacing.md,
+        borderWidth: 1,
+        borderColor: colors.border,
+        gap: spacing.xs,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+    },
+    cardIcon: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    cardLabel: {
+        fontSize: typography.fontSizes.xs,
+        color: colors.textSecondary,
+        fontWeight: typography.fontWeights.medium,
+        letterSpacing: 0.3,
+        textTransform: 'uppercase',
+    },
+    cardValue: {
+        fontSize: typography.fontSizes['2xl'],
+        fontWeight: typography.fontWeights.bold,
+        color: colors.text,
+    },
+    cardUnit: {
+        fontSize: typography.fontSizes.sm,
+        color: colors.textSecondary,
+        fontWeight: typography.fontWeights.medium,
+    },
+    cardBadge: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: spacing.sm,
+        paddingVertical: 2,
+        borderRadius: borderRadius.full,
+        borderWidth: 1,
+    },
+    cardBadgeText: {
+        fontSize: typography.fontSizes.xs,
+        fontWeight: typography.fontWeights.semibold,
+    },
+    ctaCard: {
+        backgroundColor: colors.card,
+        borderRadius: borderRadius['2xl'],
+        padding: spacing.lg,
+        borderWidth: 1,
+        borderColor: 'rgba(0,212,255,0.20)',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.md,
+    },
+    ctaIcon: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0,212,255,0.12)',
+    },
+    ctaContent: {
+        flex: 1,
+        gap: 2,
+    },
+    ctaTitle: {
+        fontSize: typography.fontSizes.base,
+        fontWeight: typography.fontWeights.bold,
+        color: colors.text,
+    },
+    ctaSubtitle: {
+        fontSize: typography.fontSizes.xs,
+        color: colors.textSecondary,
+    },
+    ctaButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+        borderRadius: borderRadius.full,
+        backgroundColor: colors.primary,
+    },
+    ctaButtonText: {
+        fontSize: typography.fontSizes.xs,
+        fontWeight: typography.fontWeights.bold,
+        color: '#0A0A18',
+    },
+    soonCard: {
+        backgroundColor: colors.card,
+        borderRadius: borderRadius['2xl'],
+        padding: spacing.lg,
+        borderWidth: 1,
+        borderColor: colors.border,
+        gap: spacing.sm,
+    },
+    soonHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    soonIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0,212,255,0.10)',
+    },
+    soonBadge: {
+        paddingHorizontal: spacing.md,
+        paddingVertical: 4,
+        borderRadius: borderRadius.full,
+        backgroundColor: 'rgba(0,212,255,0.10)',
+        borderWidth: 1,
+        borderColor: 'rgba(0,212,255,0.25)',
+    },
+    soonBadgeText: {
+        fontSize: typography.fontSizes.xs,
+        color: colors.primary,
+        fontWeight: typography.fontWeights.semibold,
+        letterSpacing: 0.3,
+    },
+    soonTitle: {
+        fontSize: typography.fontSizes.base,
+        fontWeight: typography.fontWeights.bold,
+        color: colors.text,
+    },
+    soonSubtitle: {
+        fontSize: typography.fontSizes.sm,
+        color: colors.textSecondary,
+        lineHeight: typography.fontSizes.sm * typography.lineHeights.relaxed,
+    },
+    soonDeviceRow: {
+        flexDirection: 'row',
+        gap: spacing.xs,
+        marginTop: spacing.xs,
+    },
+    soonDeviceIcon: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(255,255,255,0.04)',
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+});

@@ -7,6 +7,7 @@ export * from './BadgesScreen';
 export * from './RankingScreen';
 export * from './FeedbackScreen';
 export * from './EvolutionScreen';
+export * from './WellnessScreen';
 export * from './SettingsScreen';
 export * from './StatsScreen';
 export * from './CoachAnalysisScreen';

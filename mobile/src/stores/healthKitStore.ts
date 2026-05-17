@@ -15,6 +15,7 @@ import { BASE_API_URL } from '../config/api.config';
 import { HealthKitManager } from '../services/healthkit';
 import * as devicesService from '../services/devices';
 import * as Storage from '../utils/storage';
+import { useWellnessStore } from './wellnessStore';
 
 interface HealthKitState {
     // Capability
@@ -213,6 +214,10 @@ export const useHealthKitStore = create<HealthKitState>((set, get) => ({
                 lastSyncedAt: HealthKitManager.getLastSyncedAt(),
                 lastSyncedCount: result.inserted,
             });
+
+            if (result.inserted > 0) {
+                useWellnessStore.getState().reset();
+            }
         } catch (e) {
             const message = e instanceof Error ? e.message : 'Erro desconhecido';
             console.warn('[healthKitStore] syncRecentIfConnected failed:', e);
