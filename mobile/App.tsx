@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet, View, Text } from 'react-native';
+import { StyleSheet, View, Text, AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppNavigator } from './src/navigation';
 import { useNotifications } from './src/hooks/useNotifications';
@@ -10,6 +10,8 @@ import { SuperwallProvider } from 'expo-superwall';
 import { SuperwallBridge } from './src/components/paywall/SuperwallBridge';
 import { initializeRevenueCat, getSuperwallApiKey } from './src/services/paywall';
 import { initSubscriptionListener } from './src/stores/authStore';
+import { useSubscriptionStore } from './src/stores/subscriptionStore';
+import { useDevMenuStore } from './src/stores/devMenuStore';
 import { useAppleWatchStore } from './src/stores/appleWatchStore';
 import { WatchBridgeDebugBanner } from './src/components/debug/WatchBridgeDebugBanner';
 import { useWatchSync } from './src/hooks/useWatchSync';
@@ -100,7 +102,22 @@ export default function App() {
   useEffect(() => {
     initializeRevenueCat();
     const removeListener = initSubscriptionListener();
+    // Hidrata DevMenu override em dev/preview (no-op em prod via __DEV__ check inside hydrate consumers)
+    if (__DEV__) {
+      void useDevMenuStore.getState().hydrate();
+    }
     return () => removeListener();
+  }, []);
+
+  // Refetch subscription quando o app volta do background (cobre upgrade
+  // feito fora do app — App Store / web — e expiração silenciosa)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void useSubscriptionStore.getState().fetchSubscription();
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   // Inicializa bridge com Apple Watch (Phase 4)

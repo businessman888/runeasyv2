@@ -44,6 +44,9 @@ import { PlanPreviewScreen as QuizPlanPreviewScreen } from '../screens/quiz/Plan
 import { PlanLoadingScreen } from '../screens/quiz/PlanLoadingScreen';
 import { BriefingScreen } from '../screens/quiz/BriefingScreen';
 import { PlanPreviewScreen as OldPlanPreviewScreen } from '../screens/PlanPreviewScreen';
+// DevMenuScreen é dev-only; o require() em vez de import preserva tree-shaking
+// em produção (junto com o gate `__DEV__` na registration).
+const DevMenuScreen = __DEV__ ? require('../screens/dev/DevMenuScreen').DevMenuScreen : null;
 import { colors, typography } from '../theme';
 import { useAuthStore } from '../stores';
 
@@ -464,6 +467,16 @@ export function AppNavigator() {
                                 animation: 'fade',
                             }}
                         />
+                        {__DEV__ && DevMenuScreen && (
+                            <Stack.Screen
+                                name="DevMenu"
+                                component={DevMenuScreen}
+                                options={{
+                                    headerShown: false,
+                                    presentation: 'modal',
+                                }}
+                            />
+                        )}
                     </>
                 )}
             </Stack.Navigator>

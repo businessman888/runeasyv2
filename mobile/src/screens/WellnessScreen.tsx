@@ -21,6 +21,8 @@ import { HealthSection } from '../components/wellness/HealthSection';
 import { ZonesChart } from '../components/wellness/ZonesChart';
 import { EvolutionChart } from '../components/wellness/EvolutionChart';
 import { WellnessSkeleton } from '../components/wellness/WellnessSkeleton';
+import { UpgradeProCard } from '../components/upgrade/UpgradeProCard';
+import { useProFeature } from '../hooks/useProFeature';
 
 type Nav = NativeStackNavigationProp<Record<string, object | undefined>>;
 
@@ -35,15 +37,17 @@ export function WellnessScreen() {
     const syncHealthKit = useHealthKitStore((s) => s.syncRecentIfConnected);
     const readinessStatus = useReadinessStore((s) => s.readinessStatus);
     const fetchReadinessStatus = useReadinessStore((s) => s.fetchReadinessStatus);
+    const { isProUser } = useProFeature();
 
     useFocusEffect(
         useCallback(() => {
             fetchSummary();
-            fetchReadinessStatus();
+            // Pro-only: avoid an authenticated request that just shows a card
+            if (isProUser) fetchReadinessStatus();
             // Trigger a fresh HealthKit sync on focus — store will invalidate
             // wellness cache if new activities are imported.
             syncHealthKit(7).catch(() => undefined);
-        }, [fetchSummary, fetchReadinessStatus, syncHealthKit]),
+        }, [fetchSummary, fetchReadinessStatus, syncHealthKit, isProUser]),
     );
 
     const onRefresh = useCallback(() => {
@@ -56,7 +60,9 @@ export function WellnessScreen() {
 
     // Wait for BOTH summary and readiness status to land so the readiness
     // card doesn't flash the wrong variant (locked → pending or vice versa).
-    const showSkeleton = (!summary && loading) || (summary && readinessStatus === null);
+    // For Free users, readinessStatus isn't fetched — skip that part of the wait.
+    const showSkeleton =
+        (!summary && loading) || (isProUser && summary && readinessStatus === null);
 
     return (
         <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -93,11 +99,24 @@ export function WellnessScreen() {
                     </View>
                 ) : (
                     <View style={styles.sections}>
-                        <ReadinessCard
-                            readiness={summary.readiness}
-                            isUnlocked={readinessStatus?.isUnlocked ?? false}
-                            onPressQuiz={handleOpenQuiz}
-                        />
+                        {isProUser ? (
+                            <ReadinessCard
+                                readiness={summary.readiness}
+                                isUnlocked={readinessStatus?.isUnlocked ?? false}
+                                onPressQuiz={handleOpenQuiz}
+                            />
+                        ) : (
+                            <UpgradeProCard
+                                variant="medium"
+                                title="Check-in de Prontidão"
+                                subtitle="Recurso exclusivo Pro"
+                                bullets={[
+                                    'Relatórios diários de prontidão',
+                                    'Sugestões baseadas em sono e FC',
+                                ]}
+                                ctaLabel="Upgrade to Pro"
+                            />
+                        )}
 
                         <PerformanceGrid
                             performance={summary.performance}
@@ -106,7 +125,16 @@ export function WellnessScreen() {
 
                         <HealthSection health={summary.health} />
 
-                        <ZonesChart zones={summary.zones} />
+                        {isProUser ? (
+                            <ZonesChart zones={summary.zones} />
+                        ) : (
+                            <UpgradeProCard
+                                variant="compact"
+                                title="Zonas detalhadas no Pro"
+                                subtitle="Análise de zonas de FC com dados do seu relógio"
+                                ctaLabel="Upgrade to Pro"
+                            />
+                        )}
 
                         <EvolutionChart
                             evolution={summary.evolution}

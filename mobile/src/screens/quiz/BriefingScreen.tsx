@@ -16,6 +16,7 @@ import {
 // CommonActions removed — AppNavigator handles transition via onboarding_completed state
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useSubscriptionStore } from '../../stores/subscriptionStore';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop, Circle as SvgCircle } from 'react-native-svg';
 import { usePlacement } from 'expo-superwall';
@@ -105,7 +106,7 @@ const ProgressChart = ({ chartPoints, accentColor }: { chartPoints: number[]; ac
 export function BriefingScreen({ navigation, route }: any) {
     const { data } = useOnboardingStore();
     const { saveOnboardingOnly } = useOnboardingStore();
-    const isPro = useAuthStore((s) => s.isPro);
+    const isPro = useSubscriptionStore((s) => s.isProUser);
     const userId = route?.params?.userId;
     const archetype: Archetype = route?.params?.archetype;
     const { registerPlacement } = usePlacement();
@@ -155,15 +156,10 @@ export function BriefingScreen({ navigation, route }: any) {
         } catch { }
     };
 
-    // EXPO_PUBLIC_APP_VARIANT is inlined by Metro at build time; a plain APP_VARIANT
-    // lookup is stripped by the bundler in EAS preview/production builds.
-    const isDevBuild =
-        __DEV__ ||
-        process.env.EXPO_PUBLIC_APP_VARIANT === 'preview' ||
-        process.env.EXPO_PUBLIC_APP_VARIANT === 'development';
-
     const handleConfirmAndStart = async () => {
-        // If not Pro, show paywall
+        // If not Pro, give the user a chance to upgrade via paywall.
+        // If they close it (Free path), we still save onboarding and let them
+        // into the app — they will see UpgradeProCard in gated sections.
         if (!isPro) {
             try {
                 await registerPlacement({ placement: PAYWALL_PLACEMENTS.VIEW_TRAINING_PLAN });
@@ -171,20 +167,13 @@ export function BriefingScreen({ navigation, route }: any) {
                 console.warn('[Paywall] Erro ao registrar view_training_plan:', err);
             }
 
-            // Re-check subscription status after paywall
-            await useAuthStore.getState().syncSubscriptionStatus();
-            const nowPro = useAuthStore.getState().isPro;
-            if (!nowPro) {
-                // In dev/preview builds, bypass paywall so we can test the full flow
-                if (isDevBuild) {
-                    console.log('[BriefingScreen] DEV/PREVIEW MODE — bypassing paywall, proceeding as Pro');
-                } else {
-                    return; // User didn't subscribe, stay on screen
-                }
-            }
+            // Pull fresh status — webhook may have flipped them to Pro mid-call
+            await useSubscriptionStore.getState().fetchSubscription();
         }
 
-        // User is Pro — save onboarding data to backend (NO AI generation)
+        // Save onboarding regardless of plan.
+        // - Pro: HomeScreen will trigger AI generation on first focus.
+        // - Free: backend skips AI generation (gated by subscription_plan check).
         try {
             const saved = await saveOnboardingOnly();
             if (!saved) {
@@ -199,7 +188,6 @@ export function BriefingScreen({ navigation, route }: any) {
 
         // Update local user state — AppNavigator reacts to onboarding_completed
         // and automatically transitions from onboarding stack to main stack.
-        // No manual navigation.reset or login needed (those caused double-mount).
         const currentUser = useAuthStore.getState().user;
         if (currentUser) {
             useAuthStore.getState().setUser({

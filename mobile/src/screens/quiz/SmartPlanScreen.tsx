@@ -15,6 +15,7 @@ import {
 import { CommonActions } from '@react-navigation/native';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useSubscriptionStore } from '../../stores/subscriptionStore';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop, Circle as SvgCircle } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -122,7 +123,7 @@ const ProgressChart = () => {
 // =============================================
 export function SmartPlanScreen({ navigation, route }: any) {
     const { data, generatedPlan: storePlan } = useOnboardingStore();
-    const isPro = useAuthStore((s) => s.isPro);
+    const isPro = useSubscriptionStore((s) => s.isProUser);
     const userId = route?.params?.userId;
     const { registerPlacement } = usePlacement();
     const insets = useSafeAreaInsets();
@@ -167,20 +168,12 @@ export function SmartPlanScreen({ navigation, route }: any) {
         } catch { }
     };
 
-    // EXPO_PUBLIC_APP_VARIANT is inlined by the Metro bundler at build time.
-    // Plain APP_VARIANT is NOT — process.env lookups without the EXPO_PUBLIC_ prefix
-    // are stripped in production/preview EAS builds, which is why the previous
-    // bypass silently failed and the "Desbloquear Tudo" button did nothing.
-    const isDevBuild =
-        __DEV__ ||
-        process.env.EXPO_PUBLIC_APP_VARIANT === 'preview' ||
-        process.env.EXPO_PUBLIC_APP_VARIANT === 'development';
-
     const handleUnlockAll = async () => {
         console.log('[SmartPlan] Desbloquear tudo pressed');
 
         // ── Trigger: view_training_plan ──
-        // Se o usuário não for Pro, exibe paywall antes de desbloquear
+        // Se o usuário não for Pro, exibe paywall (chance de upgrade).
+        // Se ele fechar, segue como Free — vai ver UpgradeProCards na Home.
         if (!isPro) {
             try {
                 console.log('[Paywall] Registrando placement: view_training_plan');
@@ -189,17 +182,8 @@ export function SmartPlanScreen({ navigation, route }: any) {
                 console.warn('[Paywall] Erro ao registrar view_training_plan:', err);
             }
 
-            // Após o paywall, re-verifica se agora é Pro
-            await useAuthStore.getState().syncSubscriptionStatus();
-            const nowPro = useAuthStore.getState().isPro;
-            if (!nowPro) {
-                if (isDevBuild) {
-                    console.log('[SmartPlan] DEV/PREVIEW MODE — bypassing paywall, proceeding');
-                } else {
-                    console.log('[SmartPlan] Usuário não converteu — mantendo na tela');
-                    return;
-                }
-            }
+            // Pull fresh status — paywall may have completed purchase
+            await useSubscriptionStore.getState().fetchSubscription();
         }
 
         const currentUser = useAuthStore.getState().user;

@@ -27,6 +27,8 @@ import { OverviewSection } from '../components/home/OverviewSection';
 import { Patent } from '../components/patents/Patent';
 import { getCurrentPatent } from '../utils/patents';
 import { useHealthKitStore } from '../stores/healthKitStore';
+import { useProFeature } from '../hooks/useProFeature';
+import { UpgradeProCard } from '../components/upgrade/UpgradeProCard';
 
 import { BASE_API_URL } from '../config/api.config';
 
@@ -79,6 +81,7 @@ function BedIcon({ size = 24, color = '#A78BFA' }: { size?: number; color?: stri
 
 export function HomeScreen({ navigation }: any) {
     const { user } = useAuthStore();
+    const { isProUser } = useProFeature();
     const { stats, badges, fetchStats, fetchBadges, isLoading: gamificationLoading } = useGamificationStore();
     const { upcomingWorkouts, fetchUpcomingWorkouts, isLoading: trainingLoading, today, nextWorkout: storeNextWorkout, fetchSchedule, clearScheduleData, schedule, retryPendingWorkouts } = useTrainingStore();
     const { latestSummary, fetchLatestSummary, latestActivity, latestActivityLoading, fetchLatestActivity } = useFeedbackStore();
@@ -174,6 +177,13 @@ export function HomeScreen({ navigation }: any) {
 
     // Trigger plan generation if no workouts exist
     const checkAndTriggerGeneration = useCallback(async () => {
+        // Free users don't have a plan — backend gating refuses generation,
+        // and HomeScreen shows UpgradeProCard in place of WorkoutCard.
+        if (!isProUser) {
+            console.log('[HomeScreen] User is Free — skipping plan generation check');
+            return;
+        }
+
         // Guard: prevent concurrent/double triggers
         if (generationTriggeredRef.current) return;
 
@@ -257,7 +267,7 @@ export function HomeScreen({ navigation }: any) {
             setPlanGenError(true);
             generationTriggeredRef.current = false; // Allow retry on error
         }
-    }, [triggerPlanGeneration, startPolling]);
+    }, [triggerPlanGeneration, startPolling, isProUser]);
 
     // Retry plan generation
     const handleRetryGeneration = useCallback(async () => {
@@ -623,31 +633,57 @@ export function HomeScreen({ navigation }: any) {
                     </View>
                 )}
 
-                {/* Workout Card - Show when it's NOT a recovery day and there's a workout to show */}
-                {!isRecoveryDay && mainWorkout && (
-                    <WorkoutCard
-                        key={`main-workout-${mainWorkout.id || mainWorkout.scheduled_date}`}
-                        workout={mainWorkout as any}
-                        isToday={hasTodayWorkout}
-                        isCompleted={todayData?.status === 'completed' && hasTodayWorkout}
-                        onStartWorkout={handleStartWorkout}
-                        allBadges={badges}
+                {/* Free users see UpgradeProCard in place of the workout. Pro path unchanged. */}
+                {!isProUser ? (
+                    <UpgradeProCard
+                        variant="medium"
+                        title="Desbloqueie seu plano personalizado"
+                        bullets={[
+                            'Planos de treino com Coach AI',
+                            'Ajuste automático com seu relógio',
+                            'Acompanhamento 24h do plano',
+                        ]}
+                        ctaLabel="Upgrade to Pro"
                     />
-                )}
+                ) : (
+                    <>
+                        {/* Workout Card - Show when it's NOT a recovery day and there's a workout to show */}
+                        {!isRecoveryDay && mainWorkout && (
+                            <WorkoutCard
+                                key={`main-workout-${mainWorkout.id || mainWorkout.scheduled_date}`}
+                                workout={mainWorkout as any}
+                                isToday={hasTodayWorkout}
+                                isCompleted={todayData?.status === 'completed' && hasTodayWorkout}
+                                onStartWorkout={handleStartWorkout}
+                                allBadges={badges}
+                            />
+                        )}
 
-                {/* No Workout Card - Only show if no recovery and no workout */}
-                {!mainWorkout && !isRecoveryDay && (
-                    <View style={styles.workoutCard}>
-                        <View style={styles.lockedContent}>
-                            <RunningIcon size={48} color="#6B7280" />
-                            <Text style={styles.lockedText}>Nenhum treino agendado</Text>
-                        </View>
-                    </View>
+                        {/* No Workout Card - Only show if no recovery and no workout */}
+                        {!mainWorkout && !isRecoveryDay && (
+                            <View style={styles.workoutCard}>
+                                <View style={styles.lockedContent}>
+                                    <RunningIcon size={48} color="#6B7280" />
+                                    <Text style={styles.lockedText}>Nenhum treino agendado</Text>
+                                </View>
+                            </View>
+                        )}
+                    </>
                 )}
                 </View>
                 {/* ── fim Seus treinos ─────────────────────────────────────────── */}
 
-                {/* AI Analysis Card */}
+                {/* AI Analysis Card — Free users see compact upgrade card */}
+                {!isProUser ? (
+                    <View style={{ marginHorizontal: spacing.lg, marginTop: spacing.xl }}>
+                        <UpgradeProCard
+                            variant="compact"
+                            title="Análises dos treinos com Coach AI"
+                            subtitle="Feedback inteligente exclusivo Pro"
+                            ctaLabel="Upgrade to Pro"
+                        />
+                    </View>
+                ) : (
                 <View style={styles.aiCard}>
                     {latestActivityLoading ? (
                         <View style={styles.aiLoadingContainer}>
@@ -771,6 +807,7 @@ export function HomeScreen({ navigation }: any) {
                         </View>
                     )}
                 </View>
+                )}
             </ScrollView>
 
 

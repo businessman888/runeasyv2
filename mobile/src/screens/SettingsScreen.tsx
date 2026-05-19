@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
     View,
     Text,
@@ -8,6 +8,7 @@ import {
     Image,
     Switch,
     Platform,
+    Pressable,
 } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
@@ -53,6 +54,23 @@ function EditIcon({ size = 16, color = '#0A0A18' }: { size?: number; color?: str
 export function SettingsScreen({ navigation }: any) {
     const { user, logout } = useAuthStore();
 
+    // Secret gesture: 5 taps on the header opens DevMenu (dev/preview only).
+    // Ships as no-op in production via __DEV__ guard at navigation registration.
+    const tapCountRef = useRef(0);
+    const lastTapAtRef = useRef(0);
+    const handleHeaderTap = () => {
+        if (!__DEV__) return;
+        const now = Date.now();
+        if (now - lastTapAtRef.current > 2000) {
+            tapCountRef.current = 0;
+        }
+        lastTapAtRef.current = now;
+        tapCountRef.current += 1;
+        if (tapCountRef.current >= 5) {
+            tapCountRef.current = 0;
+            navigation.navigate('DevMenu');
+        }
+    };
 
     const handleLogout = async () => {
         await logout();
@@ -68,9 +86,9 @@ export function SettingsScreen({ navigation }: any) {
         <ScreenContainer>
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 {/* Header */}
-                <View style={styles.header}>
+                <Pressable onPress={handleHeaderTap} style={styles.header} hitSlop={4}>
                     <Text style={styles.headerTitle}>Configurações da Conta</Text>
-                </View>
+                </Pressable>
 
                 {/* Profile Section */}
                 <View style={styles.profileSection}>

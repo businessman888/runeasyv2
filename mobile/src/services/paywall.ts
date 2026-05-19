@@ -217,6 +217,9 @@ export const PAYWALL_PLACEMENTS = {
 
   /** Exibido ao tentar visualizar um plano de treino detalhado */
   VIEW_TRAINING_PLAN: 'view_training_plan',
+
+  /** Disparado por qualquer toque em UpgradeProCard espalhado pelo app */
+  UPGRADE_TAPPED: 'upgrade_tapped',
 } as const;
 
 export type PaywallPlacement = (typeof PAYWALL_PLACEMENTS)[keyof typeof PAYWALL_PLACEMENTS];

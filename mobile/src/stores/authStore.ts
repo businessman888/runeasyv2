@@ -8,6 +8,7 @@ import {
     checkProStatus,
     addSubscriptionListener,
 } from '../services/paywall';
+import { useSubscriptionStore } from './subscriptionStore';
 
 interface User {
     id: string;
@@ -64,16 +65,13 @@ interface AuthState {
     user: User | null;
     isAuthenticated: boolean;
     isLoading: boolean;
-    isPro: boolean;
 
     // Actions
     setUser: (user: User | null) => void;
     setAuthenticated: (authenticated: boolean) => void;
-    setIsPro: (isPro: boolean) => void;
     login: (userId: string) => Promise<void>;
     logout: () => Promise<void>;
     checkAuth: () => Promise<void>;
-    syncSubscriptionStatus: () => Promise<void>;
 }
 
 const API_URL = BASE_API_URL;
@@ -97,7 +95,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     user: null,
     isAuthenticated: false,
     isLoading: true,
-    isPro: false,
 
     setUser: (user) => {
         set({ user, isAuthenticated: !!user });
@@ -105,10 +102,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     setAuthenticated: (authenticated) => {
         set({ isAuthenticated: authenticated });
-    },
-
-    setIsPro: (isPro) => {
-        set({ isPro });
     },
 
     login: async (userId: string) => {
@@ -159,7 +152,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 try {
                     await identifyRevenueCatUser(userId);
                     const { isPro } = await checkProStatus();
-                    set({ isPro });
+                    useSubscriptionStore.getState().setFromRevenueCat(isPro);
+                    // Reconcile with backend (RevenueCat webhook is the source of truth)
+                    void useSubscriptionStore.getState().fetchSubscription();
                     console.log('[AUTH] RevenueCat sync — isPro:', isPro);
                 } catch (err) {
                     console.warn('[AUTH] RevenueCat identify falhou:', err);
@@ -197,10 +192,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             }
 
             await clearAllAuthTokens();
-            set({ user: null, isAuthenticated: false, isPro: false });
+            useSubscriptionStore.getState().reset();
+            set({ user: null, isAuthenticated: false });
         } catch (error) {
             console.error('[AUTH] Logout error:', error);
-            set({ user: null, isAuthenticated: false, isPro: false });
+            useSubscriptionStore.getState().reset();
+            set({ user: null, isAuthenticated: false });
         }
     },
 
@@ -270,15 +267,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
     },
 
-    syncSubscriptionStatus: async () => {
-        try {
-            const { isPro } = await checkProStatus();
-            set({ isPro });
-            console.log('[AUTH] Subscription sync — isPro:', isPro);
-        } catch (error) {
-            console.error('[AUTH] Erro ao sincronizar assinatura:', error);
-        }
-    },
 }));
 
 /**
@@ -288,7 +276,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
  */
 export function initSubscriptionListener(): () => void {
     return addSubscriptionListener((isPro) => {
-        useAuthStore.getState().setIsPro(isPro);
+        useSubscriptionStore.getState().setFromRevenueCat(isPro);
+        // SDK push reflects a real purchase/expiration — pull the backend
+        // state too so trial/cancellation deltas don't lag behind.
+        void useSubscriptionStore.getState().fetchSubscription();
         console.log('[AUTH] Subscription listener — isPro atualizado:', isPro);
     });
 }

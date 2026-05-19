@@ -29,6 +29,7 @@ import { HealthModule } from './modules/health/health.module';
 import { SharingModule } from './modules/sharing';
 import { DevicesModule } from './modules/devices';
 import { AuthModule } from './modules/auth';
+import { SubscriptionModule } from './modules/subscription';
 
 @Module({
   imports: [
@@ -97,6 +98,7 @@ import { AuthModule } from './modules/auth';
     SharingModule,
     DevicesModule,
     AuthModule,
+    SubscriptionModule,
   ],
   controllers: [AppController],
   providers: [AppService],

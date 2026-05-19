@@ -23,6 +23,8 @@ import { ScreenContainer } from '../../components/ScreenContainer';
 import { useTrainingStore } from '../../stores';
 import type { PlanWeek } from '../../types/plan-overview.types';
 import { WeekRow } from './components/WeekRow';
+import { UpgradeProCard } from '../../components/upgrade/UpgradeProCard';
+import { useProFeature } from '../../hooks/useProFeature';
 
 // ─── Figma tokens ────────────────────────────────────────────────────────────
 const BG = '#0E0E1F';
@@ -48,12 +50,32 @@ export function PlanGoalsScreen() {
     const loading = useTrainingStore((s) => s.planOverviewLoading);
     const error = useTrainingStore((s) => s.planOverviewError);
     const fetchPlanOverview = useTrainingStore((s) => s.fetchPlanOverview);
+    const { isProUser } = useProFeature();
 
     useEffect(() => {
-        if (!planOverview && !loading) {
+        // Avoid hitting the backend for users that don't have a plan
+        if (isProUser && !planOverview && !loading) {
             fetchPlanOverview();
         }
-    }, [planOverview, loading, fetchPlanOverview]);
+    }, [planOverview, loading, fetchPlanOverview, isProUser]);
+
+    if (!isProUser) {
+        return (
+            <ScreenContainer>
+                <UpgradeProCard
+                    variant="fullscreen"
+                    title="Planejamento disponível no Pro"
+                    subtitle="Acompanhe seu plano semana a semana com Coach AI"
+                    bullets={[
+                        'Plano completo semana a semana',
+                        'Acompanhamento de quilometragem',
+                        'Histórico e progressão de fases',
+                    ]}
+                    ctaLabel="Upgrade to Pro"
+                />
+            </ScreenContainer>
+        );
+    }
 
     const handleWeekPress = useCallback(
         (weekNumber: number) => {

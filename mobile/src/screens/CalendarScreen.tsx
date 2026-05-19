@@ -19,6 +19,8 @@ import { ZONE_COLORS, ZONE_LABELS, PHASE_LABELS, getZoneColor } from '../theme/z
 import { useTrainingStore, useStatsStore, ScheduleDay } from '../stores';
 import type { TrainingZone, WorkoutPhase } from '../stores/trainingStore';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { UpgradeProCard } from '../components/upgrade/UpgradeProCard';
+import { useProFeature } from '../hooks/useProFeature';
 
 
 // Icon components using @expo/vector-icons
@@ -152,6 +154,7 @@ interface WorkoutData {
 export function CalendarScreen({ navigation }: any) {
     const { workouts, fetchWorkouts, fetchUpcomingWorkouts, plan, fetchPlan, generationStatus, checkPlanStatus, schedule, fetchSchedule } = useTrainingStore();
     const { summary, fetchSummary } = useStatsStore();
+    const { isProUser } = useProFeature();
     const [selectedDate, setSelectedDate] = React.useState(new Date().getDate());
     const [currentMonth, setCurrentMonth] = React.useState(new Date());
     const [isScheduleLocked, setIsScheduleLocked] = React.useState(false);
@@ -607,6 +610,17 @@ export function CalendarScreen({ navigation }: any) {
                         <GoalsIcon size={24} color="#EBEBF5" />
                     </TouchableOpacity>
                 </View>
+
+                {!isProUser && (
+                    <View style={{ paddingHorizontal: spacing.lg, marginTop: spacing.md }}>
+                        <UpgradeProCard
+                            variant="compact"
+                            title="Tenha treinos planejados por IA"
+                            subtitle="Calendário com plano de treino do Coach AI"
+                            ctaLabel="Upgrade to Pro"
+                        />
+                    </View>
+                )}
 
                 {/* Stats Bar */}
                 <View style={styles.statsBar}>
