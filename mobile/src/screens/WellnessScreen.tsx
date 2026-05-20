@@ -120,7 +120,7 @@ export function WellnessScreen() {
 
                         <PerformanceGrid
                             performance={summary.performance}
-                            frequencyPlanned={summary.overview.frequencyPlanned}
+                            frequencyPlanned={isProUser ? summary.overview.frequencyPlanned : 0}
                         />
 
                         <HealthSection health={summary.health} />

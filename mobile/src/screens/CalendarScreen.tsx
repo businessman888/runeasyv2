@@ -152,9 +152,15 @@ interface WorkoutData {
 }
 
 export function CalendarScreen({ navigation }: any) {
-    const { workouts, fetchWorkouts, fetchUpcomingWorkouts, plan, fetchPlan, generationStatus, checkPlanStatus, schedule, fetchSchedule } = useTrainingStore();
+    const { workouts: rawWorkouts, fetchWorkouts, fetchUpcomingWorkouts, plan, fetchPlan, generationStatus, checkPlanStatus, schedule: rawSchedule, fetchSchedule } = useTrainingStore();
     const { summary, fetchSummary } = useStatsStore();
     const { isProUser } = useProFeature();
+
+    // Free users have no plan — never surface plan schedule/workouts in the calendar
+    // grid, day detail, or "Próximo" card. Pre-gating accounts may still carry an
+    // orphan plan in the DB, so gate at the data source rather than per-element.
+    const workouts = isProUser ? rawWorkouts : [];
+    const schedule = isProUser ? rawSchedule : [];
     const [selectedDate, setSelectedDate] = React.useState(new Date().getDate());
     const [currentMonth, setCurrentMonth] = React.useState(new Date());
     const [isScheduleLocked, setIsScheduleLocked] = React.useState(false);

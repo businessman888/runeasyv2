@@ -17,6 +17,8 @@ interface HomeFixedHeaderProps {
     unreadCount: number;
     profilePic: string;
     userName: string;
+    /** Free users have no plan — hide the week grid and plan-derived counters. */
+    isProUser: boolean;
     onPressProfile: () => void;
     onPressNotifications: () => void;
 }
@@ -40,6 +42,7 @@ export function HomeFixedHeader({
     unreadCount,
     profilePic,
     userName,
+    isProUser,
     onPressProfile,
     onPressNotifications,
 }: HomeFixedHeaderProps) {
@@ -137,18 +140,23 @@ export function HomeFixedHeader({
                         <MaterialCommunityIcons name="fire" size={18} color="#FFFFFF" />
                         <Text style={styles.statTextWhite}>{currentStreak}</Text>
                     </View>
-                    <View style={styles.statItem}>
-                        <Ionicons name="flash" size={18} color={colors.recovery} />
-                        <Text style={styles.statTextLight}>
-                            {counters.restDone}/{counters.restTotal}
-                        </Text>
-                    </View>
-                    <View style={styles.statItem}>
-                        <MaterialCommunityIcons name="shoe-sneaker" size={18} color={colors.primary} />
-                        <Text style={styles.statTextWhite}>
-                            {counters.workoutDone}/{counters.workoutTotal}
-                        </Text>
-                    </View>
+                    {/* Rest/workout counters derive from the plan schedule — Pro only. */}
+                    {isProUser && (
+                        <>
+                            <View style={styles.statItem}>
+                                <Ionicons name="flash" size={18} color={colors.recovery} />
+                                <Text style={styles.statTextLight}>
+                                    {counters.restDone}/{counters.restTotal}
+                                </Text>
+                            </View>
+                            <View style={styles.statItem}>
+                                <MaterialCommunityIcons name="shoe-sneaker" size={18} color={colors.primary} />
+                                <Text style={styles.statTextWhite}>
+                                    {counters.workoutDone}/{counters.workoutTotal}
+                                </Text>
+                            </View>
+                        </>
+                    )}
                 </View>
 
                 <TouchableOpacity
@@ -167,7 +175,8 @@ export function HomeFixedHeader({
                 </TouchableOpacity>
             </View>
 
-            {/* Section 2: Week Grid */}
+            {/* Section 2: Week Grid — plan schedule, Pro only */}
+            {isProUser && (
             <View style={styles.weekRow}>
                 {weekData.map((day) => {
                     const isCurrentDay = day.isToday;
@@ -200,6 +209,7 @@ export function HomeFixedHeader({
                     );
                 })}
             </View>
+            )}
         </View>
     );
 }

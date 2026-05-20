@@ -516,6 +516,7 @@ export function HomeScreen({ navigation }: any) {
                 unreadCount={unreadCount}
                 profilePic={profilePic}
                 userName={userName}
+                isProUser={isProUser}
                 onPressProfile={() => navigation.navigate('Settings')}
                 onPressNotifications={() => navigation.navigate('Notifications')}
             />
@@ -572,8 +573,8 @@ export function HomeScreen({ navigation }: any) {
                 <View>
                     <Text style={styles.sectionTitle}>Seus treinos</Text>
 
-                {/* Recovery Card - Show when it's a recovery day */}
-                {isRecoveryDay && (
+                {/* Recovery Card - Pro only (Free has no plan, sees UpgradeProCard below) */}
+                {isProUser && isRecoveryDay && (
                     <View style={styles.recoveryCard}>
                         <View style={styles.recoveryHeader}>
                             <View style={styles.recoveryBadge}>
