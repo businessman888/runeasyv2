@@ -152,12 +152,19 @@ export class FeedbackController {
      * Get latest activity with feedback for home screen AI card
      */
     @Get('latest/activity')
-    async getLatestActivityWithFeedback(@Headers('x-user-id') userId: string) {
+    async getLatestActivityWithFeedback(
+        @Headers('x-user-id') userId: string,
+        @Query('source') source?: string,
+    ) {
         if (!userId) {
             throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
         }
 
-        const result = await this.feedbackAIService.getLatestActivityWithFeedback(userId);
+        // Only 'plan' and 'activity' filter; anything else falls back to the
+        // legacy "most recent activity overall" behaviour.
+        const scope = source === 'plan' || source === 'activity' ? source : undefined;
+
+        const result = await this.feedbackAIService.getLatestActivityWithFeedback(userId, scope);
         return result;
     }
 

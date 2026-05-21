@@ -147,6 +147,14 @@ interface FeedbackState {
     latestActivity: LatestActivityData | null;
     latestActivityLoading: boolean;
 
+    // Scoped latest activity for the Home "Treinos | Atividades" tabs.
+    // 'plan' → last activity linked to a plan workout (coach feedback);
+    // 'result' → last manual/free activity (run summary).
+    latestPlanActivity: LatestActivityData | null;
+    latestPlanActivityLoading: boolean;
+    latestActivityResult: LatestActivityData | null;
+    latestActivityResultLoading: boolean;
+
     // Workout History
     workoutHistory: WorkoutMonth[];
     workoutSummary: WorkoutHistorySummary | null;
@@ -161,7 +169,7 @@ interface FeedbackState {
     fetchHistory: (limit?: number) => Promise<void>;
     fetchFeedback: (feedbackId: string) => Promise<void>;
     fetchLatestSummary: () => Promise<void>;
-    fetchLatestActivity: () => Promise<void>;
+    fetchLatestActivity: (scope?: 'plan' | 'activity') => Promise<void>;
     rateFeedback: (feedbackId: string, rating: number) => Promise<void>;
     fetchWorkoutHistory: (limit?: number, offset?: number) => Promise<void>;
     loadMoreWorkouts: () => Promise<void>;
@@ -180,6 +188,10 @@ export const useFeedbackStore = create<FeedbackState>((set, get) => ({
     latestSummary: null,
     latestActivity: null,
     latestActivityLoading: false,
+    latestPlanActivity: null,
+    latestPlanActivityLoading: false,
+    latestActivityResult: null,
+    latestActivityResultLoading: false,
     workoutHistory: [],
     workoutSummary: null,
     workoutHistoryLoading: false,
@@ -251,28 +263,47 @@ export const useFeedbackStore = create<FeedbackState>((set, get) => ({
         }
     },
 
-    fetchLatestActivity: async () => {
+    fetchLatestActivity: async (scope) => {
+        // No scope → legacy behaviour (latest activity overall, written to
+        // `latestActivity`). With a scope, the backend filters by the linked
+        // workout's source and we store into the matching tab slot.
+        const slot = {
+            loading:
+                scope === 'plan'
+                    ? 'latestPlanActivityLoading'
+                    : scope === 'activity'
+                        ? 'latestActivityResultLoading'
+                        : 'latestActivityLoading',
+            data:
+                scope === 'plan'
+                    ? 'latestPlanActivity'
+                    : scope === 'activity'
+                        ? 'latestActivityResult'
+                        : 'latestActivity',
+        } as const;
+
         try {
-            set({ latestActivityLoading: true });
+            set({ [slot.loading]: true } as any);
             const userId = await getUserId();
 
             if (!userId) {
-                set({ latestActivityLoading: false });
+                set({ [slot.loading]: false } as any);
                 return;
             }
 
-            const response = await fetch(`${API_URL}/feedback/latest/activity`, {
+            const query = scope ? `?source=${scope}` : '';
+            const response = await fetch(`${API_URL}/feedback/latest/activity${query}`, {
                 headers: { 'x-user-id': userId },
             });
 
             if (response.ok) {
                 const data = await response.json();
-                set({ latestActivity: data });
+                set({ [slot.data]: data } as any);
             }
         } catch (error) {
             console.error('Fetch latest activity error:', error);
         } finally {
-            set({ latestActivityLoading: false });
+            set({ [slot.loading]: false } as any);
         }
     },
 

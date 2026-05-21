@@ -14,8 +14,12 @@ import LottieView from 'lottie-react-native';
 import * as Storage from '../utils/storage';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
-import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore, useStatsStore, useNotificationStore, getDisplayName, getAvatarUrl } from '../stores';
+import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore, useStatsStore, useNotificationStore, useWorkoutScopeStore, getDisplayName, getAvatarUrl } from '../stores';
+import type { LatestActivityData } from '../stores/feedbackStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
+import { SegmentedTabs } from '../components/ui/SegmentedTabs';
+import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
+import { WorkoutDayCard } from '../components/training/WorkoutDayCard';
 import { CircularProgress } from '../components/CircularProgress';
 import { Skeleton } from '../components/Skeleton';
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -83,8 +87,13 @@ export function HomeScreen({ navigation }: any) {
     const { user } = useAuthStore();
     const { isProUser } = useProFeature();
     const { stats, badges, fetchStats, fetchBadges, isLoading: gamificationLoading } = useGamificationStore();
-    const { upcomingWorkouts, fetchUpcomingWorkouts, isLoading: trainingLoading, today, nextWorkout: storeNextWorkout, fetchSchedule, clearScheduleData, schedule, retryPendingWorkouts } = useTrainingStore();
-    const { latestSummary, fetchLatestSummary, latestActivity, latestActivityLoading, fetchLatestActivity } = useFeedbackStore();
+    const { upcomingWorkouts, fetchUpcomingWorkouts, isLoading: trainingLoading, today, nextWorkout: storeNextWorkout, fetchSchedule, clearScheduleData, schedule, retryPendingWorkouts, workouts: rawWorkouts, fetchWorkouts } = useTrainingStore();
+    const {
+        latestSummary, fetchLatestSummary, fetchLatestActivity,
+        latestPlanActivity, latestPlanActivityLoading,
+        latestActivityResult, latestActivityResultLoading,
+    } = useFeedbackStore();
+    const { scope, setScope } = useWorkoutScopeStore();
     const { summary, fetchSummary, isLoading: statsLoading } = useStatsStore();
     const { unreadCount, fetchUnreadCount } = useNotificationStore();
     const initializeHealthKit = useHealthKitStore((s) => s.initialize);
@@ -307,7 +316,9 @@ export function HomeScreen({ navigation }: any) {
                     fetchBadges(),
                     fetchUpcomingWorkouts(),
                     fetchLatestSummary(),
-                    fetchLatestActivity(),
+                    fetchLatestActivity('plan'),
+                    fetchLatestActivity('activity'),
+                    fetchWorkouts(startStr, endStr),
                     fetchSummary(),
                     fetchUnreadCount(),
                     fetchSchedule(startStr, endStr),
@@ -382,18 +393,28 @@ export function HomeScreen({ navigation }: any) {
     const nextWorkout = storeNextWorkout;
     const todayWorkout = todayData?.type === 'workout' ? todayData.workout : null;
 
+    // Today's manual/free activities (Atividades tab). Read from rawWorkouts —
+    // ungated — so Free users still see their own logged activities; filtering
+    // to manual/free also excludes any orphan plan workout.
+    const todayDateForActivities = new Date();
+    const todayStr = `${todayDateForActivities.getFullYear()}-${String(todayDateForActivities.getMonth() + 1).padStart(2, '0')}-${String(todayDateForActivities.getDate()).padStart(2, '0')}`;
+    const activitySourceRank = (s?: string | null) => (s === 'manual' ? 0 : s === 'free' ? 1 : 2);
+    const todayActivities = (rawWorkouts ?? [])
+        .filter((w) => w.scheduled_date === todayStr && (w.source === 'manual' || w.source === 'free'))
+        .sort((a, b) => activitySourceRank(a.source) - activitySourceRank(b.source));
+
     // Refetch feedback when workout status changes to 'completed'
     useEffect(() => {
         if (todayData?.status === 'completed') {
             // Delay to allow AI feedback to be generated
-            const timer = setTimeout(() => {
-                fetchLatestActivity();
-            }, 2000);
+            const refreshResults = () => {
+                fetchLatestActivity('plan');
+                fetchLatestActivity('activity');
+            };
+            const timer = setTimeout(refreshResults, 2000);
 
             // Retry after 5 more seconds if still loading or no data
-            const retryTimer = setTimeout(() => {
-                fetchLatestActivity();
-            }, 7000);
+            const retryTimer = setTimeout(refreshResults, 7000);
 
             return () => {
                 clearTimeout(timer);
@@ -475,6 +496,127 @@ export function HomeScreen({ navigation }: any) {
         } else {
             return date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'short' });
         }
+    };
+
+    // Tap on an activity card (Atividades tab). Completed → run summary;
+    // pending manual → start it (free runs aren't "started" from a card).
+    const handleActivityCardPress = (w: any) => {
+        const src: 'plan' | 'manual' | 'free' | undefined = w?.source;
+        if (w?.status === 'completed') {
+            navigation.navigate('RunSummary', {
+                workoutId: w.id,
+                distance: 0,
+                timeMs: 0,
+                routeCoordinates: [],
+                routePoints: [],
+                savedLocally: false,
+                mode: src === 'manual' ? 'manual' : 'free',
+                workoutTitle: w.title ?? undefined,
+                targetPaceSeconds: w.target_pace_seconds ?? undefined,
+                targetDistanceKm: w.distance_km ?? undefined,
+            });
+            return;
+        }
+        if (src === 'manual') {
+            const n = new Date();
+            const dayLabel = `Hoje ${n.getDate().toString().padStart(2, '0')}/${(n.getMonth() + 1).toString().padStart(2, '0')}`;
+            navigation.navigate('Running', {
+                workoutId: w.id,
+                dayLabel,
+                title: `${getWorkoutTypeName(w.type)} - ${(w.distance_km ?? 0).toFixed(1)}Km`,
+                workoutBlocks: w.instructions_json ?? [],
+                mode: 'manual',
+                targetPaceSeconds: w.target_pace_seconds ?? undefined,
+                targetDistanceKm: w.distance_km ?? undefined,
+            });
+        }
+    };
+
+    // Renders the inner body of the result/feedback card for a given activity.
+    // Plan workouts route to CoachAnalysis (full feedback); manual/free route to
+    // RunSummary. Shared by the Treinos and Atividades tabs.
+    const renderResultCardBody = (data: LatestActivityData) => {
+        const source = data.workout_source;
+        const isPlanWorkout = source === 'plan';
+        const isCoachReady = isPlanWorkout && !!data.feedback;
+        const cardTitle = isPlanWorkout ? 'Análise do Treinador' : 'Resumo do treino';
+        const cardCta = isPlanWorkout
+            ? (isCoachReady ? 'Ver feedback completo' : 'Análise em preparo...')
+            : 'Ver resumo do treino';
+
+        const handleOpen = () => {
+            if (isPlanWorkout) {
+                if (!isCoachReady) return;
+                navigation.navigate('CoachAnalysis', {
+                    activityId: data.activity?.id,
+                    feedbackId: data.feedback?.id,
+                });
+            } else {
+                navigation.navigate('RunSummary', {
+                    workoutId: data.workout_id ?? undefined,
+                    distance: data.activity?.distance ?? 0,
+                    timeMs: (data.activity?.moving_time ?? 0) * 1000,
+                    routeCoordinates: [],
+                    routePoints: [],
+                    savedLocally: false,
+                    mode: source === 'manual' ? 'manual' : 'free',
+                    targetPaceSeconds: data.target_pace_seconds ?? undefined,
+                    targetDistanceKm: data.conquest?.planned_distance_km ?? undefined,
+                    workoutTitle: data.workout_title ?? data.activity?.name ?? undefined,
+                });
+            }
+        };
+
+        return (
+            <>
+                <View style={styles.aiHeader}>
+                    <View>
+                        <Text style={styles.aiTitle}>{cardTitle}</Text>
+                        <Text style={styles.aiSubtitle}>
+                            {data.activity?.name || 'Corrida'} - {data.activity?.date_label}
+                        </Text>
+                    </View>
+                    <BinocularsIcon size={35} color="#00D4FF" />
+                </View>
+
+                <View style={styles.aiStats}>
+                    <View style={styles.aiPaceSection}>
+                        <Text style={styles.aiPace}>
+                            {data.activity?.formatted_pace} <Text style={styles.aiPaceUnit}>km</Text>
+                        </Text>
+                        <View style={styles.efficiencyBadge}>
+                            <TrendUpIcon size={18} color={data.efficiency_percent >= 0 ? "#32CD32" : "#FF6B6B"} />
+                            <Text style={[
+                                styles.efficiencyText,
+                                { color: data.efficiency_percent >= 0 ? "#32CD32" : "#FF6B6B" }
+                            ]}>
+                                {data.efficiency_percent >= 0 ? '+' : ''}{data.efficiency_percent}% EFICIENTE
+                            </Text>
+                        </View>
+                    </View>
+                    <View style={styles.miniChart}>
+                        <View style={[styles.bar, { height: 20 }]} />
+                        <View style={[styles.bar, { height: 28 }]} />
+                        <View style={[styles.bar, { height: 24 }]} />
+                        <View style={[styles.barActive, { height: 40 }]} />
+                        <View style={[styles.bar, { height: 32 }]} />
+                        <View style={[styles.barActive, { height: 48 }]} />
+                    </View>
+                </View>
+
+                <TouchableOpacity
+                    style={[
+                        styles.feedbackButton,
+                        isPlanWorkout && !isCoachReady && { opacity: 0.5 },
+                    ]}
+                    onPress={handleOpen}
+                    disabled={isPlanWorkout && !isCoachReady}
+                >
+                    <Text style={styles.feedbackButtonText}>{cardCta}</Text>
+                    <ArrowRightIcon size={18} color="#00D4FF" />
+                </TouchableOpacity>
+            </>
+        );
     };
 
     const getWorkoutPace = (workout: any): string => {
@@ -569,6 +711,16 @@ export function HomeScreen({ navigation }: any) {
                 {/* ── Overview semanal ──────────────────────────────────────────── */}
                 <OverviewSection />
 
+                {/* ── Treinos | Atividades ─────────────────────────────────────── */}
+                <SegmentedTabs
+                    tabs={[{ key: 'plan', label: 'Treinos' }, { key: 'activity', label: 'Atividades' }]}
+                    activeKey={scope}
+                    onChange={setScope}
+                    style={styles.scopeTabs}
+                />
+
+                {scope === 'plan' ? (
+                <>
                 {/* ── Seus treinos ─────────────────────────────────────────────── */}
                 <View>
                     <Text style={styles.sectionTitle}>Seus treinos</Text>
@@ -677,101 +829,16 @@ export function HomeScreen({ navigation }: any) {
                     resumos de corrida livre/manual aqui, ou o estado "sem resultados".
                     A análise do Coach AI só aparece para treinos de plano (Pro). */}
                 <View style={styles.aiCard}>
-                    {latestActivityLoading ? (
+                    {latestPlanActivityLoading ? (
                         <View style={styles.aiLoadingContainer}>
                             <Skeleton width="50%" height={20} style={{ marginBottom: 8 }} />
                             <Skeleton width="30%" height={14} style={{ marginBottom: 16 }} />
                             <Skeleton width="40%" height={36} style={{ marginBottom: 8 }} />
                             <Skeleton width="60%" height={24} />
                         </View>
-                    ) : latestActivity?.activity ? (() => {
-                        // Treinos 'free'/'manual' não têm feedback do treinador (regra do backend
-                        // em training.service.ts:580 — IA só roda em source='plan'). Mostramos um
-                        // card de "Resumo do treino" que abre a RunSummary.
-                        const source = latestActivity.workout_source;
-                        const isPlanWorkout = source === 'plan';
-                        const isCoachReady = isPlanWorkout && !!latestActivity.feedback;
-                        const cardTitle = isPlanWorkout ? 'Análise do Treinador' : 'Resumo do treino';
-                        const cardCta = isPlanWorkout
-                            ? (isCoachReady ? 'Ver feedback completo' : 'Análise em preparo...')
-                            : 'Ver resumo do treino';
-
-                        const handleOpen = () => {
-                            if (isPlanWorkout) {
-                                if (!isCoachReady) return;
-                                navigation.navigate('CoachAnalysis', {
-                                    activityId: latestActivity.activity?.id,
-                                    feedbackId: latestActivity.feedback?.id,
-                                });
-                            } else {
-                                navigation.navigate('RunSummary', {
-                                    workoutId: latestActivity.workout_id ?? undefined,
-                                    distance: latestActivity.activity?.distance ?? 0,
-                                    timeMs: (latestActivity.activity?.moving_time ?? 0) * 1000,
-                                    routeCoordinates: [],
-                                    routePoints: [],
-                                    savedLocally: false,
-                                    mode: source === 'manual' ? 'manual' : 'free',
-                                    targetPaceSeconds: latestActivity.target_pace_seconds ?? undefined,
-                                    targetDistanceKm: latestActivity.conquest?.planned_distance_km ?? undefined,
-                                    workoutTitle: latestActivity.workout_title
-                                        ?? latestActivity.activity?.name
-                                        ?? undefined,
-                                });
-                            }
-                        };
-
-                        return (
-                            <>
-                                <View style={styles.aiHeader}>
-                                    <View>
-                                        <Text style={styles.aiTitle}>{cardTitle}</Text>
-                                        <Text style={styles.aiSubtitle}>
-                                            {latestActivity.activity.name || 'Corrida'} - {latestActivity.activity.date_label}
-                                        </Text>
-                                    </View>
-                                    <BinocularsIcon size={35} color="#00D4FF" />
-                                </View>
-
-                                <View style={styles.aiStats}>
-                                    <View style={styles.aiPaceSection}>
-                                        <Text style={styles.aiPace}>
-                                            {latestActivity.activity.formatted_pace} <Text style={styles.aiPaceUnit}>km</Text>
-                                        </Text>
-                                        <View style={styles.efficiencyBadge}>
-                                            <TrendUpIcon size={18} color={latestActivity.efficiency_percent >= 0 ? "#32CD32" : "#FF6B6B"} />
-                                            <Text style={[
-                                                styles.efficiencyText,
-                                                { color: latestActivity.efficiency_percent >= 0 ? "#32CD32" : "#FF6B6B" }
-                                            ]}>
-                                                {latestActivity.efficiency_percent >= 0 ? '+' : ''}{latestActivity.efficiency_percent}% EFICIENTE
-                                            </Text>
-                                        </View>
-                                    </View>
-                                    <View style={styles.miniChart}>
-                                        <View style={[styles.bar, { height: 20 }]} />
-                                        <View style={[styles.bar, { height: 28 }]} />
-                                        <View style={[styles.bar, { height: 24 }]} />
-                                        <View style={[styles.barActive, { height: 40 }]} />
-                                        <View style={[styles.bar, { height: 32 }]} />
-                                        <View style={[styles.barActive, { height: 48 }]} />
-                                    </View>
-                                </View>
-
-                                <TouchableOpacity
-                                    style={[
-                                        styles.feedbackButton,
-                                        isPlanWorkout && !isCoachReady && { opacity: 0.5 },
-                                    ]}
-                                    onPress={handleOpen}
-                                    disabled={isPlanWorkout && !isCoachReady}
-                                >
-                                    <Text style={styles.feedbackButtonText}>{cardCta}</Text>
-                                    <ArrowRightIcon size={18} color="#00D4FF" />
-                                </TouchableOpacity>
-                            </>
-                        );
-                    })() : hasCompletedWorkouts ? (
+                    ) : latestPlanActivity?.activity ? (
+                        renderResultCardBody(latestPlanActivity)
+                    ) : hasCompletedWorkouts ? (
                         <>
                             <View style={styles.aiHeader}>
                                 <View>
@@ -799,6 +866,53 @@ export function HomeScreen({ navigation }: any) {
                         </View>
                     )}
                 </View>
+                </>
+                ) : (
+                <>
+                {/* ── Suas atividades (manuais + livres do dia) ────────────────── */}
+                <View>
+                    <Text style={styles.sectionTitle}>Seus treinos</Text>
+                    {todayActivities.length > 0 ? (
+                        todayActivities.map((w) => (
+                            <WorkoutDayCard
+                                key={`home-activity-${w.id}`}
+                                workout={w as any}
+                                onPress={handleActivityCardPress}
+                            />
+                        ))
+                    ) : (
+                        <FriendlyEmptyCard
+                            icon="walk-outline"
+                            title="Nenhuma atividade hoje"
+                            subtitle="Suas corridas livres e treinos manuais do dia aparecem aqui."
+                        />
+                    )}
+                </View>
+
+                {/* Resultados das atividades (resumo da corrida, sem feedback do Coach) */}
+                {latestActivityResultLoading ? (
+                    <View style={styles.aiCard}>
+                        <View style={styles.aiLoadingContainer}>
+                            <Skeleton width="50%" height={20} style={{ marginBottom: 8 }} />
+                            <Skeleton width="30%" height={14} style={{ marginBottom: 16 }} />
+                            <Skeleton width="40%" height={36} style={{ marginBottom: 8 }} />
+                            <Skeleton width="60%" height={24} />
+                        </View>
+                    </View>
+                ) : latestActivityResult?.activity ? (
+                    <View style={styles.aiCard}>
+                        {renderResultCardBody(latestActivityResult)}
+                    </View>
+                ) : (
+                    <FriendlyEmptyCard
+                        icon="stats-chart-outline"
+                        title="Nenhum resultado ainda"
+                        subtitle="Os resumos das suas corridas aparecem aqui após você treinar."
+                        style={{ marginTop: spacing.lg }}
+                    />
+                )}
+                </>
+                )}
             </ScrollView>
 
 
@@ -986,6 +1100,12 @@ const styles = StyleSheet.create({
         color: '#EBEBF5',
         marginLeft: 17,
         marginBottom: 11,
+    },
+
+    // "Treinos | Atividades" tabs above the workouts/results sections
+    scopeTabs: {
+        marginHorizontal: 17,
+        marginBottom: spacing.lg,
     },
 
     // Workout Card (legacy — kept for the "no workout" empty state)

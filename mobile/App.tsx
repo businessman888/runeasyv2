@@ -21,6 +21,7 @@ import { initializeRevenueCat, getSuperwallApiKey } from './src/services/paywall
 import { initSubscriptionListener } from './src/stores/authStore';
 import { useSubscriptionStore } from './src/stores/subscriptionStore';
 import { useDevMenuStore } from './src/stores/devMenuStore';
+import { useWorkoutScopeStore } from './src/stores/workoutScopeStore';
 import { useAppleWatchStore } from './src/stores/appleWatchStore';
 import { WatchBridgeDebugBanner } from './src/components/debug/WatchBridgeDebugBanner';
 import { useWatchSync } from './src/hooks/useWatchSync';
@@ -147,6 +148,8 @@ export default function App() {
   useEffect(() => {
     initializeRevenueCat();
     const removeListener = initSubscriptionListener();
+    // Restaura a aba "Treinos | Atividades" escolhida (Home + Calendário)
+    void useWorkoutScopeStore.getState().hydrate();
     // Hidrata DevMenu override em dev/preview (no-op em prod via __DEV__ check inside hydrate consumers)
     if (__DEV__) {
       void useDevMenuStore.getState().hydrate();

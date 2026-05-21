@@ -8,4 +8,5 @@ export * from './readinessStore';
 export * from './notificationStore';
 export * from './sharingStore';
 export * from './wellnessStore';
+export * from './workoutScopeStore';
 

@@ -16,10 +16,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
 import { ZONE_COLORS, ZONE_LABELS, PHASE_LABELS, getZoneColor } from '../theme/zoneColors';
-import { useTrainingStore, useStatsStore, ScheduleDay } from '../stores';
+import { useTrainingStore, useStatsStore, useWorkoutScopeStore, ScheduleDay } from '../stores';
 import type { TrainingZone, WorkoutPhase } from '../stores/trainingStore';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { UpgradeProCard } from '../components/upgrade/UpgradeProCard';
+import { SegmentedTabs } from '../components/ui/SegmentedTabs';
+import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
+import { WorkoutDayCard } from '../components/training/WorkoutDayCard';
 import { useProFeature } from '../hooks/useProFeature';
 
 
@@ -155,6 +158,7 @@ export function CalendarScreen({ navigation }: any) {
     const { workouts: rawWorkouts, fetchWorkouts, fetchUpcomingWorkouts, plan, fetchPlan, generationStatus, checkPlanStatus, schedule: rawSchedule, fetchSchedule } = useTrainingStore();
     const { summary, fetchSummary } = useStatsStore();
     const { isProUser } = useProFeature();
+    const { scope, setScope } = useWorkoutScopeStore();
 
     // Free users have no plan — never surface plan schedule/workouts in the calendar
     // grid, day detail, or "Próximo" card. Pre-gating accounts may still carry an
@@ -376,6 +380,31 @@ export function CalendarScreen({ navigation }: any) {
             .sort((a, b) => sourceRank(a.source) - sourceRank(b.source));
     };
 
+    // ── Atividades tab (manual + free) ──────────────────────────────────────
+    // Read from rawWorkouts (ungated) so Free users still see their own logged
+    // activities; filtering to manual/free also excludes any orphan plan workout.
+    const activityWorkouts = React.useMemo(
+        () => rawWorkouts.filter(w => w.source === 'manual' || w.source === 'free'),
+        [rawWorkouts],
+    );
+
+    const getActivitiesForDayStr = (dateStr: string) => {
+        const rank = (s: string | undefined) => (s === 'manual' ? 0 : s === 'free' ? 1 : 2);
+        return activityWorkouts
+            .filter(w => w.scheduled_date === dateStr)
+            .sort((a, b) => rank(a.source) - rank(b.source));
+    };
+
+    // Calendar marker for the Atividades tab — no recovery concept here.
+    const getActivityStatusForDay = (day: number | null): 'completed' | 'planned' | null => {
+        if (!day) return null;
+        const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayWorkouts = activityWorkouts.filter(w => w.scheduled_date === dateStr);
+        if (dayWorkouts.length === 0) return null;
+        if (dayWorkouts.some(w => w.status === 'completed')) return 'completed';
+        return 'planned';
+    };
+
     // Day press: just select the day. The previous double-click-opens-modal
     // shortcut was removed — modal entry is now exclusively via the
     // "Ver detalhes do treino" button on a pending workout card.
@@ -536,6 +565,13 @@ export function CalendarScreen({ navigation }: any) {
     const selectedDateWorkouts = getWorkoutsForDayStr(getSelectedDateStr());
     const selectedDateTotalKm = selectedDateWorkouts.reduce((sum, w) => sum + (w.distance_km || 0), 0);
 
+    // Day-detail list keyed to the active tab: Treinos shows plan-source
+    // workouts (rest stays rest); Atividades shows the day's manual/free runs.
+    const planSelectedWorkouts = selectedDateWorkouts.filter(w => w.source === 'plan');
+    const activitySelectedWorkouts = getActivitiesForDayStr(getSelectedDateStr());
+    const scopedSelectedWorkouts = scope === 'plan' ? planSelectedWorkouts : activitySelectedWorkouts;
+    const scopedTotalKm = scopedSelectedWorkouts.reduce((sum, w) => sum + (w.distance_km || 0), 0);
+
     // Check if selected date is today
     const isSelectedDateToday = () => {
         const today = new Date();
@@ -617,7 +653,7 @@ export function CalendarScreen({ navigation }: any) {
                     </TouchableOpacity>
                 </View>
 
-                {!isProUser && (
+                {!isProUser && scope === 'plan' && (
                     <View style={{ paddingHorizontal: spacing.lg, marginTop: spacing.md }}>
                         <UpgradeProCard
                             variant="compact"
@@ -648,6 +684,14 @@ export function CalendarScreen({ navigation }: any) {
                     </View>
 
                 </View>
+
+                {/* ── Treinos | Atividades ─────────────────────────────────────── */}
+                <SegmentedTabs
+                    tabs={[{ key: 'plan', label: 'Treinos' }, { key: 'activity', label: 'Atividades' }]}
+                    activeKey={scope}
+                    onChange={setScope}
+                    style={styles.scopeTabs}
+                />
 
                 {/* Month Selector */}
                 <View style={styles.monthSelector}>
@@ -682,7 +726,11 @@ export function CalendarScreen({ navigation }: any) {
                     {/* Days grid */}
                     <View style={styles.daysGrid}>
                         {days.map((day, index) => {
-                            const workoutStatus = getWorkoutStatus(day);
+                            // Treinos tab marks plan workouts/rest; Atividades tab
+                            // marks days with manual/free runs (no rest concept).
+                            const workoutStatus = scope === 'plan'
+                                ? getWorkoutStatus(day)
+                                : getActivityStatusForDay(day);
                             const isSelected = day === selectedDate;
 
                             return (
@@ -751,185 +799,107 @@ export function CalendarScreen({ navigation }: any) {
                         <View>
                             <Text style={styles.todayDate}>• {formatSelectedDateLabel()}, {formatSelectedDateDisplay()}</Text>
                             <Text style={styles.todayTitle}>
-                                {!isSelectedDateWithinPlan ? 'Sem Plano Ativo' : isSelectedDateRecovery ? 'Dia de Recuperação' : 'Treinos do dia'}
+                                {scope === 'activity'
+                                    ? 'Atividades do dia'
+                                    : !isSelectedDateWithinPlan ? 'Sem Plano Ativo' : isSelectedDateRecovery ? 'Dia de Recuperação' : 'Treinos do dia'}
                             </Text>
                         </View>
-                        {isSelectedDateWithinPlan && !isSelectedDateRecovery && selectedDateWorkouts.length > 0 && (
+                        {scopedSelectedWorkouts.length > 0 && (
                             <View style={styles.totalKm}>
-                                <Text style={styles.totalKmValue}>{formatKm(selectedDateTotalKm)} <Text style={styles.totalKmUnit}>km</Text></Text>
+                                <Text style={styles.totalKmValue}>{formatKm(scopedTotalKm)} <Text style={styles.totalKmUnit}>km</Text></Text>
                                 <Text style={styles.totalKmLabel}>total</Text>
                             </View>
                         )}
                     </View>
 
-                    {/* Recovery Card - Shown when selected date is recovery */}
-                    {isSelectedDateRecovery && selectedDateWorkouts.length === 0 ? (
-                        <View key={`recovery-${getSelectedDateStr()}`} style={styles.recoveryCard}>
-                            <View style={styles.recoveryCardHeader}>
-                                <MoonIcon size={48} color="#A78BFA" />
-                                <View style={styles.recoveryCardInfo}>
-                                    <Text style={styles.recoveryTitle}>Dia de Recuperação</Text>
-                                    <Text style={styles.recoverySubtitle}>
-                                        Descanse para maximizar seus ganhos
-                                    </Text>
-                                </View>
-                            </View>
-                            <View style={styles.recoveryTips}>
-                                <View style={styles.recoveryTipItem}>
-                                    <BoltIcon size={16} color="#A78BFA" />
-                                    <Text style={styles.recoveryTipText}>Hidrate-se bem</Text>
-                                </View>
-                                <View style={styles.recoveryTipItem}>
-                                    <BoltIcon size={16} color="#A78BFA" />
-                                    <Text style={styles.recoveryTipText}>Durma 7-8 horas</Text>
-                                </View>
-                                <View style={styles.recoveryTipItem}>
-                                    <BoltIcon size={16} color="#A78BFA" />
-                                    <Text style={styles.recoveryTipText}>Alongamento leve</Text>
-                                </View>
-                            </View>
-                        </View>
-                    ) : selectedDateWorkouts.length > 0 ? (
-                        /**
-                         * One card per workout for the selected date. The same
-                         * day can hold a planned workout, a manually scheduled
-                         * one, and one or more free runs the user logged later
-                         * — each with its own status badge and routing.
-                         */
-                        selectedDateWorkouts.map((w) => {
-                            const labels: Record<string, string> = {
-                                'easy_run': 'Rodagem Leve',
-                                'long_run': 'Longão',
-                                'intervals': 'Intervalados',
-                                'tempo': 'Tempo Run',
-                                'recovery': 'Recuperação',
-                                'free_run': 'Corrida Livre',
-                            };
-                            const distanceLabel = formatKm(w.distance_km);
-                            const titleText = `${labels[w.type] || w.type} - ${distanceLabel}km`;
-                            const intensityText =
-                                w.type === 'intervals' || w.type === 'tempo' ? 'ALTA INTENSIDADE' : 'MODERADO';
-                            const src = (w.source as ('plan' | 'manual' | 'free' | undefined)) ?? 'plan';
-
-                            const statusBadge = (() => {
-                                if (w.status === 'completed') {
-                                    return { color: '#32CD32', label: 'Concluído' };
-                                }
-                                if (w.status === 'missed') {
-                                    return { color: '#FF4444', label: 'Não realizado' };
-                                }
-                                if (w.status === 'skipped') {
-                                    return { color: 'rgba(235,235,245,0.4)', label: 'Ignorado' };
-                                }
-                                return { color: '#FFC107', label: 'Pendente' };
-                            })();
-
-                            return (
-                                <View
-                                    key={`workout-${w.id}-${getSelectedDateStr()}`}
-                                    style={styles.workoutDetailCard}
-                                >
-                                    {/* Card Top Section */}
-                                    <View style={styles.cardTopSection}>
-                                        <View style={styles.workoutDetailHeader}>
-                                            <View style={styles.intensityBadge}>
-                                                <Text style={styles.intensityText}>{intensityText}</Text>
-                                            </View>
-                                            {src === 'plan' ? (
-                                                <View style={[styles.sourceBadge, { borderColor: '#00D4FF' }]}>
-                                                    <Ionicons name="flash" size={12} color="#00D4FF" />
-                                                    <Text style={[styles.sourceBadgeText, { color: '#00D4FF' }]}>PLANO</Text>
-                                                </View>
-                                            ) : src === 'manual' ? (
-                                                <View style={[styles.sourceBadge, { borderColor: '#A78BFA' }]}>
-                                                    <Ionicons name="create-outline" size={12} color="#A78BFA" />
-                                                    <Text style={[styles.sourceBadgeText, { color: '#A78BFA' }]}>MANUAL</Text>
-                                                </View>
-                                            ) : (
-                                                <View style={[styles.sourceBadge, { borderColor: '#32CD32' }]}>
-                                                    <MaterialCommunityIcons name="run" size={12} color="#32CD32" />
-                                                    <Text style={[styles.sourceBadgeText, { color: '#32CD32' }]}>LIVRE</Text>
-                                                </View>
-                                            )}
-                                            <View style={styles.pendingBadge}>
-                                                <View style={[styles.pendingDot, { backgroundColor: statusBadge.color }]} />
-                                                <Text style={styles.pendingText}>{statusBadge.label}</Text>
-                                            </View>
-                                        </View>
-
-                                        <View style={styles.workoutDetailBody}>
-                                            <View style={styles.workoutInfo}>
-                                                <Text style={styles.workoutTitle}>{titleText}</Text>
-                                                <Text style={styles.workoutDescription}>{w.objective || (src === 'free' ? 'Corrida livre registrada' : 'Treino do dia')}</Text>
-                                                <View style={styles.workoutMetrics}>
-                                                    <View style={styles.metricItem}>
-                                                        <TimerIcon size={20} color="#00D4FF" />
-                                                        <Text style={styles.metricText}>{Math.round((w.distance_km || 0) * 6)} min</Text>
-                                                    </View>
-                                                    <View style={styles.metricItem}>
-                                                        <PaceClockIcon size={20} color="#00D4FF" />
-                                                        <Text style={styles.metricText}>
-                                                            {w.instructions_json?.[0]?.pace_min
-                                                                ? `${Math.floor(w.instructions_json[0].pace_min)}:${String(Math.round((w.instructions_json[0].pace_min % 1) * 60)).padStart(2, '0')} /km`
-                                                                : '6:00 /km'}
-                                                        </Text>
-                                                    </View>
-                                                </View>
-                                            </View>
-                                            <Image
-                                                source={{ uri: 'https://images.unsplash.com/photo-1571008887538-b36bb32f4571?w=100&h=100&fit=crop' }}
-                                                style={styles.workoutImage}
-                                            />
-                                        </View>
-                                    </View>
-
-                                    {/* View Details Button - Bottom Section of Card */}
-                                    <TouchableOpacity
-                                        style={styles.viewDetailsButton}
-                                        onPress={() => handleWorkoutCardPress(w)}
-                                        activeOpacity={0.7}
-                                    >
-                                        <Text style={styles.viewDetailsText}>
-                                            {w.status === 'completed' ? 'Ver resumo do treino' : 'Ver detalhes do treino'}
+                    {/* Day detail — keyed to the active tab.
+                        Treinos: rest stays rest; plan workouts otherwise.
+                        Atividades: the day's manual/free runs, or a friendly empty card. */}
+                    {scope === 'plan' ? (
+                        isSelectedDateRecovery ? (
+                            <View key={`recovery-${getSelectedDateStr()}`} style={styles.recoveryCard}>
+                                <View style={styles.recoveryCardHeader}>
+                                    <MoonIcon size={48} color="#A78BFA" />
+                                    <View style={styles.recoveryCardInfo}>
+                                        <Text style={styles.recoveryTitle}>Dia de Recuperação</Text>
+                                        <Text style={styles.recoverySubtitle}>
+                                            Descanse para maximizar seus ganhos
                                         </Text>
-                                        <ArrowRightIcon size={20} color="#FFFFFF" />
-                                    </TouchableOpacity>
+                                    </View>
                                 </View>
-                            );
-                        })
-                    ) : !isSelectedDateWithinPlan ? (
-                        /* No Plan Active - Show informative message */
-                        <View key={`no-plan-${getSelectedDateStr()}`} style={styles.workoutDetailCard}>
-                            <View style={styles.cardTopSection}>
-                                <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-                                    <Ionicons name="calendar-outline" size={40} color="rgba(235, 235, 245, 0.4)" />
-                                    <Text style={[styles.workoutTitle, { textAlign: 'center', marginTop: 12 }]}>
-                                        Nenhum plano ativo para esta data
-                                    </Text>
-                                    <Text style={[styles.workoutDescription, { textAlign: 'center', marginTop: 8 }]}>
-                                        Seu plano de treino já foi concluído ou ainda não começou
-                                    </Text>
+                                <View style={styles.recoveryTips}>
+                                    <View style={styles.recoveryTipItem}>
+                                        <BoltIcon size={16} color="#A78BFA" />
+                                        <Text style={styles.recoveryTipText}>Hidrate-se bem</Text>
+                                    </View>
+                                    <View style={styles.recoveryTipItem}>
+                                        <BoltIcon size={16} color="#A78BFA" />
+                                        <Text style={styles.recoveryTipText}>Durma 7-8 horas</Text>
+                                    </View>
+                                    <View style={styles.recoveryTipItem}>
+                                        <BoltIcon size={16} color="#A78BFA" />
+                                        <Text style={styles.recoveryTipText}>Alongamento leve</Text>
+                                    </View>
                                 </View>
                             </View>
-                        </View>
+                        ) : planSelectedWorkouts.length > 0 ? (
+                            planSelectedWorkouts.map((w) => (
+                                <WorkoutDayCard
+                                    key={`plan-${w.id}-${getSelectedDateStr()}`}
+                                    workout={w as any}
+                                    onPress={handleWorkoutCardPress}
+                                />
+                            ))
+                        ) : !isSelectedDateWithinPlan ? (
+                            /* No Plan Active - Show informative message */
+                            <View key={`no-plan-${getSelectedDateStr()}`} style={styles.workoutDetailCard}>
+                                <View style={styles.cardTopSection}>
+                                    <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                                        <Ionicons name="calendar-outline" size={40} color="rgba(235, 235, 245, 0.4)" />
+                                        <Text style={[styles.workoutTitle, { textAlign: 'center', marginTop: 12 }]}>
+                                            Nenhum plano ativo para esta data
+                                        </Text>
+                                        <Text style={[styles.workoutDescription, { textAlign: 'center', marginTop: 8 }]}>
+                                            Seu plano de treino já foi concluído ou ainda não começou
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+                        ) : (
+                            <View key={`rest-day-${getSelectedDateStr()}`} style={styles.workoutDetailCard}>
+                                <View style={styles.cardTopSection}>
+                                    <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                                        <Ionicons name="bed-outline" size={40} color="#A78BFA" />
+                                        <Text style={[styles.workoutTitle, { textAlign: 'center', marginTop: 12 }]}>
+                                            Hoje é dia de recuperar as energias
+                                        </Text>
+                                        <Text style={[styles.workoutDescription, { textAlign: 'center', marginTop: 8 }]}>
+                                            Nenhum treino agendado para esta data
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+                        )
                     ) : (
-                        <View key={`rest-day-${getSelectedDateStr()}`} style={styles.workoutDetailCard}>
-                            <View style={styles.cardTopSection}>
-                                <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-                                    <Ionicons name="bed-outline" size={40} color="#A78BFA" />
-                                    <Text style={[styles.workoutTitle, { textAlign: 'center', marginTop: 12 }]}>
-                                        Hoje é dia de recuperar as energias
-                                    </Text>
-                                    <Text style={[styles.workoutDescription, { textAlign: 'center', marginTop: 8 }]}>
-                                        Nenhum treino agendado para esta data
-                                    </Text>
-                                </View>
-                            </View>
-                        </View>
+                        activitySelectedWorkouts.length > 0 ? (
+                            activitySelectedWorkouts.map((w) => (
+                                <WorkoutDayCard
+                                    key={`act-${w.id}-${getSelectedDateStr()}`}
+                                    workout={w as any}
+                                    onPress={handleWorkoutCardPress}
+                                />
+                            ))
+                        ) : (
+                            <FriendlyEmptyCard
+                                icon="walk-outline"
+                                title="Nenhuma atividade neste dia"
+                                subtitle="Suas corridas livres e treinos manuais aparecem aqui."
+                            />
+                        )
                     )}
 
-                    {/* Next Workout Section - Shows tomorrow's event (Workout or Recovery) */}
-                    {tomorrowEntry && tomorrowEntry.type !== null && (
+                    {/* Next Workout Section — plan-only (tomorrow's planned event) */}
+                    {scope === 'plan' && tomorrowEntry && tomorrowEntry.type !== null && (
                         <View key={`next-section-${tomorrowEntry.date}`} style={styles.nextWorkoutSection}>
                             <View style={styles.nextWorkoutDivider} />
                             <Text style={styles.nextWorkoutLabel}>
@@ -1317,6 +1287,10 @@ const styles = StyleSheet.create({
     statUnitMuted: {
         fontSize: typography.fontSizes.sm,
         color: 'rgba(235, 235, 245, 0.4)',
+    },
+    scopeTabs: {
+        marginHorizontal: spacing.lg,
+        marginTop: spacing.md,
     },
     monthSelector: {
         flexDirection: 'row',

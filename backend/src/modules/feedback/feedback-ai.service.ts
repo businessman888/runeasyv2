@@ -282,20 +282,63 @@ Regras:
     /**
      * Get latest activity with feedback for home screen AI card
      */
-    async getLatestActivityWithFeedback(userId: string) {
-        // 1. Get latest activity
-        const { data: latestActivity, error: activityError } = await this.supabaseService
-            .from('activities')
-            .select('*')
-            .eq('user_id', userId)
-            .order('start_date', { ascending: false })
-            .limit(1)
-            .single();
+    async getLatestActivityWithFeedback(userId: string, scope?: 'plan' | 'activity') {
+        const empty = { activity: null, feedback: null, efficiency_percent: 0, conquest: null };
 
-        if (activityError || !latestActivity) {
-            return { activity: null, feedback: null, efficiency_percent: 0, conquest: null };
+        // 1. Resolve the latest activity for the requested scope.
+        //    - no scope        → most recent activity overall (legacy behaviour)
+        //    - scope='plan'     → most recent activity linked to a plan workout
+        //    - scope='activity' → most recent activity linked to a manual/free workout
+        let latestActivity: any = null;
+
+        if (scope === 'plan' || scope === 'activity') {
+            const sourceValues = scope === 'plan' ? ['plan'] : ['manual', 'free'];
+
+            const { data: scopedWorkouts } = await this.supabaseService
+                .from('workouts')
+                .select('activity_id')
+                .eq('user_id', userId)
+                .in('source', sourceValues)
+                .not('activity_id', 'is', null);
+
+            const activityIds = Array.from(
+                new Set((scopedWorkouts ?? []).map((w: any) => w.activity_id).filter(Boolean)),
+            );
+
+            if (activityIds.length === 0) return empty;
+
+            const { data, error } = await this.supabaseService
+                .from('activities')
+                .select('*')
+                .eq('user_id', userId)
+                .in('id', activityIds)
+                .order('start_date', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (error || !data) return empty;
+            latestActivity = data;
+        } else {
+            const { data, error } = await this.supabaseService
+                .from('activities')
+                .select('*')
+                .eq('user_id', userId)
+                .order('start_date', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (error || !data) return empty;
+            latestActivity = data;
         }
 
+        return this.buildLatestActivityResponse(userId, latestActivity);
+    }
+
+    /**
+     * Build the rich home-screen activity payload (feedback, linked workout,
+     * conquest, VO2 estimate) from an already-selected activity row.
+     */
+    private async buildLatestActivityResponse(userId: string, latestActivity: any) {
         // 2. Get associated feedback if exists
         const { data: feedback } = await this.supabaseService
             .from('ai_feedbacks')
