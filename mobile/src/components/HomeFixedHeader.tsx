@@ -175,12 +175,15 @@ export function HomeFixedHeader({
                 </TouchableOpacity>
             </View>
 
-            {/* Section 2: Week Grid — plan schedule, Pro only */}
-            {isProUser && (
+            {/* Section 2: Week Grid — always shown (days + current-day marker).
+                The per-day workout/rest icons come from the plan, so they render
+                for Pro only; Free sees just the weekday + number. */}
             <View style={styles.weekRow}>
                 {weekData.map((day) => {
                     const isCurrentDay = day.isToday;
-                    const borderColor = day.type === 'recovery' ? colors.recovery : colors.primary;
+                    // Free has no plan → always mark the current day in cyan (never
+                    // leak the plan's recovery color).
+                    const borderColor = isProUser && day.type === 'recovery' ? colors.recovery : colors.primary;
 
                     return (
                         <View
@@ -195,7 +198,7 @@ export function HomeFixedHeader({
                         >
                             <Text style={styles.dayLabel}>{day.label}</Text>
                             <View style={styles.dayIconContainer}>
-                                {renderDayIcon(day)}
+                                {isProUser && renderDayIcon(day)}
                             </View>
                             <Text
                                 style={[
@@ -209,7 +212,6 @@ export function HomeFixedHeader({
                     );
                 })}
             </View>
-            )}
         </View>
     );
 }

@@ -41,6 +41,23 @@ export const colors = {
     glassWhite: 'rgba(255, 255, 255, 0.1)',
     glassLight: 'rgba(255, 255, 255, 0.05)',
     glassDark: 'rgba(0, 0, 0, 0.3)',
+
+    // Upgrade Pro card (Figma node 1235:1300) — glass over bg image
+    proGlassOverlay: 'rgba(28, 28, 46, 0.6)',  // dark veil over the bg image
+    proCtaFill: 'rgba(8, 34, 42, 0.92)',       // CTA pill — near-opaque dark teal so the card blur doesn't bleed through
+    proDivider: 'rgba(235, 235, 245, 0.1)',    // hairline under header
+    proMutedText: 'rgba(235, 235, 245, 0.6)',  // tagline + bullets
+};
+
+// Plus Jakarta Sans — loaded at runtime in App.tsx via @expo-google-fonts.
+// Reference these instead of relying on fontWeight alone (custom fonts on RN
+// need an explicit fontFamily per weight).
+export const fonts = {
+    regular: 'PlusJakartaSans_400Regular',
+    medium: 'PlusJakartaSans_500Medium',
+    semibold: 'PlusJakartaSans_600SemiBold',
+    bold: 'PlusJakartaSans_700Bold',
+    extrabold: 'PlusJakartaSans_800ExtraBold',
 };
 
 // Typography based on Plus Jakarta Sans
@@ -139,4 +156,5 @@ export default {
     spacing,
     borderRadius,
     shadows,
+    fonts,
 };

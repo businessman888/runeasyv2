@@ -1,12 +1,21 @@
 import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import {
+  useFonts,
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+} from '@expo-google-fonts/plus-jakarta-sans';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet, View, Text, AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppNavigator } from './src/navigation';
 import { useNotifications } from './src/hooks/useNotifications';
 import Mapbox from '@rnmapbox/maps';
-import { SuperwallProvider } from 'expo-superwall';
+import { SuperwallProvider, CustomPurchaseControllerProvider } from 'expo-superwall';
+import type { CustomPurchaseControllerContext } from 'expo-superwall';
 import { SuperwallBridge } from './src/components/paywall/SuperwallBridge';
 import { initializeRevenueCat, getSuperwallApiKey } from './src/services/paywall';
 import { initSubscriptionListener } from './src/stores/authStore';
@@ -23,6 +32,31 @@ import './src/tasks/locationTask';
 // Deve ser chamado antes de qualquer componente MapView ser renderizado.
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? '');
 
+
+/**
+ * Custom purchase controller — wrapping SuperwallProvider with this puts the
+ * Superwall SDK in MANUAL purchase management mode. Without it the SDK runs in
+ * automatic mode, manages subscriptionStatus itself from Play Billing, IGNORES
+ * our setSubscriptionStatus, and (with no valid billing in dev) leaves the
+ * status UNKNOWN — which makes Superwall HOLD every paywall and registerPlacement
+ * never present. In manual mode our setSubscriptionStatus (Free→INACTIVE) takes
+ * effect and paywalls present.
+ *
+ * Purchases themselves aren't wired (RevenueCat keys are `test_*` / invalid), so
+ * the handlers are graceful no-ops for now — the goal is to PRESENT the paywall.
+ * TODO: route onPurchase/onPurchaseRestore through RevenueCat once real
+ * `goog_`/`appl_` keys are configured.
+ */
+const superwallPurchaseController: CustomPurchaseControllerContext = {
+  onPurchase: async (params) => {
+    console.log('[Superwall] onPurchase →', JSON.stringify(params));
+    return { type: 'cancelled' };
+  },
+  onPurchaseRestore: async () => {
+    console.log('[Superwall] onPurchaseRestore');
+    return { type: 'failed', error: 'Restore não configurado (dev)' };
+  },
+};
 
 // Error Boundary to catch rendering errors
 class ErrorBoundary extends React.Component<
@@ -98,6 +132,17 @@ function NotificationManager() {
 }
 
 export default function App() {
+  // Plus Jakarta Sans — fonte do design system. Carregada em runtime; usada
+  // (por ora) nos cards de upgrade Pro. fontError evita travar o app se o
+  // carregamento falhar — segue com a fonte do sistema.
+  const [fontsLoaded, fontError] = useFonts({
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
+  });
+
   // Inicializa RevenueCat e subscription listener uma vez
   useEffect(() => {
     initializeRevenueCat();
@@ -127,15 +172,24 @@ export default function App() {
 
   const superwallApiKey = getSuperwallApiKey();
 
+  // Mantém o splash enquanto a fonte carrega (padrão Expo). Se falhar, segue.
+  if (!fontsLoaded && !fontError) {
+    return null;
+  }
+
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
+        <CustomPurchaseControllerProvider controller={superwallPurchaseController}>
         <SuperwallProvider
           apiKeys={{
             ios: superwallApiKey,
             android: superwallApiKey,
           }}
           options={__DEV__ ? { logging: { level: 'debug' } } : undefined}
+          onConfigurationError={(error) =>
+            console.warn('[Superwall] Configuration error:', error?.message ?? String(error))
+          }
         >
           <GestureHandlerRootView style={styles.container}>
             <StatusBar style="light" translucent backgroundColor="transparent" />
@@ -149,6 +203,7 @@ export default function App() {
             <WatchBridgeDebugBanner />
           </GestureHandlerRootView>
         </SuperwallProvider>
+        </CustomPurchaseControllerProvider>
       </SafeAreaProvider>
     </ErrorBoundary>
   );

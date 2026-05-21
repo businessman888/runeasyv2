@@ -108,13 +108,12 @@ export function WellnessScreen() {
                         ) : (
                             <UpgradeProCard
                                 variant="medium"
-                                title="Check-in de Prontidão"
-                                subtitle="Recurso exclusivo Pro"
+                                tagline="Sua prontidão diária calculada por IA"
                                 bullets={[
-                                    'Relatórios diários de prontidão',
-                                    'Sugestões baseadas em sono e FC',
+                                    'Prontidão calculada por IA todo dia',
+                                    'Sugestões com base em sono e FC',
+                                    'Saiba quando forçar ou descansar',
                                 ]}
-                                ctaLabel="Upgrade to Pro"
                             />
                         )}
 
@@ -130,9 +129,7 @@ export function WellnessScreen() {
                         ) : (
                             <UpgradeProCard
                                 variant="compact"
-                                title="Zonas detalhadas no Pro"
-                                subtitle="Análise de zonas de FC com dados do seu relógio"
-                                ctaLabel="Upgrade to Pro"
+                                tagline="Zonas de FC detalhadas com dados do relógio"
                             />
                         )}
 

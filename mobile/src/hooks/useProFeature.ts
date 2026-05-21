@@ -1,16 +1,17 @@
 import { useCallback } from 'react';
-import { usePlacement } from 'expo-superwall';
+import { usePlacement, useUser } from 'expo-superwall';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
 import { PAYWALL_PLACEMENTS } from '../services/paywall';
 
 /**
- * Single entrypoint for Pro gating. Components call `isProUser` to decide
- * whether to render real content or UpgradeProCard, and `openUpgrade` to
- * trigger the Superwall paywall with the `upgrade_tapped` placement.
+ * Single entrypoint for Pro gating. Components read `isProUser` to decide whether
+ * to render real content or UpgradeProCard, and call `openUpgrade` to trigger the
+ * Superwall paywall (placement `upgrade_tapped`).
  *
- * Configure the `upgrade_tapped` placement in the Superwall dashboard. If
- * the placement isn't configured, the call resolves silently — fine for dev
- * but visible as a warning in console.
+ * The app runs Superwall in MANUAL purchase management mode (via
+ * `CustomPurchaseControllerProvider` in App.tsx). In that mode Superwall holds
+ * every paywall until we tell it the subscription status — so `openUpgrade` sets
+ * it (mirroring the app's truth) right before registering the placement.
  */
 export function useProFeature() {
   const isProUser = useSubscriptionStore((s) => s.isProUser);
@@ -18,17 +19,25 @@ export function useProFeature() {
   const status = useSubscriptionStore((s) => s.status);
   const daysRemainingInTrial = useSubscriptionStore((s) => s.daysRemainingInTrial);
   const fetchSubscription = useSubscriptionStore((s) => s.fetchSubscription);
+
+  const { setSubscriptionStatus } = useUser();
   const { registerPlacement } = usePlacement();
 
   const openUpgrade = useCallback(async () => {
     try {
+      const subStatus = isProUser
+        ? { status: 'ACTIVE' as const, entitlements: [{ id: 'pro', type: 'SERVICE_LEVEL' as const }] }
+        : { status: 'INACTIVE' as const };
+      await setSubscriptionStatus(subStatus);
+
       await registerPlacement({ placement: PAYWALL_PLACEMENTS.UPGRADE_TAPPED });
-      // Reconcile after paywall closes (purchase may have completed)
+
+      // Reconcile after the paywall closes (a purchase may have completed).
       await fetchSubscription();
     } catch (err) {
       console.warn('[useProFeature] openUpgrade failed:', err);
     }
-  }, [registerPlacement, fetchSubscription]);
+  }, [isProUser, setSubscriptionStatus, registerPlacement, fetchSubscription]);
 
   return {
     isProUser,

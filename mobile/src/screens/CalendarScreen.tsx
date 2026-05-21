@@ -621,9 +621,7 @@ export function CalendarScreen({ navigation }: any) {
                     <View style={{ paddingHorizontal: spacing.lg, marginTop: spacing.md }}>
                         <UpgradeProCard
                             variant="compact"
-                            title="Tenha treinos planejados por IA"
-                            subtitle="Calendário com plano de treino do Coach AI"
-                            ctaLabel="Upgrade to Pro"
+                            tagline="Calendário com plano de treino do Coach AI"
                         />
                     </View>
                 )}

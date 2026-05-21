@@ -638,13 +638,12 @@ export function HomeScreen({ navigation }: any) {
                 {!isProUser ? (
                     <UpgradeProCard
                         variant="medium"
-                        title="Desbloqueie seu plano personalizado"
+                        tagline="Seu plano de corrida personalizado pelo Coach AI"
                         bullets={[
                             'Planos de treino com Coach AI',
                             'Ajuste automático com seu relógio',
-                            'Acompanhamento 24h do plano',
+                            'Acompanhamento 24h do seu plano',
                         ]}
-                        ctaLabel="Upgrade to Pro"
                     />
                 ) : (
                     <>
@@ -674,17 +673,9 @@ export function HomeScreen({ navigation }: any) {
                 </View>
                 {/* ── fim Seus treinos ─────────────────────────────────────────── */}
 
-                {/* AI Analysis Card — Free users see compact upgrade card */}
-                {!isProUser ? (
-                    <View style={{ marginHorizontal: spacing.lg, marginTop: spacing.xl }}>
-                        <UpgradeProCard
-                            variant="compact"
-                            title="Análises dos treinos com Coach AI"
-                            subtitle="Feedback inteligente exclusivo Pro"
-                            ctaLabel="Upgrade to Pro"
-                        />
-                    </View>
-                ) : (
+                {/* Análise / resultados de treino — exibido para todos. Free vê os
+                    resumos de corrida livre/manual aqui, ou o estado "sem resultados".
+                    A análise do Coach AI só aparece para treinos de plano (Pro). */}
                 <View style={styles.aiCard}>
                     {latestActivityLoading ? (
                         <View style={styles.aiLoadingContainer}>
@@ -808,7 +799,6 @@ export function HomeScreen({ navigation }: any) {
                         </View>
                     )}
                 </View>
-                )}
             </ScrollView>
 
 

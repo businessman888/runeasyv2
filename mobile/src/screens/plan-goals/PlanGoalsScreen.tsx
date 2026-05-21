@@ -64,14 +64,12 @@ export function PlanGoalsScreen() {
             <ScreenContainer>
                 <UpgradeProCard
                     variant="fullscreen"
-                    title="Planejamento disponível no Pro"
-                    subtitle="Acompanhe seu plano semana a semana com Coach AI"
+                    tagline="Acompanhe seu plano semana a semana com Coach AI"
                     bullets={[
                         'Plano completo semana a semana',
                         'Acompanhamento de quilometragem',
                         'Histórico e progressão de fases',
                     ]}
-                    ctaLabel="Upgrade to Pro"
                 />
             </ScreenContainer>
         );
