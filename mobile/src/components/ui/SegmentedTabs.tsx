@@ -1,5 +1,5 @@
 import React, { memo, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { colors, typography } from '../../theme';
 
 /**
@@ -40,10 +40,12 @@ function SegmentedTabsInner<K extends string = string>({
             {tabs.map((tab) => {
                 const isActive = tab.key === activeKey;
                 return (
-                    <Pressable
+                    <TouchableOpacity
                         key={tab.key}
                         style={[styles.tab, isActive && styles.tabActive]}
                         onPress={handlePress(tab.key)}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
                         accessibilityRole="tab"
                         accessibilityLabel={tab.label}
                         accessibilityState={{ selected: isActive }}
@@ -51,7 +53,7 @@ function SegmentedTabsInner<K extends string = string>({
                         <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
                             {tab.label}
                         </Text>
-                    </Pressable>
+                    </TouchableOpacity>
                 );
             })}
         </View>

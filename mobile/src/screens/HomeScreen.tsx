@@ -19,7 +19,6 @@ import type { LatestActivityData } from '../stores/feedbackStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { SegmentedTabs } from '../components/ui/SegmentedTabs';
 import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
-import { WorkoutDayCard } from '../components/training/WorkoutDayCard';
 import { CircularProgress } from '../components/CircularProgress';
 import { Skeleton } from '../components/Skeleton';
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -37,6 +36,13 @@ import { UpgradeProCard } from '../components/upgrade/UpgradeProCard';
 import { BASE_API_URL } from '../config/api.config';
 
 const MarathonAnimation = require('../../telas frontend/icons/icons second card/Marathon.json');
+
+// Stable reference so the memoized SegmentedTabs doesn't re-render on every
+// parent re-render (e.g. while focus-effect fetches resolve).
+const SCOPE_TABS: { key: 'plan' | 'activity'; label: string }[] = [
+    { key: 'plan', label: 'Treinos' },
+    { key: 'activity', label: 'Atividades' },
+];
 
 // Icon components using @expo/vector-icons
 function RunningIcon({ size = 30, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -713,7 +719,7 @@ export function HomeScreen({ navigation }: any) {
 
                 {/* ── Treinos | Atividades ─────────────────────────────────────── */}
                 <SegmentedTabs
-                    tabs={[{ key: 'plan', label: 'Treinos' }, { key: 'activity', label: 'Atividades' }]}
+                    tabs={SCOPE_TABS}
                     activeKey={scope}
                     onChange={setScope}
                     style={styles.scopeTabs}
@@ -874,11 +880,15 @@ export function HomeScreen({ navigation }: any) {
                     <Text style={styles.sectionTitle}>Seus treinos</Text>
                     {todayActivities.length > 0 ? (
                         todayActivities.map((w) => (
-                            <WorkoutDayCard
-                                key={`home-activity-${w.id}`}
-                                workout={w as any}
-                                onPress={handleActivityCardPress}
-                            />
+                            <View key={`home-activity-${w.id}`} style={styles.activityCardSpacing}>
+                                <WorkoutCard
+                                    workout={w as any}
+                                    isToday={true}
+                                    isCompleted={w.status === 'completed'}
+                                    onStartWorkout={() => handleActivityCardPress(w)}
+                                    allBadges={badges}
+                                />
+                            </View>
                         ))
                     ) : (
                         <FriendlyEmptyCard
@@ -1106,6 +1116,11 @@ const styles = StyleSheet.create({
     scopeTabs: {
         marginHorizontal: 17,
         marginBottom: spacing.lg,
+    },
+
+    // Spacing between stacked manual/free activity cards (Atividades tab)
+    activityCardSpacing: {
+        marginBottom: spacing.base,
     },
 
     // Workout Card (legacy — kept for the "no workout" empty state)

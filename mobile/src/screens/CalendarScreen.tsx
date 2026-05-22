@@ -128,6 +128,12 @@ const formatKm = (km: number | null | undefined): string => {
     return Number(km.toFixed(2)).toString();
 };
 
+// Stable reference so the memoized SegmentedTabs doesn't re-render needlessly.
+const SCOPE_TABS: { key: 'plan' | 'activity'; label: string }[] = [
+    { key: 'plan', label: 'Treinos' },
+    { key: 'activity', label: 'Atividades' },
+];
+
 // Workout data interface
 interface WorkoutBlock {
     id: string;
@@ -550,12 +556,38 @@ export function CalendarScreen({ navigation }: any) {
         return null;
     };
 
+    // Plan-tab marker. The backend flips a plan rest day to type:'workout' when
+    // the user logs a manual/free run on it (workoutsByDate prefers plan, else
+    // falls back to the activity). For the Treinos tab a rest day must STAY a
+    // rest day (purple bolt) regardless of activities — those belong to the
+    // Atividades tab. So when the day's primary workout is manual/free, treat it
+    // as recovery here. Anything else (plan, or legacy null source) is a plan workout.
+    const getPlanStatusForDay = (day: number | null): 'completed' | 'missed' | 'planned' | 'recovery' | null => {
+        if (!day) return null;
+        const scheduleDay = getScheduleForDay(day);
+        if (!scheduleDay || scheduleDay.type === null) return null;
+        if (scheduleDay.type === 'recovery') return 'recovery';
+        const src = scheduleDay.workout?.source;
+        if (src === 'manual' || src === 'free') return 'recovery';
+        if (scheduleDay.status === 'completed') return 'completed';
+        if (scheduleDay.status === 'missed') return 'missed';
+        if (scheduleDay.status === 'pending') return 'planned';
+        return null;
+    };
+
     // Derived: Get schedule for selected date (reactive to selectedDate)
     const getSelectedDateStr = () => {
         return `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`;
     };
     const selectedDateSchedule = schedule.find(s => s.date === getSelectedDateStr()) || null;
     const isSelectedDateRecovery = selectedDateSchedule?.type === 'recovery';
+    // Plan-tab recovery: a true recovery day, OR a plan rest day where the user
+    // logged a manual/free run (that run appears on the Atividades tab instead).
+    const isSelectedPlanRecovery = !!selectedDateSchedule
+        && selectedDateSchedule.type !== null
+        && (selectedDateSchedule.type === 'recovery'
+            || selectedDateSchedule.workout?.source === 'manual'
+            || selectedDateSchedule.workout?.source === 'free');
     const isSelectedDateWithinPlan = selectedDateSchedule?.type !== null && selectedDateSchedule?.type !== undefined;
     // Every workout the user has logged or planned for the selected date —
     // the source of truth for the "Treinos do dia" card list. Falls back to
@@ -687,7 +719,7 @@ export function CalendarScreen({ navigation }: any) {
 
                 {/* ── Treinos | Atividades ─────────────────────────────────────── */}
                 <SegmentedTabs
-                    tabs={[{ key: 'plan', label: 'Treinos' }, { key: 'activity', label: 'Atividades' }]}
+                    tabs={SCOPE_TABS}
                     activeKey={scope}
                     onChange={setScope}
                     style={styles.scopeTabs}
@@ -726,10 +758,11 @@ export function CalendarScreen({ navigation }: any) {
                     {/* Days grid */}
                     <View style={styles.daysGrid}>
                         {days.map((day, index) => {
-                            // Treinos tab marks plan workouts/rest; Atividades tab
-                            // marks days with manual/free runs (no rest concept).
+                            // Treinos tab marks plan workouts/rest (rest stays rest
+                            // even with a manual run); Atividades tab marks days with
+                            // manual/free runs (no rest concept).
                             const workoutStatus = scope === 'plan'
-                                ? getWorkoutStatus(day)
+                                ? getPlanStatusForDay(day)
                                 : getActivityStatusForDay(day);
                             const isSelected = day === selectedDate;
 
@@ -801,7 +834,7 @@ export function CalendarScreen({ navigation }: any) {
                             <Text style={styles.todayTitle}>
                                 {scope === 'activity'
                                     ? 'Atividades do dia'
-                                    : !isSelectedDateWithinPlan ? 'Sem Plano Ativo' : isSelectedDateRecovery ? 'Dia de Recuperação' : 'Treinos do dia'}
+                                    : !isSelectedDateWithinPlan ? 'Sem Plano Ativo' : isSelectedPlanRecovery ? 'Dia de Recuperação' : 'Treinos do dia'}
                             </Text>
                         </View>
                         {scopedSelectedWorkouts.length > 0 && (
@@ -816,7 +849,7 @@ export function CalendarScreen({ navigation }: any) {
                         Treinos: rest stays rest; plan workouts otherwise.
                         Atividades: the day's manual/free runs, or a friendly empty card. */}
                     {scope === 'plan' ? (
-                        isSelectedDateRecovery ? (
+                        isSelectedPlanRecovery ? (
                             <View key={`recovery-${getSelectedDateStr()}`} style={styles.recoveryCard}>
                                 <View style={styles.recoveryCardHeader}>
                                     <MoonIcon size={48} color="#A78BFA" />
