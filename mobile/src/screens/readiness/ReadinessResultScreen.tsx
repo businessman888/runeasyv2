@@ -176,12 +176,35 @@ const MetricCard: React.FC<{
 
 export function ReadinessResultScreen({ navigation }: any) {
     const { verdict, isLoading, error, fetchVerdict, resetQuiz } = useReadinessStore();
+    const insets = useSafeAreaInsets();
+
+    // All hooks must run unconditionally, BEFORE any early return (Rules of Hooks).
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const slideAnim = useRef(new Animated.Value(30)).current;
 
     useEffect(() => {
         if (!verdict && !isLoading && !error) {
             fetchVerdict();
         }
     }, []);
+
+    // Fade-in animation: trigger only when the verdict (and its view) becomes available.
+    useEffect(() => {
+        if (verdict) {
+            Animated.parallel([
+                Animated.timing(fadeAnim, {
+                    toValue: 1,
+                    duration: 600,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(slideAnim, {
+                    toValue: 0,
+                    duration: 600,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+        }
+    }, [verdict]);
 
     const handleConfirm = () => {
         // Navigate to success screen with fade animation
@@ -220,27 +243,6 @@ export function ReadinessResultScreen({ navigation }: any) {
         hour: '2-digit',
         minute: '2-digit',
     });
-
-    const insets = useSafeAreaInsets();
-
-    // Fade-in animation for content
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const slideAnim = useRef(new Animated.Value(30)).current;
-
-    useEffect(() => {
-        Animated.parallel([
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 600,
-                useNativeDriver: true,
-            }),
-            Animated.timing(slideAnim, {
-                toValue: 0,
-                duration: 600,
-                useNativeDriver: true,
-            }),
-        ]).start();
-    }, []);
 
     return (
         <View style={[styles.container, { paddingTop: insets.top + 10 }]}>

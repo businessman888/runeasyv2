@@ -39,6 +39,7 @@ import {
     RunSummaryScreen,
     PlanGoalsScreen,
     WeekDetailScreen,
+    PrePaywallScreen,
 } from '../screens';
 import { PlanPreviewScreen as QuizPlanPreviewScreen } from '../screens/quiz/PlanPreviewScreen';
 import { PlanLoadingScreen } from '../screens/quiz/PlanLoadingScreen';
@@ -303,6 +304,15 @@ export function AppNavigator() {
                             name="Main"
                             component={MainTabs}
                             options={{ headerShown: false }}
+                        />
+                        <Stack.Screen
+                            name="PrePaywall"
+                            component={PrePaywallScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'modal',
+                                gestureEnabled: true,
+                            }}
                         />
                         <Stack.Screen
                             name="Badges"

@@ -13,6 +13,7 @@ export type RootStackParamList = {
     Login: undefined;
     Onboarding: undefined;
     Main: { initialTab?: string };
+    PrePaywall: undefined;
     Retrospective: undefined;
     Feedback: { feedbackId: string };
     WorkoutDetail: { workoutId: string };

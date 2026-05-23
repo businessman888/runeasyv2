@@ -20,6 +20,7 @@ export * from './SupportScreen';
 export * from './RetrospectiveScreen';
 export * from './CustomizeGoalScreen';
 export * from './ManualWorkoutConfigScreen';
+export * from './PrePaywallScreen';
 
 // Plan Goals (visão do plano completo + detalhe semanal)
 export * from './plan-goals';

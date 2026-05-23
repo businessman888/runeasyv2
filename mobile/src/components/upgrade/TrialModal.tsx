@@ -32,7 +32,7 @@ interface TrialModalProps {
  */
 export function TrialModal({ visible, onClose }: TrialModalProps) {
     const insets = useSafeAreaInsets();
-    const { openUpgrade } = useProFeature();
+    const { presentPaywall } = useProFeature();
 
     const sheetHeight = useRef(FALLBACK_HEIGHT);
     const translateY = useRef(new Animated.Value(FALLBACK_HEIGHT)).current;
@@ -75,12 +75,13 @@ export function TrialModal({ visible, onClose }: TrialModalProps) {
     const handleClose = useCallback(() => animateOut(onClose), [animateOut, onClose]);
 
     const handleStartTrial = useCallback(() => {
-        // Close the sheet first, then open the paywall (mirrors the cards).
+        // This sheet is itself a teaser, so it opens the paywall directly
+        // (skipping the PrePaywall interstitial that the cards route through).
         animateOut(() => {
             onClose();
-            void openUpgrade();
+            void presentPaywall();
         });
-    }, [animateOut, onClose, openUpgrade]);
+    }, [animateOut, onClose, presentPaywall]);
 
     const onSheetLayout = (e: LayoutChangeEvent) => {
         const h = e.nativeEvent.layout.height;

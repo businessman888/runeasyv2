@@ -46,6 +46,7 @@ export const colors = {
     proGlassOverlay: 'rgba(28, 28, 46, 0.6)',       // dark veil over the bg image
     proGlassOverlayStrong: 'rgba(14, 14, 30, 0.82)', // denser veil for teasers — keeps overlay text readable over the mock (Android blur is weak)
     proGlassBorder: 'rgba(235, 235, 245, 0.18)',     // light, clean glass hairline border
+    proCardGlassFill: 'rgba(28, 28, 46, 0.5)',       // pre-paywall benefit cards — translucent glass fill (border reuses proDivider)
     proCtaFill: 'rgba(8, 34, 42, 0.92)',            // CTA pill — near-opaque dark teal so the card blur doesn't bleed through
     proDivider: 'rgba(235, 235, 245, 0.1)',         // hairline under header
     proMutedText: 'rgba(235, 235, 245, 0.6)',       // tagline + bullets
