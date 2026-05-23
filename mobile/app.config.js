@@ -106,7 +106,11 @@ export default {
       }
     ],
     "@bacons/apple-targets",
-    "./plugins/withAppleWatch"
+    "./plugins/withAppleWatch",
+    [
+      "./plugins/withGarminConnectIQ",
+      { appUuid: "8338c29a-1ddf-40d4-892c-b1a3038a1cf5" }
+    ]
   ],
   notification: {
     icon: "./assets/notification-icon.png",

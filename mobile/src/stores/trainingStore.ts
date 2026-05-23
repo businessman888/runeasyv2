@@ -24,11 +24,11 @@ export interface RoutePoint {
  * (source='phone', sem HR/calorias, pace calculado pelo backend).
  */
 export interface WorkoutSourceMetadata {
-    /** 'phone' (default) ou 'apple_watch' quando vier do relógio */
-    source?: 'phone' | 'apple_watch';
+    /** 'phone' (default), 'apple_watch' (Apple Watch) ou 'garmin_watch' (Connect IQ) */
+    source?: 'phone' | 'apple_watch' | 'garmin_watch';
     /** ISO 8601 do início da corrida — relevante quando source != 'phone' */
     started_at?: string;
-    /** Identificador externo (ex.: HKWorkout UUID) para dedup */
+    /** Identificador externo (ex.: HKWorkout UUID, Garmin activity id) para dedup */
     external_id?: string;
     /** FC média BPM */
     average_heartrate?: number;
@@ -38,6 +38,8 @@ export interface WorkoutSourceMetadata {
     calories?: number;
     /** Pace médio em segundos por km */
     avg_pace_seconds_per_km?: number;
+    /** Modelo do relógio Garmin (ex.: "fēnix 7 Pro") quando source='garmin_watch' */
+    garmin_device_name?: string;
 }
 
 export interface WorkoutTrackingPayload extends WorkoutSourceMetadata {
@@ -558,7 +560,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
                         route_points: payload.route_points,
                         total_distance_meters: payload.total_distance_meters,
                         duration_seconds: payload.duration_seconds,
-                        // Metadata opcional (Apple Watch, etc.) — backend já aceita
+                        // Metadata opcional (Apple Watch, Garmin, etc.) — backend já aceita
                         ...(payload.source            && { source: payload.source }),
                         ...(payload.external_id       && { external_id: payload.external_id }),
                         ...(payload.started_at        && { started_at: payload.started_at }),
@@ -566,6 +568,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
                         ...(payload.max_heartrate     != null && { max_heartrate: payload.max_heartrate }),
                         ...(payload.calories          != null && { calories: payload.calories }),
                         ...(payload.avg_pace_seconds_per_km != null && { avg_pace_seconds_per_km: payload.avg_pace_seconds_per_km }),
+                        ...(payload.garmin_device_name && { garmin_device_name: payload.garmin_device_name }),
                     }),
                 },
             );
@@ -615,13 +618,14 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
                     duration_seconds: payload.duration_seconds,
                     started_at: payload.started_at,
                     city: payload.city,
-                    // Metadata opcional (Apple Watch, etc.)
+                    // Metadata opcional (Apple Watch, Garmin, etc.)
                     ...(payload.source            && { source: payload.source }),
                     ...(payload.external_id       && { external_id: payload.external_id }),
                     ...(payload.average_heartrate != null && { average_heartrate: payload.average_heartrate }),
                     ...(payload.max_heartrate     != null && { max_heartrate: payload.max_heartrate }),
                     ...(payload.calories          != null && { calories: payload.calories }),
                     ...(payload.avg_pace_seconds_per_km != null && { avg_pace_seconds_per_km: payload.avg_pace_seconds_per_km }),
+                    ...(payload.garmin_device_name && { garmin_device_name: payload.garmin_device_name }),
                 }),
             });
 

@@ -1,0 +1,4 @@
+# Garmin SDK binaries — downloaded manually from developer.garmin.com (EULA)
+ios/ConnectIQ.framework/
+ios/ConnectIQ.xcframework/
+android/libs/*.aar

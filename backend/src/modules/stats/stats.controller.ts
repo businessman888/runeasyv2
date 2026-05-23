@@ -1,88 +1,88 @@
 import {
-    Controller,
-    Get,
-    Query,
-    Headers,
-    HttpException,
-    HttpStatus,
+  Controller,
+  Get,
+  Query,
+  Headers,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { StatsService } from './stats.service';
 
 @Controller('stats')
 export class StatsController {
-    constructor(private readonly statsService: StatsService) { }
+  constructor(private readonly statsService: StatsService) {}
 
-    /**
-     * Get weekly statistics
-     */
-    @Get('weekly')
-    async getWeeklyStats(
-        @Headers('x-user-id') userId: string,
-        @Query('weeks') weeks?: string,
-    ) {
-        if (!userId) {
-            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
-        }
-
-        const data = await this.statsService.getWeeklyStats(
-            userId,
-            weeks ? parseInt(weeks, 10) : 12,
-        );
-
-        return { stats: data };
+  /**
+   * Get weekly statistics
+   */
+  @Get('weekly')
+  async getWeeklyStats(
+    @Headers('x-user-id') userId: string,
+    @Query('weeks') weeks?: string,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
 
-    /**
-     * Get monthly statistics
-     */
-    @Get('monthly')
-    async getMonthlyStats(
-        @Headers('x-user-id') userId: string,
-        @Query('months') months?: string,
-    ) {
-        if (!userId) {
-            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
-        }
+    const data = await this.statsService.getWeeklyStats(
+      userId,
+      weeks ? parseInt(weeks, 10) : 12,
+    );
 
-        const data = await this.statsService.getMonthlyStats(
-            userId,
-            months ? parseInt(months, 10) : 6,
-        );
+    return { stats: data };
+  }
 
-        return { stats: data };
+  /**
+   * Get monthly statistics
+   */
+  @Get('monthly')
+  async getMonthlyStats(
+    @Headers('x-user-id') userId: string,
+    @Query('months') months?: string,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
 
-    /**
-     * Get pace progression for charts
-     */
-    @Get('pace-progression')
-    async getPaceProgression(
-        @Headers('x-user-id') userId: string,
-        @Query('limit') limit?: string,
-    ) {
-        if (!userId) {
-            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
-        }
+    const data = await this.statsService.getMonthlyStats(
+      userId,
+      months ? parseInt(months, 10) : 6,
+    );
 
-        const data = await this.statsService.getPaceProgression(
-            userId,
-            limit ? parseInt(limit, 10) : 20,
-        );
+    return { stats: data };
+  }
 
-        return { progression: data };
+  /**
+   * Get pace progression for charts
+   */
+  @Get('pace-progression')
+  async getPaceProgression(
+    @Headers('x-user-id') userId: string,
+    @Query('limit') limit?: string,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
 
-    /**
-     * Get summary statistics
-     */
-    @Get('summary')
-    async getSummaryStats(@Headers('x-user-id') userId: string) {
-        if (!userId) {
-            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
-        }
+    const data = await this.statsService.getPaceProgression(
+      userId,
+      limit ? parseInt(limit, 10) : 20,
+    );
 
-        const data = await this.statsService.getSummaryStats(userId);
+    return { progression: data };
+  }
 
-        return { summary: data };
+  /**
+   * Get summary statistics
+   */
+  @Get('summary')
+  async getSummaryStats(@Headers('x-user-id') userId: string) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
+
+    const data = await this.statsService.getSummaryStats(userId);
+
+    return { summary: data };
+  }
 }

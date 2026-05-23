@@ -1,5 +1,10 @@
 export type SubscriptionPlan = 'free' | 'pro';
-export type SubscriptionStatus = 'active' | 'trial' | 'expired' | 'cancelled' | 'billing_issue';
+export type SubscriptionStatus =
+  | 'active'
+  | 'trial'
+  | 'expired'
+  | 'cancelled'
+  | 'billing_issue';
 
 export interface SubscriptionStateDto {
   plan: SubscriptionPlan;

@@ -1,0 +1,9 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": {
+    "modules": ["ExpoGarminConnectIQModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.garminconnectiq.ExpoGarminConnectIQModule"]
+  }
+}

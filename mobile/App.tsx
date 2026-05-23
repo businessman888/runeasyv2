@@ -25,6 +25,9 @@ import { useWorkoutScopeStore } from './src/stores/workoutScopeStore';
 import { useAppleWatchStore } from './src/stores/appleWatchStore';
 import { WatchBridgeDebugBanner } from './src/components/debug/WatchBridgeDebugBanner';
 import { useWatchSync } from './src/hooks/useWatchSync';
+import { useGarminSync } from './src/hooks/useGarmin';
+import { initGarmin, onCompletedRun } from './src/services/garminConnect';
+import { useTrainingStore } from './src/stores/trainingStore';
 
 // Registra Task de Rastreamento (Background GPS)
 import './src/tasks/locationTask';
@@ -107,6 +110,17 @@ function WatchSyncManager() {
 }
 
 /**
+ * GarminSyncManager Component
+ *
+ * Push do treino do dia para o relógio Garmin (via Connect IQ Mobile SDK) sempre
+ * que houver dispositivo conectado + treino disponível. Espelha o WatchSyncManager.
+ */
+function GarminSyncManager() {
+  useGarminSync();
+  return null;
+}
+
+/**
  * Notification Manager Component
  *
  * Handles push notification lifecycle.
@@ -173,6 +187,53 @@ export default function App() {
     void useAppleWatchStore.getState().bootstrap();
   }, []);
 
+  // Inicializa bridge com Garmin Connect IQ — registra listener de corridas
+  // finalizadas no relógio Garmin e roteia para trainingStore.
+  useEffect(() => {
+    void initGarmin().catch((e) => console.warn('[App] initGarmin failed:', e));
+
+    const unsub = onCompletedRun(async (run) => {
+      console.log('[App] Garmin completed run received:', {
+        external_id: run.external_id,
+        distance_m: run.total_distance_meters,
+        duration_s: run.duration_seconds,
+        device: run.garmin_device_name,
+        workout_id: run.workout_id,
+      });
+
+      const sourceMetadata = {
+        source: 'garmin_watch' as const,
+        external_id: run.external_id,
+        started_at: run.started_at,
+        average_heartrate: run.avg_heart_rate ?? undefined,
+        max_heartrate: run.max_heart_rate ?? undefined,
+        calories: run.calories ?? undefined,
+        avg_pace_seconds_per_km: run.avg_pace_seconds_per_km,
+        garmin_device_name: run.garmin_device_name,
+      };
+
+      if (run.workout_id) {
+        await useTrainingStore.getState().completeWorkout({
+          workoutId: run.workout_id,
+          route_points: run.route_points,
+          total_distance_meters: run.total_distance_meters,
+          duration_seconds: run.duration_seconds,
+          ...sourceMetadata,
+        });
+      } else {
+        await useTrainingStore.getState().completeFreeRun({
+          localId: run.external_id,
+          route_points: run.route_points,
+          total_distance_meters: run.total_distance_meters,
+          duration_seconds: run.duration_seconds,
+          ...sourceMetadata,
+        });
+      }
+    });
+
+    return unsub;
+  }, []);
+
   const superwallApiKey = getSuperwallApiKey();
 
   // Mantém o splash enquanto a fonte carrega (padrão Expo). Se falhar, segue.
@@ -202,6 +263,8 @@ export default function App() {
             <NotificationManager />
             {/* WatchSyncManager: pushes today's workout + user name to Apple Watch */}
             <WatchSyncManager />
+            {/* GarminSyncManager: pushes today's workout to Garmin watch via Connect IQ */}
+            <GarminSyncManager />
             <AppNavigator />
             <WatchBridgeDebugBanner />
           </GestureHandlerRootView>

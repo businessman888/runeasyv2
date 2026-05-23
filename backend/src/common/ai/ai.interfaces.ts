@@ -4,7 +4,13 @@ export interface AICallOptions {
   /** User ID for per-user usage tracking */
   userId?: string;
   /** System prompt — string or structured blocks with cache_control */
-  systemPrompt: string | Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }>;
+  systemPrompt:
+    | string
+    | Array<{
+        type: 'text';
+        text: string;
+        cache_control?: { type: 'ephemeral' };
+      }>;
   /** User message content */
   userMessage: string;
   /** Maximum output tokens */

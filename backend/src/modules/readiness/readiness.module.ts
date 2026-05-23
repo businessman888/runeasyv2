@@ -10,19 +10,19 @@ import { DatabaseModule } from '../../database';
 import { NotificationModule } from '../notifications';
 
 @Module({
-    imports: [
-        ConfigModule,
-        DatabaseModule,
-        ScheduleModule.forRoot(),
-        NotificationModule,
-    ],
-    controllers: [ReadinessController],
-    providers: [
-        ReadinessService,
-        ReadinessAIService,
-        ReadinessScheduler,
-        QuestionSetsParserService,
-    ],
-    exports: [ReadinessService],
+  imports: [
+    ConfigModule,
+    DatabaseModule,
+    ScheduleModule.forRoot(),
+    NotificationModule,
+  ],
+  controllers: [ReadinessController],
+  providers: [
+    ReadinessService,
+    ReadinessAIService,
+    ReadinessScheduler,
+    QuestionSetsParserService,
+  ],
+  exports: [ReadinessService],
 })
-export class ReadinessModule { }
+export class ReadinessModule {}

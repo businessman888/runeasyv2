@@ -15,20 +15,25 @@ import { ReadinessModule } from '../readiness/readiness.module';
 import { StatsModule } from '../stats/stats.module';
 
 @Module({
-    imports: [
-        ScheduleModule.forRoot(),
-        NotificationModule,
-        UsersModule,
-        GamificationModule,
-        ReadinessModule,
-        StatsModule,
-        BullModule.registerQueue({
-            name: 'feedback-queue',
-        }),
-    ],
-    controllers: [TrainingController, WellnessController],
-    providers: [TrainingService, TrainingAIService, TrainingSchedulerService, RetrospectiveService, WellnessService],
-    exports: [TrainingService, TrainingAIService, RetrospectiveService],
+  imports: [
+    ScheduleModule.forRoot(),
+    NotificationModule,
+    UsersModule,
+    GamificationModule,
+    ReadinessModule,
+    StatsModule,
+    BullModule.registerQueue({
+      name: 'feedback-queue',
+    }),
+  ],
+  controllers: [TrainingController, WellnessController],
+  providers: [
+    TrainingService,
+    TrainingAIService,
+    TrainingSchedulerService,
+    RetrospectiveService,
+    WellnessService,
+  ],
+  exports: [TrainingService, TrainingAIService, RetrospectiveService],
 })
-export class TrainingModule { }
-
+export class TrainingModule {}

@@ -4,9 +4,9 @@ import { OnboardingService } from './onboarding.service';
 import { DatabaseModule } from '../../database';
 
 @Module({
-    imports: [DatabaseModule],
-    controllers: [OnboardingController],
-    providers: [OnboardingService],
-    exports: [OnboardingService],
+  imports: [DatabaseModule],
+  controllers: [OnboardingController],
+  providers: [OnboardingService],
+  exports: [OnboardingService],
 })
-export class OnboardingModule { }
+export class OnboardingModule {}

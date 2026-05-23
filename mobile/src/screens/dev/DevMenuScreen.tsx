@@ -18,6 +18,11 @@ import { colors, spacing, typography, borderRadius } from '../../theme';
 import { useDevMenuStore } from '../../stores/devMenuStore';
 import { useSubscriptionStore } from '../../stores/subscriptionStore';
 import type { DevPlanOverride } from '../../utils/devTools';
+import { useTrainingStore } from '../../stores/trainingStore';
+import {
+  __simulateCompletedRun,
+  __simulateDeviceStatus,
+} from '../../services/garminConnect';
 
 const OPTIONS: { value: DevPlanOverride; label: string; description: string }[] = [
   { value: null, label: 'Sem override', description: 'Usa estado real (RevenueCat + backend)' },
@@ -105,6 +110,82 @@ export function DevMenuScreen({ navigation }: any) {
         <Ionicons name="refresh" size={18} color={colors.primary} />
         <Text style={styles.refreshText}>Refetch /users/me/subscription</Text>
       </Pressable>
+
+      <Text style={styles.sectionTitle}>Garmin Connect IQ Mock</Text>
+      <Text style={styles.helperText}>
+        Simula eventos do relógio Garmin sem precisar do hardware. Útil pra validar
+        o pipeline `completeWorkout` / `completeFreeRun` com source=&apos;garmin_watch&apos;.
+      </Text>
+
+      <View style={styles.optionList}>
+        <Pressable
+          style={styles.optionRow}
+          onPress={() => __simulateCompletedRun()}
+          accessibilityRole="button"
+          accessibilityLabel="Simular corrida livre Garmin"
+        >
+          <View style={styles.optionTextWrap}>
+            <Text style={styles.optionLabel}>Simular corrida livre</Text>
+            <Text style={styles.optionDescription}>
+              Dispara WORKOUT_COMPLETE sem workout_id → completeFreeRun()
+            </Text>
+          </View>
+          <Ionicons name="play-circle" size={28} color={colors.primary} />
+        </Pressable>
+
+        <Pressable
+          style={styles.optionRow}
+          onPress={() => {
+            const today = useTrainingStore.getState().today;
+            const workoutId = today?.workout?.id;
+            if (!workoutId) {
+              console.warn('[DevMenu] Nenhum treino do dia para simular');
+              return;
+            }
+            __simulateCompletedRun({ workout_id: workoutId });
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Simular treino do dia Garmin"
+        >
+          <View style={styles.optionTextWrap}>
+            <Text style={styles.optionLabel}>Simular treino do dia</Text>
+            <Text style={styles.optionDescription}>
+              Usa o today.workout.id → completeWorkout() + AI feedback
+            </Text>
+          </View>
+          <Ionicons name="play-circle" size={28} color={colors.primary} />
+        </Pressable>
+
+        <Pressable
+          style={styles.optionRow}
+          onPress={() => __simulateDeviceStatus('connected')}
+          accessibilityRole="button"
+          accessibilityLabel="Simular dispositivo conectado"
+        >
+          <View style={styles.optionTextWrap}>
+            <Text style={styles.optionLabel}>Simular Garmin conectado</Text>
+            <Text style={styles.optionDescription}>
+              Emite onDeviceStatusChange(connected) — útil pra testar GarminCard
+            </Text>
+          </View>
+          <Ionicons name="bluetooth" size={28} color={colors.primary} />
+        </Pressable>
+
+        <Pressable
+          style={styles.optionRow}
+          onPress={() => __simulateDeviceStatus('not_connected')}
+          accessibilityRole="button"
+          accessibilityLabel="Simular dispositivo desconectado"
+        >
+          <View style={styles.optionTextWrap}>
+            <Text style={styles.optionLabel}>Simular Garmin desconectado</Text>
+            <Text style={styles.optionDescription}>
+              Emite onDeviceStatusChange(not_connected)
+            </Text>
+          </View>
+          <Ionicons name="cloud-offline" size={28} color={colors.warning} />
+        </Pressable>
+      </View>
     </ScrollView>
   );
 }

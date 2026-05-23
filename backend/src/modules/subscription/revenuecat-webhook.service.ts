@@ -3,7 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../../database';
 import { SubscriptionService } from './subscription.service';
 import { TrainingService } from '../training/training.service';
-import { RevenueCatEvent, RevenueCatWebhookBody } from './dto/revenuecat-event.dto';
+import {
+  RevenueCatEvent,
+  RevenueCatWebhookBody,
+} from './dto/revenuecat-event.dto';
 
 @Injectable()
 export class RevenueCatWebhookService {
@@ -18,7 +21,9 @@ export class RevenueCatWebhookService {
   ) {
     this.webhookSecret = config.get<string>('REVENUECAT_WEBHOOK_SECRET');
     if (!this.webhookSecret) {
-      this.logger.warn('REVENUECAT_WEBHOOK_SECRET not set — webhook will reject all requests');
+      this.logger.warn(
+        'REVENUECAT_WEBHOOK_SECRET not set — webhook will reject all requests',
+      );
     }
   }
 
@@ -32,7 +37,9 @@ export class RevenueCatWebhookService {
     }
   }
 
-  async process(body: RevenueCatWebhookBody): Promise<{ handled: boolean; reason?: string }> {
+  async process(
+    body: RevenueCatWebhookBody,
+  ): Promise<{ handled: boolean; reason?: string }> {
     const event = body?.event;
     if (!event?.id || !event?.type || !event?.app_user_id) {
       this.logger.warn('Malformed RevenueCat webhook payload', body);
@@ -75,7 +82,9 @@ export class RevenueCatWebhookService {
         case 'SUBSCRIBER_ALIAS':
         case 'TRANSFER':
         case 'NON_RENEWING_PURCHASE':
-          this.logger.log(`[RC] Ignoring event type ${event.type} for ${userId}`);
+          this.logger.log(
+            `[RC] Ignoring event type ${event.type} for ${userId}`,
+          );
           break;
         default:
           this.logger.warn(`[RC] Unknown event type: ${event.type as string}`);
@@ -90,29 +99,46 @@ export class RevenueCatWebhookService {
 
       return { handled: true };
     } catch (err) {
-      this.logger.error(`[RC] Failed to process event ${event.id} for ${userId}`, err);
+      this.logger.error(
+        `[RC] Failed to process event ${event.id} for ${userId}`,
+        err,
+      );
       throw err;
     }
   }
 
-  private async handleActivation(userId: string, event: RevenueCatEvent): Promise<void> {
+  private async handleActivation(
+    userId: string,
+    event: RevenueCatEvent,
+  ): Promise<void> {
     const isTrial = event.period_type === 'TRIAL';
-    const purchasedAt = event.purchased_at_ms ? new Date(event.purchased_at_ms).toISOString() : null;
-    const expiresAt = event.expiration_at_ms ? new Date(event.expiration_at_ms).toISOString() : null;
+    const purchasedAt = event.purchased_at_ms
+      ? new Date(event.purchased_at_ms).toISOString()
+      : null;
+    const expiresAt = event.expiration_at_ms
+      ? new Date(event.expiration_at_ms).toISOString()
+      : null;
 
-    const prior = await this.subscriptionService.getState(userId).catch(() => null);
+    const prior = await this.subscriptionService
+      .getState(userId)
+      .catch(() => null);
 
     await this.subscriptionService.updateSubscription(userId, {
       subscription_plan: 'pro',
       subscription_status: isTrial ? 'trial' : 'active',
       ...(isTrial
         ? { trial_started_at: purchasedAt, trial_expires_at: expiresAt }
-        : { subscription_started_at: purchasedAt, subscription_expires_at: expiresAt }),
+        : {
+            subscription_started_at: purchasedAt,
+            subscription_expires_at: expiresAt,
+          }),
       revenuecat_user_id: event.original_app_user_id ?? userId,
       grace_period_expires_at: null,
     });
 
-    this.logger.log(`[RC] Activated Pro for user ${userId} (trial=${isTrial}, expires=${expiresAt})`);
+    this.logger.log(
+      `[RC] Activated Pro for user ${userId} (trial=${isTrial}, expires=${expiresAt})`,
+    );
 
     // First transition to Pro → generate plan if onboarding exists and no plan yet
     if (!prior?.isPro) {
@@ -120,13 +146,20 @@ export class RevenueCatWebhookService {
     }
   }
 
-  private async handleCancellation(userId: string, event: RevenueCatEvent): Promise<void> {
-    const expiresAt = event.expiration_at_ms ? new Date(event.expiration_at_ms).toISOString() : null;
+  private async handleCancellation(
+    userId: string,
+    event: RevenueCatEvent,
+  ): Promise<void> {
+    const expiresAt = event.expiration_at_ms
+      ? new Date(event.expiration_at_ms).toISOString()
+      : null;
     await this.subscriptionService.updateSubscription(userId, {
       subscription_status: 'cancelled',
       subscription_expires_at: expiresAt,
     });
-    this.logger.log(`[RC] Cancelled subscription for user ${userId}, keeps Pro until ${expiresAt}`);
+    this.logger.log(
+      `[RC] Cancelled subscription for user ${userId}, keeps Pro until ${expiresAt}`,
+    );
   }
 
   private async handleExpiration(userId: string): Promise<void> {
@@ -134,7 +167,9 @@ export class RevenueCatWebhookService {
       subscription_plan: 'free',
       subscription_status: 'expired',
     });
-    this.logger.log(`[RC] Subscription expired for user ${userId}, downgraded to free`);
+    this.logger.log(
+      `[RC] Subscription expired for user ${userId}, downgraded to free`,
+    );
   }
 
   private async handleBillingIssue(userId: string): Promise<void> {
@@ -143,13 +178,17 @@ export class RevenueCatWebhookService {
       subscription_status: 'billing_issue',
       grace_period_expires_at: grace,
     });
-    this.logger.log(`[RC] Billing issue for user ${userId}, grace until ${grace}`);
+    this.logger.log(
+      `[RC] Billing issue for user ${userId}, grace until ${grace}`,
+    );
   }
 
   private async maybeGeneratePlan(userId: string): Promise<void> {
     const existingPlan = await this.trainingService.getActivePlan(userId);
     if (existingPlan) {
-      this.logger.log(`[RC] User ${userId} already has active plan — skipping generation`);
+      this.logger.log(
+        `[RC] User ${userId} already has active plan — skipping generation`,
+      );
       return;
     }
 
@@ -160,7 +199,9 @@ export class RevenueCatWebhookService {
       .maybeSingle();
 
     if (error || !onboarding) {
-      this.logger.log(`[RC] No onboarding data for ${userId} — skipping plan generation`);
+      this.logger.log(
+        `[RC] No onboarding data for ${userId} — skipping plan generation`,
+      );
       return;
     }
 
@@ -183,9 +224,14 @@ export class RevenueCatWebhookService {
         preferredDays: selectedDays,
         startDate: dto.start_date || onboarding.start_date,
       });
-      this.logger.log(`[RC] Plan generated for ${userId} after upgrade — plan_id=${result.plan_id}`);
+      this.logger.log(
+        `[RC] Plan generated for ${userId} after upgrade — plan_id=${result.plan_id}`,
+      );
     } catch (err) {
-      this.logger.error(`[RC] Plan generation failed for ${userId} after upgrade`, err);
+      this.logger.error(
+        `[RC] Plan generation failed for ${userId} after upgrade`,
+        err,
+      );
     }
   }
 }

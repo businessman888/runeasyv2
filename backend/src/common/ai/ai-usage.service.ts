@@ -38,25 +38,29 @@ export class AIUsageService {
    */
   async log(entry: UsageLogEntry): Promise<void> {
     try {
-      const { error } = await this.supabaseService.from('ai_usage_logs').insert({
-        user_id: entry.userId || null,
-        feature_name: entry.featureName,
-        model_name: entry.modelName,
-        input_tokens: entry.inputTokens,
-        output_tokens: entry.outputTokens,
-        cache_creation_tokens: entry.cacheCreationTokens,
-        cache_read_tokens: entry.cacheReadTokens,
-        estimated_cost_usd: entry.estimatedCostUsd,
-        latency_ms: entry.latencyMs,
-        success: entry.success,
-        error_message: entry.errorMessage || null,
-      });
+      const { error } = await this.supabaseService
+        .from('ai_usage_logs')
+        .insert({
+          user_id: entry.userId || null,
+          feature_name: entry.featureName,
+          model_name: entry.modelName,
+          input_tokens: entry.inputTokens,
+          output_tokens: entry.outputTokens,
+          cache_creation_tokens: entry.cacheCreationTokens,
+          cache_read_tokens: entry.cacheReadTokens,
+          estimated_cost_usd: entry.estimatedCostUsd,
+          latency_ms: entry.latencyMs,
+          success: entry.success,
+          error_message: entry.errorMessage || null,
+        });
 
       if (error) {
         this.logger.warn(`[AIUsage] Failed to log usage: ${error.message}`);
       }
     } catch (err: any) {
-      this.logger.warn(`[AIUsage] Failed to log usage (non-blocking): ${err?.message}`);
+      this.logger.warn(
+        `[AIUsage] Failed to log usage (non-blocking): ${err?.message}`,
+      );
     }
   }
 }

@@ -24,7 +24,9 @@ export class AIRouterService {
     if (apiKey) {
       this.anthropic = new Anthropic({ apiKey });
     } else {
-      this.logger.warn('[AIRouter] ANTHROPIC_API_KEY not configured — AI calls will fail');
+      this.logger.warn(
+        '[AIRouter] ANTHROPIC_API_KEY not configured — AI calls will fail',
+      );
     }
   }
 
@@ -80,11 +82,15 @@ export class AIRouterService {
       let message: Anthropic.Message;
 
       if (useStreaming) {
-        this.logger.log(`[AIRouter] Using streaming for ${options.featureName} (maxTokens: ${options.maxTokens})`);
-        const stream = this.anthropic!.messages.stream(params as any);
+        this.logger.log(
+          `[AIRouter] Using streaming for ${options.featureName} (maxTokens: ${options.maxTokens})`,
+        );
+        const stream = this.anthropic.messages.stream(params as any);
         message = await stream.finalMessage();
       } else {
-        message = await this.anthropic!.messages.create(params as any) as Anthropic.Message;
+        message = (await this.anthropic.messages.create(
+          params as any,
+        )) as Anthropic.Message;
       }
 
       const latencyMs = Date.now() - startTime;
@@ -99,8 +105,10 @@ export class AIRouterService {
       const usage = {
         input_tokens: message.usage?.input_tokens || 0,
         output_tokens: message.usage?.output_tokens || 0,
-        cache_creation_input_tokens: (message.usage as any)?.cache_creation_input_tokens || 0,
-        cache_read_input_tokens: (message.usage as any)?.cache_read_input_tokens || 0,
+        cache_creation_input_tokens:
+          (message.usage as any)?.cache_creation_input_tokens || 0,
+        cache_read_input_tokens:
+          (message.usage as any)?.cache_read_input_tokens || 0,
       };
 
       const cost = this.usageService.calculateCost(model, usage);
@@ -121,7 +129,7 @@ export class AIRouterService {
 
       this.logger.log(
         `[AIRouter] ${options.featureName} via ${model} in ${latencyMs}ms ` +
-        `(in:${usage.input_tokens} out:${usage.output_tokens} cost:$${cost.toFixed(6)})`,
+          `(in:${usage.input_tokens} out:${usage.output_tokens} cost:$${cost.toFixed(6)})`,
       );
 
       return { data, usage, model, latencyMs, wasFallback: isFallback };
@@ -147,7 +155,10 @@ export class AIRouterService {
     }
   }
 
-  private buildParams(model: string, options: AICallOptions): Record<string, unknown> {
+  private buildParams(
+    model: string,
+    options: AICallOptions,
+  ): Record<string, unknown> {
     const params: Record<string, unknown> = {
       model,
       max_tokens: options.maxTokens,

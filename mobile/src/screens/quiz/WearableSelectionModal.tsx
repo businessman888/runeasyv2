@@ -17,6 +17,16 @@ import {
     isWatchAppInstalled as appleWatchIsInstalled,
 } from '../../services/appleWatch';
 import { connectDeviceManual } from '../../services/devices';
+import {
+    initGarmin,
+    isGarminConnectInstalled,
+    openGarminConnectStore,
+    getConnectedDevice,
+    isAppInstalledOnDevice as isGarminAppInstalled,
+    openAppStoreOnDevice as openGarminAppStore,
+    performHandshake,
+} from '../../services/garminConnect';
+import * as Storage from '../../utils/storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -228,8 +238,71 @@ export function WearableSelectionModal({
                 return;
             }
             setIsConnecting(false);
+        } else if (localSelection === 'garmin') {
+            // Garmin — Connect IQ Mobile SDK (Bluetooth via Garmin Connect Mobile)
+            setIsConnecting(true);
+            try {
+                // 1. Garmin Connect Mobile precisa estar instalado
+                const gcmInstalled = await isGarminConnectInstalled();
+                if (!gcmInstalled) {
+                    Alert.alert(
+                        'Instale o Garmin Connect',
+                        'Você precisa do app Garmin Connect Mobile instalado no celular e o relógio pareado com ele.',
+                        [
+                            { text: 'Cancelar', style: 'cancel' },
+                            { text: 'Abrir loja', onPress: () => { void openGarminConnectStore(); } },
+                        ],
+                    );
+                    setIsConnecting(false);
+                    return;
+                }
+
+                // 2. Inicializa SDK + detecta dispositivos pareados
+                await initGarmin();
+                const device = await getConnectedDevice();
+                if (!device) {
+                    Alert.alert(
+                        'Nenhum Garmin encontrado',
+                        'Certifique-se de que seu relógio está pareado via Garmin Connect Mobile e ligado.',
+                    );
+                    setIsConnecting(false);
+                    return;
+                }
+
+                // 3. App RunEasy precisa estar instalado no relógio
+                const appInstalled = await isGarminAppInstalled(device.id);
+                if (!appInstalled) {
+                    Alert.alert(
+                        'Instale o RunEasy no relógio',
+                        'O app RunEasy precisa estar instalado no seu Garmin via Connect IQ Store.',
+                        [
+                            { text: 'Cancelar', style: 'cancel' },
+                            { text: 'Abrir Connect IQ Store', onPress: () => { void openGarminAppStore(device.id); } },
+                        ],
+                    );
+                    setIsConnecting(false);
+                    return;
+                }
+
+                // 4. Handshake — envia token, aguarda HANDSHAKE_ACK (best-effort, timeout 5s)
+                const token = (await Storage.getItemAsync('access_token')) || '';
+                await performHandshake(device, token, 5000);
+
+                // 5. Persiste em connected_devices (mesmo provider que OAuth para reuso de UI)
+                await connectDeviceManual('garmin', device.name);
+
+                onSelect(localSelection);
+            } catch (e) {
+                Alert.alert(
+                    'Erro ao conectar',
+                    e instanceof Error ? e.message : 'Falha na conexão com o Garmin. Tente novamente.',
+                );
+                setIsConnecting(false);
+                return;
+            }
+            setIsConnecting(false);
         } else {
-            // Garmin — sem OAuth ainda; salva só preferência
+            // Fallback (não deveria acontecer com os providers atuais)
             onSelect(localSelection);
         }
     };

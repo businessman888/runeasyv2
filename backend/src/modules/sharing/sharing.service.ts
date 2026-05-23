@@ -83,21 +83,20 @@ export class SharingService {
         }
       : null;
 
-    const gamification =
-      levelRow
-        ? {
-            currentLevel: levelRow.current_level,
-            totalPoints: levelRow.total_points,
-            currentStreak: levelRow.current_streak,
-            recentBadges: (recentBadges || []).map((ub: any) => ({
-              slug: ub.badges?.slug || '',
-              name: ub.badges?.name || '',
-              icon: ub.badges?.icon || '',
-              type: ub.badges?.type || 'milestone',
-              tier: Number(ub.badges?.tier) || 1,
-            })),
-          }
-        : null;
+    const gamification = levelRow
+      ? {
+          currentLevel: levelRow.current_level,
+          totalPoints: levelRow.total_points,
+          currentStreak: levelRow.current_streak,
+          recentBadges: (recentBadges || []).map((ub: any) => ({
+            slug: ub.badges?.slug || '',
+            name: ub.badges?.name || '',
+            icon: ub.badges?.icon || '',
+            type: ub.badges?.type || 'milestone',
+            tier: Number(ub.badges?.tier) || 1,
+          })),
+        }
+      : null;
 
     const routePoints =
       routeRow?.raw_data && Array.isArray(routeRow.raw_data)

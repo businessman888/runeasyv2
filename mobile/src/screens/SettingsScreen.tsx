@@ -18,6 +18,7 @@ import { useSubscriptionStore } from '../stores/subscriptionStore';
 import { useProFeature } from '../hooks/useProFeature';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { AppleHealthCard } from '../components/AppleHealthCard';
+import { GarminCard } from '../components/GarminCard';
 
 // Icon components using @expo/vector-icons
 function PersonIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -170,13 +171,14 @@ export function SettingsScreen({ navigation }: any) {
                 </View>
 
 
-                {/* DISPOSITIVOS Section (iOS-only, hidden if HealthKit unavailable) */}
-                {Platform.OS === 'ios' && (
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>DISPOSITIVOS</Text>
-                        <AppleHealthCard />
+                {/* DISPOSITIVOS Section — Apple Health (iOS) + Garmin (iOS + Android) */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>DISPOSITIVOS</Text>
+                    <View style={{ gap: 10 }}>
+                        {Platform.OS === 'ios' && <AppleHealthCard />}
+                        <GarminCard />
                     </View>
-                )}
+                </View>
 
                 {/* PREFERÊNCIAS Section */}
                 <View style={styles.section}>

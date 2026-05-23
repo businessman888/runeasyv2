@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AIRouterService, AI_FEATURES } from '../../common/ai';
-import { PaceCalculatorService, TrainingZone } from '../../common/pace-calculator';
+import {
+  PaceCalculatorService,
+  TrainingZone,
+} from '../../common/pace-calculator';
 
 export interface TrainingPlanRequest {
   goal: string;
@@ -136,44 +139,56 @@ export class TrainingAIService {
   private readonly goalDescriptions: Record<string, string> = {
     '5k': 'Completar/melhorar tempo em prova de 5km',
     '10k': 'Completar/melhorar tempo em prova de 10km',
-    'half_marathon': 'Completar/melhorar tempo em meia maratona (21.1km)',
-    'marathon': 'Completar/melhorar tempo em maratona (42.2km)',
-    'general_fitness': 'Melhorar condicionamento físico geral para corrida',
+    half_marathon: 'Completar/melhorar tempo em meia maratona (21.1km)',
+    marathon: 'Completar/melhorar tempo em maratona (42.2km)',
+    general_fitness: 'Melhorar condicionamento físico geral para corrida',
   };
 
   private readonly levelDescriptions: Record<string, string> = {
-    'beginner': 'Iniciante (0-6 meses de experiência)',
-    'intermediate': 'Intermediário (6-24 meses de experiência)',
-    'advanced': 'Avançado (2+ anos de experiência)',
+    beginner: 'Iniciante (0-6 meses de experiência)',
+    intermediate: 'Intermediário (6-24 meses de experiência)',
+    advanced: 'Avançado (2+ anos de experiência)',
   };
 
   private readonly goalLabels: Record<string, string> = {
     '5k': '5km',
     '10k': '10km',
-    'half_marathon': 'Meia Maratona',
-    'marathon': 'Maratona',
-    'general_fitness': 'Fitness',
+    half_marathon: 'Meia Maratona',
+    marathon: 'Maratona',
+    general_fitness: 'Fitness',
   };
 
   private readonly levelLabels: Record<string, string> = {
-    'beginner': 'Corredor Iniciante',
-    'intermediate': 'Corredor Intermediário',
-    'advanced': 'Corredor Avançado',
+    beginner: 'Corredor Iniciante',
+    intermediate: 'Corredor Intermediário',
+    advanced: 'Corredor Avançado',
   };
 
   // Convention shared with mobile (AvailableDaysScreen): 0=Dom ... 6=Sáb,
   // matching JavaScript Date.getDay().
-  private readonly dayNames = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+  private readonly dayNames = [
+    'domingo',
+    'segunda',
+    'terça',
+    'quarta',
+    'quinta',
+    'sexta',
+    'sábado',
+  ];
 
   /**
    * Build a human-readable description of the user's selected weekdays for
    * the AI prompt. Returns an empty string when no days were provided so
    * older callers without preferredDays don't get malformed instructions.
    */
-  private describePreferredDays(preferredDays: number[] | undefined | null): string {
+  private describePreferredDays(
+    preferredDays: number[] | undefined | null,
+  ): string {
     if (!preferredDays || preferredDays.length === 0) return '';
-    const sorted = [...preferredDays].filter(d => d >= 0 && d <= 6).sort((a, b) => a - b);
-    const named = sorted.map(d => `${d}=${this.dayNames[d]}`).join(', ');
+    const sorted = [...preferredDays]
+      .filter((d) => d >= 0 && d <= 6)
+      .sort((a, b) => a - b);
+    const named = sorted.map((d) => `${d}=${this.dayNames[d]}`).join(', ');
     return `\nDIAS DA SEMANA OBRIGATÓRIOS: ${sorted.join(', ')} (${named}). Use SOMENTE estes valores no campo day_of_week — não invente outros dias.`;
   }
 
@@ -181,15 +196,21 @@ export class TrainingAIService {
    * PROMPT 1 (FAST): Generate only the first workout and plan header
    * Target response time: ~3-5 seconds
    */
-  async generateFirstWorkout(request: TrainingPlanRequest): Promise<QuickPlanResult> {
+  async generateFirstWorkout(
+    request: TrainingPlanRequest,
+  ): Promise<QuickPlanResult> {
     // GUARD: Clamp unrealistic pace values before sending to AI
     let safePace = request.currentPace5k;
     if (safePace !== null && safePace !== undefined) {
       if (safePace > 15.0) {
-        this.logger.warn(`[Pace Guard] Pace ${safePace.toFixed(2)} min/km is unrealistic (>15), defaulting to 7.0`);
+        this.logger.warn(
+          `[Pace Guard] Pace ${safePace.toFixed(2)} min/km is unrealistic (>15), defaulting to 7.0`,
+        );
         safePace = 7.0;
       } else if (safePace < 2.0) {
-        this.logger.warn(`[Pace Guard] Pace ${safePace.toFixed(2)} min/km is impossibly fast (<2), clamping to 3.0`);
+        this.logger.warn(
+          `[Pace Guard] Pace ${safePace.toFixed(2)} min/km is impossibly fast (<2), clamping to 3.0`,
+        );
         safePace = 3.0;
       }
     }
@@ -274,12 +295,20 @@ Responda APENAS com o JSON.`;
 
       const result = await this.aiRouter.call<QuickPlanResult>({
         featureName: AI_FEATURES.PLAN_GENERATION_FIRST,
-        systemPrompt: [{ type: 'text' as const, text: systemPrompt, cache_control: { type: 'ephemeral' as const } }],
+        systemPrompt: [
+          {
+            type: 'text' as const,
+            text: systemPrompt,
+            cache_control: { type: 'ephemeral' as const },
+          },
+        ],
         userMessage: userPrompt,
         maxTokens: 4000,
       });
 
-      this.logger.log(`[Prompt 1] First workout generated in ${result.latencyMs}ms`);
+      this.logger.log(
+        `[Prompt 1] First workout generated in ${result.latencyMs}ms`,
+      );
       return result.data;
     } catch (error) {
       this.logger.error('[Prompt 1] Failed to generate first workout', error);
@@ -350,19 +379,32 @@ ${request.targetPace ? `6. IMPORTANTE: O objetivo final é correr no pace ${requ
 Responda APENAS com o JSON contendo as semanas 2 até ${request.targetWeeks}.`;
 
     try {
-      this.logger.log(`[Prompt 2] Generating weeks 2-${request.targetWeeks}...`);
+      this.logger.log(
+        `[Prompt 2] Generating weeks 2-${request.targetWeeks}...`,
+      );
 
       const result = await this.aiRouter.call<FullScheduleResult>({
         featureName: AI_FEATURES.PLAN_GENERATION_REMAINING,
-        systemPrompt: [{ type: 'text' as const, text: systemPrompt, cache_control: { type: 'ephemeral' as const } }],
+        systemPrompt: [
+          {
+            type: 'text' as const,
+            text: systemPrompt,
+            cache_control: { type: 'ephemeral' as const },
+          },
+        ],
         userMessage: userPrompt,
         maxTokens: 20000,
       });
 
-      this.logger.log(`[Prompt 2] Generated ${result.data.weeks?.length || 0} weeks in ${result.latencyMs}ms`);
+      this.logger.log(
+        `[Prompt 2] Generated ${result.data.weeks?.length || 0} weeks in ${result.latencyMs}ms`,
+      );
       return result.data;
     } catch (error) {
-      this.logger.error('[Prompt 2] Failed to generate remaining schedule', error);
+      this.logger.error(
+        '[Prompt 2] Failed to generate remaining schedule',
+        error,
+      );
       throw error;
     }
   }
@@ -371,15 +413,21 @@ Responda APENAS com o JSON contendo as semanas 2 até ${request.targetWeeks}.`;
    * Generate a FULL training plan using a single AI prompt (all weeks at once).
    * Optimized: no fullSchedulePreview (saves ~50% output tokens), concise tips.
    */
-  async generateTrainingPlan(request: TrainingPlanRequest): Promise<GeneratedPlan> {
+  async generateTrainingPlan(
+    request: TrainingPlanRequest,
+  ): Promise<GeneratedPlan> {
     // GUARD: Clamp unrealistic pace values before sending to AI
     let safePace = request.currentPace5k;
     if (safePace !== null && safePace !== undefined) {
       if (safePace > 15.0) {
-        this.logger.warn(`[Pace Guard] Pace ${safePace.toFixed(2)} min/km is unrealistic (>15), defaulting to 7.0`);
+        this.logger.warn(
+          `[Pace Guard] Pace ${safePace.toFixed(2)} min/km is unrealistic (>15), defaulting to 7.0`,
+        );
         safePace = 7.0;
       } else if (safePace < 2.0) {
-        this.logger.warn(`[Pace Guard] Pace ${safePace.toFixed(2)} min/km is impossibly fast (<2), clamping to 3.0`);
+        this.logger.warn(
+          `[Pace Guard] Pace ${safePace.toFixed(2)} min/km is impossibly fast (<2), clamping to 3.0`,
+        );
         safePace = 3.0;
       }
     }
@@ -517,16 +565,26 @@ ${request.limitations ? `7. ADAPTAÇÃO obrigatória às limitações: ${request
 Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
 
     try {
-      this.logger.log(`[FullPlan] Generating ${request.targetWeeks}-week plan with AI Router...`);
+      this.logger.log(
+        `[FullPlan] Generating ${request.targetWeeks}-week plan with AI Router...`,
+      );
 
       const result = await this.aiRouter.call<GeneratedPlan>({
         featureName: AI_FEATURES.PLAN_GENERATION_LEGACY,
-        systemPrompt: [{ type: 'text' as const, text: systemPrompt, cache_control: { type: 'ephemeral' as const } }],
+        systemPrompt: [
+          {
+            type: 'text' as const,
+            text: systemPrompt,
+            cache_control: { type: 'ephemeral' as const },
+          },
+        ],
         userMessage: userPrompt,
         maxTokens: 64000,
       });
 
-      this.logger.log(`[FullPlan] Generated plan with ${result.data.weeks?.length || 0} weeks in ${result.latencyMs}ms`);
+      this.logger.log(
+        `[FullPlan] Generated plan with ${result.data.weeks?.length || 0} weeks in ${result.latencyMs}ms`,
+      );
       return result.data;
     } catch (error) {
       this.logger.error('[FullPlan] Failed to generate training plan', error);

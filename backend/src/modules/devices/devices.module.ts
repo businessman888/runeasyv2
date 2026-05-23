@@ -11,19 +11,17 @@ import { PolarOAuthService } from './providers/polar-oauth.service';
 import { AppleHealthNormalizer } from './providers/apple-health.normalizer';
 
 @Module({
-    imports: [
-        BullModule.registerQueue({ name: 'activity-sync-queue' }),
-    ],
-    controllers: [DevicesController, OAuthController],
-    providers: [
-        DevicesService,
-        ActivitySyncService,
-        ActivitySyncProcessor,
-        TokenRefreshService,
-        FitbitOAuthService,
-        PolarOAuthService,
-        AppleHealthNormalizer,
-    ],
-    exports: [DevicesService, ActivitySyncService, TokenRefreshService],
+  imports: [BullModule.registerQueue({ name: 'activity-sync-queue' })],
+  controllers: [DevicesController, OAuthController],
+  providers: [
+    DevicesService,
+    ActivitySyncService,
+    ActivitySyncProcessor,
+    TokenRefreshService,
+    FitbitOAuthService,
+    PolarOAuthService,
+    AppleHealthNormalizer,
+  ],
+  exports: [DevicesService, ActivitySyncService, TokenRefreshService],
 })
 export class DevicesModule {}

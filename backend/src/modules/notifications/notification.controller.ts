@@ -1,207 +1,220 @@
 import {
-    Controller,
-    Post,
-    Get,
-    Patch,
-    Body,
-    Headers,
-    Param,
-    Query,
-    HttpException,
-    HttpStatus,
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Body,
+  Headers,
+  Param,
+  Query,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { NotificationService } from './notification.service';
 
 @Controller('notifications')
 export class NotificationController {
-    constructor(private readonly notificationService: NotificationService) { }
+  constructor(private readonly notificationService: NotificationService) {}
 
-    /**
-     * Get all notifications for the authenticated user
-     */
-    @Get()
-    async getNotifications(
-        @Headers('x-user-id') userId: string,
-        @Query('limit') limit?: string,
-        @Query('offset') offset?: string,
-    ) {
-        if (!userId) {
-            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
-        }
-
-        const notifications = await this.notificationService.getUserNotifications(
-            userId,
-            limit ? parseInt(limit) : 50,
-            offset ? parseInt(offset) : 0,
-        );
-
-        return { notifications };
+  /**
+   * Get all notifications for the authenticated user
+   */
+  @Get()
+  async getNotifications(
+    @Headers('x-user-id') userId: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
 
-    /**
-     * Get unread notification count
-     */
-    @Get('unread-count')
-    async getUnreadCount(@Headers('x-user-id') userId: string) {
-        if (!userId) {
-            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
-        }
+    const notifications = await this.notificationService.getUserNotifications(
+      userId,
+      limit ? parseInt(limit) : 50,
+      offset ? parseInt(offset) : 0,
+    );
 
-        const count = await this.notificationService.getUnreadCount(userId);
-        return { count };
+    return { notifications };
+  }
+
+  /**
+   * Get unread notification count
+   */
+  @Get('unread-count')
+  async getUnreadCount(@Headers('x-user-id') userId: string) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
 
-    /**
-     * Mark a notification as read
-     */
-    @Patch(':id/read')
-    async markAsRead(
-        @Headers('x-user-id') userId: string,
-        @Param('id') notificationId: string,
-    ) {
-        if (!userId) {
-            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
-        }
+    const count = await this.notificationService.getUnreadCount(userId);
+    return { count };
+  }
 
-        if (!notificationId) {
-            throw new HttpException('Notification ID required', HttpStatus.BAD_REQUEST);
-        }
-
-        const success = await this.notificationService.markAsRead(notificationId, userId);
-        return { success };
+  /**
+   * Mark a notification as read
+   */
+  @Patch(':id/read')
+  async markAsRead(
+    @Headers('x-user-id') userId: string,
+    @Param('id') notificationId: string,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
 
-    /**
-     * Get user's notification preferences
-     */
-    @Get('preferences')
-    async getPreferences(@Headers('x-user-id') userId: string) {
-        if (!userId) {
-            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
-        }
-
-        const preferences = await this.notificationService.getPreferences(userId);
-        return { preferences };
+    if (!notificationId) {
+      throw new HttpException(
+        'Notification ID required',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
-    /**
-     * Update user's notification preferences
-     */
-    @Patch('preferences')
-    async updatePreferences(
-        @Headers('x-user-id') userId: string,
-        @Body() preferences: {
-            readiness_enabled?: boolean;
-            fatigue_alerts_enabled?: boolean;
-            session_reminder_enabled?: boolean;
-            sync_enabled?: boolean;
-            squad_activities_enabled?: boolean;
-        },
-    ) {
-        if (!userId) {
-            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
-        }
+    const success = await this.notificationService.markAsRead(
+      notificationId,
+      userId,
+    );
+    return { success };
+  }
 
-        const updated = await this.notificationService.updatePreferences(userId, preferences);
-        return { preferences: updated };
+  /**
+   * Get user's notification preferences
+   */
+  @Get('preferences')
+  async getPreferences(@Headers('x-user-id') userId: string) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
 
-    /**
-     * Save user's push token
-     */
-    @Post('push-token')
-    async savePushToken(
-        @Headers('x-user-id') userId: string,
-        @Body() dto: { pushToken: string },
-    ) {
-        if (!userId) {
-            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
-        }
+    const preferences = await this.notificationService.getPreferences(userId);
+    return { preferences };
+  }
 
-        if (!dto.pushToken) {
-            throw new HttpException('Push token required', HttpStatus.BAD_REQUEST);
-        }
-
-        await this.notificationService.savePushToken(userId, dto.pushToken);
-
-        return { success: true, message: 'Push token saved successfully' };
+  /**
+   * Update user's notification preferences
+   */
+  @Patch('preferences')
+  async updatePreferences(
+    @Headers('x-user-id') userId: string,
+    @Body()
+    preferences: {
+      readiness_enabled?: boolean;
+      fatigue_alerts_enabled?: boolean;
+      session_reminder_enabled?: boolean;
+      sync_enabled?: boolean;
+      squad_activities_enabled?: boolean;
+    },
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
 
-    /**
-     * Test push notification (for development/debugging)
-     */
-    @Post('test-push')
-    async testPushNotification(
-        @Headers('x-user-id') userId: string,
-        @Body() dto?: { title?: string; body?: string },
-    ) {
-        if (!userId) {
-            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
-        }
+    const updated = await this.notificationService.updatePreferences(
+      userId,
+      preferences,
+    );
+    return { preferences: updated };
+  }
 
-        const title = dto?.title || '🧪 Teste de Notificação RunEasy';
-        const body = dto?.body || 'Se você está vendo isso, as push notifications estão funcionando!';
-
-        const sent = await this.notificationService.sendPushNotification(
-            userId,
-            title,
-            body,
-            {
-                type: 'test',
-                screen: 'Retrospective', // Test deep linking to Retrospective
-            },
-        );
-
-        return {
-            success: sent,
-            message: sent ? 'Push notification sent' : 'Failed to send notification (token may be missing)'
-        };
+  /**
+   * Save user's push token
+   */
+  @Post('push-token')
+  async savePushToken(
+    @Headers('x-user-id') userId: string,
+    @Body() dto: { pushToken: string },
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
+
+    if (!dto.pushToken) {
+      throw new HttpException('Push token required', HttpStatus.BAD_REQUEST);
+    }
+
+    await this.notificationService.savePushToken(userId, dto.pushToken);
+
+    return { success: true, message: 'Push token saved successfully' };
+  }
+
+  /**
+   * Test push notification (for development/debugging)
+   */
+  @Post('test-push')
+  async testPushNotification(
+    @Headers('x-user-id') userId: string,
+    @Body() dto?: { title?: string; body?: string },
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+
+    const title = dto?.title || '🧪 Teste de Notificação RunEasy';
+    const body =
+      dto?.body ||
+      'Se você está vendo isso, as push notifications estão funcionando!';
+
+    const sent = await this.notificationService.sendPushNotification(
+      userId,
+      title,
+      body,
+      {
+        type: 'test',
+        screen: 'Retrospective', // Test deep linking to Retrospective
+      },
+    );
+
+    return {
+      success: sent,
+      message: sent
+        ? 'Push notification sent'
+        : 'Failed to send notification (token may be missing)',
+    };
+  }
 }
 
 // Keep legacy endpoints on /users path
 @Controller('users')
 export class UserNotificationController {
-    constructor(private readonly notificationService: NotificationService) { }
+  constructor(private readonly notificationService: NotificationService) {}
 
-    /**
-     * Save user's push token
-     */
-    @Post('push-token')
-    async savePushToken(
-        @Headers('x-user-id') userId: string,
-        @Body() dto: { push_token: string },
-    ) {
-        if (!userId) {
-            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
-        }
-
-        if (!dto.push_token) {
-            throw new HttpException('Push token required', HttpStatus.BAD_REQUEST);
-        }
-
-        await this.notificationService.savePushToken(userId, dto.push_token);
-
-        return { success: true };
+  /**
+   * Save user's push token
+   */
+  @Post('push-token')
+  async savePushToken(
+    @Headers('x-user-id') userId: string,
+    @Body() dto: { push_token: string },
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
 
-    /**
-     * Test push notification (for development)
-     */
-    @Post('test-notification')
-    async testNotification(@Headers('x-user-id') userId: string) {
-        if (!userId) {
-            throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
-        }
-
-        const sent = await this.notificationService.sendPushNotification(
-            userId,
-            '🧪 Notificação de Teste',
-            'Se você está vendo isso, as notificações estão funcionando!',
-            { type: 'test' },
-        );
-
-        return { success: sent };
+    if (!dto.push_token) {
+      throw new HttpException('Push token required', HttpStatus.BAD_REQUEST);
     }
+
+    await this.notificationService.savePushToken(userId, dto.push_token);
+
+    return { success: true };
+  }
+
+  /**
+   * Test push notification (for development)
+   */
+  @Post('test-notification')
+  async testNotification(@Headers('x-user-id') userId: string) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+
+    const sent = await this.notificationService.sendPushNotification(
+      userId,
+      '🧪 Notificação de Teste',
+      'Se você está vendo isso, as notificações estão funcionando!',
+      { type: 'test' },
+    );
+
+    return { success: sent };
+  }
 }
-

@@ -7,15 +7,15 @@ import { NotificationModule } from '../notifications';
 import { GamificationModule } from '../gamification/gamification.module';
 
 @Module({
-    imports: [
-        forwardRef(() => NotificationModule),
-        GamificationModule,
-        BullModule.registerQueue({
-            name: 'feedback-queue',
-        }),
-    ],
-    controllers: [FeedbackController],
-    providers: [FeedbackAIService, FeedbackProcessor],
-    exports: [FeedbackAIService, BullModule],
+  imports: [
+    forwardRef(() => NotificationModule),
+    GamificationModule,
+    BullModule.registerQueue({
+      name: 'feedback-queue',
+    }),
+  ],
+  controllers: [FeedbackController],
+  providers: [FeedbackAIService, FeedbackProcessor],
+  exports: [FeedbackAIService, BullModule],
 })
-export class FeedbackModule { }
+export class FeedbackModule {}

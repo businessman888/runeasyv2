@@ -28,7 +28,7 @@ export class SubscriptionService {
       .from('users')
       .select(
         'subscription_plan, subscription_status, trial_started_at, trial_expires_at, ' +
-        'subscription_started_at, subscription_expires_at, grace_period_expires_at, onboarding_completed',
+          'subscription_started_at, subscription_expires_at, grace_period_expires_at, onboarding_completed',
       )
       .eq('id', userId)
       .single<UserSubscriptionRow>();
@@ -72,14 +72,17 @@ export class SubscriptionService {
   private toDto(row: UserSubscriptionRow): SubscriptionStateDto {
     const plan = row.subscription_plan ?? 'free';
     const status = row.subscription_status ?? 'active';
-    const trialExpires = row.trial_expires_at ? new Date(row.trial_expires_at).getTime() : null;
+    const trialExpires = row.trial_expires_at
+      ? new Date(row.trial_expires_at).getTime()
+      : null;
     const now = Date.now();
 
     // Pro access if plan='pro' AND status grants active access. 'cancelled' keeps
     // Pro until subscription_expires_at; expired/billing_issue drop the access.
     const isPro =
       plan === 'pro' &&
-      (status === 'active' || status === 'trial' ||
+      (status === 'active' ||
+        status === 'trial' ||
         (status === 'cancelled' &&
           row.subscription_expires_at !== null &&
           new Date(row.subscription_expires_at).getTime() > now));

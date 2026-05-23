@@ -2,52 +2,55 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AIRouterService, AI_FEATURES } from '../../common/ai';
 
 export interface ReadinessInput {
-    checkIn: {
-        sleep: number;      // 1-5
-        legs: number;       // 1-5
-        mood: number;       // 1-5
-        stress: number;     // 1-5
-        motivation: number; // 1-5
-    };
-    trainingLoadData: string;     // Formatted text description
-    todayWorkout?: {
-        type: string;
-        title: string;
-        distance_km?: number;
-        intensity?: string;
-    };
-    tomorrowWorkout?: {
-        type: string;
-        title: string;
-    };
+  checkIn: {
+    sleep: number; // 1-5
+    legs: number; // 1-5
+    mood: number; // 1-5
+    stress: number; // 1-5
+    motivation: number; // 1-5
+  };
+  trainingLoadData: string; // Formatted text description
+  todayWorkout?: {
+    type: string;
+    title: string;
+    distance_km?: number;
+    intensity?: string;
+  };
+  tomorrowWorkout?: {
+    type: string;
+    title: string;
+  };
 }
 
 export interface ReadinessVerdict {
-    readiness_score: number;          // 0-100
-    status_color: 'green' | 'yellow' | 'red';
-    status_label: string;
-    ai_analysis: {
-        headline: string;
-        reasoning: string;
-        plan_adjustment: string;
-    };
-    metrics_summary: Array<{
-        label: string;
-        value: string;
-        sublabel?: string;
-        icon: string;
-    }>;
-    generated_at: string;
+  readiness_score: number; // 0-100
+  status_color: 'green' | 'yellow' | 'red';
+  status_label: string;
+  ai_analysis: {
+    headline: string;
+    reasoning: string;
+    plan_adjustment: string;
+  };
+  metrics_summary: Array<{
+    label: string;
+    value: string;
+    sublabel?: string;
+    icon: string;
+  }>;
+  generated_at: string;
 }
 
 @Injectable()
 export class ReadinessAIService {
-    private readonly logger = new Logger(ReadinessAIService.name);
+  private readonly logger = new Logger(ReadinessAIService.name);
 
-    constructor(private aiRouter: AIRouterService) {}
+  constructor(private aiRouter: AIRouterService) {}
 
-    async analyzeReadiness(input: ReadinessInput, userId?: string): Promise<ReadinessVerdict> {
-        const systemPrompt = `Você é o 'Head Coach IA' da RunEasy. Sua missão é decidir se o atleta deve manter o plano, reduzir a carga ou descansar hoje.
+  async analyzeReadiness(
+    input: ReadinessInput,
+    userId?: string,
+  ): Promise<ReadinessVerdict> {
+    const systemPrompt = `Você é o 'Head Coach IA' da RunEasy. Sua missão é decidir se o atleta deve manter o plano, reduzir a carga ou descansar hoje.
 
 INPUTS RECEBIDOS:
 1. Check-in (1-5): Sono, Pernas, Clima Mental, Estresse, Motivação
@@ -90,17 +93,29 @@ OUTPUT: Retorne APENAS um objeto JSON válido seguindo o schema abaixo, sem expl
   ]
 }`;
 
-        const checkInAvg = (input.checkIn.sleep + input.checkIn.legs + input.checkIn.mood + input.checkIn.stress + input.checkIn.motivation) / 5;
+    const checkInAvg =
+      (input.checkIn.sleep +
+        input.checkIn.legs +
+        input.checkIn.mood +
+        input.checkIn.stress +
+        input.checkIn.motivation) /
+      5;
 
-        const checkInLabels = {
-            sleep: ['Péssimo', 'Ruim', 'Ok', 'Bom', 'Excelente'],
-            legs: ['Como chumbo', 'Pesadas', 'Normais', 'Leves', 'Com molas'],
-            mood: ['Tempestade', 'Nublado', 'Instável', 'Ensolarado', 'Céu limpo'],
-            stress: ['Insuportável', 'Pesado', 'Presente', 'Leve', 'Inexistente'],
-            motivation: ['Ainda na cama', 'Preciso café', 'Talvez', 'Vamos nessa!', 'Já estou de tênis'],
-        };
+    const checkInLabels = {
+      sleep: ['Péssimo', 'Ruim', 'Ok', 'Bom', 'Excelente'],
+      legs: ['Como chumbo', 'Pesadas', 'Normais', 'Leves', 'Com molas'],
+      mood: ['Tempestade', 'Nublado', 'Instável', 'Ensolarado', 'Céu limpo'],
+      stress: ['Insuportável', 'Pesado', 'Presente', 'Leve', 'Inexistente'],
+      motivation: [
+        'Ainda na cama',
+        'Preciso café',
+        'Talvez',
+        'Vamos nessa!',
+        'Já estou de tênis',
+      ],
+    };
 
-        const userPrompt = `ANÁLISE DE PRONTIDÃO DO ATLETA
+    const userPrompt = `ANÁLISE DE PRONTIDÃO DO ATLETA
 
 CHECK-IN DIÁRIO (1-5):
 - Sono: ${input.checkIn.sleep}/5 (${checkInLabels.sleep[input.checkIn.sleep - 1]})
@@ -123,25 +138,33 @@ Hora atual: ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: 
 
 Gere o veredito de prontidão em JSON.`;
 
-        try {
-            this.logger.log('Generating readiness verdict with AI Router...');
+    try {
+      this.logger.log('Generating readiness verdict with AI Router...');
 
-            const result = await this.aiRouter.call<ReadinessVerdict>({
-                featureName: AI_FEATURES.READINESS,
-                userId,
-                systemPrompt: [{ type: 'text' as const, text: systemPrompt, cache_control: { type: 'ephemeral' as const } }],
-                userMessage: userPrompt,
-                maxTokens: 2000,
-            });
+      const result = await this.aiRouter.call<ReadinessVerdict>({
+        featureName: AI_FEATURES.READINESS,
+        userId,
+        systemPrompt: [
+          {
+            type: 'text' as const,
+            text: systemPrompt,
+            cache_control: { type: 'ephemeral' as const },
+          },
+        ],
+        userMessage: userPrompt,
+        maxTokens: 2000,
+      });
 
-            const verdict = result.data;
-            verdict.generated_at = new Date().toISOString();
+      const verdict = result.data;
+      verdict.generated_at = new Date().toISOString();
 
-            this.logger.log(`Readiness verdict: score=${verdict.readiness_score}, color=${verdict.status_color}`);
-            return verdict;
-        } catch (error) {
-            this.logger.error('Failed to generate readiness verdict', error);
-            throw error;
-        }
+      this.logger.log(
+        `Readiness verdict: score=${verdict.readiness_score}, color=${verdict.status_color}`,
+      );
+      return verdict;
+    } catch (error) {
+      this.logger.error('Failed to generate readiness verdict', error);
+      throw error;
     }
+  }
 }

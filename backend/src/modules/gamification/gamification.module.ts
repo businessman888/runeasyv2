@@ -5,10 +5,9 @@ import { RankingController } from './ranking.controller';
 import { NotificationModule } from '../notifications';
 
 @Module({
-    imports: [NotificationModule],
-    controllers: [GamificationController, RankingController],
-    providers: [GamificationService],
-    exports: [GamificationService],
+  imports: [NotificationModule],
+  controllers: [GamificationController, RankingController],
+  providers: [GamificationService],
+  exports: [GamificationService],
 })
-export class GamificationModule { }
-
+export class GamificationModule {}

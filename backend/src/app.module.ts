@@ -44,7 +44,7 @@ import { SubscriptionModule } from './modules/subscription';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
         const redisUrl = configService.get<string>('REDIS_URL');
-        
+
         if (redisUrl) {
           try {
             const url = new URL(redisUrl);
@@ -54,14 +54,16 @@ import { SubscriptionModule } from './modules/subscription';
                 port: parseInt(url.port, 10) || 6379,
                 username: url.username || undefined,
                 password: url.password || undefined,
-                tls: redisUrl.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
+                tls: redisUrl.startsWith('rediss://')
+                  ? { rejectUnauthorized: false }
+                  : undefined,
               },
             };
           } catch (error) {
             console.error('[BullMQ] Failed to parse REDIS_URL:', error);
           }
         }
-        
+
         // Fallback for local development
         return {
           connection: {
@@ -103,4 +105,4 @@ import { SubscriptionModule } from './modules/subscription';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}

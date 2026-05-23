@@ -42,22 +42,25 @@ export const TIER_MODEL_MAP: Record<AITier, string> = {
 export const FALLBACK_MODEL = AI_MODELS.SONNET_4_6;
 
 // Pricing per million tokens (USD) — verify against https://www.anthropic.com/pricing
-export const MODEL_PRICING: Record<string, {
-  input: number;
-  output: number;
-  cache_write: number;
-  cache_read: number;
-}> = {
+export const MODEL_PRICING: Record<
+  string,
+  {
+    input: number;
+    output: number;
+    cache_write: number;
+    cache_read: number;
+  }
+> = {
   [AI_MODELS.SONNET_4_6]: {
-    input: 3.00,
-    output: 15.00,
+    input: 3.0,
+    output: 15.0,
     cache_write: 3.75,
-    cache_read: 0.30,
+    cache_read: 0.3,
   },
   [AI_MODELS.HAIKU_4_5]: {
-    input: 0.80,
-    output: 4.00,
-    cache_write: 1.00,
+    input: 0.8,
+    output: 4.0,
+    cache_write: 1.0,
     cache_read: 0.08,
   },
 };
