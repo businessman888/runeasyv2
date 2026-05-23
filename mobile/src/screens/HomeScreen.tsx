@@ -12,8 +12,8 @@ import {
 } from 'react-native';
 import LottieView from 'lottie-react-native';
 import * as Storage from '../utils/storage';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius, shadows } from '../theme';
+import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
+import { colors, typography, spacing, borderRadius, shadows, fonts } from '../theme';
 import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore, useStatsStore, useNotificationStore, useWorkoutScopeStore, getDisplayName, getAvatarUrl } from '../stores';
 import type { LatestActivityData } from '../stores/feedbackStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
@@ -32,6 +32,9 @@ import { getCurrentPatent } from '../utils/patents';
 import { useHealthKitStore } from '../stores/healthKitStore';
 import { useProFeature } from '../hooks/useProFeature';
 import { UpgradeProCard } from '../components/upgrade/UpgradeProCard';
+import { GlassTeaseOverlay } from '../components/upgrade/GlassTeaseOverlay';
+import { ProCtaButton } from '../components/upgrade/ProCtaButton';
+import type { WorkoutData } from '../components/WorkoutCard';
 
 import { BASE_API_URL } from '../config/api.config';
 
@@ -43,6 +46,16 @@ const SCOPE_TABS: { key: 'plan' | 'activity'; label: string }[] = [
     { key: 'plan', label: 'Treinos' },
     { key: 'activity', label: 'Atividades' },
 ];
+
+// Decorative skeleton shown to Free users behind the glass teaser — looks like
+// a real generated workout to instigate "what's my plan?". Never interactive.
+const MOCK_TEASE_WORKOUT: WorkoutData = {
+    id: 'tease-mock',
+    type: 'intervals',
+    distance_km: 8,
+    instructions_json: [{ type: 'main', distance_km: 8, pace_min: 5.0 }],
+    status: 'pending',
+};
 
 // Icon components using @expo/vector-icons
 function RunningIcon({ size = 30, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -436,6 +449,11 @@ export function HomeScreen({ navigation }: any) {
 
     const hasCompletedWorkouts = (summary?.total_runs ?? 0) > 0;
 
+    // Coach-analysis card locked state. Free users get a premium Pro upsell;
+    // Pro users without a completed workout get the "complete first workout" hint.
+    const isAiLocked = !latestPlanActivityLoading && !latestPlanActivity?.activity && !hasCompletedWorkouts;
+    const isFreeAiLock = isAiLocked && !isProUser;
+
     // Check if workout is for today (used for button enable/disable)
     const isWorkoutToday = (dateStr: string): boolean => {
         const workoutDate = new Date(dateStr + 'T00:00:00');
@@ -792,17 +810,30 @@ export function HomeScreen({ navigation }: any) {
                     </View>
                 )}
 
-                {/* Free users see UpgradeProCard in place of the workout. Pro path unchanged. */}
+                {/* Free users see a blurred mock workout (teaser) with a glass
+                    overlay in place of the real workout. Pro path unchanged. */}
                 {!isProUser ? (
-                    <UpgradeProCard
-                        variant="medium"
-                        tagline="Seu plano de corrida personalizado pelo Coach AI"
-                        bullets={[
-                            'Planos de treino com Coach AI',
-                            'Ajuste automático com seu relógio',
-                            'Acompanhamento 24h do seu plano',
-                        ]}
-                    />
+                    <GlassTeaseOverlay
+                        pressable
+                        blurIntensity={70}
+                        veilColor={colors.proGlassOverlayStrong}
+                        overlay={
+                            <View style={styles.homeTeaseOverlay}>
+                                <Text style={styles.homeTeaseTitle}>
+                                    Você está usando só uma fração do RunEasy.
+                                </Text>
+                                <ProCtaButton label="Descobrir o que falta" icon="arrow-forward" />
+                            </View>
+                        }
+                    >
+                        <WorkoutCard
+                            workout={MOCK_TEASE_WORKOUT}
+                            isToday
+                            isCompleted={false}
+                            onStartWorkout={() => {}}
+                            allBadges={[]}
+                        />
+                    </GlassTeaseOverlay>
                 ) : (
                     <>
                         {/* Workout Card - Show when it's NOT a recovery day and there's a workout to show */}
@@ -834,7 +865,7 @@ export function HomeScreen({ navigation }: any) {
                 {/* Análise / resultados de treino — exibido para todos. Free vê os
                     resumos de corrida livre/manual aqui, ou o estado "sem resultados".
                     A análise do Coach AI só aparece para treinos de plano (Pro). */}
-                <View style={styles.aiCard}>
+                <View style={[styles.aiCard, isFreeAiLock && styles.aiCardPremium]}>
                     {latestPlanActivityLoading ? (
                         <View style={styles.aiLoadingContainer}>
                             <Skeleton width="50%" height={20} style={{ marginBottom: 8 }} />
@@ -854,7 +885,29 @@ export function HomeScreen({ navigation }: any) {
                                 <BinocularsIcon size={35} color="#00D4FF" />
                             </View>
                         </>
+                    ) : !isProUser ? (
+                        /* Free: premium Pro upsell for the Coach analysis. */
+                        <View style={styles.lockedContainer}>
+                            <View style={styles.aiHeader}>
+                                <View>
+                                    <Text style={styles.aiTitle}>Análise do Treinador</Text>
+                                    <Text style={styles.aiSubtitlePremium}>Exclusivo do Coach AI</Text>
+                                </View>
+                                <View style={styles.aiLockBadge}>
+                                    <Feather name="lock" size={18} color={colors.primary} />
+                                </View>
+                            </View>
+                            <View style={styles.lockedContentPremium}>
+                                <View style={styles.aiLockBadgeLarge}>
+                                    <Feather name="lock" size={30} color={colors.primary} />
+                                </View>
+                                <Text style={styles.lockedTextPremium}>
+                                    Torne-se Pro para alavancar seu nível com acompanhamento real do seu Coach
+                                </Text>
+                            </View>
+                        </View>
                     ) : (
+                        /* Pro without a completed workout yet. */
                         <View style={styles.lockedContainer}>
                             <View style={styles.aiHeader}>
                                 <View>
@@ -1118,6 +1171,20 @@ const styles = StyleSheet.create({
         marginBottom: spacing.lg,
     },
 
+    // Glass teaser overlay (Free) — sits over the blurred mock workout
+    homeTeaseOverlay: {
+        alignItems: 'center',
+        gap: spacing.lg,
+    },
+    homeTeaseTitle: {
+        color: colors.textLight,
+        fontFamily: fonts.extrabold,
+        fontSize: 22,
+        lineHeight: 28,
+        letterSpacing: -0.3,
+        textAlign: 'center',
+    },
+
     // Spacing between stacked manual/free activity cards (Atividades tab)
     activityCardSpacing: {
         marginBottom: spacing.base,
@@ -1250,6 +1317,12 @@ const styles = StyleSheet.create({
         padding: spacing.lg,
         gap: spacing.lg,
     },
+    // Premium accent for the Free Coach-analysis upsell card
+    aiCardPremium: {
+        borderWidth: 1,
+        borderColor: 'rgba(0, 212, 255, 0.35)',
+        ...shadows.neon,
+    },
     aiLoadingContainer: {
         padding: spacing.md,
     },
@@ -1363,6 +1436,48 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.sm,
         color: '#6B7280',
         textAlign: 'center' as const,
+    },
+    // Premium locked state (Free Coach-analysis upsell)
+    aiSubtitlePremium: {
+        fontSize: typography.fontSizes.xs,
+        color: colors.primary,
+        fontFamily: fonts.semibold,
+        marginTop: 3,
+    },
+    aiLockBadge: {
+        width: 40,
+        height: 40,
+        borderRadius: borderRadius.full,
+        alignItems: 'center' as const,
+        justifyContent: 'center' as const,
+        backgroundColor: 'rgba(0, 212, 255, 0.12)',
+        borderWidth: 1,
+        borderColor: 'rgba(0, 212, 255, 0.3)',
+    },
+    lockedContentPremium: {
+        alignItems: 'center' as const,
+        justifyContent: 'center' as const,
+        paddingTop: spacing.sm,
+        paddingBottom: spacing.xs,
+        gap: spacing.base,
+    },
+    aiLockBadgeLarge: {
+        width: 72,
+        height: 72,
+        borderRadius: borderRadius.full,
+        alignItems: 'center' as const,
+        justifyContent: 'center' as const,
+        backgroundColor: 'rgba(0, 212, 255, 0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(0, 212, 255, 0.25)',
+    },
+    lockedTextPremium: {
+        fontSize: typography.fontSizes.base,
+        lineHeight: 22,
+        color: colors.textLight,
+        fontFamily: fonts.medium,
+        textAlign: 'center' as const,
+        paddingHorizontal: spacing.sm,
     },
     // Apple Health sync banner
     healthKitBanner: {

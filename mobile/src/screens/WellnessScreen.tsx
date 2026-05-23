@@ -108,12 +108,11 @@ export function WellnessScreen() {
                         ) : (
                             <UpgradeProCard
                                 variant="medium"
-                                tagline="Sua prontidão diária calculada por IA"
-                                bullets={[
-                                    'Prontidão calculada por IA todo dia',
-                                    'Sugestões com base em sono e FC',
-                                    'Saiba quando forçar ou descansar',
-                                ]}
+                                heroVariant="headline"
+                                showHeader={false}
+                                priceLabel="Como seu corpo está hoje?"
+                                tagline="Faça o check-in e descubra a recomendação do Coach AI"
+                                ctaLabel="Ver recomendação do Coach"
                             />
                         )}
 

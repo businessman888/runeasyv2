@@ -7,7 +7,7 @@ import {
     Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
 import { colors, typography } from '../theme';
 import { ScheduleDay } from '../stores/trainingStore';
 
@@ -198,7 +198,13 @@ export function HomeFixedHeader({
                         >
                             <Text style={styles.dayLabel}>{day.label}</Text>
                             <View style={styles.dayIconContainer}>
-                                {isProUser && renderDayIcon(day)}
+                                {/* Pro: real plan workout/rest icon. Free: a clean
+                                    lock where the plan icon would be (teaser). */}
+                                {isProUser ? (
+                                    renderDayIcon(day)
+                                ) : (
+                                    <Feather name="lock" size={12} color="rgba(235, 235, 245, 0.35)" />
+                                )}
                             </View>
                             <Text
                                 style={[

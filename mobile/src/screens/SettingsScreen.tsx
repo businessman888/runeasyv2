@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -10,9 +10,12 @@ import {
     Platform,
     Pressable,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
-import { useAuthStore, getDisplayName, getAvatarUrl } from '../stores';
+import { useAuthStore, useTrialModalStore, getDisplayName, getAvatarUrl } from '../stores';
+import { useSubscriptionStore } from '../stores/subscriptionStore';
+import { useProFeature } from '../hooks/useProFeature';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { AppleHealthCard } from '../components/AppleHealthCard';
 
@@ -53,6 +56,16 @@ function EditIcon({ size = 16, color = '#0A0A18' }: { size?: number; color?: str
 
 export function SettingsScreen({ navigation }: any) {
     const { user, logout } = useAuthStore();
+
+    // One-time (per app open) "Iniciar Teste Grátis" promo — Free only, and only
+    // once the subscription has resolved (avoids flashing it to a Pro user).
+    const { isProUser } = useProFeature();
+    const trialIsLoading = useSubscriptionStore((s) => s.isLoading);
+    useFocusEffect(
+        useCallback(() => {
+            if (!isProUser && !trialIsLoading) useTrialModalStore.getState().show();
+        }, [isProUser, trialIsLoading])
+    );
 
     // Secret gesture: 5 taps on the header opens DevMenu (dev/preview only).
     // Ships as no-op in production via __DEV__ guard at navigation registration.

@@ -13,17 +13,32 @@ import {
     PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius, shadows } from '../theme';
+import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
+import { colors, typography, spacing, borderRadius, shadows, fonts } from '../theme';
 import { ZONE_COLORS, ZONE_LABELS, PHASE_LABELS, getZoneColor } from '../theme/zoneColors';
-import { useTrainingStore, useStatsStore, useWorkoutScopeStore, ScheduleDay } from '../stores';
+import { useTrainingStore, useStatsStore, useWorkoutScopeStore, useTrialModalStore, ScheduleDay } from '../stores';
+import { useSubscriptionStore } from '../stores/subscriptionStore';
 import type { TrainingZone, WorkoutPhase } from '../stores/trainingStore';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { UpgradeProCard } from '../components/upgrade/UpgradeProCard';
+import { GlassTeaseOverlay } from '../components/upgrade/GlassTeaseOverlay';
+import { ProCtaButton } from '../components/upgrade/ProCtaButton';
 import { SegmentedTabs } from '../components/ui/SegmentedTabs';
 import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
-import { WorkoutDayCard } from '../components/training/WorkoutDayCard';
+import { WorkoutDayCard, type DayWorkout } from '../components/training/WorkoutDayCard';
 import { useProFeature } from '../hooks/useProFeature';
+
+// Decorative mock workout shown (blurred) under the Calendar day teaser for
+// Free users — looks like a real planned workout. Never interactive.
+const MOCK_DAY_WORKOUT: DayWorkout = {
+    id: 'tease-day',
+    type: 'intervals',
+    distance_km: 8,
+    source: 'plan',
+    status: 'pending',
+    objective: 'Treino do dia',
+    instructions_json: [{ pace_min: 5.0 }],
+};
 
 
 // Icon components using @expo/vector-icons
@@ -171,6 +186,9 @@ export function CalendarScreen({ navigation }: any) {
     // orphan plan in the DB, so gate at the data source rather than per-element.
     const workouts = isProUser ? rawWorkouts : [];
     const schedule = isProUser ? rawSchedule : [];
+    // Free users on the Treinos tab get the conversion teaser: a blurred mock
+    // calendar + locked day card with the upgrade card floating on top.
+    const isPlanTease = !isProUser && scope === 'plan';
     const [selectedDate, setSelectedDate] = React.useState(new Date().getDate());
     const [currentMonth, setCurrentMonth] = React.useState(new Date());
     const [isScheduleLocked, setIsScheduleLocked] = React.useState(false);
@@ -285,6 +303,15 @@ export function CalendarScreen({ navigation }: any) {
             fetchSummary();
             fetchPlan();
         }, [currentMonth])
+    );
+
+    // One-time (per app open) "Iniciar Teste Grátis" promo — Free only, and only
+    // once the subscription has resolved (avoids flashing it to a Pro user).
+    const trialIsLoading = useSubscriptionStore((s) => s.isLoading);
+    useFocusEffect(
+        useCallback(() => {
+            if (!isProUser && !trialIsLoading) useTrialModalStore.getState().show();
+        }, [isProUser, trialIsLoading])
     );
 
     // Helper: Get tomorrow's schedule entry (today + 1)
@@ -575,6 +602,19 @@ export function CalendarScreen({ navigation }: any) {
         return null;
     };
 
+    // Deterministic mock status for the Free teaser grid — fills the calendar
+    // with a believable plan: rest on Sun/Thu, past days completed, future
+    // days planned. Purely decorative (rendered behind the glass blur).
+    const getMockStatusForDay = (day: number | null): 'completed' | 'missed' | 'planned' | 'recovery' | null => {
+        if (!day) return null;
+        const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+        const dow = date.getDay();
+        if (dow === 0 || dow === 4) return 'recovery';
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return date.getTime() < today.getTime() ? 'completed' : 'planned';
+    };
+
     // Derived: Get schedule for selected date (reactive to selectedDate)
     const getSelectedDateStr = () => {
         return `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`;
@@ -642,6 +682,83 @@ export function CalendarScreen({ navigation }: any) {
     const insets = useSafeAreaInsets();
     const days = getDaysInMonth();
 
+    // Calendar grid body (week header + days + legend), parameterized by the
+    // status function so it can render real data OR the Free teaser mockup.
+    const renderGridContent = (
+        getStatus: (day: number | null) => 'completed' | 'missed' | 'planned' | 'recovery' | null,
+    ) => (
+        <>
+            {/* Week days header */}
+            <View style={styles.weekDaysRow}>
+                {weekDays.map((day, i) => (
+                    <Text key={i} style={styles.weekDayText}>{day}</Text>
+                ))}
+            </View>
+
+            {/* Days grid */}
+            <View style={styles.daysGrid}>
+                {days.map((day, index) => {
+                    const workoutStatus = getStatus(day);
+                    const isSelected = day === selectedDate;
+
+                    return (
+                        <TouchableOpacity
+                            key={index}
+                            style={styles.dayCell}
+                            onPress={() => day && handleDayPress(day)}
+                            disabled={!day}
+                        >
+                            {day ? (
+                                <View style={[
+                                    styles.dayContent,
+                                    isSelected && styles.daySelected,
+                                ]}>
+                                    <Text style={[
+                                        styles.dayNumber,
+                                        isSelected && styles.dayNumberSelected,
+                                    ]}>
+                                        {day}
+                                    </Text>
+                                    {/* Workout indicator based on API type/status */}
+                                    {workoutStatus === 'completed' && !isSelected && (
+                                        <View style={styles.completedIndicator}>
+                                            <CheckIcon size={14} color="#32CD32" />
+                                        </View>
+                                    )}
+                                    {workoutStatus === 'missed' && !isSelected && (
+                                        <View style={styles.missedIndicator}>
+                                            <XIcon size={12} color="#FF4444" />
+                                        </View>
+                                    )}
+                                    {workoutStatus === 'recovery' && !isSelected && (
+                                        <View style={styles.recoveryIndicator}>
+                                            <BoltIcon size={12} color="#A78BFA" />
+                                        </View>
+                                    )}
+                                    {workoutStatus === 'planned' && !isSelected && (
+                                        <View style={styles.plannedIndicator} />
+                                    )}
+                                </View>
+                            ) : null}
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+
+            {/* Legend - inside calendar card */}
+            <View style={styles.legend}>
+                <View style={styles.legendItem}>
+                    <View style={styles.legendLine} />
+                    <Text style={styles.legendText}>Rodagem</Text>
+                </View>
+                <View style={styles.legendItem}>
+                    <View style={[styles.legendLine, styles.legendLineCyan]} />
+                    <Text style={styles.legendText}>Intervalado</Text>
+                </View>
+            </View>
+        </>
+    );
+
     return (
         <ScreenContainer>
             {/* Locked State Overlay */}
@@ -684,15 +801,6 @@ export function CalendarScreen({ navigation }: any) {
                         <GoalsIcon size={24} color="#EBEBF5" />
                     </TouchableOpacity>
                 </View>
-
-                {!isProUser && scope === 'plan' && (
-                    <View style={{ paddingHorizontal: spacing.lg, marginTop: spacing.md }}>
-                        <UpgradeProCard
-                            variant="compact"
-                            tagline="Calendário com plano de treino do Coach AI"
-                        />
-                    </View>
-                )}
 
                 {/* Stats Bar */}
                 <View style={styles.statsBar}>
@@ -746,82 +854,34 @@ export function CalendarScreen({ navigation }: any) {
                     </View>
                 </View>
 
-                {/* Calendar Grid */}
-                <View style={styles.calendarContainer}>
-                    {/* Week days header */}
-                    <View style={styles.weekDaysRow}>
-                        {weekDays.map((day, i) => (
-                            <Text key={i} style={styles.weekDayText}>{day}</Text>
-                        ))}
-                    </View>
-
-                    {/* Days grid */}
-                    <View style={styles.daysGrid}>
-                        {days.map((day, index) => {
-                            // Treinos tab marks plan workouts/rest (rest stays rest
-                            // even with a manual run); Atividades tab marks days with
-                            // manual/free runs (no rest concept).
-                            const workoutStatus = scope === 'plan'
-                                ? getPlanStatusForDay(day)
-                                : getActivityStatusForDay(day);
-                            const isSelected = day === selectedDate;
-
-                            return (
-                                <TouchableOpacity
-                                    key={index}
-                                    style={styles.dayCell}
-                                    onPress={() => day && handleDayPress(day)}
-                                    disabled={!day}
-                                >
-                                    {day ? (
-                                        <View style={[
-                                            styles.dayContent,
-                                            isSelected && styles.daySelected,
-                                        ]}>
-                                            <Text style={[
-                                                styles.dayNumber,
-                                                isSelected && styles.dayNumberSelected,
-                                            ]}>
-                                                {day}
-                                            </Text>
-                                            {/* Workout indicator based on API type/status */}
-                                            {workoutStatus === 'completed' && !isSelected && (
-                                                <View style={styles.completedIndicator}>
-                                                    <CheckIcon size={14} color="#32CD32" />
-                                                </View>
-                                            )}
-                                            {workoutStatus === 'missed' && !isSelected && (
-                                                <View style={styles.missedIndicator}>
-                                                    <XIcon size={12} color="#FF4444" />
-                                                </View>
-                                            )}
-                                            {workoutStatus === 'recovery' && !isSelected && (
-                                                <View style={styles.recoveryIndicator}>
-                                                    <BoltIcon size={12} color="#A78BFA" />
-                                                </View>
-                                            )}
-                                            {workoutStatus === 'planned' && !isSelected && (
-                                                <View style={styles.plannedIndicator} />
-                                            )}
-                                        </View>
-                                    ) : null}
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </View>
-
-                    {/* Legend - inside calendar card */}
-                    <View style={styles.legend}>
-                        <View style={styles.legendItem}>
-                            <View style={styles.legendLine} />
-                            <Text style={styles.legendText}>Rodagem</Text>
+                {/* Calendar Grid — Free + Treinos shows a blurred mock plan with
+                    the upgrade card floating on top; everyone else sees real data. */}
+                {isPlanTease ? (
+                    <GlassTeaseOverlay
+                        radius={24}
+                        showAnimatedBorder={false}
+                        style={styles.calendarTease}
+                        overlay={
+                            <UpgradeProCard
+                                variant="medium"
+                                heroVariant="headline"
+                                showHeader={false}
+                                priceLabel="A diferença entre correr e evoluir é um plano."
+                                tagline="Deixe o Coach AI montar seu cronograma pra você"
+                                ctaLabel="Montar cronograma"
+                                style={styles.calendarTeaseCard}
+                            />
+                        }
+                    >
+                        <View style={[styles.calendarContainer, styles.calendarTeaseInner]}>
+                            {renderGridContent(getMockStatusForDay)}
                         </View>
-                        <View style={styles.legendItem}>
-                            <View style={[styles.legendLine, styles.legendLineCyan]} />
-                            <Text style={styles.legendText}>Intervalado</Text>
-                        </View>
+                    </GlassTeaseOverlay>
+                ) : (
+                    <View style={styles.calendarContainer}>
+                        {renderGridContent(scope === 'plan' ? getPlanStatusForDay : getActivityStatusForDay)}
                     </View>
-                </View>
+                )}
 
                 {/* Selected Date Section - Reactive to calendar selection */}
                 <View
@@ -834,6 +894,7 @@ export function CalendarScreen({ navigation }: any) {
                             <Text style={styles.todayTitle}>
                                 {scope === 'activity'
                                     ? 'Atividades do dia'
+                                    : isPlanTease ? 'Treinos do dia'
                                     : !isSelectedDateWithinPlan ? 'Sem Plano Ativo' : isSelectedPlanRecovery ? 'Dia de Recuperação' : 'Treinos do dia'}
                             </Text>
                         </View>
@@ -846,10 +907,32 @@ export function CalendarScreen({ navigation }: any) {
                     </View>
 
                     {/* Day detail — keyed to the active tab.
-                        Treinos: rest stays rest; plan workouts otherwise.
+                        Treinos: Free teaser (locked card) → rest stays rest → plan workouts.
                         Atividades: the day's manual/free runs, or a friendly empty card. */}
                     {scope === 'plan' ? (
-                        isSelectedPlanRecovery ? (
+                        isPlanTease ? (
+                            <GlassTeaseOverlay
+                                key={`tease-day-${getSelectedDateStr()}`}
+                                pressable
+                                radius={24}
+                                blurIntensity={70}
+                                veilColor={colors.proGlassOverlayStrong}
+                                showAnimatedBorder={false}
+                                borderColor={colors.proGlassBorder}
+                                overlay={
+                                    <View style={styles.lockedDayOverlay}>
+                                        <Feather name="lock" size={26} color={colors.primary} />
+                                        <Text style={styles.lockedDayTitle}>Treino do dia bloqueado</Text>
+                                        <Text style={styles.lockedDaySubtitle}>
+                                            Ative o Pro para ver o treino que o Coach AI preparou pra você.
+                                        </Text>
+                                        <ProCtaButton label="Desbloquear treino" icon="arrow-forward" />
+                                    </View>
+                                }
+                            >
+                                <WorkoutDayCard workout={MOCK_DAY_WORKOUT} onPress={() => {}} />
+                            </GlassTeaseOverlay>
+                        ) : isSelectedPlanRecovery ? (
                             <View key={`recovery-${getSelectedDateStr()}`} style={styles.recoveryCard}>
                                 <View style={styles.recoveryCardHeader}>
                                     <MoonIcon size={48} color="#A78BFA" />
@@ -1366,6 +1449,37 @@ const styles = StyleSheet.create({
         borderRadius: 24,
         paddingVertical: spacing.xl,
         paddingHorizontal: spacing.md,
+    },
+    // Free teaser: GlassTeaseOverlay carries the outer margin/radius; the inner
+    // calendar drops its own margin so it fills the overlay edge-to-edge.
+    calendarTease: {
+        marginHorizontal: spacing.md,
+        marginBottom: spacing.lg,
+    },
+    calendarTeaseInner: {
+        marginHorizontal: 0,
+        marginBottom: 0,
+    },
+    calendarTeaseCard: {
+        width: '100%',
+    },
+    // Locked "treino do dia" overlay (Free)
+    lockedDayOverlay: {
+        alignItems: 'center',
+        gap: spacing.md,
+    },
+    lockedDayTitle: {
+        color: colors.textLight,
+        fontFamily: fonts.bold,
+        fontSize: 18,
+        textAlign: 'center',
+    },
+    lockedDaySubtitle: {
+        color: colors.proMutedText,
+        fontFamily: fonts.regular,
+        fontSize: 14,
+        lineHeight: 20,
+        textAlign: 'center',
     },
     weekDaysRow: {
         flexDirection: 'row',

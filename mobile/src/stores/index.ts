@@ -9,4 +9,5 @@ export * from './notificationStore';
 export * from './sharingStore';
 export * from './wellnessStore';
 export * from './workoutScopeStore';
+export * from './trialModalStore';
 

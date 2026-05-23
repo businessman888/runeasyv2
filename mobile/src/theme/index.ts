@@ -43,10 +43,12 @@ export const colors = {
     glassDark: 'rgba(0, 0, 0, 0.3)',
 
     // Upgrade Pro card (Figma node 1235:1300) — glass over bg image
-    proGlassOverlay: 'rgba(28, 28, 46, 0.6)',  // dark veil over the bg image
-    proCtaFill: 'rgba(8, 34, 42, 0.92)',       // CTA pill — near-opaque dark teal so the card blur doesn't bleed through
-    proDivider: 'rgba(235, 235, 245, 0.1)',    // hairline under header
-    proMutedText: 'rgba(235, 235, 245, 0.6)',  // tagline + bullets
+    proGlassOverlay: 'rgba(28, 28, 46, 0.6)',       // dark veil over the bg image
+    proGlassOverlayStrong: 'rgba(14, 14, 30, 0.82)', // denser veil for teasers — keeps overlay text readable over the mock (Android blur is weak)
+    proGlassBorder: 'rgba(235, 235, 245, 0.18)',     // light, clean glass hairline border
+    proCtaFill: 'rgba(8, 34, 42, 0.92)',            // CTA pill — near-opaque dark teal so the card blur doesn't bleed through
+    proDivider: 'rgba(235, 235, 245, 0.1)',         // hairline under header
+    proMutedText: 'rgba(235, 235, 245, 0.6)',       // tagline + bullets
 };
 
 // Plus Jakarta Sans — loaded at runtime in App.tsx via @expo-google-fonts.

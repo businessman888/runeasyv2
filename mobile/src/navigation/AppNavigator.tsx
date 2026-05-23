@@ -48,7 +48,8 @@ import { PlanPreviewScreen as OldPlanPreviewScreen } from '../screens/PlanPrevie
 // em produção (junto com o gate `__DEV__` na registration).
 const DevMenuScreen = __DEV__ ? require('../screens/dev/DevMenuScreen').DevMenuScreen : null;
 import { colors, typography } from '../theme';
-import { useAuthStore } from '../stores';
+import { useAuthStore, useTrialModalStore } from '../stores';
+import { TrialModal } from '../components/upgrade/TrialModal';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -88,6 +89,11 @@ function WorkoutDetailScreen({ route }: any) {
 function MainTabs({ route, navigation }: any) {
     const { initialTab } = route.params || {};
 
+    // One-time "Iniciar Teste Grátis" promo sheet — mounted once here (over the
+    // tabs) and driven by the store; triggered from Calendar/Settings on focus.
+    const trialVisible = useTrialModalStore((s) => s.visible);
+    const hideTrial = useTrialModalStore((s) => s.hide);
+
     // Navigate to the correct tab after mount if initialTab is specified
     React.useEffect(() => {
         if (initialTab && initialTab !== 'Home') {
@@ -100,6 +106,7 @@ function MainTabs({ route, navigation }: any) {
     }, [initialTab, navigation]);
 
     return (
+        <View style={{ flex: 1 }}>
         <Tab.Navigator
             id="MainTabs"
             initialRouteName="Home"
@@ -159,6 +166,8 @@ function MainTabs({ route, navigation }: any) {
                 }}
             />
         </Tab.Navigator>
+        <TrialModal visible={trialVisible} onClose={hideTrial} />
+        </View>
     );
 }
 

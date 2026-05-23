@@ -13,6 +13,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, borderRadius, spacing, fonts, shadows } from '../../theme';
 import { useProFeature } from '../../hooks/useProFeature';
 import { AnimatedBorder } from './AnimatedBorder';
+import { ProCtaButton } from './ProCtaButton';
 
 const BG_IMAGE = require('../../assets/images/bgCardUpToPlan.png');
 const CARD_RADIUS = 20;
@@ -24,12 +25,20 @@ export interface UpgradeProCardProps {
   variant: UpgradeProCardVariant;
   /** Hero line. Defaults to the trial CTA copy. */
   priceLabel?: string;
+  /**
+   * How the hero line reads: `'price'` (default) is the big centered trial
+   * hook; `'headline'` is a sentence-style title (smaller, looser leading,
+   * wraps freely) used by the contextual placements.
+   */
+  heroVariant?: 'price' | 'headline';
   /** Context-specific value line under the price (per placement). */
   tagline?: string;
   /** Value-prop bullets — rendered on medium/fullscreen only. */
   bullets?: string[];
   ctaLabel?: string;
   recommendedLabel?: string;
+  /** Show the "Pro" label + "Recomendado" badge row. Hide for headline cards. */
+  showHeader?: boolean;
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
 }
@@ -37,26 +46,27 @@ export interface UpgradeProCardProps {
 function UpgradeProCardImpl({
   variant,
   priceLabel = 'Inicie seu teste grátis',
+  heroVariant = 'price',
   tagline,
   bullets,
   ctaLabel = 'Upgrade to Pro',
   recommendedLabel = 'Recomendado',
+  showHeader = true,
   onPress,
   style,
 }: UpgradeProCardProps) {
   const { openUpgrade } = useProFeature();
 
   const handlePress = useCallback(() => {
-    // TEMP DIAGNOSTIC — remove once the paywall tap is confirmed working.
-    console.log('[UpgradeProCard] handlePress fired — variant:', variant, '| hasOnPress:', !!onPress);
     if (onPress) {
       onPress();
       return;
     }
     void openUpgrade();
-  }, [onPress, openUpgrade, variant]);
+  }, [onPress, openUpgrade]);
 
   const isCompact = variant === 'compact';
+  const isHeadline = heroVariant === 'headline';
   const showBullets = variant !== 'compact' && !!bullets && bullets.length > 0;
   const accessibilityLabel = `${ctaLabel}. Pro, ${priceLabel}${tagline ? '. ' + tagline : ''}`;
 
@@ -67,7 +77,9 @@ function UpgradeProCardImpl({
       style={[
         styles.cardBase,
         isCompact && styles.cardCompact,
-        variant === 'medium' && styles.cardMedium,
+        // Headline cards fit their content (no fixed minHeight) so they don't
+        // float with disproportionate empty space.
+        variant === 'medium' && !isHeadline && styles.cardMedium,
         variant === 'fullscreen' && styles.cardFullscreen,
       ]}
       imageStyle={styles.bgImage}
@@ -92,16 +104,26 @@ function UpgradeProCardImpl({
 
       <View style={styles.content}>
         {/* Header: Pro + Recomendado pill */}
-        <View style={styles.headerRow}>
-          <Text style={[styles.proLabel, isCompact && styles.proLabelCompact]}>Pro</Text>
-          <View style={styles.recommendedPill}>
-            <MaterialCommunityIcons name="fire" size={14} color={colors.backgroundLight} />
-            <Text style={styles.recommendedText}>{recommendedLabel}</Text>
+        {showHeader && (
+          <View style={styles.headerRow}>
+            <Text style={[styles.proLabel, isCompact && styles.proLabelCompact]}>Pro</Text>
+            <View style={styles.recommendedPill}>
+              <MaterialCommunityIcons name="fire" size={14} color={colors.backgroundLight} />
+              <Text style={styles.recommendedText}>{recommendedLabel}</Text>
+            </View>
           </View>
-        </View>
+        )}
 
-        {/* Hero price */}
-        <Text style={[styles.price, isCompact && styles.priceCompact]}>{priceLabel}</Text>
+        {/* Hero price / headline */}
+        <Text
+          style={[
+            styles.price,
+            isCompact && styles.priceCompact,
+            isHeadline && styles.priceHeadline,
+          ]}
+        >
+          {priceLabel}
+        </Text>
 
         {/* Context tagline */}
         {tagline && (
@@ -129,10 +151,7 @@ function UpgradeProCardImpl({
         )}
 
         {/* CTA */}
-        <View style={[styles.cta, isCompact && styles.ctaCompact]}>
-          <Ionicons name="arrow-up" size={18} color={CYAN} style={styles.ctaIcon} />
-          <Text style={styles.ctaText}>{ctaLabel}</Text>
-        </View>
+        <ProCtaButton label={ctaLabel} compact={isCompact} />
       </View>
     </ImageBackground>
   );
@@ -240,6 +259,11 @@ const styles = StyleSheet.create({
     fontSize: 22,
     marginTop: 0,
   },
+  priceHeadline: {
+    fontSize: 22,
+    lineHeight: 28,
+    letterSpacing: -0.2,
+  },
 
   // Tagline
   tagline: {
@@ -273,34 +297,6 @@ const styles = StyleSheet.create({
     color: colors.proMutedText,
     fontFamily: fonts.regular,
     fontSize: 15,
-  },
-
-  // CTA
-  cta: {
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: colors.proCtaFill,
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: CYAN,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    marginTop: spacing.xs,
-    ...shadows.neon,
-  },
-  ctaCompact: {
-    minHeight: 44,
-  },
-  ctaIcon: {
-    marginRight: 2,
-  },
-  ctaText: {
-    color: CYAN,
-    fontFamily: fonts.semibold,
-    fontSize: 16,
   },
 
   // Fullscreen overlay
