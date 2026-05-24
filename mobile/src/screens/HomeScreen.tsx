@@ -459,11 +459,9 @@ export function HomeScreen({ navigation }: any) {
     const pointsToNext = stats?.points_to_next_level ?? 100;
     const currentStreak = stats?.current_streak ?? 0;
 
-    const hasCompletedWorkouts = (summary?.total_runs ?? 0) > 0;
-
     // Coach-analysis card locked state. Free users get a premium Pro upsell;
-    // Pro users without a completed workout get the "complete first workout" hint.
-    const isAiLocked = !latestPlanActivityLoading && !latestPlanActivity?.activity && !hasCompletedWorkouts;
+    // Pro users without a completed plan workout get the "complete first workout" hint.
+    const isAiLocked = !latestPlanActivityLoading && !latestPlanActivity?.activity;
     const isFreeAiLock = isAiLocked && !isProUser;
 
     // Check if workout is for today (used for button enable/disable)
@@ -887,16 +885,6 @@ export function HomeScreen({ navigation }: any) {
                         </View>
                     ) : latestPlanActivity?.activity ? (
                         renderResultCardBody(latestPlanActivity)
-                    ) : hasCompletedWorkouts ? (
-                        <>
-                            <View style={styles.aiHeader}>
-                                <View>
-                                    <Text style={styles.aiTitle}>Análise do Treinador</Text>
-                                    <Text style={styles.aiSubtitle}>Carregando dados...</Text>
-                                </View>
-                                <BinocularsIcon size={35} color="#00D4FF" />
-                            </View>
-                        </>
                     ) : !isProUser ? (
                         /* Free: premium Pro upsell for the Coach analysis. */
                         <View style={styles.lockedContainer}>
