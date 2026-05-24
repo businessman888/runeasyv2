@@ -14,6 +14,7 @@
 const {
   withInfoPlist,
   withAndroidManifest,
+  withAppBuildGradle,
   withAppDelegate,
   AndroidConfig,
 } = require('@expo/config-plugins');
@@ -97,21 +98,85 @@ function withGarminAppDelegate(config) {
   });
 }
 
+/**
+ * Injeta a dependência do Garmin Connect IQ SDK (`.aar`) no `app/build.gradle`.
+ *
+ * Por que aqui (e não no `build.gradle` do módulo expo-garmin-connect-iq)?
+ * O Android Gradle Plugin proíbe que módulos library (que produzem AAR)
+ * declarem `.aar` locais como `implementation` — falha em `bundleDebugAar`
+ * com "Direct local .aar file dependencies are not supported". Módulos APK
+ * (como o app) podem embedar .aar locais sem restrição.
+ *
+ * O caminho relativo é a partir de `android/app/build.gradle` → módulo expo.
+ */
+function withGarminAppBuildGradle(config) {
+  return withAppBuildGradle(config, (config) => {
+    const marker = 'expo-garmin-connect-iq SDK';
+    if (config.modResults.contents.includes(marker)) {
+      return config;
+    }
+    const depSnippet = `
+    // ${marker} — embedded directly in the APK (cannot be declared inside the
+    // library module's build.gradle due to the AGP "Direct local .aar file
+    // dependencies are not supported when building an AAR" restriction).
+    implementation fileTree(dir: '../../modules/expo-garmin-connect-iq/android/libs', include: ['*.aar'])`;
+
+    let src = config.modResults.contents;
+    // Inject before the closing brace of the LAST `dependencies { ... }` block.
+    const depsAnchor = /dependencies\s*\{/g;
+    let lastMatch;
+    let m;
+    while ((m = depsAnchor.exec(src)) !== null) {
+      lastMatch = m;
+    }
+    if (!lastMatch) {
+      console.warn(
+        '[withGarminConnectIQ] could not find a `dependencies {` block in app/build.gradle — Garmin .aar NOT linked',
+      );
+      return config;
+    }
+    // Find the matching closing brace, accounting for nesting.
+    let depth = 1;
+    let idx = lastMatch.index + lastMatch[0].length;
+    while (idx < src.length && depth > 0) {
+      const ch = src[idx];
+      if (ch === '{') depth += 1;
+      else if (ch === '}') depth -= 1;
+      if (depth === 0) break;
+      idx += 1;
+    }
+    if (depth !== 0) {
+      console.warn(
+        '[withGarminConnectIQ] could not find matching `}` for dependencies block — Garmin .aar NOT linked',
+      );
+      return config;
+    }
+    config.modResults.contents = src.slice(0, idx) + depSnippet + '\n' + src.slice(idx);
+    return config;
+  });
+}
+
 function withGarminAndroidManifest(config) {
   return withAndroidManifest(config, (config) => {
-    const manifest = config.modResults.manifest;
+    // `config.modResults` é o wrapper { manifest: { ... } }. As APIs do
+    // @expo/config-plugins esperam esse wrapper diretamente; o nó interno
+    // <manifest> (com queries / application) fica em `config.modResults.manifest`.
+    const innerManifest = config.modResults.manifest;
 
-    // <queries>
-    manifest.queries = manifest.queries || [];
-    const alreadyQueried = manifest.queries.some((q) =>
+    // <queries> — adicionado no nó interno <manifest>
+    innerManifest.queries = innerManifest.queries || [];
+    const alreadyQueried = innerManifest.queries.some((q) =>
       (q.package || []).some((p) => p.$['android:name'] === GCM_PACKAGE)
     );
     if (!alreadyQueried) {
-      manifest.queries.push({ package: [{ $: { 'android:name': GCM_PACKAGE } }] });
+      innerManifest.queries.push({ package: [{ $: { 'android:name': GCM_PACKAGE } }] });
     }
 
-    // BLUETOOTH_CONNECT
-    AndroidConfig.Permissions.addPermission(manifest, 'android.permission.BLUETOOTH_CONNECT');
+    // BLUETOOTH_CONNECT — addPermission recebe o WRAPPER (acessa .manifest internamente)
+    AndroidConfig.Permissions.addPermission(
+      config.modResults,
+      'android.permission.BLUETOOTH_CONNECT',
+    );
     return config;
   });
 }
@@ -128,6 +193,7 @@ const withGarminConnectIQ = (config, options = {}) => {
   config = withGarminInfoPlist(config, { appUuid });
   config = withGarminAppDelegate(config);
   config = withGarminAndroidManifest(config);
+  config = withGarminAppBuildGradle(config);
   return config;
 };
 

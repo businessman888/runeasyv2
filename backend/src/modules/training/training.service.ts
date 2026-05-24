@@ -914,7 +914,15 @@ export class TrainingService {
     const startedAt = payload.started_at
       ? new Date(payload.started_at)
       : new Date(Date.now() - payload.duration_seconds * 1000);
-    const scheduledDate = startedAt.toISOString().split('T')[0];
+    // `scheduled_date` é o que o calendário usa pra atribuir o treino ao dia.
+    // `startedAt.toISOString()` retorna UTC — uma corrida às 23:00 SP cai no
+    // dia seguinte em UTC. Ajustamos pro horário local de São Paulo antes de
+    // extrair YYYY-MM-DD pra que a corrida apareça no dia em que o usuário
+    // realmente correu.
+    const spLocal = new Date(
+      startedAt.getTime() + this.SAO_PAULO_OFFSET_HOURS * 60 * 60 * 1000,
+    );
+    const scheduledDate = spLocal.toISOString().split('T')[0];
     const distanceKm = (payload.total_distance_meters || 0) / 1000;
 
     const titleByHour = (date: Date): string => {
