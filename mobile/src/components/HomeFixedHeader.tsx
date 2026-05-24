@@ -66,11 +66,24 @@ export function HomeFixedHeader({
             const scheduleDay = schedule.find(s => s.date === dateStr) || null;
             const isToday = dateStr === todayStr;
 
-            let status: DayStatus = null;
-            const type: 'workout' | 'recovery' | null = scheduleDay?.type ?? null;
+            // O backend `getScheduleWithStatus` faz fallback do tipo do dia para
+            // 'workout' quando o usuário registra uma corrida manual/livre num
+            // dia que originalmente era recovery. No grid semanal (que reflete
+            // o PLANO), esses dias devem permanecer recovery — a corrida livre
+            // pertence à aba "Atividades", não ao header de progresso do plano.
+            // Mesmo padrão usado em `CalendarScreen.getPlanStatusForDay`.
+            const workoutSource = scheduleDay?.workout?.source;
+            const isNonPlanFallback = scheduleDay?.type === 'workout'
+                && (workoutSource === 'manual' || workoutSource === 'free');
+            const effectiveType: 'workout' | 'recovery' | null = isNonPlanFallback
+                ? 'recovery'
+                : (scheduleDay?.type ?? null);
 
-            if (scheduleDay && scheduleDay.type !== null) {
-                if (scheduleDay.type === 'recovery') {
+            let status: DayStatus = null;
+            const type: 'workout' | 'recovery' | null = effectiveType;
+
+            if (scheduleDay && effectiveType !== null) {
+                if (effectiveType === 'recovery') {
                     status = scheduleDay.is_past || isToday ? 'recovery' : 'pending_recovery';
                 } else if (scheduleDay.status === 'completed') {
                     status = 'completed';

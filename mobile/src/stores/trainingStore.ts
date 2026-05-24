@@ -156,6 +156,61 @@ function getPendingFreeRuns(): FreeRunPayload[] {
     }
 }
 
+// ─── De-dup do Garmin (janela de 10 minutos) ─────────────────────────────────
+/**
+ * Mapa `external_id → timestamp(ms)` persistido em MMKV para evitar reenviar
+ * o MESMO payload de treino vindo da Garmin (via Connect IQ) num intervalo
+ * curto. O backend `ActivitySyncService` já tem dedup ±10min por `external_id`,
+ * mas esta trava local evita o round-trip de rede + race conditions quando o
+ * Garmin SDK ou um mock manda o mesmo evento duas vezes (acontece na prática
+ * quando o app é morto e retorna, ou quando o listener é re-registrado).
+ *
+ * Aplica APENAS para `source === 'garmin_watch'` — Apple Watch e telefone já
+ * têm seus próprios mecanismos (HKWorkout UUID, GPS task lock).
+ */
+const garminDedupStorage = createMMKV({ id: 'garmin-recent-sends' });
+const GARMIN_DEDUP_WINDOW_MS = 10 * 60 * 1000;
+
+function getGarminDedupMap(): Record<string, number> {
+    try {
+        const raw = garminDedupStorage.getString('map');
+        return raw ? JSON.parse(raw) : {};
+    } catch {
+        return {};
+    }
+}
+
+function pruneGarminDedupMap(map: Record<string, number>): Record<string, number> {
+    const cutoff = Date.now() - GARMIN_DEDUP_WINDOW_MS;
+    const cleaned: Record<string, number> = {};
+    for (const [id, ts] of Object.entries(map)) {
+        if (ts >= cutoff) cleaned[id] = ts;
+    }
+    return cleaned;
+}
+
+/** Retorna `true` se este `external_id` foi enviado nos últimos 10 minutos. */
+function wasRecentlySentToGarminBackend(externalId: string): boolean {
+    if (!externalId) return false;
+    const map = pruneGarminDedupMap(getGarminDedupMap());
+    const ts = map[externalId];
+    if (!ts) return false;
+    const ageMs = Date.now() - ts;
+    return ageMs < GARMIN_DEDUP_WINDOW_MS;
+}
+
+/** Registra o envio de um `external_id` no mapa de dedup (com cleanup de TTL). */
+function markGarminSent(externalId: string) {
+    if (!externalId) return;
+    try {
+        const map = pruneGarminDedupMap(getGarminDedupMap());
+        map[externalId] = Date.now();
+        garminDedupStorage.set('map', JSON.stringify(map));
+    } catch (e) {
+        console.warn('[GarminDedup] Falha ao registrar envio:', e);
+    }
+}
+
 export type WorkoutSource = 'plan' | 'manual' | 'free';
 export type WorkoutType =
     | 'easy_run'
@@ -305,6 +360,14 @@ interface TrainingState {
     isLoading: boolean;
     error: string | null;
     generationStatus: GenerationStatus;
+    /**
+     * Flag global de "analisando performance" — ligado durante o processamento
+     * de um treino vindo de wearable (Garmin Connect IQ, Apple Watch). UI deve
+     * mostrar overlay/spinner enquanto o backend insere a activity, gamificação
+     * roda e (para plan workouts) o BullMQ feedback-queue enfileira o feedback.
+     * Limpo quando a chamada ao backend resolve (sucesso OU falha).
+     */
+    isAnalyzingPerformance: boolean;
 
     // Actions
     fetchPlan: () => Promise<void>;
@@ -322,6 +385,7 @@ interface TrainingState {
     retryPendingFreeRuns: () => Promise<void>;
     checkPlanStatus: (planId: string) => Promise<boolean>;
     setGenerationStatus: (status: GenerationStatus) => void;
+    setAnalyzingPerformance: (analyzing: boolean) => void;
     clearScheduleData: () => void;
 }
 
@@ -345,8 +409,11 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
     isLoading: false,
     error: null,
     generationStatus: null,
+    isAnalyzingPerformance: false,
 
     setGenerationStatus: (status) => set({ generationStatus: status }),
+
+    setAnalyzingPerformance: (analyzing) => set({ isAnalyzingPerformance: analyzing }),
 
     clearScheduleData: () => set({ today: null, nextWorkout: null, schedule: [] }),
 
@@ -533,7 +600,24 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
     },
 
     completeWorkout: async (payload: WorkoutTrackingPayload) => {
-        console.log(`[completeWorkout] Iniciando. workoutId=${payload.workoutId}, dist=${payload.total_distance_meters}m, dur=${payload.duration_seconds}s, pontos=${payload.route_points.length}`);
+        console.log(`[completeWorkout] Iniciando. workoutId=${payload.workoutId}, dist=${payload.total_distance_meters}m, dur=${payload.duration_seconds}s, pontos=${payload.route_points.length}, source=${payload.source ?? 'phone'}`);
+
+        const isGarminPayload = payload.source === 'garmin_watch';
+
+        // Trava de dedup para Garmin: se este `external_id` foi enviado nos
+        // últimos 10 min, ignoramos o envio (já está no backend / activity row
+        // existe). Evita reenvios espúrios quando o listener do Connect IQ
+        // dispara o mesmo evento duas vezes (race condition).
+        if (isGarminPayload && payload.external_id && wasRecentlySentToGarminBackend(payload.external_id)) {
+            console.log(`[completeWorkout] Garmin dedup hit: ${payload.external_id} já enviado nos últimos 10min — pulando.`);
+            return { success: true, savedLocally: false };
+        }
+
+        // Liga o overlay global "analisando performance" para wearables
+        // (Garmin / Apple Watch). Phone não dispara — o fluxo tradicional do
+        // app já tem suas próprias telas de loading.
+        const isWearablePayload = isGarminPayload || payload.source === 'apple_watch';
+        if (isWearablePayload) set({ isAnalyzingPerformance: true });
 
         // SAFETY FIRST: salva localmente ANTES de tentar API
         // Se o app crashar/recarregar durante o fetch, os dados sobrevivem
@@ -542,6 +626,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         const userId = await getUserId();
         if (!userId) {
             console.warn('[completeWorkout] Sem userId — mantendo no pending para retry');
+            if (isWearablePayload) set({ isAnalyzingPerformance: false });
             return { success: false, savedLocally: true };
         }
 
@@ -580,21 +665,35 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
                 return { success: false, savedLocally: true };
             }
 
-            // Sucesso! Remove do pending
+            // Sucesso! Remove do pending e registra envio Garmin no dedup map.
             console.log(`[completeWorkout] Workout ${payload.workoutId} salvo no backend com sucesso`);
             removePendingWorkout(payload.workoutId);
+            if (isGarminPayload && payload.external_id) markGarminSent(payload.external_id);
             get().fetchUpcomingWorkouts();
             useWellnessStore.getState().reset();
             return { success: true, savedLocally: false };
         } catch (error) {
             console.error('[completeWorkout] Erro de rede:', error);
-            // Dados já estão no pending — mantém lá
+            // Dados já estão no pending — mantém lá para retry quando rede voltar
             return { success: false, savedLocally: true };
+        } finally {
+            if (isWearablePayload) set({ isAnalyzingPerformance: false });
         }
     },
 
     completeFreeRun: async (payload: FreeRunPayload) => {
-        console.log(`[completeFreeRun] Iniciando. localId=${payload.localId}, dist=${payload.total_distance_meters}m, dur=${payload.duration_seconds}s, pontos=${payload.route_points.length}`);
+        console.log(`[completeFreeRun] Iniciando. localId=${payload.localId}, dist=${payload.total_distance_meters}m, dur=${payload.duration_seconds}s, pontos=${payload.route_points.length}, source=${payload.source ?? 'phone'}`);
+
+        const isGarminPayload = payload.source === 'garmin_watch';
+
+        // Trava de dedup Garmin (idêntica ao completeWorkout — ver comentário lá).
+        if (isGarminPayload && payload.external_id && wasRecentlySentToGarminBackend(payload.external_id)) {
+            console.log(`[completeFreeRun] Garmin dedup hit: ${payload.external_id} já enviado nos últimos 10min — pulando.`);
+            return { success: true, savedLocally: false };
+        }
+
+        const isWearablePayload = isGarminPayload || payload.source === 'apple_watch';
+        if (isWearablePayload) set({ isAnalyzingPerformance: true });
 
         // SAFETY FIRST: salva localmente antes de tentar API
         savePendingFreeRun(payload);
@@ -602,6 +701,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         const userId = await getUserId();
         if (!userId) {
             console.warn('[completeFreeRun] Sem userId — mantendo no pending para retry');
+            if (isWearablePayload) set({ isAnalyzingPerformance: false });
             return { success: false, savedLocally: true };
         }
 
@@ -635,6 +735,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
                 return { success: false, savedLocally: true };
             }
 
+            if (isGarminPayload && payload.external_id) markGarminSent(payload.external_id);
             const data = await response.json();
             console.log(`[completeFreeRun] Free run salvo no backend. id=${data.workout?.id}`);
             removePendingFreeRun(payload.localId);
@@ -644,6 +745,8 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         } catch (error) {
             console.error('[completeFreeRun] Erro de rede:', error);
             return { success: false, savedLocally: true };
+        } finally {
+            if (isWearablePayload) set({ isAnalyzingPerformance: false });
         }
     },
 

@@ -28,6 +28,7 @@ import { useWatchSync } from './src/hooks/useWatchSync';
 import { useGarminSync } from './src/hooks/useGarmin';
 import { initGarmin, onCompletedRun } from './src/services/garminConnect';
 import { useTrainingStore } from './src/stores/trainingStore';
+import { useNetworkRetry } from './src/hooks/useNetworkRetry';
 
 // Registra Task de Rastreamento (Background GPS)
 import './src/tasks/locationTask';
@@ -117,6 +118,18 @@ function WatchSyncManager() {
  */
 function GarminSyncManager() {
   useGarminSync();
+  return null;
+}
+
+/**
+ * NetworkRetryManager Component
+ *
+ * Escuta mudanças de conectividade via NetInfo e dispara retry das filas
+ * locais de workouts pendentes (`pending-workouts`, `pending-free-runs` MMKV)
+ * quando a rede passa de offline → online. Renderiza null.
+ */
+function NetworkRetryManager() {
+  useNetworkRetry();
   return null;
 }
 
@@ -265,6 +278,8 @@ export default function App() {
             <WatchSyncManager />
             {/* GarminSyncManager: pushes today's workout to Garmin watch via Connect IQ */}
             <GarminSyncManager />
+            {/* NetworkRetryManager: retries pending workouts/free runs when network comes back */}
+            <NetworkRetryManager />
             <AppNavigator />
             <WatchBridgeDebugBanner />
           </GestureHandlerRootView>

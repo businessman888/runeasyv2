@@ -408,9 +408,21 @@ export function HomeScreen({ navigation }: any) {
 
     // Use API data: today from store is authoritative
     const todayData = today;
-    const isRecoveryDay = todayData?.type === 'recovery';
     const nextWorkout = storeNextWorkout;
-    const todayWorkout = todayData?.type === 'workout' ? todayData.workout : null;
+
+    // Mesmo padrão do `CalendarScreen.getPlanStatusForDay`: o backend
+    // `getScheduleWithStatus` faz fallback do dia para `type: 'workout'` quando
+    // o usuário loga uma corrida manual/livre num dia originalmente de
+    // recovery (workoutsByDate prefere plan, senão usa o manual/free). Na aba
+    // Treinos, esses dias devem se comportar como recovery — a corrida livre
+    // pertence à aba Atividades. Isso evita que um `free_run` apareça como se
+    // fosse treino do plano em "Seus treinos" e no header semanal.
+    const rawTodayWorkout = todayData?.type === 'workout' ? todayData.workout : null;
+    const todayHasNonPlanFallback = !!rawTodayWorkout
+        && (rawTodayWorkout.source === 'manual' || rawTodayWorkout.source === 'free');
+
+    const isRecoveryDay = todayData?.type === 'recovery' || todayHasNonPlanFallback;
+    const todayWorkout = todayHasNonPlanFallback ? null : rawTodayWorkout;
 
     // Today's manual/free activities (Atividades tab). Read from rawWorkouts —
     // ungated — so Free users still see their own logged activities; filtering
