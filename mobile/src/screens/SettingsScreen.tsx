@@ -19,6 +19,8 @@ import { useProFeature } from '../hooks/useProFeature';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { AppleHealthCard } from '../components/AppleHealthCard';
 import { GarminCard } from '../components/GarminCard';
+import { PolarCard } from '../components/PolarCard';
+import { FitbitCard } from '../components/FitbitCard';
 
 // Icon components using @expo/vector-icons
 function PersonIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
@@ -171,12 +173,14 @@ export function SettingsScreen({ navigation }: any) {
                 </View>
 
 
-                {/* DISPOSITIVOS Section — Apple Health (iOS) + Garmin (iOS + Android) */}
+                {/* DISPOSITIVOS Section — Apple Health (iOS) + Garmin/Polar/Fitbit (iOS + Android) */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>DISPOSITIVOS</Text>
                     <View style={{ gap: 10 }}>
                         {Platform.OS === 'ios' && <AppleHealthCard />}
                         <GarminCard />
+                        <PolarCard />
+                        <FitbitCard />
                     </View>
                 </View>
 

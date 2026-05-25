@@ -23,7 +23,6 @@ import { useSubscriptionStore } from './src/stores/subscriptionStore';
 import { useDevMenuStore } from './src/stores/devMenuStore';
 import { useWorkoutScopeStore } from './src/stores/workoutScopeStore';
 import { useAppleWatchStore } from './src/stores/appleWatchStore';
-import { WatchBridgeDebugBanner } from './src/components/debug/WatchBridgeDebugBanner';
 import { useWatchSync } from './src/hooks/useWatchSync';
 import { useGarminSync } from './src/hooks/useGarmin';
 import { initGarmin, onCompletedRun } from './src/services/garminConnect';
@@ -281,7 +280,6 @@ export default function App() {
             {/* NetworkRetryManager: retries pending workouts/free runs when network comes back */}
             <NetworkRetryManager />
             <AppNavigator />
-            <WatchBridgeDebugBanner />
           </GestureHandlerRootView>
         </SuperwallProvider>
         </CustomPurchaseControllerProvider>
