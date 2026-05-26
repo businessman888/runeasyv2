@@ -9,6 +9,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { TreadmillDataDto } from './treadmill-data.dto';
 
 export class RoutePointDto {
   @IsNumber()
@@ -103,4 +104,20 @@ export class CreateWorkoutTrackingDto {
   @IsOptional()
   @IsISO8601()
   started_at?: string;
+
+  /**
+   * Ambiente onde o treino foi realizado. Default 'outdoor' (corrida ao ar
+   * livre com GPS). 'treadmill' indica corrida em esteira — neste caso
+   * `route_points` pode vir vazio e `treadmill_data` traz as métricas FTMS
+   * ou do modo manual.
+   */
+  @IsOptional()
+  @IsIn(['outdoor', 'treadmill'])
+  environment?: 'outdoor' | 'treadmill';
+
+  /** Metadados da esteira (Smart FTMS ou modo manual). */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => TreadmillDataDto)
+  treadmill_data?: TreadmillDataDto;
 }

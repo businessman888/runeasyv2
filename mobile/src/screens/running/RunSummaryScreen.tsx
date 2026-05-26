@@ -29,6 +29,16 @@ import {
 } from '../../utils/runMetrics';
 import type { RunMode } from './RunningScreen';
 
+export interface TreadmillSummaryData {
+  is_smart: boolean;
+  device_name?: string;
+  avg_speed_kmh?: number;
+  max_speed_kmh?: number;
+  avg_incline?: number;
+  total_calories?: number;
+  speed_samples?: { t: number; kmh: number; incline?: number }[];
+}
+
 // ─── Tipos de rota ────────────────────────────────────────────────────────────
 type RunSummaryRouteParams = {
   RunSummary: {
@@ -42,6 +52,9 @@ type RunSummaryRouteParams = {
     targetPaceSeconds?: number;
     targetDistanceKm?: number;
     workoutTitle?: string;
+    /** Ambiente do treino — quando 'treadmill', oculta mapa e mostra gráfico de velocidade. */
+    environment?: 'outdoor' | 'treadmill';
+    treadmillData?: TreadmillSummaryData;
   };
 };
 
@@ -127,6 +140,8 @@ export function RunSummaryScreen() {
     targetPaceSeconds: initialTargetPaceSeconds,
     targetDistanceKm: initialTargetDistanceKm,
     workoutTitle: initialWorkoutTitle,
+    environment: initialEnvironment,
+    treadmillData: initialTreadmillData,
   } = route.params || {};
 
   // ── Hidratação opcional via backend ─────────────────────────────────────
@@ -154,6 +169,8 @@ export function RunSummaryScreen() {
     calories?: number | null;
     /** Fonte da activity — usado pra mostrar badge "Apple Watch" se relevante */
     activitySource?: string | null;
+    environment?: 'outdoor' | 'treadmill';
+    treadmillData?: TreadmillSummaryData | null;
   };
   const [enriched, setEnriched] = useState<Enriched | null>(null);
   const [enriching, setEnriching] = useState(false);
@@ -199,6 +216,8 @@ export function RunSummaryScreen() {
         maxHeartRate: activity?.max_heartrate ?? null,
         calories: activity?.calories ?? null,
         activitySource: activity?.source ?? null,
+        environment: ((activity as any)?.environment as 'outdoor' | 'treadmill' | undefined) ?? undefined,
+        treadmillData: ((activity as any)?.treadmill_data as TreadmillSummaryData | null | undefined) ?? null,
       });
       setEnriching(false);
     })();
@@ -213,6 +232,11 @@ export function RunSummaryScreen() {
   const targetPaceSeconds = enriched?.targetPaceSeconds ?? initialTargetPaceSeconds;
   const targetDistanceKm = enriched?.targetDistanceKm ?? initialTargetDistanceKm;
   const workoutTitle = enriched?.workoutTitle ?? initialWorkoutTitle;
+  const environment: 'outdoor' | 'treadmill' =
+    enriched?.environment ?? initialEnvironment ?? 'outdoor';
+  const treadmillData: TreadmillSummaryData | null =
+    enriched?.treadmillData ?? initialTreadmillData ?? null;
+  const isTreadmill = environment === 'treadmill';
   const avgHeartRate = enriched?.avgHeartRate ?? null;
   const maxHeartRate = enriched?.maxHeartRate ?? null;
   const calories = enriched?.calories ?? null;
@@ -344,7 +368,22 @@ export function RunSummaryScreen() {
 
   return (
     <View style={styles.container}>
-      {/* ── Mapa fullscreen atrás ───────────────────────────────────────── */}
+      {/* ── Mapa fullscreen atrás OU placeholder de esteira ───────────────── */}
+      {isTreadmill ? (
+        <View style={[StyleSheet.absoluteFillObject, styles.treadmillBackdrop]}>
+          <View style={styles.treadmillBackdropContent}>
+            <Ionicons name="walk" size={56} color={T.cyan} />
+            <Text style={styles.treadmillBackdropTitle}>Esteira</Text>
+            <Text style={styles.treadmillBackdropSubtitle}>
+              {treadmillData?.is_smart && treadmillData?.device_name
+                ? treadmillData.device_name
+                : treadmillData?.is_smart === false
+                  ? 'Modo manual'
+                  : 'Treino interno'}
+            </Text>
+          </View>
+        </View>
+      ) : (
       <View style={StyleSheet.absoluteFillObject}>
         <Mapbox.MapView
           style={StyleSheet.absoluteFillObject}
@@ -419,6 +458,7 @@ export function RunSummaryScreen() {
           </View>
         )}
       </View>
+      )}
 
       {/* ── Header da screen (chevron + "Relatório" + share) ───────────── */}
       <SafeAreaView edges={['top']} style={styles.topOverlay}>
@@ -548,7 +588,77 @@ export function RunSummaryScreen() {
             </View>
           )}
 
-          {/* Card Splits — sempre presente, com empty state se não houver dados */}
+          {/* Card de velocidade da esteira — só aparece no modo treadmill */}
+          {isTreadmill && treadmillData ? (
+            <View style={styles.treadmillChartCard}>
+              <Text style={styles.treadmillChartTitle}>Velocidade na esteira</Text>
+              <Text style={styles.treadmillChartSubtitle}>
+                {treadmillData.is_smart
+                  ? 'Dados lidos diretamente da esteira via Bluetooth FTMS.'
+                  : 'Modo manual — velocidade configurada pelo usuário.'}
+              </Text>
+              {treadmillData.speed_samples &&
+              treadmillData.speed_samples.length > 1 ? (
+                <View style={styles.chartWrap}>
+                  <LineChart
+                    data={treadmillData.speed_samples.map((s) => ({
+                      value: s.kmh,
+                      label: '',
+                    }))}
+                    height={150}
+                    width={chartAvailableWidth}
+                    thickness={2}
+                    color={T.cyan}
+                    areaChart
+                    curved
+                    startFillColor={T.cyan}
+                    endFillColor={T.cyan}
+                    startOpacity={0.45}
+                    endOpacity={0.05}
+                    initialSpacing={CHART_INITIAL_SPACING}
+                    endSpacing={CHART_END_SPACING}
+                    yAxisColor="transparent"
+                    xAxisColor={T.divider}
+                    rulesType="solid"
+                    rulesColor="rgba(235,235,245,0.06)"
+                    yAxisTextStyle={styles.chartAxisText}
+                    xAxisLabelTextStyle={styles.chartAxisLabelText}
+                    showVerticalLines={false}
+                    hideDataPoints
+                  />
+                </View>
+              ) : null}
+              <View style={styles.treadmillStatsRow}>
+                <View style={styles.treadmillStatBlock}>
+                  <Text style={styles.treadmillStatValue}>
+                    {treadmillData.avg_speed_kmh != null
+                      ? treadmillData.avg_speed_kmh.toFixed(1)
+                      : '—'}
+                  </Text>
+                  <Text style={styles.treadmillStatLabel}>Vel. média km/h</Text>
+                </View>
+                <View style={styles.treadmillStatBlock}>
+                  <Text style={styles.treadmillStatValue}>
+                    {treadmillData.max_speed_kmh != null
+                      ? treadmillData.max_speed_kmh.toFixed(1)
+                      : '—'}
+                  </Text>
+                  <Text style={styles.treadmillStatLabel}>Vel. máx km/h</Text>
+                </View>
+                <View style={styles.treadmillStatBlock}>
+                  <Text style={styles.treadmillStatValue}>
+                    {treadmillData.avg_incline != null
+                      ? `${treadmillData.avg_incline.toFixed(1)}%`
+                      : '—'}
+                  </Text>
+                  <Text style={styles.treadmillStatLabel}>Inclinação média</Text>
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          {/* Card Splits — só faz sentido para corridas outdoor (depende de GPS) */}
+          {!isTreadmill && (
           <View style={styles.cardDark}>
             <Text style={styles.cardTitle}>Splits</Text>
 
@@ -579,6 +689,7 @@ export function RunSummaryScreen() {
               />
             )}
           </View>
+          )}
 
           {/* Card Pace — sempre presente, com empty state se não houver dados */}
           <View style={styles.cardDark}>
@@ -897,6 +1008,69 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: T.bgPrimary,
+  },
+
+  // Treadmill backdrop (no map for treadmill runs)
+  treadmillBackdrop: {
+    backgroundColor: T.bgPrimary,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 90,
+  },
+  treadmillBackdropContent: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  treadmillBackdropTitle: {
+    color: T.textPrimary,
+    fontSize: 22,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+  treadmillBackdropSubtitle: {
+    color: T.textSecondary,
+    fontSize: 13,
+  },
+
+  // Treadmill speed chart card (replaces map area in the sheet)
+  treadmillChartCard: {
+    backgroundColor: T.cardDarker,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
+  },
+  treadmillChartTitle: {
+    color: T.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  treadmillChartSubtitle: {
+    color: T.textSecondary,
+    fontSize: 12,
+    marginBottom: 12,
+  },
+  treadmillStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: T.divider,
+  },
+  treadmillStatBlock: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  treadmillStatValue: {
+    color: T.cyan,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  treadmillStatLabel: {
+    color: T.textSecondary,
+    fontSize: 11,
+    marginTop: 2,
   },
 
   // Header overlay (screen)

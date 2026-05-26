@@ -47,7 +47,9 @@ export class ReferralService {
 
     const { data, error } = await this.supabase
       .from('influencers')
-      .select('id, name, code, commission_rate, max_commission_months, is_active')
+      .select(
+        'id, name, code, commission_rate, max_commission_months, is_active',
+      )
       .ilike('code', normalized)
       .maybeSingle();
 
@@ -179,11 +181,13 @@ export class ReferralService {
         'id, commission_rate, max_commission_months, total_referrals, total_commission_earned, total_revenue_generated',
       )
       .eq('id', referral.influencer_id)
-      .maybeSingle<Influencer & {
-        total_referrals: number;
-        total_commission_earned: number;
-        total_revenue_generated: number;
-      }>();
+      .maybeSingle<
+        Influencer & {
+          total_referrals: number;
+          total_commission_earned: number;
+          total_revenue_generated: number;
+        }
+      >();
 
     if (!influencer) return;
 
@@ -210,7 +214,9 @@ export class ReferralService {
 
     const storeFee = round2(grossAmount * STORE_FEE_RATE);
     const netAmount = round2(grossAmount - storeFee);
-    const commissionAmount = round2(netAmount * Number(influencer.commission_rate));
+    const commissionAmount = round2(
+      netAmount * Number(influencer.commission_rate),
+    );
 
     const periodStart = event.purchased_at_ms
       ? new Date(event.purchased_at_ms).toISOString()

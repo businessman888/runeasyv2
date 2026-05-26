@@ -10,6 +10,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { RoutePointDto } from './workout-tracking.dto';
+import { TreadmillDataDto } from './treadmill-data.dto';
 
 export class CompleteFreeWorkoutDto {
   @IsArray()
@@ -77,4 +78,18 @@ export class CompleteFreeWorkoutDto {
   @IsOptional()
   @IsNumber()
   avg_pace_seconds_per_km?: number;
+
+  /**
+   * Ambiente onde a corrida livre foi realizada. Default 'outdoor'.
+   * 'treadmill' indica esteira — neste caso `route_points` pode vir vazio.
+   */
+  @IsOptional()
+  @IsIn(['outdoor', 'treadmill'])
+  environment?: 'outdoor' | 'treadmill';
+
+  /** Metadados da esteira (Smart FTMS ou modo manual). */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => TreadmillDataDto)
+  treadmill_data?: TreadmillDataDto;
 }

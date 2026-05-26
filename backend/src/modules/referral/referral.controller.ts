@@ -40,10 +40,7 @@ export class ReferralController {
 
   @Post('apply')
   @HttpCode(200)
-  async apply(
-    @Headers('x-user-id') userId: string,
-    @Body() dto: ApplyCodeDto,
-  ) {
+  async apply(@Headers('x-user-id') userId: string, @Body() dto: ApplyCodeDto) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }

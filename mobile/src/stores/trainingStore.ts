@@ -40,6 +40,24 @@ export interface WorkoutSourceMetadata {
     avg_pace_seconds_per_km?: number;
     /** Modelo do relógio Garmin (ex.: "fēnix 7 Pro") quando source='garmin_watch' */
     garmin_device_name?: string;
+    /**
+     * Ambiente onde o treino foi realizado. Default 'outdoor' (mantém
+     * comportamento histórico). 'treadmill' indica corrida em esteira —
+     * `route_points` pode vir vazio e `treadmill_data` traz métricas FTMS.
+     */
+    environment?: 'outdoor' | 'treadmill';
+    /** Metadados da esteira (FTMS ou modo manual) — espelha backend DTO. */
+    treadmill_data?: TreadmillDataPayload;
+}
+
+export interface TreadmillDataPayload {
+    is_smart: boolean;
+    device_name?: string;
+    avg_speed_kmh?: number;
+    max_speed_kmh?: number;
+    avg_incline?: number;
+    total_calories?: number;
+    speed_samples?: { t: number; kmh: number; incline?: number }[];
 }
 
 export interface WorkoutTrackingPayload extends WorkoutSourceMetadata {
@@ -654,6 +672,8 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
                         ...(payload.calories          != null && { calories: payload.calories }),
                         ...(payload.avg_pace_seconds_per_km != null && { avg_pace_seconds_per_km: payload.avg_pace_seconds_per_km }),
                         ...(payload.garmin_device_name && { garmin_device_name: payload.garmin_device_name }),
+                        ...(payload.environment       && { environment: payload.environment }),
+                        ...(payload.treadmill_data    && { treadmill_data: payload.treadmill_data }),
                     }),
                 },
             );
@@ -726,6 +746,8 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
                     ...(payload.calories          != null && { calories: payload.calories }),
                     ...(payload.avg_pace_seconds_per_km != null && { avg_pace_seconds_per_km: payload.avg_pace_seconds_per_km }),
                     ...(payload.garmin_device_name && { garmin_device_name: payload.garmin_device_name }),
+                    ...(payload.environment       && { environment: payload.environment }),
+                    ...(payload.treadmill_data    && { treadmill_data: payload.treadmill_data }),
                 }),
             });
 

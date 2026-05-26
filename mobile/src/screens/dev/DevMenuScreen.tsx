@@ -32,7 +32,13 @@ const OPTIONS: { value: DevPlanOverride; label: string; description: string }[] 
 ];
 
 export function DevMenuScreen({ navigation }: any) {
-  const { planOverride, setPlanOverride, hydrate } = useDevMenuStore();
+  const {
+    planOverride,
+    setPlanOverride,
+    mockTreadmillEnabled,
+    setMockTreadmillEnabled,
+    hydrate,
+  } = useDevMenuStore();
   const subscription = useSubscriptionStore();
 
   useEffect(() => {
@@ -186,6 +192,44 @@ export function DevMenuScreen({ navigation }: any) {
           <Ionicons name="cloud-offline" size={28} color={colors.warning} />
         </Pressable>
       </View>
+
+      <Text style={styles.sectionTitle}>Esteira (FTMS) Mock</Text>
+      <Text style={styles.helperText}>
+        Injeta um device FTMS falso no scan e simula stream de dados (velocidade
+        senoidal, FC randômico). Permite testar todo o fluxo de esteira sem
+        hardware Bluetooth.
+      </Text>
+
+      <Pressable
+        style={[
+          styles.optionRow,
+          mockTreadmillEnabled && styles.optionRowActive,
+        ]}
+        onPress={() => setMockTreadmillEnabled(!mockTreadmillEnabled)}
+        accessibilityRole="button"
+        accessibilityLabel="Toggle mock de esteira FTMS"
+        accessibilityState={{ checked: mockTreadmillEnabled }}
+      >
+        <View style={styles.optionTextWrap}>
+          <Text style={styles.optionLabel}>
+            {mockTreadmillEnabled ? 'Mock ATIVO' : 'Mock desativado'}
+          </Text>
+          <Text style={styles.optionDescription}>
+            {mockTreadmillEnabled
+              ? 'O scan retornará "Mock Treadmill Pro" no lugar do BLE real'
+              : 'Toque para ativar o device fake'}
+          </Text>
+        </View>
+        <Ionicons
+          name={
+            mockTreadmillEnabled
+              ? 'checkmark-circle'
+              : 'radio-button-off'
+          }
+          size={28}
+          color={mockTreadmillEnabled ? colors.primary : colors.textSecondary}
+        />
+      </Pressable>
     </ScrollView>
   );
 }

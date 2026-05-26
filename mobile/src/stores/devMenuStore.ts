@@ -11,17 +11,21 @@ import * as Storage from '../utils/storage';
 import type { DevPlanOverride } from '../utils/devTools';
 
 const STORAGE_KEY = 'dev_plan_override';
+const MOCK_TREADMILL_KEY = 'dev_mock_treadmill';
 
 interface DevMenuState {
   planOverride: DevPlanOverride;
+  mockTreadmillEnabled: boolean;
   hydrated: boolean;
 
   setPlanOverride: (value: DevPlanOverride) => Promise<void>;
+  setMockTreadmillEnabled: (enabled: boolean) => Promise<void>;
   hydrate: () => Promise<void>;
 }
 
 export const useDevMenuStore = create<DevMenuState>((set) => ({
   planOverride: null,
+  mockTreadmillEnabled: false,
   hydrated: false,
 
   setPlanOverride: async (value) => {
@@ -33,9 +37,23 @@ export const useDevMenuStore = create<DevMenuState>((set) => ({
     }
   },
 
+  setMockTreadmillEnabled: async (enabled) => {
+    set({ mockTreadmillEnabled: enabled });
+    if (enabled) {
+      await Storage.setItemAsync(MOCK_TREADMILL_KEY, '1');
+    } else {
+      await Storage.deleteItemAsync(MOCK_TREADMILL_KEY);
+    }
+  },
+
   hydrate: async () => {
     const raw = await Storage.getItemAsync(STORAGE_KEY);
     const value = raw === 'free' || raw === 'pro' || raw === 'trial' ? raw : null;
-    set({ planOverride: value, hydrated: true });
+    const mock = await Storage.getItemAsync(MOCK_TREADMILL_KEY);
+    set({
+      planOverride: value,
+      mockTreadmillEnabled: mock === '1',
+      hydrated: true,
+    });
   },
 }));

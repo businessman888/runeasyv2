@@ -40,6 +40,7 @@ import {
     PlanGoalsScreen,
     WeekDetailScreen,
     PrePaywallScreen,
+    TreadmillSetupScreen,
 } from '../screens';
 import { PlanPreviewScreen as QuizPlanPreviewScreen } from '../screens/quiz/PlanPreviewScreen';
 import { PlanLoadingScreen } from '../screens/quiz/PlanLoadingScreen';
@@ -51,6 +52,7 @@ const DevMenuScreen = __DEV__ ? require('../screens/dev/DevMenuScreen').DevMenuS
 import { colors, typography } from '../theme';
 import { useAuthStore, useTrialModalStore } from '../stores';
 import { TrialModal } from '../components/upgrade/TrialModal';
+import { RunEnvironmentModal } from '../components/RunEnvironmentModal';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -486,6 +488,15 @@ export function AppNavigator() {
                                 animation: 'fade',
                             }}
                         />
+                        <Stack.Screen
+                            name="TreadmillSetup"
+                            component={TreadmillSetupScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'card',
+                                gestureEnabled: true,
+                            }}
+                        />
                         {__DEV__ && DevMenuScreen && (
                             <Stack.Screen
                                 name="DevMenu"
@@ -499,6 +510,7 @@ export function AppNavigator() {
                     </>
                 )}
             </Stack.Navigator>
+            <RunEnvironmentModal />
         </NavigationContainer >
     );
 }

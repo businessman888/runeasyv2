@@ -10,4 +10,7 @@ export * from './sharingStore';
 export * from './wellnessStore';
 export * from './workoutScopeStore';
 export * from './trialModalStore';
+export * from './treadmillStore';
+export * from './devMenuStore';
+export * from './runEnvironmentStore';
 

@@ -19,6 +19,7 @@ import Animated, {
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { WorkoutCard } from '../../components/WorkoutCard';
 import { useTrainingStore, useGamificationStore } from '../../stores';
+import { useStartWorkoutFlow } from '../../hooks/useStartWorkoutFlow';
 import type { PlanWorkout } from '../../types/plan-overview.types';
 import { getPhaseStyle } from './phaseTokens';
 
@@ -77,6 +78,7 @@ export function WeekDetailScreen() {
     const planOverview = useTrainingStore((s) => s.planOverview);
     const fetchPlanOverview = useTrainingStore((s) => s.fetchPlanOverview);
     const badges = useGamificationStore((s) => s.badges) ?? [];
+    const { startRun } = useStartWorkoutFlow();
 
     // Safety net: if user deep-links or refreshes, hydrate the overview.
     useEffect(() => {
@@ -94,7 +96,7 @@ export function WeekDetailScreen() {
         (workout: PlanWorkout) => {
             const dayLabel = `Hoje ${new Date().getDate().toString().padStart(2, '0')}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}`;
             const title = `${getWorkoutTypeName(workout.type)} - ${workout.distance_km.toFixed(1)}Km`;
-            navigation.navigate('Running', {
+            startRun({
                 workoutId: workout.id,
                 dayLabel,
                 title,
@@ -104,7 +106,7 @@ export function WeekDetailScreen() {
                 targetDistanceKm: workout.distance_km,
             });
         },
-        [navigation],
+        [startRun],
     );
 
     const renderItem = useCallback(

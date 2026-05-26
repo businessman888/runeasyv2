@@ -16,6 +16,7 @@ import { useWorkoutGoals } from '../../hooks/useWorkoutGoals';
 import { useTrainingStore } from '../../stores';
 import { GoalsModal } from '../../components/GoalsModal';
 import { MapLocationPuck } from '../../components/map/MapLocationPuck';
+import { TreadmillRunningView } from './TreadmillRunningView';
 import type { WorkoutBlockAPI } from '../../types/workoutGoals';
 
 // ─── Tipos de rota ────────────────────────────────────────────────────────────
@@ -32,6 +33,8 @@ type RunningRouteParams = {
     targetPaceSeconds?: number;
     /** Para modo 'manual': distância alvo em km */
     targetDistanceKm?: number;
+    /** Ambiente do treino. 'treadmill' substitui o fluxo GPS por leitura FTMS/manual. */
+    environment?: 'outdoor' | 'treadmill';
   };
 };
 
@@ -53,7 +56,34 @@ const T = {
 
 
 // ─── Component ────────────────────────────────────────────────────────────────
+/**
+ * Top-level Running route. Switches between the outdoor GPS view and the
+ * treadmill view based on the `environment` param. Splitting at the route
+ * level lets the outdoor branch keep using its hooks (useTracking, etc.)
+ * unchanged — the treadmill branch never instantiates them.
+ */
 export function RunningScreen() {
+  const route = useRoute<RouteProp<RunningRouteParams, 'Running'>>();
+
+  if (route.params?.environment === 'treadmill') {
+    const mode: RunMode =
+      route.params?.mode ?? (route.params?.workoutId ? 'planned' : 'free');
+    return (
+      <TreadmillRunningView
+        workoutId={route.params?.workoutId}
+        dayLabel={route.params?.dayLabel}
+        title={route.params?.title}
+        mode={mode}
+        targetPaceSeconds={route.params?.targetPaceSeconds}
+        targetDistanceKm={route.params?.targetDistanceKm}
+      />
+    );
+  }
+
+  return <OutdoorRunningView />;
+}
+
+function OutdoorRunningView() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RunningRouteParams, 'Running'>>();
   const insets = useSafeAreaInsets();

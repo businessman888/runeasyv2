@@ -28,7 +28,9 @@ export default {
       NSPhotoLibraryAddUsageDescription: "RunEasy precisa de acesso para salvar imagens dos seus treinos na galeria.",
       NSHealthShareUsageDescription: "Precisamos acessar seus dados de treino para sincronizar suas corridas do Apple Watch e personalizar seu plano de treino com IA.",
       NSHealthUpdateUsageDescription: "Precisamos salvar informações dos seus treinos realizados no RunEasy.",
-      UIBackgroundModes: ["fetch", "processing", "location", "remote-notification"],
+      NSBluetoothAlwaysUsageDescription: "O RunEasy usa o Bluetooth para conectar à sua esteira e receber dados de treino em tempo real (velocidade, distância, inclinação).",
+      NSBluetoothPeripheralUsageDescription: "O RunEasy usa o Bluetooth para conectar à sua esteira e receber dados de treino em tempo real.",
+      UIBackgroundModes: ["fetch", "processing", "location", "remote-notification", "bluetooth-central"],
       LSApplicationQueriesSchemes: [
         "instagram",
         "instagram-stories"
@@ -51,7 +53,11 @@ export default {
       "ACCESS_FINE_LOCATION",
       "ACCESS_BACKGROUND_LOCATION",
       "FOREGROUND_SERVICE",
-      "FOREGROUND_SERVICE_LOCATION"
+      "FOREGROUND_SERVICE_LOCATION",
+      "android.permission.BLUETOOTH_SCAN",
+      "android.permission.BLUETOOTH_CONNECT",
+      "android.permission.BLUETOOTH",
+      "android.permission.BLUETOOTH_ADMIN"
     ],
     queries: [
       { package: "com.instagram.android" },
@@ -110,7 +116,16 @@ export default {
     [
       "./plugins/withGarminConnectIQ",
       { appUuid: "8338c29a-1ddf-40d4-892c-b1a3038a1cf5" }
-    ]
+    ],
+    [
+      "react-native-ble-plx",
+      {
+        isBackgroundEnabled: true,
+        modes: ["central"],
+        bluetoothAlwaysPermission: "O RunEasy usa o Bluetooth para conectar à sua esteira e receber dados de treino em tempo real (velocidade, distância, inclinação)."
+      }
+    ],
+    "./plugins/withBluetoothNeverForLocation"
   ],
   notification: {
     icon: "./assets/notification-icon.png",

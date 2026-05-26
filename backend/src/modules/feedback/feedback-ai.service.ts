@@ -27,6 +27,15 @@ export interface WorkoutComparison {
       average_speed: number;
       elevation_difference: number;
     }>;
+    environment?: 'outdoor' | 'treadmill';
+    treadmill_data?: {
+      is_smart?: boolean;
+      device_name?: string;
+      avg_speed_kmh?: number;
+      max_speed_kmh?: number;
+      avg_incline?: number;
+      total_calories?: number;
+    } | null;
   };
 }
 
@@ -105,6 +114,8 @@ export class FeedbackAIService {
         elevation_gain: activity.elevation_gain,
         average_heartrate: activity.average_heartrate,
         splits_metric: activity.splits_metric,
+        environment: activity.environment ?? 'outdoor',
+        treadmill_data: activity.treadmill_data ?? null,
       },
     };
 
@@ -182,6 +193,21 @@ IMPORTANTE: Responda APENAS com um JSON válido, sem texto adicional.`;
         comparison.planned.distance_km) *
       100;
 
+    const isTreadmill = comparison.executed.environment === 'treadmill';
+    const tm = comparison.executed.treadmill_data;
+
+    const treadmillContext = isTreadmill
+      ? `
+
+⚠️ AMBIENTE: ESTEIRA
+- Este treino foi feito em esteira (${tm?.is_smart ? `Smart Treadmill conectada via Bluetooth — ${tm?.device_name ?? 'esteira'}` : 'modo manual'}).
+- NÃO comente sobre elevação real, terreno, GPS, rota, vento ou condições climáticas.
+- A "elevação" exibida não é altitude — é a inclinação configurada na esteira.
+- Inclinação média da esteira: ${tm?.avg_incline != null ? tm.avg_incline.toFixed(1) + '%' : 'plana'}.
+${tm?.avg_speed_kmh != null ? `- Velocidade média na esteira: ${tm.avg_speed_kmh.toFixed(1)} km/h` : ''}
+${tm?.max_speed_kmh != null ? `- Velocidade máxima na esteira: ${tm.max_speed_kmh.toFixed(1)} km/h` : ''}`
+      : '';
+
     const userPrompt = `Analise este treino e gere um feedback detalhado:
 
 TREINO PLANEJADO:
@@ -195,8 +221,7 @@ TREINO EXECUTADO:
 - Pace médio: ${comparison.executed.average_pace?.toFixed(2) || 'N/A'} min/km
 - Pace máximo: ${comparison.executed.max_pace?.toFixed(2) || 'N/A'} min/km
 - Tempo total: ${Math.floor(comparison.executed.moving_time / 60)} minutos
-- Elevação: ${comparison.executed.elevation_gain?.toFixed(0) || 0}m
-${comparison.executed.average_heartrate ? `- FC média: ${comparison.executed.average_heartrate} bpm` : ''}
+${isTreadmill ? '' : `- Elevação: ${comparison.executed.elevation_gain?.toFixed(0) || 0}m\n`}${comparison.executed.average_heartrate ? `- FC média: ${comparison.executed.average_heartrate} bpm` : ''}${treadmillContext}
 
 SPLITS (km):
 ${this.formatSplits(comparison.executed.splits_metric)}

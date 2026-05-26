@@ -27,6 +27,7 @@ import { SegmentedTabs } from '../components/ui/SegmentedTabs';
 import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
 import { WorkoutDayCard, type DayWorkout } from '../components/training/WorkoutDayCard';
 import { useProFeature } from '../hooks/useProFeature';
+import { useStartWorkoutFlow } from '../hooks/useStartWorkoutFlow';
 
 // Decorative mock workout shown (blurred) under the Calendar day teaser for
 // Free users — looks like a real planned workout. Never interactive.
@@ -180,6 +181,7 @@ export function CalendarScreen({ navigation }: any) {
     const { summary, fetchSummary } = useStatsStore();
     const { isProUser } = useProFeature();
     const { scope, setScope } = useWorkoutScopeStore();
+    const { startRun } = useStartWorkoutFlow();
 
     // Free users have no plan — never surface plan schedule/workouts in the calendar
     // grid, day detail, or "Próximo" card. Pre-gating accounts may still carry an
@@ -1286,7 +1288,7 @@ export function CalendarScreen({ navigation }: any) {
                                             closeModal();
                                             const src = raw?.source as ('plan' | 'manual' | 'free' | undefined);
                                             const mode = src === 'manual' ? 'manual' : 'planned';
-                                            navigation.navigate('Running', {
+                                            startRun({
                                                 workoutId: raw?.id ?? selectedWorkout?.id,
                                                 dayLabel,
                                                 title: raw?.title ?? selectedWorkout?.title ?? 'Meu Treino',

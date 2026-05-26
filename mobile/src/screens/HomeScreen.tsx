@@ -17,6 +17,7 @@ import { colors, typography, spacing, borderRadius, shadows, fonts } from '../th
 import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore, useStatsStore, useNotificationStore, useWorkoutScopeStore, getDisplayName, getAvatarUrl } from '../stores';
 import type { LatestActivityData } from '../stores/feedbackStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
+import { useStartWorkoutFlow } from '../hooks/useStartWorkoutFlow';
 import { SegmentedTabs } from '../components/ui/SegmentedTabs';
 import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
 import { CircularProgress } from '../components/CircularProgress';
@@ -115,6 +116,7 @@ export function HomeScreen({ navigation }: any) {
     const { scope, setScope } = useWorkoutScopeStore();
     const { summary, fetchSummary, isLoading: statsLoading } = useStatsStore();
     const { unreadCount, fetchUnreadCount } = useNotificationStore();
+    const { startRun } = useStartWorkoutFlow();
     const initializeHealthKit = useHealthKitStore((s) => s.initialize);
     const syncHealthKitRecent = useHealthKitStore((s) => s.syncRecentIfConnected);
     const healthKitLastSyncedCount = useHealthKitStore((s) => s.lastSyncedCount);
@@ -483,7 +485,7 @@ export function HomeScreen({ navigation }: any) {
         const src = (todayWorkout as any)?.source as ('plan' | 'manual' | 'free' | undefined);
         const mode = src === 'manual' ? 'manual' : 'planned';
 
-        navigation.navigate('Running', {
+        startRun({
             workoutId: todayWorkout?.id,
             dayLabel,
             title,
@@ -495,7 +497,7 @@ export function HomeScreen({ navigation }: any) {
     };
 
     const handleStartFreeRun = () => {
-        navigation.navigate('Running', { mode: 'free' });
+        startRun({ mode: 'free' });
     };
 
     const handleOpenManualConfig = () => {
@@ -554,7 +556,7 @@ export function HomeScreen({ navigation }: any) {
         if (src === 'manual') {
             const n = new Date();
             const dayLabel = `Hoje ${n.getDate().toString().padStart(2, '0')}/${(n.getMonth() + 1).toString().padStart(2, '0')}`;
-            navigation.navigate('Running', {
+            startRun({
                 workoutId: w.id,
                 dayLabel,
                 title: `${getWorkoutTypeName(w.type)} - ${(w.distance_km ?? 0).toFixed(1)}Km`,

@@ -642,11 +642,19 @@ export class TrainingService {
       throw new Error('Workout not found');
     }
 
+    const environment: 'outdoor' | 'treadmill' =
+      payload.environment === 'treadmill' ? 'treadmill' : 'outdoor';
+    const isTreadmill = environment === 'treadmill';
+
     // Compute distance and geojson using Turf JS
     let turfDistanceLimit = 0;
     let routeWKT = null;
 
-    if (payload.route_points && payload.route_points.length > 1) {
+    if (
+      !isTreadmill &&
+      payload.route_points &&
+      payload.route_points.length > 1
+    ) {
       const coordinates = payload.route_points.map((p) => [
         p.longitude,
         p.latitude,
@@ -680,9 +688,15 @@ export class TrainingService {
         : 0;
     const paceMinPerKm = paceSeconds / 60;
 
-    // Compute elevation gain from GPS altitudes (best-effort)
+    // Compute elevation gain from GPS altitudes (best-effort).
+    // Treadmill runs have no GPS altitude — leave at zero (the avg incline
+    // from FTMS is persisted separately in treadmill_data.avg_incline).
     let elevationGain = 0;
-    if (payload.route_points && payload.route_points.length > 1) {
+    if (
+      !isTreadmill &&
+      payload.route_points &&
+      payload.route_points.length > 1
+    ) {
       for (let i = 1; i < payload.route_points.length; i++) {
         const prev = payload.route_points[i - 1]?.altitude;
         const curr = payload.route_points[i]?.altitude;
@@ -733,10 +747,12 @@ export class TrainingService {
           average_pace: finalPaceMinPerKm,
           max_pace: finalPaceMinPerKm,
           elevation_gain: elevationGain,
-          gps_route: payload.route_points || null,
+          gps_route: isTreadmill ? null : payload.route_points || null,
           average_heartrate: payload.average_heartrate ?? null,
           max_heartrate: payload.max_heartrate ?? null,
           calories: payload.calories ?? null,
+          environment,
+          treadmill_data: isTreadmill ? (payload.treadmill_data ?? null) : null,
         })
         .select()
         .single();
@@ -763,6 +779,7 @@ export class TrainingService {
           time_run_seconds: payload.duration_seconds, // Note: You may need migrations if these columns differ
           pace_seconds_per_km: paceSeconds,
           completed_at: completedAtIso,
+          environment,
           ...(activityId ? { activity_id: activityId } : {}),
         })
         .eq('id', workoutId)
@@ -934,6 +951,9 @@ export class TrainingService {
       return 'Corrida da noite';
     };
 
+    const environment: 'outdoor' | 'treadmill' =
+      payload.environment === 'treadmill' ? 'treadmill' : 'outdoor';
+
     const { data: workout, error: insertError } = await this.supabaseService
       .from('workouts')
       .insert({
@@ -949,6 +969,7 @@ export class TrainingService {
         objective: null,
         tips: [],
         status: 'pending',
+        environment,
       })
       .select()
       .single();
@@ -974,6 +995,8 @@ export class TrainingService {
       calories: payload.calories,
       avg_pace_seconds_per_km: payload.avg_pace_seconds_per_km,
       started_at: payload.started_at,
+      environment,
+      treadmill_data: payload.treadmill_data,
     });
   }
 
@@ -998,7 +1021,7 @@ export class TrainingService {
       const { data: act } = await this.supabaseService
         .from('activities')
         .select(
-          'id, name, distance, moving_time, elapsed_time, average_pace, average_speed, total_elevation_gain, elevation_gain, start_date, gps_route, average_heartrate, max_heartrate, calories, source',
+          'id, name, distance, moving_time, elapsed_time, average_pace, average_speed, total_elevation_gain, elevation_gain, start_date, gps_route, average_heartrate, max_heartrate, calories, source, environment, treadmill_data',
         )
         .eq('id', data.activity_id)
         .single();
