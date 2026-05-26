@@ -30,6 +30,7 @@ import { SharingModule } from './modules/sharing';
 import { DevicesModule } from './modules/devices';
 import { AuthModule } from './modules/auth';
 import { SubscriptionModule } from './modules/subscription';
+import { ReferralModule } from './modules/referral';
 
 @Module({
   imports: [
@@ -101,6 +102,7 @@ import { SubscriptionModule } from './modules/subscription';
     DevicesModule,
     AuthModule,
     SubscriptionModule,
+    ReferralModule,
   ],
   controllers: [AppController],
   providers: [AppService],

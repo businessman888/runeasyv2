@@ -12,12 +12,12 @@ import { colors, typography, spacing, borderRadius, shadows } from '../theme';
 import { useStatsStore, useFeedbackStore, useGamificationStore } from '../stores';
 
 export function StatsScreen({ navigation }: any) {
-    const { stats, loading, fetchStats } = useStatsStore();
+    const { fetchAllStats } = useStatsStore();
     const { latestSummary } = useFeedbackStore();
     const { stats: gamStats } = useGamificationStore();
 
     React.useEffect(() => {
-        fetchStats();
+        fetchAllStats();
     }, []);
 
     return (

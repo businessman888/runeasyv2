@@ -8,3 +8,4 @@ export { PlanLoadingScreen } from './PlanLoadingScreen';
 export { BriefingScreen } from './BriefingScreen';
 export { GoalTimeframeScreen } from './GoalTimeframeScreen';
 export { WearableConnectionScreen } from './WearableConnectionScreen';
+export { ReferralCodeScreen } from './ReferralCodeScreen';

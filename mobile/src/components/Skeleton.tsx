@@ -1,9 +1,9 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, Platform, ViewStyle } from 'react-native';
+import { View, StyleSheet, Animated, Platform, ViewStyle, DimensionValue } from 'react-native';
 import { colors } from '../theme';
 
 interface SkeletonProps {
-    width: number | string;
+    width: DimensionValue;
     height: number;
     borderRadius?: number;
     style?: ViewStyle;
@@ -63,7 +63,7 @@ export function SkeletonText({
     height = 16,
     style
 }: {
-    width?: number | string;
+    width?: DimensionValue;
     height?: number;
     style?: ViewStyle;
 }) {

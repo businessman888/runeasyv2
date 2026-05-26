@@ -40,6 +40,11 @@ interface OnboardingData {
     preferredDays: number[];
     goalTimeframe: number | null; // Goal timeframe in months (1, 3, 6)
     preferredWearable: string | null; // 'garmin' | 'polar' | 'fitbit' | 'apple_watch' | null
+
+    // Referral / influencer code (optional). Set by ReferralCodeScreen after
+    // a successful POST /referral/apply. Drives Superwall placement choice.
+    referralCode: string | null;
+    referralInfluencerId: string | null;
 }
 
 
@@ -131,6 +136,8 @@ const initialData: Partial<OnboardingData> = {
     preferredDays: [],
     goalTimeframe: null,
     preferredWearable: null,
+    referralCode: null,
+    referralInfluencerId: null,
 };
 
 export const useOnboardingStore = create<OnboardingState>((set, get) => ({

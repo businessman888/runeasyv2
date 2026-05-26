@@ -36,6 +36,7 @@ import { DistanceTimeScreen } from './quiz/DistanceTimeScreen';
 import { StartDateScreen } from './quiz/StartDateScreen';
 import { GoalTimeframeScreen } from './quiz/GoalTimeframeScreen';
 import { WearableConnectionScreen } from './quiz/WearableConnectionScreen';
+import { ReferralCodeScreen } from './quiz/ReferralCodeScreen';
 
 // Interstitial screens
 import { GoalAchievableScreen } from './quiz/GoalAchievableScreen';
@@ -172,6 +173,11 @@ export function OnboardingScreen({ navigation, route }: any) {
         { key: 'limitations', Component: LimitationsScreen },                                      // 15
         { key: 'goalTimeframe', Component: GoalTimeframeScreen },                                  // 16
         { key: 'preferredWearable', Component: WearableConnectionScreen, isWearableStep: true },   // 17
+        {
+            keys: ['referralCode', 'referralInfluencerId'],
+            key: 'referralCode',
+            Component: ReferralCodeScreen,
+        },                                                                                          // 18 — referral (último)
     ];
 
     const TOTAL_QUESTIONS = QUIZ_STEPS.filter(s => !s.isInterstitial).length; // 15
@@ -220,6 +226,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             case 'goalTimeframe':
                 return typeof data.goalTimeframe === 'number' && data.goalTimeframe > 0;
             case 'preferredWearable': return true;
+            case 'referralCode': return true; // optional — user can always skip
             default: return false;
         }
     };
@@ -289,24 +296,20 @@ export function OnboardingScreen({ navigation, route }: any) {
             addXP(XP_PER_QUESTION);
             xpCreditedRef.current.add(currentStep);
         }
-        if (!xpCreditedRef.current.has(-1)) {
-            addXP(XP_COMPLETION_BONUS);
-            xpCreditedRef.current.add(-1);
-        }
-        navigation.navigate('Quiz_PlanLoading', { userId });
+        // Advance to the referral-code step (the new last index). Completion
+        // bonus is now awarded only when the user clicks Continue on that step.
+        setCurrentStep(currentStep + 1);
     };
 
     const handleWearableConnect = () => {
-        // User picked a provider in the modal → award XP and advance
+        // User picked a provider in the modal → award per-question XP and
+        // advance to the referral-code step. Completion bonus + navigation to
+        // Quiz_PlanLoading happen from handleContinue at the final step.
         if (!xpCreditedRef.current.has(currentStep)) {
             addXP(XP_PER_QUESTION);
             xpCreditedRef.current.add(currentStep);
         }
-        if (!xpCreditedRef.current.has(-1)) {
-            addXP(XP_COMPLETION_BONUS);
-            xpCreditedRef.current.add(-1);
-        }
-        navigation.navigate('Quiz_PlanLoading', { userId });
+        setCurrentStep(currentStep + 1);
     };
 
     const handleWearableModalClose = () => {

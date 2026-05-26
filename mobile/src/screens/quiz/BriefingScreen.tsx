@@ -22,6 +22,7 @@ import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop, Circle as S
 import { usePlacement } from 'expo-superwall';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PAYWALL_PLACEMENTS } from '../../services/paywall';
+import { referralService } from '../../services/referralService';
 import {
     Archetype,
     getGoalLabel,
@@ -119,12 +120,26 @@ export function BriefingScreen({ navigation, route }: any) {
         return () => handler.remove();
     }, []);
 
-    // Trigger onboarding_complete placement on mount (for analytics)
+    // Trigger paywall placement on mount. Hits /referral/status first to decide
+    // between the discounted paywall (REFERRAL_ACTIVATED) and the standard
+    // onboarding paywall. Reading from the server guarantees correctness
+    // across cold-restart, since the onboarding Zustand store does not persist.
     useEffect(() => {
         if (!isPro) {
-            registerPlacement({ placement: PAYWALL_PLACEMENTS.ONBOARDING_COMPLETE }).catch((err: Error) =>
-                console.warn('[Paywall] Erro ao registrar onboarding_complete:', err),
-            );
+            (async () => {
+                try {
+                    const status = await referralService.getStatus();
+                    const placement = status.has_referral
+                        ? PAYWALL_PLACEMENTS.REFERRAL_ACTIVATED
+                        : PAYWALL_PLACEMENTS.ONBOARDING_COMPLETE;
+                    const params = status.has_referral
+                        ? { influencer_code: status.code }
+                        : undefined;
+                    await registerPlacement({ placement, params });
+                } catch (err: unknown) {
+                    console.warn('[Paywall] Erro ao registrar placement onboarding:', err);
+                }
+            })();
         }
     }, []);
 

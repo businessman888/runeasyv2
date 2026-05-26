@@ -220,6 +220,10 @@ export const PAYWALL_PLACEMENTS = {
 
   /** Disparado por qualquer toque em UpgradeProCard espalhado pelo app */
   UPGRADE_TAPPED: 'upgrade_tapped',
+
+  /** Exibido em vez do paywall padrão quando o usuário aplicou um código de
+   *  indicação válido no onboarding. Apresenta o produto promocional com desconto. */
+  REFERRAL_ACTIVATED: 'referral_activated',
 } as const;
 
 export type PaywallPlacement = (typeof PAYWALL_PLACEMENTS)[keyof typeof PAYWALL_PLACEMENTS];

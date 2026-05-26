@@ -115,7 +115,7 @@ export function initAppleWatch(): void {
 
     watchEvents.addListener('user-info', (envelopes) => {
         if (!Array.isArray(envelopes)) return;
-        for (const env of envelopes as WatchEnvelope[]) {
+        for (const env of envelopes as unknown as WatchEnvelope[]) {
             if (!env || typeof env !== 'object') continue;
             if (env.type === 'completed_run' && env.payload) {
                 const run = env.payload as CompletedRunFromWatch;

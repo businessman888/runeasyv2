@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../../database';
 import { SubscriptionService } from './subscription.service';
 import { TrainingService } from '../training/training.service';
+import { ReferralService } from '../referral';
 import {
   RevenueCatEvent,
   RevenueCatWebhookBody,
@@ -18,6 +19,7 @@ export class RevenueCatWebhookService {
     private readonly supabase: SupabaseService,
     private readonly subscriptionService: SubscriptionService,
     private readonly trainingService: TrainingService,
+    private readonly referralService: ReferralService,
   ) {
     this.webhookSecret = config.get<string>('REVENUECAT_WEBHOOK_SECRET');
     if (!this.webhookSecret) {
@@ -139,6 +141,21 @@ export class RevenueCatWebhookService {
     this.logger.log(
       `[RC] Activated Pro for user ${userId} (trial=${isTrial}, expires=${expiresAt})`,
     );
+
+    // Referral commission: record one row per paid month, capped at the
+    // influencer's max_commission_months. Skip for trial periods — money only
+    // changes hands at the first real charge.
+    if (!isTrial) {
+      try {
+        await this.referralService.processCommission(userId, event);
+      } catch (err) {
+        // Commission must never break the webhook — log and move on.
+        this.logger.error(
+          `[RC] Commission processing failed for ${userId}`,
+          err,
+        );
+      }
+    }
 
     // First transition to Pro → generate plan if onboarding exists and no plan yet
     if (!prior?.isPro) {

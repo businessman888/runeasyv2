@@ -66,7 +66,6 @@ export function MapLocationPuck({ onGPSFix }: MapLocationPuckProps) {
 
       <Mapbox.UserLocation
         visible={true}
-        renderMode="normal"
         showsUserHeadingIndicator={false}
         onUpdate={handleUpdate}
       >
