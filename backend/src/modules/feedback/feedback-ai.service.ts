@@ -516,6 +516,10 @@ Regras:
         average_heartrate: latestActivity.average_heartrate,
         start_date: latestActivity.start_date,
         date_label: dateLabel,
+        // Surface treadmill metadata to the Home AI card so it can hide
+        // outdoor-only chrome (elevation/route mentions) for indoor runs.
+        environment: latestActivity.environment ?? 'outdoor',
+        treadmill_data: latestActivity.treadmill_data ?? null,
       },
       feedback: feedback
         ? {
@@ -764,6 +768,9 @@ Regras:
               ? (1000 / activity.average_speed / 60).toFixed(2)
               : null,
           elevation_gain: activity.total_elevation_gain || 0,
+          // Surface treadmill flag so the history → RunSummary navigation can
+          // pre-select the right layout without waiting for re-hydration.
+          environment: activity.environment ?? 'outdoor',
           feedback: feedbackMap.get(activity.id) || null,
           workout_id: linked?.workout_id ?? null,
           source: linked?.source ?? null,

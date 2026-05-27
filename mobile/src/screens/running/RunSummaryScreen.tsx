@@ -203,6 +203,21 @@ export function RunSummaryScreen() {
         .filter((p) => p && typeof p.longitude === 'number' && typeof p.latitude === 'number')
         .map((p) => [p.longitude, p.latitude]);
 
+      // Environment chain: activity.environment is the canonical source
+      // (set on every completion), but the top-level workout row mirrors
+      // it as a safety net. Fall back to 'outdoor' only when both are
+      // genuinely absent.
+      const activityEnv = (activity as any)?.environment as
+        | 'outdoor'
+        | 'treadmill'
+        | undefined;
+      const workoutEnv = (details as any)?.environment as
+        | 'outdoor'
+        | 'treadmill'
+        | undefined;
+      const resolvedEnv: 'outdoor' | 'treadmill' | undefined =
+        activityEnv ?? workoutEnv ?? undefined;
+
       setEnriched({
         routePoints: gps,
         routeCoordinates: coords,
@@ -216,7 +231,7 @@ export function RunSummaryScreen() {
         maxHeartRate: activity?.max_heartrate ?? null,
         calories: activity?.calories ?? null,
         activitySource: activity?.source ?? null,
-        environment: ((activity as any)?.environment as 'outdoor' | 'treadmill' | undefined) ?? undefined,
+        environment: resolvedEnv,
         treadmillData: ((activity as any)?.treadmill_data as TreadmillSummaryData | null | undefined) ?? null,
       });
       setEnriching(false);
@@ -516,10 +531,14 @@ export function RunSummaryScreen() {
             </View>
           )}
 
-          {/* Título auto */}
+          {/* Título — usa o título real persistido no backend. autoTitle só
+              é fallback quando o backend não devolveu título (ex: workout
+              criado antes desse campo existir). Não filtra por mode: free
+              runs também têm título salvo ("Corrida da manhã/tarde/noite"
+              ancorado ao horário real de início, não ao "agora"). */}
           <View style={styles.titleWrap}>
             <Text style={styles.runTitle}>
-              {workoutTitle && mode !== 'free' ? workoutTitle : autoTitle}
+              {workoutTitle ?? autoTitle}
             </Text>
           </View>
 

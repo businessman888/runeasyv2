@@ -104,6 +104,7 @@ export function TrainingHistoryScreen({ navigation }: any) {
                 savedLocally: false,
                 mode: source,
                 workoutTitle: workout.title ?? workout.name ?? undefined,
+                environment: (workout as any)?.environment ?? undefined,
             });
             return;
         }

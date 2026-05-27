@@ -550,6 +550,9 @@ export function HomeScreen({ navigation }: any) {
                 workoutTitle: w.title ?? undefined,
                 targetPaceSeconds: w.target_pace_seconds ?? undefined,
                 targetDistanceKm: w.distance_km ?? undefined,
+                // Forward environment when known so the first paint already
+                // picks the right layout (hides Mapbox for treadmill runs).
+                environment: (w as any)?.environment ?? undefined,
             });
             return;
         }
@@ -599,6 +602,7 @@ export function HomeScreen({ navigation }: any) {
                     targetPaceSeconds: data.target_pace_seconds ?? undefined,
                     targetDistanceKm: data.conquest?.planned_distance_km ?? undefined,
                     workoutTitle: data.workout_title ?? data.activity?.name ?? undefined,
+                    environment: (data.activity as any)?.environment ?? undefined,
                 });
             }
         };

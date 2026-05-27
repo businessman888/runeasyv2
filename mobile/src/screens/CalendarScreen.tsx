@@ -499,6 +499,7 @@ export function CalendarScreen({ navigation }: any) {
                 workoutTitle: workout.title ?? undefined,
                 targetPaceSeconds: workout.target_pace_seconds ?? undefined,
                 targetDistanceKm: workout.distance_km ?? undefined,
+                environment: (workout as any)?.environment ?? undefined,
             });
             return;
         }

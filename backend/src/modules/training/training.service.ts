@@ -1056,6 +1056,9 @@ export class TrainingService {
           // No activity row at all (rare — workout completed but
           // activity insert failed). Synthesize a minimal activity
           // shell so the frontend can still render the route map.
+          // We mirror `environment` from the workout row so the UI's
+          // outdoor-vs-treadmill switch keeps working even in this
+          // degraded path.
           activity = {
             id: null,
             name: data.title ?? 'Corrida',
@@ -1067,9 +1070,18 @@ export class TrainingService {
             elevation_gain: 0,
             start_date: data.completed_at ?? data.scheduled_date,
             gps_route: fallbackPoints,
+            environment: data.environment ?? 'outdoor',
+            treadmill_data: null,
           };
         }
       }
+    }
+
+    // Defensive: even when activity exists but the columns weren't selected
+    // for any reason (legacy callers, partial migration), ensure environment
+    // ends up populated by mirroring the top-level workout value.
+    if (activity && activity.environment == null) {
+      activity = { ...activity, environment: data.environment ?? 'outdoor' };
     }
 
     return { ...data, activity };

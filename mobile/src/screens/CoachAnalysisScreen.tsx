@@ -170,6 +170,20 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                 .filter((p) => p && typeof p.longitude === 'number' && typeof p.latitude === 'number')
                 .map((p) => [p.longitude, p.latitude]);
 
+            // Environment chain: activity is the canonical source (set on
+            // every completion). The top-level workout mirrors it, so we
+            // fall back to it when the activity row hasn't migrated yet.
+            const activityEnv = (activity as any)?.environment as
+                | 'outdoor'
+                | 'treadmill'
+                | undefined;
+            const workoutEnv = (details as any)?.environment as
+                | 'outdoor'
+                | 'treadmill'
+                | undefined;
+            const resolvedEnv: 'outdoor' | 'treadmill' | undefined =
+                activityEnv ?? workoutEnv ?? undefined;
+
             setEnriched({
                 routePoints: gps,
                 routeCoordinates: coords,
@@ -183,7 +197,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                 targetDistanceKm: details.distance_km ?? undefined,
                 workoutTitle: details.title ?? undefined,
                 startDate: activity?.start_date,
-                environment: (activity as any)?.environment ?? undefined,
+                environment: resolvedEnv,
                 treadmillData: (activity as any)?.treadmill_data ?? null,
             });
             setEnriching(false);

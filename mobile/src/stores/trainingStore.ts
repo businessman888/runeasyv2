@@ -294,6 +294,9 @@ interface Workout {
     /** Daniels-based enrichment. Null/undefined for legacy workouts created
      *  before the scientific refinement — the UI must render gracefully. */
     metadata?: WorkoutMetadata | null;
+    /** Ambiente do treino — set pelo backend no insert. Quando 'treadmill',
+     *  a UI esconde o mapa e troca splits por gráfico de velocidade. */
+    environment?: 'outdoor' | 'treadmill' | null;
 }
 
 /** Returned by GET /training/workouts/:id — workout row enriched with the
@@ -327,6 +330,11 @@ export interface WorkoutDetails extends Workout {
         calories?: number | null;
         /** Fonte da activity ('phone' | 'apple_watch' | 'garmin' | 'fitbit' | 'polar' | 'apple_health'). */
         source?: string | null;
+        /** Ambiente onde a activity foi gerada — usado pela RunSummary/CoachAnalysis
+         *  para alternar entre layout outdoor (mapa) e treadmill (gráfico). */
+        environment?: 'outdoor' | 'treadmill' | null;
+        /** Metadados FTMS ou manual de esteira. Presente apenas em environment='treadmill'. */
+        treadmill_data?: TreadmillDataPayload | null;
     } | null;
 }
 
