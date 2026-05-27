@@ -80,9 +80,11 @@ export function TrainingHistoryScreen({ navigation }: any) {
     }, []);
 
     const navigateToWorkout = (workout: any) => {
-        // 'plan' workouts have AI coach analysis; 'manual'/'free' open the
-        // RunSummary directly. When source is missing (legacy data), fall back
-        // to feedback presence as a heuristic.
+        // Dumb redirect: 'plan' workouts → CoachAnalysis; 'manual'/'free' →
+        // RunSummary. The destination screens fetch all data via the
+        // workoutId/feedbackId and handle outdoor/treadmill internally.
+        // When source is missing (legacy data), fall back to feedback
+        // presence as a heuristic.
         const source: 'plan' | 'manual' | 'free' | null | undefined =
             workout.source ?? (workout.feedback ? 'plan' : null);
 
@@ -97,14 +99,7 @@ export function TrainingHistoryScreen({ navigation }: any) {
         if (source === 'manual' || source === 'free') {
             navigation.navigate('RunSummary', {
                 workoutId: workout.workout_id ?? undefined,
-                distance: workout.distance ?? 0,
-                timeMs: (workout.moving_time ?? 0) * 1000,
-                routeCoordinates: [],
-                routePoints: [],
-                savedLocally: false,
                 mode: source,
-                workoutTitle: workout.title ?? workout.name ?? undefined,
-                environment: (workout as any)?.environment ?? undefined,
             });
             return;
         }

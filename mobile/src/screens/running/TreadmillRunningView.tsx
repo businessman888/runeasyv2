@@ -36,6 +36,7 @@ import {
   useTrainingStore,
 } from '../../stores';
 import { MANUAL_TREADMILL_SPEED } from '../../constants/bluetooth';
+import { saveTreadmillCache } from '../../utils/treadmillCache';
 import { fonts } from '../../theme';
 
 // ─── Visual tokens (Figma-aligned) ────────────────────────────────────────────
@@ -190,6 +191,14 @@ export function TreadmillRunningView({
     } catch (error) {
       console.error('[TreadmillRunningView] completeWorkout/free erro:', error);
       savedLocally = true;
+    }
+
+    // Local-first persistence: save the treadmill telemetry to disk keyed
+    // by workoutId BEFORE clearing in-memory state. This guarantees the
+    // RunSummary "Velocidade na esteira" card survives reopen even if the
+    // backend round-trip fails to surface treadmill_data on re-fetch.
+    if (resolvedWorkoutId && tracking.treadmillData) {
+      saveTreadmillCache(resolvedWorkoutId, tracking.treadmillData);
     }
 
     try {

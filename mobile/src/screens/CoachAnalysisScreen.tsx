@@ -29,6 +29,7 @@ import {
     type RoutePoint,
     type SplitData,
 } from '../utils/runMetrics';
+import { loadTreadmillCache } from '../utils/treadmillCache';
 import { SharingModal } from './sharing/SharingModal';
 
 // ─── Design Tokens (alinhados ao RunSummary/Figma) ────────────────────────────
@@ -157,6 +158,27 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
         if (!workoutId) return;
         let cancelled = false;
         setEnriching(true);
+
+        // Local-first hydration of treadmill telemetry — mirrors the
+        // behaviour in RunSummary. Reads disk synchronously so the
+        // "Velocidade na esteira" card paints on first frame.
+        const cachedTreadmill = loadTreadmillCache(workoutId);
+        if (cachedTreadmill) {
+            setEnriched((prev) => ({
+                routePoints: prev?.routePoints ?? [],
+                routeCoordinates: prev?.routeCoordinates ?? [],
+                distance: prev?.distance ?? 0,
+                timeMs: prev?.timeMs ?? 0,
+                elevationGainM: prev?.elevationGainM ?? 0,
+                targetPaceSeconds: prev?.targetPaceSeconds,
+                targetDistanceKm: prev?.targetDistanceKm,
+                workoutTitle: prev?.workoutTitle,
+                startDate: prev?.startDate,
+                environment: 'treadmill',
+                treadmillData: cachedTreadmill as TreadmillSummary,
+            }));
+        }
+
         (async () => {
             const details = await fetchWorkoutDetails(workoutId);
             if (cancelled) return;
@@ -211,11 +233,36 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                 });
             }
 
+            // Same defensive metric resolution as RunSummary: prefer
+            // activity values, fall back to the workout row's executed
+            // metrics (set by completeWorkout regardless of activity-insert
+            // status). Keeps the header populated when the activity row
+            // is missing or zero (treadmill runs, degraded inserts).
+            const workoutDistanceM =
+                (details as any)?.distance_run != null
+                    ? Number((details as any).distance_run) * 1000
+                    : null;
+            const workoutTimeS =
+                (details as any)?.time_run_seconds != null
+                    ? Number((details as any).time_run_seconds)
+                    : null;
+            const activityDistance =
+                activity?.distance != null && activity.distance > 0
+                    ? activity.distance
+                    : null;
+            const activityTimeS =
+                activity?.moving_time != null && activity.moving_time > 0
+                    ? activity.moving_time
+                    : null;
+            const resolvedDistance =
+                activityDistance ?? workoutDistanceM ?? 0;
+            const resolvedTimeS = activityTimeS ?? workoutTimeS ?? 0;
+
             setEnriched({
                 routePoints: gps,
                 routeCoordinates: coords,
-                distance: activity?.distance ?? 0,
-                timeMs: (activity?.moving_time ?? 0) * 1000,
+                distance: resolvedDistance,
+                timeMs: resolvedTimeS * 1000,
                 elevationGainM:
                     activity?.total_elevation_gain ??
                     activity?.elevation_gain ??
@@ -224,8 +271,9 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                 targetDistanceKm: details.distance_km ?? undefined,
                 workoutTitle: details.title ?? undefined,
                 startDate: activity?.start_date,
-                environment: resolvedEnv,
-                treadmillData: parsedTm,
+                environment:
+                    resolvedEnv ?? (cachedTreadmill ? 'treadmill' : undefined),
+                treadmillData: parsedTm ?? (cachedTreadmill as TreadmillSummary | null),
             });
             setEnriching(false);
         })();
@@ -438,6 +486,38 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
     const environment: 'outdoor' | 'treadmill' = enriched?.environment ?? 'outdoor';
     const treadmillData = enriched?.treadmillData ?? null;
     const isTreadmill = environment === 'treadmill';
+
+    // Cold-start loading guard. Coach analysis depends on two async
+    // sources (feedback + workout details). If neither resolved yet,
+    // show a centered spinner instead of a half-populated UI with
+    // zeros for distance / time / pace.
+    const showColdStartLoading =
+        !enriched && enriching && !feedback;
+    if (showColdStartLoading) {
+        return (
+            <View style={[styles.container, styles.coldStartLoading]}>
+                <SafeAreaView edges={['top']} style={styles.topOverlay}>
+                    <Pressable
+                        style={styles.iconBtn}
+                        onPress={handleClose}
+                        hitSlop={10}
+                        accessibilityRole="button"
+                        accessibilityLabel="Voltar"
+                    >
+                        <Ionicons name="chevron-back" size={22} color={T.textPrimary} />
+                    </Pressable>
+                    <View style={styles.titlePill}>
+                        <Text style={styles.titlePillMain}>Análise do Treinador</Text>
+                    </View>
+                    <View style={styles.iconBtn} />
+                </SafeAreaView>
+                <View style={styles.coldStartCenter}>
+                    <ActivityIndicator size="large" color={T.cyan} />
+                    <Text style={styles.coldStartText}>Carregando análise...</Text>
+                </View>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
@@ -1316,6 +1396,23 @@ function formatTimeShort(iso: string): string {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: T.bgPrimary },
+
+    // Cold-start loading state — shown when opened from history / home
+    // before feedback + workout details finish hydrating.
+    coldStartLoading: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    coldStartCenter: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+    },
+    coldStartText: {
+        color: T.textSecondary,
+        fontSize: 14,
+    },
 
     // Treadmill backdrop (no map for treadmill runs)
     treadmillBackdrop: {

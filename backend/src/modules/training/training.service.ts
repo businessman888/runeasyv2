@@ -1038,6 +1038,7 @@ export class TrainingService {
     const activityGps = Array.isArray(activity?.gps_route)
       ? activity.gps_route
       : [];
+    let fallbackPoints: any[] | null = null;
     if (activityGps.length === 0) {
       const { data: routeRow } = await this.supabaseService
         .from('workout_routes')
@@ -1046,35 +1047,52 @@ export class TrainingService {
         .limit(1)
         .maybeSingle();
 
-      const fallbackPoints = Array.isArray(routeRow?.raw_data)
+      fallbackPoints = Array.isArray(routeRow?.raw_data)
         ? routeRow.raw_data
         : null;
-      if (fallbackPoints && fallbackPoints.length > 0) {
-        if (activity) {
-          activity = { ...activity, gps_route: fallbackPoints };
-        } else {
-          // No activity row at all (rare — workout completed but
-          // activity insert failed). Synthesize a minimal activity
-          // shell so the frontend can still render the route map.
-          // We mirror `environment` from the workout row so the UI's
-          // outdoor-vs-treadmill switch keeps working even in this
-          // degraded path.
-          activity = {
-            id: null,
-            name: data.title ?? 'Corrida',
-            distance: (data.distance_run ?? data.distance_km ?? 0) * 1000,
-            moving_time: data.time_run_seconds ?? 0,
-            average_pace: data.pace_seconds_per_km
-              ? data.pace_seconds_per_km / 60
-              : null,
-            elevation_gain: 0,
-            start_date: data.completed_at ?? data.scheduled_date,
-            gps_route: fallbackPoints,
-            environment: data.environment ?? 'outdoor',
-            treadmill_data: null,
-          };
-        }
+      if (fallbackPoints && fallbackPoints.length > 0 && activity) {
+        activity = { ...activity, gps_route: fallbackPoints };
       }
+    }
+
+    // Synthesize a minimal activity shell when the workout is completed but
+    // the activity row is missing — this covers TWO degraded paths:
+    //
+    //  (a) Outdoor: activity insert failed, but workout_routes was saved.
+    //      We use `fallbackPoints` for the route.
+    //  (b) Treadmill: no GPS by design, and the activity row may also be
+    //      missing if the insert failed. We still pull the executed
+    //      metrics from the workout row (`distance_run`, `time_run_seconds`)
+    //      so the result screen never shows zeros.
+    //
+    // Without this, the frontend would see `activity: null` and have to
+    // rely on initial route params — which is exactly the bug that made
+    // headers show as zeros when reopening a workout from Calendar/Home.
+    const isCompleted = data?.status === 'completed';
+    if (!activity && isCompleted) {
+      activity = {
+        id: null,
+        name: data.title ?? 'Corrida',
+        distance:
+          (Number(data.distance_run ?? data.distance_km ?? 0)) * 1000,
+        moving_time: Number(data.time_run_seconds ?? 0),
+        elapsed_time: Number(data.time_run_seconds ?? 0),
+        average_pace: data.pace_seconds_per_km
+          ? Number(data.pace_seconds_per_km) / 60
+          : null,
+        average_speed: null,
+        elevation_gain: 0,
+        total_elevation_gain: 0,
+        start_date: data.completed_at ?? data.scheduled_date,
+        gps_route:
+          fallbackPoints && fallbackPoints.length > 0 ? fallbackPoints : null,
+        average_heartrate: null,
+        max_heartrate: null,
+        calories: null,
+        source: 'phone',
+        environment: data.environment ?? 'outdoor',
+        treadmill_data: null,
+      };
     }
 
     // Defensive: even when activity exists but the columns weren't selected

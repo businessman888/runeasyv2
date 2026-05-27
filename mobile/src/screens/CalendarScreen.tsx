@@ -485,21 +485,16 @@ export function CalendarScreen({ navigation }: any) {
                 return;
             }
 
+            // Dumb redirect: only `workoutId` + `mode` (for the layout
+            // branch — manual shows "Planejado vs Executado", free does
+            // not). RunSummaryScreen owns hydration and persistence; this
+            // tap is just routing.
             const mode = source === 'manual' ? 'manual'
                 : source === 'plan' ? 'planned'
                     : 'free';
             navigation.navigate('RunSummary', {
                 workoutId: workout.id,
-                distance: 0,
-                timeMs: 0,
-                routeCoordinates: [],
-                routePoints: [],
-                savedLocally: false,
                 mode,
-                workoutTitle: workout.title ?? undefined,
-                targetPaceSeconds: workout.target_pace_seconds ?? undefined,
-                targetDistanceKm: workout.distance_km ?? undefined,
-                environment: (workout as any)?.environment ?? undefined,
             });
             return;
         }

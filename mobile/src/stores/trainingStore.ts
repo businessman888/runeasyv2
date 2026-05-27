@@ -297,6 +297,14 @@ interface Workout {
     /** Ambiente do treino — set pelo backend no insert. Quando 'treadmill',
      *  a UI esconde o mapa e troca splits por gráfico de velocidade. */
     environment?: 'outdoor' | 'treadmill' | null;
+    /** Métricas executadas, escritas em `workouts` pelo backend ao completar.
+     *  São redundantes com `activities.distance/moving_time` mas sobrevivem
+     *  quando a activity row está faltando (legacy / esteira sem GPS), e por
+     *  isso a UI usa como fallback para pintar headers antes de hidratar. */
+    distance_run?: number | null;          // km
+    time_run_seconds?: number | null;       // segundos
+    pace_seconds_per_km?: number | null;    // segundos por km
+    completed_at?: string | null;
 }
 
 /** Returned by GET /training/workouts/:id — workout row enriched with the

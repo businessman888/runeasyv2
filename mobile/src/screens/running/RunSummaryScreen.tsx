@@ -27,6 +27,7 @@ import {
   type RoutePoint,
   type SplitData,
 } from '../../utils/runMetrics';
+import { loadTreadmillCache } from '../../utils/treadmillCache';
 import type { RunMode } from './RunningScreen';
 
 export interface TreadmillSummaryData {
@@ -40,12 +41,29 @@ export interface TreadmillSummaryData {
 }
 
 // ─── Tipos de rota ────────────────────────────────────────────────────────────
+/**
+ * RunSummary supports two entry shapes:
+ *
+ *  1. Live finish — Running/TreadmillRunningView pass the full payload
+ *     (`distance`, `timeMs`, `routePoints`, `routeCoordinates`,
+ *     `environment`, `treadmillData`) so the first paint shows real values
+ *     immediately, before any network call.
+ *
+ *  2. Dumb redirect — Calendar / Home / TrainingHistory pass only
+ *     `{ workoutId, mode }`. The screen fetches everything via
+ *     `fetchWorkoutDetails(workoutId)` and renders outdoor or treadmill
+ *     based on the persisted data. A loading skeleton covers the gap so
+ *     no zeros are ever shown.
+ *
+ * All fields except `workoutId` are optional; missing values fall back to
+ * the hydrated data or to a sensible neutral default.
+ */
 type RunSummaryRouteParams = {
   RunSummary: {
     workoutId?: string;
-    distance: number;       // metros
-    timeMs: number;         // milissegundos
-    routeCoordinates: number[][]; // [lng, lat][]
+    distance?: number;       // metros
+    timeMs?: number;         // milissegundos
+    routeCoordinates?: number[][]; // [lng, lat][]
     routePoints?: RoutePoint[];
     savedLocally?: boolean;
     mode?: RunMode;
@@ -179,6 +197,33 @@ export function RunSummaryScreen() {
     if (hasInitialRoute || !workoutId) return;
     let cancelled = false;
     setEnriching(true);
+
+    // Local-first: read the on-device treadmill cache synchronously so the
+    // "Velocidade na esteira" card paints immediately, before the backend
+    // round-trip resolves. The fetch below still runs to confirm/refresh
+    // server-side fields — but the chart never disappears while we wait.
+    const cachedTreadmill = loadTreadmillCache(workoutId);
+    if (cachedTreadmill) {
+      setEnriched((prev) => ({
+        routePoints: prev?.routePoints ?? [],
+        routeCoordinates: prev?.routeCoordinates ?? [],
+        distance: prev?.distance ?? initialDistance,
+        timeMs: prev?.timeMs ?? initialTimeMs,
+        mode: prev?.mode,
+        targetPaceSeconds: prev?.targetPaceSeconds,
+        targetDistanceKm: prev?.targetDistanceKm,
+        workoutTitle: prev?.workoutTitle,
+        avgHeartRate: prev?.avgHeartRate ?? null,
+        maxHeartRate: prev?.maxHeartRate ?? null,
+        calories: prev?.calories ?? null,
+        activitySource: prev?.activitySource ?? null,
+        // Force environment to treadmill since we have local cache data
+        // for this workout — only treadmill runs ever get cached.
+        environment: 'treadmill',
+        treadmillData: cachedTreadmill as TreadmillSummaryData,
+      }));
+    }
+
     (async () => {
       const details = await fetchWorkoutDetails(workoutId);
       if (cancelled) return;
@@ -253,11 +298,40 @@ export function RunSummaryScreen() {
         });
       }
 
+      // Workout row carries `distance_run` (km) and `time_run_seconds` —
+      // written by `completeWorkout` regardless of whether the activity
+      // insert succeeded. Use them as the second layer of fallback so
+      // the header is never blank when the activity row is missing or
+      // when the activity exists but its execution metrics are 0
+      // (degraded inserts, esteira sem activity_id, etc).
+      const workoutDistanceM =
+        (details as any)?.distance_run != null
+          ? Number((details as any).distance_run) * 1000
+          : null;
+      const workoutTimeS =
+        (details as any)?.time_run_seconds != null
+          ? Number((details as any).time_run_seconds)
+          : null;
+
+      const activityDistance =
+        activity?.distance != null && activity.distance > 0
+          ? activity.distance
+          : null;
+      const activityTimeS =
+        activity?.moving_time != null && activity.moving_time > 0
+          ? activity.moving_time
+          : null;
+
+      const resolvedDistance =
+        activityDistance ?? workoutDistanceM ?? initialDistance;
+      const resolvedTimeS =
+        activityTimeS ?? workoutTimeS ?? Math.round(initialTimeMs / 1000);
+
       setEnriched({
         routePoints: gps,
         routeCoordinates: coords,
-        distance: activity?.distance ?? initialDistance,
-        timeMs: ((activity?.moving_time ?? Math.round(initialTimeMs / 1000))) * 1000,
+        distance: resolvedDistance,
+        timeMs: resolvedTimeS * 1000,
         mode: enrichedMode,
         targetPaceSeconds: details.target_pace_seconds ?? undefined,
         targetDistanceKm: details.distance_km ?? undefined,
@@ -266,8 +340,13 @@ export function RunSummaryScreen() {
         maxHeartRate: activity?.max_heartrate ?? null,
         calories: activity?.calories ?? null,
         activitySource: activity?.source ?? null,
-        environment: resolvedEnv,
-        treadmillData: parsedTm,
+        // If backend didn't return env but we have local treadmill cache,
+        // we know it was a treadmill run.
+        environment: resolvedEnv ?? (cachedTreadmill ? 'treadmill' : undefined),
+        // Prefer backend data when present (latest authoritative copy),
+        // but fall back to the local cache so a degraded server response
+        // never erases the in-app chart.
+        treadmillData: parsedTm ?? (cachedTreadmill as TreadmillSummaryData | null),
       });
       setEnriching(false);
     })();
@@ -415,6 +494,49 @@ export function RunSummaryScreen() {
     () => buildChartConfig(paceChart, summary.avgPaceSecondsPerKm, chartAvailableWidth),
     [paceChart, summary.avgPaceSecondsPerKm, chartAvailableWidth],
   );
+
+  // Cold-start loading guard. When we were opened as a "dumb redirect"
+  // (no live route data passed, only workoutId) and the hydration hasn't
+  // resolved yet, render a clean spinner instead of a half-populated UI
+  // showing zeros — the screens are persistent in data, never in a
+  // half-state.
+  //
+  // The live-finish path (RunningScreen / TreadmillRunningView) passes at
+  // least distance>0 or treadmillData or routePoints, so this branch is
+  // skipped and the live values paint immediately. The dumb-redirect path
+  // (Calendar / Home / History) passes only workoutId — that's the case
+  // we cover here.
+  const hasLiveData =
+    hasInitialRoute ||
+    initialDistance > 0 ||
+    initialTimeMs > 0 ||
+    initialTreadmillData != null ||
+    initialEnvironment === 'treadmill';
+  const showColdStartLoading =
+    !hasLiveData && !enriched && enriching && !!workoutId;
+  if (showColdStartLoading) {
+    return (
+      <View style={[styles.container, styles.coldStartLoading]}>
+        <SafeAreaView edges={['top']} style={styles.topOverlay}>
+          <Pressable
+            style={styles.iconBtn}
+            onPress={handleClose}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Voltar"
+          >
+            <Ionicons name="chevron-back" size={22} color={T.textPrimary} />
+          </Pressable>
+          <Text style={styles.screenTitle}>Relatório</Text>
+          <View style={styles.iconBtn} />
+        </SafeAreaView>
+        <View style={styles.coldStartCenter}>
+          <ActivityIndicator size="large" color={T.cyan} />
+          <Text style={styles.coldStartText}>Carregando treino...</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -1062,6 +1184,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: T.bgPrimary,
+  },
+
+  // Cold-start loading state — shown when opened via dumb-redirect entry
+  // points (Calendar / Home / History) while hydration is in progress.
+  coldStartLoading: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  coldStartCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  coldStartText: {
+    color: T.textSecondary,
+    fontSize: 14,
   },
 
   // Treadmill backdrop (no map for treadmill runs)

@@ -536,23 +536,15 @@ export function HomeScreen({ navigation }: any) {
 
     // Tap on an activity card (Atividades tab). Completed → run summary;
     // pending manual → start it (free runs aren't "started" from a card).
+    //
+    // Dumb redirect: only `workoutId` + `mode`. RunSummaryScreen handles
+    // hydration and outdoor/treadmill branching on its own.
     const handleActivityCardPress = (w: any) => {
         const src: 'plan' | 'manual' | 'free' | undefined = w?.source;
         if (w?.status === 'completed') {
             navigation.navigate('RunSummary', {
                 workoutId: w.id,
-                distance: 0,
-                timeMs: 0,
-                routeCoordinates: [],
-                routePoints: [],
-                savedLocally: false,
                 mode: src === 'manual' ? 'manual' : 'free',
-                workoutTitle: w.title ?? undefined,
-                targetPaceSeconds: w.target_pace_seconds ?? undefined,
-                targetDistanceKm: w.distance_km ?? undefined,
-                // Forward environment when known so the first paint already
-                // picks the right layout (hides Mapbox for treadmill runs).
-                environment: (w as any)?.environment ?? undefined,
             });
             return;
         }
@@ -587,22 +579,15 @@ export function HomeScreen({ navigation }: any) {
             if (isPlanWorkout) {
                 if (!isCoachReady) return;
                 navigation.navigate('CoachAnalysis', {
-                    activityId: data.activity?.id,
                     feedbackId: data.feedback?.id,
+                    activityId: data.activity?.id,
                 });
             } else {
+                // Dumb redirect — RunSummaryScreen fetches everything via
+                // workoutId and handles outdoor/treadmill internally.
                 navigation.navigate('RunSummary', {
                     workoutId: data.workout_id ?? undefined,
-                    distance: data.activity?.distance ?? 0,
-                    timeMs: (data.activity?.moving_time ?? 0) * 1000,
-                    routeCoordinates: [],
-                    routePoints: [],
-                    savedLocally: false,
                     mode: source === 'manual' ? 'manual' : 'free',
-                    targetPaceSeconds: data.target_pace_seconds ?? undefined,
-                    targetDistanceKm: data.conquest?.planned_distance_km ?? undefined,
-                    workoutTitle: data.workout_title ?? data.activity?.name ?? undefined,
-                    environment: (data.activity as any)?.environment ?? undefined,
                 });
             }
         };
