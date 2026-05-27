@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Figma reference images (downloaded via MCP for visual fidelity checks)
+/figma-refs

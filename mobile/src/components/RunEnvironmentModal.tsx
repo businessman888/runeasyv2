@@ -6,10 +6,12 @@
  * pops up. The user picks outdoor or treadmill; we then route to the
  * appropriate next screen forwarding the pending params untouched.
  *
- * Figma node 1315-1609.
+ * Visual fidelity: Figma node 1315-1609. Centered floating dialog (not a
+ * bottom sheet), 355px fixed width, translucent option cards, square
+ * 47x47 dark icon tiles. All measurements match the Figma exactly.
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -17,25 +19,73 @@ import {
   StyleSheet,
   Pressable,
   TouchableWithoutFeedback,
-  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { useRunEnvironmentStore } from '../stores/runEnvironmentStore';
 import { navigate } from '../navigation/navigationRef';
-import {
-  colors,
-  spacing,
-  borderRadius,
-  typography,
-  fonts,
-  shadows,
-} from '../theme';
+import { fonts } from '../theme';
+
+// Figma tokens (1315-1609). Card width is computed from modal width minus
+// horizontal padding × 2 so cards never overshoot the container even when
+// the modal is shrunken by safe-area or small screens.
+const F = {
+  modalBg: '#1C1C2E',
+  modalRadius: 20,
+  modalWidth: 340,
+  modalPadTop: 22,
+  modalPadBottom: 18,
+  modalPadH: 18,
+  titleColor: '#EBEBF5',
+  titleSize: 22,
+  cardBg: 'rgba(21, 21, 42, 0.85)',
+  cardRadius: 14,
+  cardHeight: 72,
+  cardGap: 10,
+  iconBg: '#0E0E1F',
+  iconRadius: 10,
+  iconSize: 44,
+  iconInner: 22,
+  iconColor: '#FFFFFF',
+  subtitleColor: 'rgba(235, 235, 245, 0.55)',
+  optionTitleSize: 15,
+  optionSubtitleSize: 12,
+  cancelSize: 13,
+  cyan: '#00D4FF',
+  backdrop: 'rgba(0, 0, 0, 0.6)',
+  cardBorder: 'rgba(235, 235, 245, 0.06)',
+};
 
 export function RunEnvironmentModal() {
   const visible = useRunEnvironmentStore((s) => s.visible);
   const pendingParams = useRunEnvironmentStore((s) => s.pendingParams);
   const close = useRunEnvironmentStore((s) => s.close);
-  const { width } = useWindowDimensions();
+
+  // Entry animation: scale + fade so the dialog feels intentional, not
+  // just blinking onto the screen. Spring tuning matches the rest of the
+  // app's modal presentations.
+  const scale = useSharedValue(0.92);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (visible) {
+      scale.value = withSpring(1, { damping: 18, stiffness: 220 });
+      opacity.value = withTiming(1, { duration: 180 });
+    } else {
+      scale.value = 0.92;
+      opacity.value = 0;
+    }
+  }, [visible, scale, opacity]);
+
+  const cardAnim = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
 
   const handleOutdoor = useCallback(() => {
     if (!pendingParams) return;
@@ -65,85 +115,44 @@ export function RunEnvironmentModal() {
       <TouchableWithoutFeedback onPress={close} accessible={false}>
         <View style={styles.backdrop}>
           <TouchableWithoutFeedback>
-            <View style={[styles.sheet, { maxWidth: Math.min(420, width - 32) }]}>
-              <View style={styles.handle} />
-              <Text style={styles.title}>Onde você vai correr?</Text>
-              <Text style={styles.subtitle}>
-                Escolha o ambiente do seu treino
+            <Animated.View style={[styles.dialog, cardAnim]}>
+              <Text
+                style={styles.title}
+                accessibilityRole="header"
+                allowFontScaling={false}
+              >
+                Onde você vai correr?
               </Text>
 
-              <Pressable
-                style={({ pressed }) => [
-                  styles.card,
-                  pressed && styles.cardPressed,
-                ]}
-                onPress={handleOutdoor}
-                accessibilityRole="button"
-                accessibilityLabel="Correr ao ar livre"
-                accessibilityHint="Inicia o treino com GPS e mapa em tempo real"
-              >
-                <View
-                  style={[
-                    styles.iconCircle,
-                    { backgroundColor: 'rgba(0, 212, 255, 0.12)' },
-                  ]}
-                >
-                  <Ionicons name="sunny" size={28} color={colors.primary} />
-                </View>
-                <View style={styles.cardTextWrap}>
-                  <Text style={styles.cardTitle}>Ao ar livre</Text>
-                  <Text style={styles.cardSubtitle}>
-                    GPS com mapa e rota em tempo real
-                  </Text>
-                </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color={colors.textSecondary}
+              <View style={styles.cardsWrap}>
+                <OptionCard
+                  iconName="sunny"
+                  iconColor={F.cyan}
+                  title="Ao ar livre"
+                  subtitle="GPS tracking com mapa."
+                  onPress={handleOutdoor}
+                  accessibilityHint="Inicia o treino com GPS e mapa em tempo real"
                 />
-              </Pressable>
+                <OptionCard
+                  iconName="walk"
+                  iconColor="#FFFFFF"
+                  title="Na esteira"
+                  subtitle="Conecte sua esteira."
+                  onPress={handleTreadmill}
+                  accessibilityHint="Conecte sua esteira via Bluetooth ou use modo manual"
+                />
+              </View>
 
               <Pressable
-                style={({ pressed }) => [
-                  styles.card,
-                  pressed && styles.cardPressed,
-                ]}
-                onPress={handleTreadmill}
-                accessibilityRole="button"
-                accessibilityLabel="Correr na esteira"
-                accessibilityHint="Conecte sua esteira por Bluetooth ou use modo manual"
-              >
-                <View
-                  style={[
-                    styles.iconCircle,
-                    { backgroundColor: 'rgba(245, 158, 11, 0.14)' },
-                  ]}
-                >
-                  <Ionicons name="walk" size={28} color={colors.accent} />
-                </View>
-                <View style={styles.cardTextWrap}>
-                  <Text style={styles.cardTitle}>Na esteira</Text>
-                  <Text style={styles.cardSubtitle}>
-                    Conecte sua esteira ou corra no modo manual
-                  </Text>
-                </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color={colors.textSecondary}
-                />
-              </Pressable>
-
-              <Pressable
-                style={styles.cancelBtn}
                 onPress={close}
+                style={styles.cancelHit}
                 accessibilityRole="button"
                 accessibilityLabel="Cancelar"
-                hitSlop={12}
+                hitSlop={8}
               >
                 <Text style={styles.cancelText}>Cancelar</Text>
               </Pressable>
-            </View>
+            </Animated.View>
           </TouchableWithoutFeedback>
         </View>
       </TouchableWithoutFeedback>
@@ -151,98 +160,151 @@ export function RunEnvironmentModal() {
   );
 }
 
+interface OptionCardProps {
+  iconName: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+  accessibilityHint?: string;
+}
+
+/**
+ * Single tappable option row (e.g. "Ao ar livre"). Matches the Figma
+ * `opt1` frame exactly: 333×81 translucent card with a square 47×47
+ * dark icon tile on the left and a 2-line text block on the right.
+ *
+ * Press feedback: spring-based scale-down to 0.97. This is the only
+ * indication of pressability we offer (no chevron), so the animation
+ * matters — without it the cards feel inert.
+ */
+const OptionCard = React.memo(function OptionCard({
+  iconName,
+  iconColor,
+  title,
+  subtitle,
+  onPress,
+  accessibilityHint,
+}: OptionCardProps) {
+  const scale = useSharedValue(1);
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Pressable
+      onPressIn={() => {
+        scale.value = withSpring(0.97, { damping: 20, stiffness: 320 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { damping: 20, stiffness: 320 });
+      }}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityHint={accessibilityHint}
+    >
+      <Animated.View style={[styles.card, animStyle]}>
+        <View style={styles.iconTile}>
+          <Ionicons name={iconName} size={F.iconInner} color={iconColor} />
+        </View>
+        <View style={styles.cardTextCol}>
+          <Text style={styles.cardTitle} allowFontScaling={false}>
+            {title}
+          </Text>
+          <Text style={styles.cardSubtitle} allowFontScaling={false}>
+            {subtitle}
+          </Text>
+        </View>
+      </Animated.View>
+    </Pressable>
+  );
+});
+
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-    justifyContent: 'flex-end',
-    paddingHorizontal: spacing.base,
-    paddingBottom: spacing.xl,
+    backgroundColor: F.backdrop,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
   },
-  sheet: {
-    alignSelf: 'center',
-    width: '100%',
-    backgroundColor: colors.card,
-    borderRadius: borderRadius['2xl'],
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xl,
-    ...shadows.lg,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 44,
-    height: 4,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.border,
-    marginBottom: spacing.base,
+  dialog: {
+    width: F.modalWidth,
+    maxWidth: '100%',
+    backgroundColor: F.modalBg,
+    borderRadius: F.modalRadius,
+    paddingTop: F.modalPadTop,
+    paddingBottom: F.modalPadBottom,
+    paddingHorizontal: F.modalPadH,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.45,
+    shadowRadius: 32,
+    elevation: 16,
   },
   title: {
-    color: colors.white,
+    color: F.titleColor,
     fontFamily: fonts.bold,
-    fontSize: typography.fontSizes['2xl'],
-    fontWeight: typography.fontWeights.bold,
-    textAlign: 'center',
-    marginBottom: spacing.xs,
+    fontSize: F.titleSize,
+    fontWeight: '700',
+    lineHeight: F.titleSize * 1.35,
+    marginBottom: 18,
   },
-  subtitle: {
-    color: colors.textSecondary,
-    fontFamily: fonts.regular,
-    fontSize: typography.fontSizes.md,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
+  cardsWrap: {
+    gap: F.cardGap,
+    marginBottom: 6,
   },
   card: {
+    width: '100%',
+    height: F.cardHeight,
+    backgroundColor: F.cardBg,
+    borderRadius: F.cardRadius,
+    borderWidth: 1,
+    borderColor: F.cardBorder,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.backgroundLight,
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.base,
-    marginBottom: spacing.md,
-    minHeight: 84,
+    paddingHorizontal: 12,
   },
-  cardPressed: {
-    borderColor: colors.primary,
-    backgroundColor: colors.highlight,
-  },
-  iconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: borderRadius.full,
+  iconTile: {
+    width: F.iconSize,
+    height: F.iconSize,
+    borderRadius: F.iconRadius,
+    backgroundColor: F.iconBg,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.base,
   },
-  cardTextWrap: {
+  cardTextCol: {
+    marginLeft: 12,
     flex: 1,
+    justifyContent: 'center',
+    gap: 2,
   },
   cardTitle: {
-    color: colors.white,
-    fontFamily: fonts.semibold,
-    fontSize: typography.fontSizes.lg,
-    fontWeight: typography.fontWeights.semibold,
-    marginBottom: 2,
+    color: F.titleColor,
+    fontFamily: fonts.bold,
+    fontSize: F.optionTitleSize,
+    fontWeight: '700',
+    lineHeight: F.optionTitleSize * 1.35,
   },
   cardSubtitle: {
-    color: colors.textSecondary,
+    color: F.subtitleColor,
     fontFamily: fonts.regular,
-    fontSize: typography.fontSizes.sm,
-    lineHeight: typography.fontSizes.sm * typography.lineHeights.normal,
+    fontSize: F.optionSubtitleSize,
+    lineHeight: F.optionSubtitleSize * 1.4,
   },
-  cancelBtn: {
-    marginTop: spacing.sm,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 44,
+  cancelHit: {
+    alignSelf: 'flex-start',
+    paddingVertical: 12,
+    paddingRight: 16,
+    marginTop: 4,
+    minHeight: 40,
   },
   cancelText: {
-    color: colors.textSecondary,
+    color: F.subtitleColor,
     fontFamily: fonts.medium,
-    fontSize: typography.fontSizes.md,
-    fontWeight: typography.fontWeights.medium,
+    fontSize: F.cancelSize,
+    lineHeight: F.cancelSize * 1.4,
   },
 });
 

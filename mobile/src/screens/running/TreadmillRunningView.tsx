@@ -1,15 +1,14 @@
 /**
- * Treadmill counterpart to the outdoor RunningScreen. Renders the same
- * "iniciar / pausar / finalizar" UX, but without Mapbox and with FTMS or
- * manual telemetry instead of GPS-derived metrics.
+ * Treadmill counterpart to the outdoor RunningScreen. Same "iniciar /
+ * pausar / finalizar" UX, but without Mapbox and with FTMS or manual
+ * telemetry instead of GPS-derived metrics.
  *
- * Mounted inline by RunningScreen when `route.params.environment === 'treadmill'`,
- * so all four "Iniciar Treino" entry points work transparently.
- *
- * Figma node 1313-1529.
+ * Visual: pixel-faithful to Figma node 1313-1529. Flat layout, no metric
+ * cards/tiles — just `label / big value` pairs in a 2-column grid. The
+ * hero "Tempo" block uses HH:MM:SS always.
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -20,6 +19,16 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  Easing,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 import { useNavigation } from '@react-navigation/native';
 import { useTreadmillTracking } from '../../hooks/useTreadmillTracking';
 import {
@@ -27,15 +36,20 @@ import {
   useTrainingStore,
 } from '../../stores';
 import { MANUAL_TREADMILL_SPEED } from '../../constants/bluetooth';
+import { fonts } from '../../theme';
 
+// ─── Visual tokens (Figma-aligned) ────────────────────────────────────────────
 const T = {
-  bgPrimary: '#0E0E1F',
+  bg: '#0E0E1F',
   cardSurface: '#1C1C2E',
+  cardBorder: 'rgba(235, 235, 245, 0.10)',
   cyan: '#00D4FF',
-  warning: '#FFC400',
   textPrimary: '#EBEBF5',
   textSecondary: 'rgba(235, 235, 245, 0.60)',
-  border: 'rgba(235,235,245,0.10)',
+  textMuted: 'rgba(235, 235, 245, 0.40)',
+  warning: '#FFC400',
+  warningBg: 'rgba(255, 196, 0, 0.10)',
+  warningBorder: 'rgba(255, 196, 0, 0.4)',
 };
 
 interface Props {
@@ -90,6 +104,31 @@ export function TreadmillRunningView({
   const isCalculating = sessionState === 'calculating';
   const isTraining = sessionState === 'training';
   const isPaused = sessionState === 'paused';
+
+  // Reactive backdrop gradient — only visible during an active session:
+  //   - training   → cyan layer fades in
+  //   - paused     → amber layer fades in (more saturated than idle)
+  //   - calculating / finished → both layers stay at 0 (solid bg only)
+  // Cross-fade is achieved by animating each layer's `opacity` independently
+  // so they can blend if the session transitions between states quickly.
+  const cyanOverlay = useSharedValue(isTraining ? 1 : 0);
+  const amberOverlay = useSharedValue(isPaused ? 1 : 0);
+  useEffect(() => {
+    cyanOverlay.value = withTiming(isTraining ? 1 : 0, {
+      duration: 500,
+      easing: Easing.inOut(Easing.quad),
+    });
+    amberOverlay.value = withTiming(isPaused ? 1 : 0, {
+      duration: 500,
+      easing: Easing.inOut(Easing.quad),
+    });
+  }, [isTraining, isPaused, cyanOverlay, amberOverlay]);
+  const cyanOverlayStyle = useAnimatedStyle(() => ({
+    opacity: cyanOverlay.value,
+  }));
+  const amberOverlayStyle = useAnimatedStyle(() => ({
+    opacity: amberOverlay.value,
+  }));
 
   const handleFinish = useCallback(async () => {
     setIsFinishing(true);
@@ -202,54 +241,84 @@ export function TreadmillRunningView({
     navigation,
   ]);
 
-  const deviceLabel = isConnected
-    ? connectedDevice?.name ?? 'Esteira'
-    : 'Modo Manual';
+  const isFreeMode = mode === 'free';
+  const showWorkoutPill = !isFreeMode && (dayLabel || title);
 
-  const distanceFormatted = (distance / 1000).toFixed(2);
-  const speedLabel = currentSpeedKmh.toFixed(1);
+  // Display strings — match Figma placeholders exactly.
+  const speedStr = `${currentSpeedKmh.toFixed(1)} km/h`;
+  const distanceStr = `${(distance / 1000).toFixed(2)} km`;
+  const paceStr =
+    currentSpeedKmh > 0 ? `${currentPace} /km` : '--:-- /km';
+  const inclineStr =
+    treadmillMode === 'smart'
+      ? `${currentInclinePercent.toFixed(1)} %`
+      : '0.0 %';
+  const hrStr = heartRate != null ? `${heartRate} bpm` : '--:-- bpm';
+  const caloriesStr = calories > 0 ? `${Math.round(calories)} cal` : '--:-- cal';
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.topOverlay} edges={['top']}>
+      {/* Reactive gradient overlays — opaque solid bg by default, fades in
+          cyan during training and a vivid amber when paused. Calculating
+          and finished states show no gradient (solid bg only). */}
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <AnimatedLinearGradient
+          colors={['#0E0E1F', 'rgba(0, 212, 255, 0.32)', '#0E0E1F']}
+          locations={[0, 0.5, 1]}
+          style={[StyleSheet.absoluteFill, cyanOverlayStyle]}
+        />
+        <AnimatedLinearGradient
+          colors={['#0E0E1F', 'rgba(255, 199, 0, 0.55)', '#0E0E1F']}
+          locations={[0, 0.5, 1]}
+          style={[StyleSheet.absoluteFill, amberOverlayStyle]}
+        />
+      </View>
+
+      <SafeAreaView edges={['top']} style={styles.topSafe}>
         <View style={styles.headerRow}>
           <Pressable
             style={styles.backBtn}
             onPress={() => navigation.goBack()}
             accessibilityRole="button"
             accessibilityLabel="Voltar"
-            hitSlop={8}
+            hitSlop={10}
           >
-            <Ionicons name="chevron-back" size={22} color={T.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={T.textPrimary} />
           </Pressable>
 
-          <View style={styles.deviceCard}>
-            <Ionicons
-              name={isConnected ? 'bluetooth' : 'walk'}
-              size={14}
-              color={isConnected ? T.cyan : T.textSecondary}
-              style={{ marginRight: 6 }}
-            />
-            <Text style={styles.deviceText} numberOfLines={1}>
-              {deviceLabel}
-            </Text>
-          </View>
+          {showWorkoutPill ? (
+            <View style={styles.workoutPill}>
+              {dayLabel ? (
+                <Text
+                  style={styles.workoutPillDay}
+                  numberOfLines={1}
+                  allowFontScaling={false}
+                >
+                  {dayLabel}
+                </Text>
+              ) : null}
+              {title ? (
+                <Text
+                  style={styles.workoutPillTitle}
+                  numberOfLines={1}
+                  allowFontScaling={false}
+                >
+                  {title}
+                </Text>
+              ) : null}
+            </View>
+          ) : (
+            <View style={styles.workoutPillFlex} />
+          )}
 
-          <View style={styles.backBtn} />
+          {showWorkoutPill ? (
+            <View style={styles.modeBadge}>
+              <Ionicons name="locate" size={20} color={T.bg} />
+            </View>
+          ) : (
+            <View style={styles.backBtn} />
+          )}
         </View>
-
-        {mode !== 'free' && (title || dayLabel) ? (
-          <View style={styles.workoutBanner}>
-            {dayLabel ? (
-              <Text style={styles.workoutDay}>{dayLabel}</Text>
-            ) : null}
-            {title ? (
-              <Text style={styles.workoutTitle} numberOfLines={1}>
-                {title}
-              </Text>
-            ) : null}
-          </View>
-        ) : null}
 
         {unexpectedDisconnect ? (
           <Pressable
@@ -262,102 +331,76 @@ export function TreadmillRunningView({
               name="warning"
               size={16}
               color={T.warning}
-              style={{ marginRight: 6 }}
+              style={{ marginRight: 8 }}
             />
-            <Text style={styles.disconnectBannerText}>
-              Conexão com a esteira perdida. Continuando em modo manual — ajuste
-              a velocidade manualmente.
+            <Text style={styles.disconnectBannerText} allowFontScaling={false}>
+              Conexão perdida — continuando em modo manual.
             </Text>
           </Pressable>
         ) : null}
+
+        {!showWorkoutPill && isConnected && connectedDevice ? (
+          <Text style={styles.deviceCaption} numberOfLines={1} allowFontScaling={false}>
+            {connectedDevice.name}
+          </Text>
+        ) : null}
       </SafeAreaView>
 
-      <View style={styles.metricsArea}>
-        <Text style={styles.timeLabel}>TEMPO</Text>
-        <Text style={[styles.timeValue, isTraining && { color: T.cyan }]}>
-          {formattedTime}
-        </Text>
-
-        <View style={styles.metricsGrid}>
-          <View style={styles.metricBlock}>
-            <Text style={styles.metricBig}>{speedLabel}</Text>
-            <Text style={styles.metricUnit}>km/h</Text>
-            <Text style={styles.metricCaption}>Velocidade</Text>
-          </View>
-          <View style={styles.metricDivider} />
-          <View style={styles.metricBlock}>
-            <Text style={styles.metricBig}>{distanceFormatted}</Text>
-            <Text style={styles.metricUnit}>km</Text>
-            <Text style={styles.metricCaption}>Distância</Text>
-          </View>
+      <View style={styles.content}>
+        {/* Hero "Tempo" */}
+        <View style={styles.heroBlock}>
+          <Text style={styles.heroLabel} allowFontScaling={false}>
+            Tempo
+          </Text>
+          <Text
+            style={[styles.heroValue, isTraining && styles.heroValueLive]}
+            allowFontScaling={false}
+          >
+            {formattedTime}
+          </Text>
         </View>
 
+        {/* Métricas flat — 2 colunas, 3 linhas, sem cards */}
         <View style={styles.metricsGrid}>
-          <View style={styles.metricBlock}>
-            <Text style={styles.metricMedium}>{currentPace}</Text>
-            <Text style={styles.metricCaption}>Pace /km</Text>
+          <View style={styles.metricsRow}>
+            <FlatMetric label="Velocidade" value={speedStr} />
+            <FlatMetric label="Distância" value={distanceStr} />
           </View>
-          <View style={styles.metricDivider} />
-          <View style={styles.metricBlock}>
-            <Text style={styles.metricMedium}>
-              {treadmillMode === 'smart'
-                ? `${currentInclinePercent.toFixed(1)}%`
-                : 'Plano'}
-            </Text>
-            <Text style={styles.metricCaption}>Inclinação</Text>
+          <View style={styles.metricsRow}>
+            <FlatMetric label="Pace" value={paceStr} />
+            <FlatMetric label="Inclinação" value={inclineStr} />
+          </View>
+          <View style={styles.metricsRow}>
+            <FlatMetric label="FC" value={hrStr} />
+            <FlatMetric label="Calorias" value={caloriesStr} />
           </View>
         </View>
-
-        <View style={styles.metricsGrid}>
-          <View style={styles.metricBlock}>
-            <Text style={styles.metricMedium}>
-              {heartRate != null ? `${heartRate}` : '--'}
-            </Text>
-            <Text style={styles.metricCaption}>FC bpm</Text>
-          </View>
-          <View style={styles.metricDivider} />
-          <View style={styles.metricBlock}>
-            <Text style={styles.metricMedium}>{Math.round(calories)}</Text>
-            <Text style={styles.metricCaption}>Calorias</Text>
-          </View>
-        </View>
-
-        {treadmillMode === 'manual' && (
-          <View style={styles.manualControls}>
-            <Text style={styles.manualLabel}>Ajustar velocidade</Text>
-            <View style={styles.manualButtonsRow}>
-              <ManualButton
-                label="−1"
-                onPress={() => bumpManualSpeed(-MANUAL_TREADMILL_SPEED.STEP_LARGE)}
-                accessibilityLabel="Diminuir 1 km/h"
-              />
-              <ManualButton
-                label="−0.1"
-                onPress={() => bumpManualSpeed(-MANUAL_TREADMILL_SPEED.STEP_SMALL)}
-                accessibilityLabel="Diminuir 0,1 km/h"
-              />
-              <Text style={styles.manualSpeedValue}>
-                {manualSpeed.toFixed(1)} km/h
-              </Text>
-              <ManualButton
-                label="+0.1"
-                onPress={() => bumpManualSpeed(MANUAL_TREADMILL_SPEED.STEP_SMALL)}
-                accessibilityLabel="Aumentar 0,1 km/h"
-              />
-              <ManualButton
-                label="+1"
-                onPress={() => bumpManualSpeed(MANUAL_TREADMILL_SPEED.STEP_LARGE)}
-                accessibilityLabel="Aumentar 1 km/h"
-              />
-            </View>
-          </View>
-        )}
       </View>
 
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 }]}>
+      {/* Bottom dock — full-width card with rounded top corners (Figma ref) */}
+      <View
+        style={[
+          styles.bottomDock,
+          { paddingBottom: insets.bottom + 18 },
+        ]}
+      >
+        {/* Manual speed strip — only when manual mode + session active */}
+        {treadmillMode === 'manual' && (isTraining || isPaused) ? (
+          <ManualSpeedStrip
+            value={manualSpeed}
+            onIncrement={() => bumpManualSpeed(MANUAL_TREADMILL_SPEED.STEP_LARGE)}
+            onDecrement={() => bumpManualSpeed(-MANUAL_TREADMILL_SPEED.STEP_LARGE)}
+            onIncrementFine={() =>
+              bumpManualSpeed(MANUAL_TREADMILL_SPEED.STEP_SMALL)
+            }
+            onDecrementFine={() =>
+              bumpManualSpeed(-MANUAL_TREADMILL_SPEED.STEP_SMALL)
+            }
+          />
+        ) : null}
         {isCalculating && (
           <Pressable
-            style={[styles.ctaBtn, styles.ctaBtnOutline]}
+            style={styles.actionBtn}
             onPress={startResumeTracking}
             accessibilityRole="button"
             accessibilityLabel="Iniciar treino na esteira"
@@ -368,14 +411,14 @@ export function TreadmillRunningView({
               color={T.textPrimary}
               style={{ marginRight: 8 }}
             />
-            <Text style={[styles.ctaText, { color: T.textPrimary }]}>
+            <Text style={styles.actionBtnText} allowFontScaling={false}>
               Iniciar
             </Text>
           </Pressable>
         )}
         {isTraining && (
           <Pressable
-            style={[styles.ctaBtn, styles.ctaBtnOutlineCyan]}
+            style={[styles.actionBtn, styles.actionBtnCyan]}
             onPress={pauseTracking}
             accessibilityRole="button"
             accessibilityLabel="Pausar treino"
@@ -386,13 +429,15 @@ export function TreadmillRunningView({
               color={T.cyan}
               style={{ marginRight: 8 }}
             />
-            <Text style={[styles.ctaText, { color: T.cyan }]}>Pausar</Text>
+            <Text style={[styles.actionBtnText, { color: T.cyan }]} allowFontScaling={false}>
+              Pausar
+            </Text>
           </Pressable>
         )}
         {isPaused && (
-          <>
+          <View style={styles.actionPair}>
             <Pressable
-              style={[styles.ctaBtn, styles.ctaBtnOutlineCyan, { flex: 1 }]}
+              style={[styles.actionBtn, styles.actionBtnCyan, styles.actionBtnHalf]}
               onPress={startResumeTracking}
               disabled={isFinishing}
               accessibilityRole="button"
@@ -400,17 +445,19 @@ export function TreadmillRunningView({
             >
               <Ionicons
                 name="play"
-                size={20}
+                size={18}
                 color={T.cyan}
                 style={{ marginRight: 8 }}
               />
-              <Text style={[styles.ctaText, { color: T.cyan }]}>Continuar</Text>
+              <Text style={[styles.actionBtnText, { color: T.cyan }]} allowFontScaling={false}>
+                Continuar
+              </Text>
             </Pressable>
             <Pressable
               style={[
-                styles.ctaBtn,
-                styles.ctaBtnFilled,
-                { flex: 1 },
+                styles.actionBtn,
+                styles.actionBtnFilled,
+                styles.actionBtnHalf,
                 isFinishing && { opacity: 0.6 },
               ]}
               onPress={handleFinish}
@@ -419,22 +466,22 @@ export function TreadmillRunningView({
               accessibilityLabel="Finalizar treino"
             >
               {isFinishing ? (
-                <ActivityIndicator size="small" color={T.bgPrimary} />
+                <ActivityIndicator size="small" color={T.bg} />
               ) : (
                 <>
                   <Ionicons
                     name="flag"
-                    size={20}
-                    color={T.bgPrimary}
+                    size={18}
+                    color={T.bg}
                     style={{ marginRight: 8 }}
                   />
-                  <Text style={[styles.ctaText, { color: T.bgPrimary }]}>
+                  <Text style={[styles.actionBtnText, { color: T.bg }]} allowFontScaling={false}>
                     Finalizar
                   </Text>
                 </>
               )}
             </Pressable>
-          </>
+          </View>
         )}
       </View>
 
@@ -442,7 +489,9 @@ export function TreadmillRunningView({
         <View style={styles.finishingOverlay}>
           <View style={styles.finishingCard}>
             <ActivityIndicator size="large" color={T.cyan} />
-            <Text style={styles.finishingTitle}>Finalizando treino</Text>
+            <Text style={styles.finishingTitle} allowFontScaling={false}>
+              Finalizando treino
+            </Text>
             <Text style={styles.finishingSubtitle}>
               Calculando velocidade média, pace e splits…
             </Text>
@@ -453,7 +502,71 @@ export function TreadmillRunningView({
   );
 }
 
-const ManualButton = React.memo(function ManualButton({
+/* ───────────────────────── Sub-components ──────────────────────────────── */
+
+/**
+ * Flat "label / value" pair used in the metrics grid. No background, no
+ * border — just typography. Matches the Figma 1313-1529 reference where
+ * each metric occupies a column with a centered label above and a centered
+ * value below.
+ */
+const FlatMetric = React.memo(function FlatMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <View style={styles.metricCol}>
+      <Text style={styles.metricLabel} allowFontScaling={false}>
+        {label}
+      </Text>
+      <Text
+        style={styles.metricValue}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        allowFontScaling={false}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+});
+
+/**
+ * Compact horizontal strip for adjusting manual speed during a session.
+ * Stays out of the way visually but is reachable without scrolling.
+ */
+const ManualSpeedStrip = React.memo(function ManualSpeedStrip({
+  value,
+  onIncrement,
+  onDecrement,
+  onIncrementFine,
+  onDecrementFine,
+}: {
+  value: number;
+  onIncrement: () => void;
+  onDecrement: () => void;
+  onIncrementFine: () => void;
+  onDecrementFine: () => void;
+}) {
+  return (
+    <View style={styles.manualStrip}>
+      <StripBtn label="−1" onPress={onDecrement} accessibilityLabel="Diminuir 1 km/h" />
+      <StripBtn label="−0.1" onPress={onDecrementFine} accessibilityLabel="Diminuir 0,1 km/h" />
+      <View style={styles.manualValueBox}>
+        <Text style={styles.manualValue} allowFontScaling={false}>
+          {value.toFixed(1)} km/h
+        </Text>
+      </View>
+      <StripBtn label="+0.1" onPress={onIncrementFine} accessibilityLabel="Aumentar 0,1 km/h" />
+      <StripBtn label="+1" onPress={onIncrement} accessibilityLabel="Aumentar 1 km/h" />
+    </View>
+  );
+});
+
+const StripBtn = React.memo(function StripBtn({
   label,
   onPress,
   accessibilityLabel,
@@ -462,68 +575,107 @@ const ManualButton = React.memo(function ManualButton({
   onPress: () => void;
   accessibilityLabel: string;
 }) {
+  const scale = useSharedValue(1);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.manualBtn,
-        pressed && styles.manualBtnPressed,
-      ]}
+      onPressIn={() => {
+        scale.value = withSpring(0.92, { damping: 18, stiffness: 360 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { damping: 18, stiffness: 360 });
+      }}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
     >
-      <Text style={styles.manualBtnText}>{label}</Text>
+      <Animated.View style={[styles.stripBtn, style]}>
+        <Text style={styles.stripBtnText} allowFontScaling={false}>
+          {label}
+        </Text>
+      </Animated.View>
     </Pressable>
   );
 });
 
+/* ───────────────────────────── Styles ──────────────────────────────────── */
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: T.bgPrimary },
-  topOverlay: {
-    paddingHorizontal: 12,
-    paddingTop: 4,
+  container: {
+    flex: 1,
+    backgroundColor: T.bg,
+  },
+  topSafe: {
+    backgroundColor: 'transparent',
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 10,
+    minHeight: 60,
   },
   backBtn: {
     width: 44,
     height: 44,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  deviceCard: {
+  workoutPillFlex: {
     flex: 1,
-    height: 44,
+  },
+  workoutPill: {
+    flex: 1,
+    minHeight: 50,
     backgroundColor: T.cardSurface,
-    borderRadius: 22,
+    borderRadius: 26,
     borderWidth: 1,
-    borderColor: T.border,
-    flexDirection: 'row',
+    borderColor: 'rgba(235, 235, 245, 0.18)',
+    paddingHorizontal: 18,
+    paddingVertical: 7,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
   },
-  deviceText: {
+  workoutPillDay: {
+    color: T.textSecondary,
+    fontFamily: fonts.medium,
+    fontSize: 11,
+    lineHeight: 13,
+    marginBottom: 2,
+  },
+  workoutPillTitle: {
     color: T.textPrimary,
-    fontSize: 13,
-    fontWeight: '500',
+    fontFamily: fonts.semibold,
+    fontSize: 14,
+    fontWeight: '600',
   },
-  workoutBanner: {
-    marginTop: 4,
-    marginHorizontal: 4,
+  modeBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: T.cyan,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deviceCaption: {
+    color: T.textMuted,
+    fontFamily: fonts.medium,
+    fontSize: 11,
+    letterSpacing: 0.4,
+    textAlign: 'center',
+    marginTop: -4,
+    marginBottom: 4,
   },
   disconnectBanner: {
-    marginTop: 8,
-    marginHorizontal: 4,
+    marginHorizontal: 16,
+    marginTop: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 196, 0, 0.10)',
-    borderColor: T.warning,
+    backgroundColor: T.warningBg,
+    borderColor: T.warningBorder,
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 12,
@@ -532,160 +684,149 @@ const styles = StyleSheet.create({
   disconnectBannerText: {
     flex: 1,
     color: T.textPrimary,
+    fontFamily: fonts.regular,
     fontSize: 12,
     lineHeight: 16,
   },
-  workoutDay: {
-    color: T.textSecondary,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  workoutTitle: {
-    color: T.textPrimary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  metricsArea: {
+
+  // Content layout
+  content: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingHorizontal: 24,
   },
-  timeLabel: {
+
+  // Hero "Tempo"
+  heroBlock: {
+    alignItems: 'center',
+    paddingTop: 28,
+    paddingBottom: 36,
+  },
+  heroLabel: {
     color: T.textSecondary,
-    fontSize: 11,
-    letterSpacing: 1.2,
-    textAlign: 'center',
-    marginTop: 16,
+    fontFamily: fonts.medium,
+    fontSize: 16,
+    marginBottom: 4,
   },
-  timeValue: {
+  heroValue: {
     color: T.textPrimary,
-    fontSize: 56,
+    fontFamily: fonts.bold,
+    fontSize: 64,
     fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 24,
-    letterSpacing: 1,
+    letterSpacing: -1.5,
+    lineHeight: 72,
   },
+  heroValueLive: {
+    color: T.cyan,
+  },
+
+  // Flat metrics grid
   metricsGrid: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: T.cardSurface,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    marginBottom: 10,
+    gap: 36,
   },
-  metricBlock: {
+  metricsRow: {
+    flexDirection: 'row',
+  },
+  metricCol: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  metricDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: T.border,
+  metricLabel: {
+    color: T.textSecondary,
+    fontFamily: fonts.regular,
+    fontSize: 15,
+    marginBottom: 6,
   },
-  metricBig: {
+  metricValue: {
     color: T.textPrimary,
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  metricMedium: {
-    color: T.textPrimary,
+    fontFamily: fonts.bold,
     fontSize: 22,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
-  metricUnit: {
-    color: T.textSecondary,
-    fontSize: 11,
-    fontWeight: '500',
-    marginTop: -2,
-  },
-  metricCaption: {
-    color: T.textSecondary,
-    fontSize: 11,
-    fontWeight: '500',
-    marginTop: 4,
-  },
-  manualControls: {
-    marginTop: 12,
-    backgroundColor: T.cardSurface,
-    borderRadius: 16,
-    padding: 14,
-  },
-  manualLabel: {
-    color: T.textSecondary,
-    fontSize: 12,
-    textAlign: 'center',
-    marginBottom: 10,
-    letterSpacing: 0.4,
-  },
-  manualButtonsRow: {
+
+  // Manual speed strip — sits inside the bottom dock above the action button.
+  manualStrip: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 6,
+    paddingVertical: 4,
+    marginBottom: 16,
+    gap: 8,
   },
-  manualBtn: {
-    minWidth: 44,
-    minHeight: 44,
-    paddingHorizontal: 10,
+  stripBtn: {
+    width: 44,
+    height: 40,
+    backgroundColor: T.bg,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: T.border,
-    backgroundColor: T.bgPrimary,
+    borderColor: T.cardBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  manualBtnPressed: {
-    borderColor: T.cyan,
-  },
-  manualBtnText: {
+  stripBtnText: {
     color: T.textPrimary,
-    fontSize: 14,
+    fontFamily: fonts.semibold,
+    fontSize: 13,
     fontWeight: '600',
   },
-  manualSpeedValue: {
+  manualValueBox: {
     flex: 1,
+    alignItems: 'center',
+  },
+  manualValue: {
     color: T.cyan,
+    fontFamily: fonts.bold,
     fontSize: 18,
     fontWeight: '700',
-    textAlign: 'center',
   },
-  bottomBar: {
+
+  // Bottom dock — full-width card with rounded top corners. Sits over
+  // the gradient backdrop so it reads as a stage lifting off the floor.
+  bottomDock: {
+    paddingHorizontal: 22,
+    paddingTop: 26,
+    backgroundColor: T.cardSurface,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    elevation: 12,
+  },
+  actionPair: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    gap: 10,
-    backgroundColor: T.bgPrimary,
+    gap: 12,
   },
-  ctaBtn: {
-    flex: 1,
+  actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 54,
-    borderRadius: 20,
+    height: 58,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(235, 235, 245, 0.55)',
     paddingHorizontal: 20,
+    backgroundColor: 'transparent',
   },
-  ctaBtnOutline: {
-    backgroundColor: T.cardSurface,
-    borderWidth: 1,
-    borderColor: T.textPrimary,
-  },
-  ctaBtnOutlineCyan: {
-    backgroundColor: T.cardSurface,
-    borderWidth: 1,
+  actionBtnCyan: {
     borderColor: T.cyan,
   },
-  ctaBtnFilled: {
+  actionBtnFilled: {
     backgroundColor: T.cyan,
-    borderWidth: 1,
     borderColor: T.cyan,
   },
-  ctaText: {
+  actionBtnHalf: {
+    flex: 1,
+  },
+  actionBtnText: {
+    color: T.textPrimary,
+    fontFamily: fonts.semibold,
     fontSize: 16,
     fontWeight: '600',
   },
+
+  // Finishing overlay
   finishingOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(14, 14, 31, 0.92)',
@@ -702,10 +843,11 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: T.cardSurface,
     borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.20)',
+    borderColor: T.cardBorder,
   },
   finishingTitle: {
     color: T.textPrimary,
+    fontFamily: fonts.bold,
     fontSize: 18,
     fontWeight: '700',
     marginTop: 14,
@@ -713,6 +855,7 @@ const styles = StyleSheet.create({
   },
   finishingSubtitle: {
     color: T.textSecondary,
+    fontFamily: fonts.regular,
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 18,

@@ -5,7 +5,8 @@
  * Forwards the original run params (workoutId, mode, target pace/distance,
  * etc.) through to the Running screen with `environment='treadmill'`.
  *
- * Figma node 1315-1642.
+ * Visual: Figma node 1315-1642 + premium polish — animated radar pulse
+ * during scan, glow-cyan manual speed card, no generic AI-grey cards.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -15,23 +16,50 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  ActivityIndicator,
   Linking,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  Easing,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  withSpring,
+  withDelay,
+  cancelAnimation,
+} from 'react-native-reanimated';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useTreadmillStore, BluetoothState } from '../../stores/treadmillStore';
 import type { TreadmillDevice } from '../../services/treadmillService';
 import { MANUAL_TREADMILL_SPEED } from '../../constants/bluetooth';
-import {
-  colors,
-  spacing,
-  borderRadius,
-  typography,
-  fonts,
-} from '../../theme';
+import { fonts } from '../../theme';
+
+// ─── Visual tokens (Figma-aligned + brand neon) ───────────────────────────────
+const T = {
+  bg: '#0E0E1F',
+  bgGradient: '#15152A',
+  card: '#1C1C2E',
+  cardTranslucent: 'rgba(28, 28, 46, 0.7)',
+  cardElevated: 'rgba(0, 212, 255, 0.04)',
+  cardBorderSubtle: 'rgba(235, 235, 245, 0.08)',
+  cardBorderNeon: 'rgba(0, 212, 255, 0.25)',
+  cardBorderNeonStrong: 'rgba(0, 212, 255, 0.45)',
+  cyan: '#00D4FF',
+  cyanGlow: 'rgba(0, 212, 255, 0.18)',
+  textPrimary: '#EBEBF5',
+  textSecondary: 'rgba(235, 235, 245, 0.6)',
+  textMuted: 'rgba(235, 235, 245, 0.35)',
+  divider: 'rgba(235, 235, 245, 0.10)',
+  success: '#10B981',
+  warning: '#FFC400',
+  warningBg: 'rgba(255, 196, 0, 0.10)',
+  warningBorder: 'rgba(255, 196, 0, 0.4)',
+  danger: '#FF453A',
+};
 
 type SetupRouteParams = {
   TreadmillSetup: {
@@ -59,7 +87,7 @@ function bluetoothStateMessage(state: BluetoothState): string | null {
     case 'off':
       return 'O Bluetooth está desligado. Ligue para conectar sua esteira.';
     case 'unauthorized':
-      return 'Permissão de Bluetooth negada. Habilite nas configurações para usar a esteira.';
+      return 'Permissão de Bluetooth negada. Habilite nas configurações.';
     case 'unsupported':
       return 'Este dispositivo não suporta Bluetooth.';
     default:
@@ -71,6 +99,7 @@ export function TreadmillSetupScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<SetupRouteParams, 'TreadmillSetup'>>();
   const runParams = route.params.runParams;
+  const insets = useSafeAreaInsets();
 
   const isScanning = useTreadmillStore((s) => s.isScanning);
   const foundDevices = useTreadmillStore((s) => s.foundDevices);
@@ -135,50 +164,65 @@ export function TreadmillSetupScreen() {
   }, [navigation, runParams]);
 
   const handleOpenSettings = useCallback(() => {
-    // `Linking.openSettings()` opens the iOS Settings page for this specific
-    // app (which lists Bluetooth + Location together) and the Android app
-    // settings page. The legacy `App-Prefs:Bluetooth` URL scheme is no
-    // longer accepted by App Review on iOS and can cause rejection.
     Linking.openSettings();
   }, []);
 
   const isReadyToStart = isConnected || usingManual;
-  const headerLabel = isConnected
+
+  // ── Header status label (drives subtitle below the title) ──────────────
+  const statusLabel = isConnected
     ? 'Esteira conectada'
-    : usingManual
-      ? 'Modo manual'
-      : 'Procurando esteira';
+    : isConnecting
+      ? 'Conectando…'
+      : usingManual
+        ? 'Modo manual ativo'
+        : isScanning
+          ? 'Procurando esteira'
+          : foundDevices.length > 0
+            ? 'Esteiras encontradas'
+            : 'Nenhuma esteira encontrada';
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.iconBtn}
-          onPress={() => {
-            stopScan();
-            navigation.goBack();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Voltar"
-          hitSlop={8}
-        >
-          <Ionicons name="chevron-back" size={24} color={colors.white} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Treino em esteira</Text>
-        <View style={styles.iconBtn} />
-      </View>
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeTop} edges={['top']}>
+        <View style={styles.header}>
+          <Pressable
+            style={styles.iconBtn}
+            onPress={() => {
+              stopScan();
+              navigation.goBack();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Voltar"
+            hitSlop={10}
+          >
+            <Ionicons name="chevron-back" size={24} color={T.textPrimary} />
+          </Pressable>
+          <View style={styles.headerTitleWrap}>
+            <Text style={styles.headerTitle} allowFontScaling={false}>
+              Treino em esteira
+            </Text>
+          </View>
+          <View style={styles.iconBtn} />
+        </View>
+      </SafeAreaView>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionLabel}>{headerLabel}</Text>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + 180 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.statusOverline} allowFontScaling={false}>
+          {statusLabel.toUpperCase()}
+        </Text>
 
         {bluetoothMsg && !isConnected ? (
           <View style={styles.warningCard}>
-            <Ionicons
-              name="warning"
-              size={22}
-              color={colors.warning}
-              style={{ marginRight: spacing.sm }}
-            />
+            <View style={styles.warningIconWrap}>
+              <Ionicons name="warning" size={20} color={T.warning} />
+            </View>
             <Text style={styles.warningText}>{bluetoothMsg}</Text>
             {bluetoothState === 'off' || bluetoothState === 'unauthorized' ? (
               <Pressable
@@ -194,183 +238,68 @@ export function TreadmillSetupScreen() {
         ) : null}
 
         {!usingManual && !isConnected ? (
-          <View style={styles.devicesSection}>
-            {isScanning ? (
-              <View style={styles.scanningRow}>
-                <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={styles.scanningText}>
-                  Procurando esteiras próximas…
-                </Text>
-              </View>
-            ) : foundDevices.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Ionicons
-                  name="bluetooth"
-                  size={40}
-                  color={colors.textSecondary}
-                />
-                <Text style={styles.emptyTitle}>Nenhuma esteira encontrada</Text>
-                <Text style={styles.emptySubtitle}>
-                  Verifique se a esteira está ligada e com o Bluetooth ativo, ou
-                  siga em modo manual.
-                </Text>
-                <Pressable
-                  style={styles.secondaryBtn}
-                  onPress={() => startScan()}
-                  accessibilityRole="button"
-                  accessibilityLabel="Procurar novamente"
-                >
-                  <Ionicons
-                    name="refresh"
-                    size={18}
-                    color={colors.primary}
+          isScanning ? (
+            <RadarScanning />
+          ) : foundDevices.length === 0 ? (
+            <EmptyState onRetry={() => startScan()} />
+          ) : (
+            <>
+              <Text style={styles.devicesHeader} allowFontScaling={false}>
+                Lista de esteiras encontradas
+              </Text>
+              <View style={styles.devicesDivider} />
+              <View style={styles.devicesList}>
+                {foundDevices.map((device) => (
+                  <DeviceRow
+                    key={device.id}
+                    device={device}
+                    loading={isConnecting}
+                    onPress={() => handleConnect(device)}
                   />
-                  <Text style={styles.secondaryBtnText}>Procurar novamente</Text>
-                </Pressable>
+                ))}
               </View>
-            ) : (
-              foundDevices.map((device) => (
-                <Pressable
-                  key={device.id}
-                  style={styles.deviceRow}
-                  onPress={() => handleConnect(device)}
-                  disabled={isConnecting}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Conectar a ${device.name}`}
-                >
-                  <View style={styles.deviceLeft}>
-                    <Ionicons
-                      name="hardware-chip"
-                      size={22}
-                      color={colors.primary}
-                      style={{ marginRight: spacing.sm }}
-                    />
-                    <View style={{ flexShrink: 1 }}>
-                      <Text style={styles.deviceName} numberOfLines={1}>
-                        {device.name}
-                      </Text>
-                      <Text style={styles.deviceMeta}>
-                        Sinal {signalBars(device.rssi)}/4
-                      </Text>
-                    </View>
-                  </View>
-                  {isConnecting ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
-                  ) : (
-                    <Ionicons
-                      name="chevron-forward"
-                      size={20}
-                      color={colors.textSecondary}
-                    />
-                  )}
-                </Pressable>
-              ))
-            )}
-          </View>
+            </>
+          )
         ) : null}
 
         {connectionError ? (
-          <Text style={styles.errorText}>
+          <Text style={styles.errorText} allowFontScaling={false}>
             Falha ao conectar: {connectionError}
           </Text>
         ) : null}
 
         {isConnected && connectedDevice ? (
-          <View style={styles.connectedCard}>
-            <Ionicons
-              name="checkmark-circle"
-              size={28}
-              color={colors.success}
-            />
-            <Text style={styles.connectedTitle}>{connectedDevice.name}</Text>
-            <Text style={styles.connectedSubtitle}>
-              {connectedDevice.supportsControl
-                ? 'Esteira Smart — leitura completa de dados FTMS.'
-                : 'Esteira FTMS — leitura de velocidade, distância e inclinação.'}
-            </Text>
-            <Pressable
-              onPress={() => disconnect()}
-              style={styles.linkBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Desconectar"
-            >
-              <Text style={styles.linkBtnText}>Desconectar</Text>
-            </Pressable>
-          </View>
+          <ConnectedCard
+            device={connectedDevice}
+            onDisconnect={() => disconnect()}
+          />
         ) : null}
 
         {usingManual && !isConnected ? (
-          <View style={styles.manualCard}>
-            <Text style={styles.manualTitle}>Velocidade inicial</Text>
-            <Text style={styles.manualSubtitle}>
-              Ajuste para o ritmo que você vai começar. Você pode mudar durante
-              o treino.
-            </Text>
-            <View style={styles.manualRow}>
-              <Pressable
-                style={styles.manualBtn}
-                onPress={() => bumpManualSpeed(-MANUAL_TREADMILL_SPEED.STEP_LARGE)}
-                accessibilityRole="button"
-                accessibilityLabel="Diminuir 1 km/h"
-              >
-                <Ionicons name="remove" size={22} color={colors.white} />
-              </Pressable>
-              <View style={styles.manualValueBox}>
-                <Text style={styles.manualValue}>
-                  {manualSpeed.toFixed(1)}
-                </Text>
-                <Text style={styles.manualUnit}>km/h</Text>
-              </View>
-              <Pressable
-                style={styles.manualBtn}
-                onPress={() => bumpManualSpeed(MANUAL_TREADMILL_SPEED.STEP_LARGE)}
-                accessibilityRole="button"
-                accessibilityLabel="Aumentar 1 km/h"
-              >
-                <Ionicons name="add" size={22} color={colors.white} />
-              </Pressable>
-            </View>
-            <View style={styles.fineRow}>
-              <Pressable
-                style={styles.fineBtn}
-                onPress={() => bumpManualSpeed(-MANUAL_TREADMILL_SPEED.STEP_SMALL)}
-                accessibilityRole="button"
-                accessibilityLabel="Diminuir 0,1 km/h"
-              >
-                <Text style={styles.fineBtnText}>−0.1</Text>
-              </Pressable>
-              <Pressable
-                style={styles.fineBtn}
-                onPress={() => setManualSpeed(MANUAL_TREADMILL_SPEED.DEFAULT)}
-                accessibilityRole="button"
-                accessibilityLabel="Resetar para padrão"
-              >
-                <Text style={styles.fineBtnText}>Resetar</Text>
-              </Pressable>
-              <Pressable
-                style={styles.fineBtn}
-                onPress={() => bumpManualSpeed(MANUAL_TREADMILL_SPEED.STEP_SMALL)}
-                accessibilityRole="button"
-                accessibilityLabel="Aumentar 0,1 km/h"
-              >
-                <Text style={styles.fineBtnText}>+0.1</Text>
-              </Pressable>
-            </View>
-          </View>
+          <ManualSpeedCard
+            value={manualSpeed}
+            onIncrement={() => bumpManualSpeed(MANUAL_TREADMILL_SPEED.STEP_LARGE)}
+            onDecrement={() => bumpManualSpeed(-MANUAL_TREADMILL_SPEED.STEP_LARGE)}
+            onIncrementFine={() =>
+              bumpManualSpeed(MANUAL_TREADMILL_SPEED.STEP_SMALL)
+            }
+            onDecrementFine={() =>
+              bumpManualSpeed(-MANUAL_TREADMILL_SPEED.STEP_SMALL)
+            }
+            onReset={() => setManualSpeed(MANUAL_TREADMILL_SPEED.DEFAULT)}
+          />
         ) : null}
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         {!isReadyToStart ? (
           <Pressable
             onPress={handleSwitchToManual}
-            style={styles.outlinedBtn}
+            style={styles.secondaryBtn}
             accessibilityRole="button"
             accessibilityLabel="Continuar sem conexão"
           >
-            <Text style={styles.outlinedBtnText}>
-              Continuar sem conexão
-            </Text>
+            <Text style={styles.secondaryBtnText}>Continuar sem conexão</Text>
           </Pressable>
         ) : null}
 
@@ -379,33 +308,365 @@ export function TreadmillSetupScreen() {
           style={[styles.primaryBtn, !isReadyToStart && styles.primaryBtnDisabled]}
           disabled={!isReadyToStart}
           accessibilityRole="button"
-          accessibilityLabel="Iniciar treino na esteira"
+          accessibilityLabel="Iniciar treino"
           accessibilityState={{ disabled: !isReadyToStart }}
         >
           <Ionicons
             name="play"
             size={20}
-            color={colors.background}
-            style={{ marginRight: spacing.sm }}
+            color={T.bg}
+            style={{ marginRight: 8 }}
           />
-          <Text style={styles.primaryBtnText}>Iniciar treino</Text>
+          <Text style={styles.primaryBtnText} allowFontScaling={false}>
+            Iniciar treino
+          </Text>
         </Pressable>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
+
+/* ───────────────────────── Sub-components ──────────────────────────────── */
+
+/**
+ * Animated radar pulse — three concentric rings expanding outward in a
+ * staggered loop, anchored by a glowing bluetooth icon. Communicates
+ * "actively scanning" much better than a generic spinner does.
+ */
+const RadarScanning = React.memo(function RadarScanning() {
+  const p1 = useSharedValue(0);
+  const p2 = useSharedValue(0);
+  const p3 = useSharedValue(0);
+
+  useEffect(() => {
+    const config = { duration: 2400, easing: Easing.out(Easing.quad) };
+    p1.value = withRepeat(withTiming(1, config), -1, false);
+    p2.value = withDelay(800, withRepeat(withTiming(1, config), -1, false));
+    p3.value = withDelay(1600, withRepeat(withTiming(1, config), -1, false));
+    return () => {
+      cancelAnimation(p1);
+      cancelAnimation(p2);
+      cancelAnimation(p3);
+    };
+  }, [p1, p2, p3]);
+
+  const ring1Style = useAnimatedStyle(() => ({
+    opacity: 0.55 * (1 - p1.value),
+    transform: [{ scale: 0.5 + p1.value * 1.6 }],
+  }));
+  const ring2Style = useAnimatedStyle(() => ({
+    opacity: 0.55 * (1 - p2.value),
+    transform: [{ scale: 0.5 + p2.value * 1.6 }],
+  }));
+  const ring3Style = useAnimatedStyle(() => ({
+    opacity: 0.55 * (1 - p3.value),
+    transform: [{ scale: 0.5 + p3.value * 1.6 }],
+  }));
+
+  return (
+    <View style={styles.radarCard}>
+      <View style={styles.radarStage}>
+        <Animated.View style={[styles.radarRing, ring1Style]} />
+        <Animated.View style={[styles.radarRing, ring2Style]} />
+        <Animated.View style={[styles.radarRing, ring3Style]} />
+        <View style={styles.radarCore}>
+          <Ionicons name="bluetooth" size={28} color={T.cyan} />
+        </View>
+      </View>
+      <Text style={styles.radarTitle} allowFontScaling={false}>
+        Procurando esteiras
+      </Text>
+      <Text style={styles.radarSubtitle} allowFontScaling={false}>
+        Mantenha o celular próximo da esteira. Só pegamos modelos compatíveis com
+        Bluetooth FTMS.
+      </Text>
+    </View>
+  );
+});
+
+const EmptyState = React.memo(function EmptyState({
+  onRetry,
+}: {
+  onRetry: () => void;
+}) {
+  return (
+    <View style={styles.emptyCard}>
+      <View style={styles.emptyIconWrap}>
+        <Ionicons name="bluetooth-outline" size={32} color={T.textSecondary} />
+      </View>
+      <Text style={styles.emptyTitle} allowFontScaling={false}>
+        Nenhuma esteira encontrada
+      </Text>
+      <Text style={styles.emptySubtitle}>
+        Verifique se a esteira está ligada com Bluetooth ativo, ou siga em modo
+        manual.
+      </Text>
+      <Pressable
+        style={styles.retryBtn}
+        onPress={onRetry}
+        accessibilityRole="button"
+        accessibilityLabel="Procurar novamente"
+      >
+        <Ionicons name="refresh" size={16} color={T.cyan} />
+        <Text style={styles.retryBtnText}>Procurar novamente</Text>
+      </Pressable>
+    </View>
+  );
+});
+
+const DeviceRow = React.memo(function DeviceRow({
+  device,
+  loading,
+  onPress,
+}: {
+  device: TreadmillDevice;
+  loading: boolean;
+  onPress: () => void;
+}) {
+  const scale = useSharedValue(1);
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+  const bars = signalBars(device.rssi);
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={loading}
+      onPressIn={() => {
+        scale.value = withSpring(0.97, { damping: 20, stiffness: 320 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { damping: 20, stiffness: 320 });
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`Conectar a ${device.name}`}
+    >
+      <Animated.View style={[styles.deviceRow, animStyle]}>
+        <Text style={styles.deviceName} numberOfLines={1} allowFontScaling={false}>
+          {device.name}
+        </Text>
+        <View style={styles.deviceRight}>
+          {loading ? (
+            <ActivityIndicator size="small" color={T.cyan} />
+          ) : (
+            <SignalBars bars={bars} />
+          )}
+        </View>
+      </Animated.View>
+    </Pressable>
+  );
+});
+
+/**
+ * 4-bar signal indicator that picks its color from signal strength.
+ * Matches Figma 1315-1642 where weak signals are amber, mid are cyan,
+ * strong are green — gives the user immediate "should I move closer?"
+ * feedback without a textual label.
+ */
+const SignalBars = React.memo(function SignalBars({ bars }: { bars: number }) {
+  const color = bars >= 4 ? T.success : bars >= 3 ? T.cyan : T.warning;
+  return (
+    <View style={styles.signalRow}>
+      {[1, 2, 3, 4].map((i) => (
+        <View
+          key={i}
+          style={[
+            styles.signalBar,
+            { height: 5 + i * 3 },
+            i <= bars
+              ? { backgroundColor: color }
+              : styles.signalBarInactive,
+          ]}
+        />
+      ))}
+    </View>
+  );
+});
+
+const ConnectedCard = React.memo(function ConnectedCard({
+  device,
+  onDisconnect,
+}: {
+  device: TreadmillDevice;
+  onDisconnect: () => void;
+}) {
+  return (
+    <View style={styles.connectedCard}>
+      <View style={styles.connectedCheck}>
+        <Ionicons name="checkmark" size={28} color={T.bg} />
+      </View>
+      <Text style={styles.connectedTitle} allowFontScaling={false}>
+        {device.name}
+      </Text>
+      <Text style={styles.connectedSubtitle}>
+        {device.supportsControl
+          ? 'Esteira Smart — leitura completa de dados FTMS.'
+          : 'Esteira FTMS — velocidade, distância e inclinação em tempo real.'}
+      </Text>
+      <Pressable
+        onPress={onDisconnect}
+        style={styles.disconnectBtn}
+        accessibilityRole="button"
+        accessibilityLabel="Desconectar"
+        hitSlop={8}
+      >
+        <Text style={styles.disconnectText}>Desconectar</Text>
+      </Pressable>
+    </View>
+  );
+});
+
+const ManualSpeedCard = React.memo(function ManualSpeedCard({
+  value,
+  onIncrement,
+  onDecrement,
+  onIncrementFine,
+  onDecrementFine,
+  onReset,
+}: {
+  value: number;
+  onIncrement: () => void;
+  onDecrement: () => void;
+  onIncrementFine: () => void;
+  onDecrementFine: () => void;
+  onReset: () => void;
+}) {
+  return (
+    <View style={styles.manualCard}>
+      <Text style={styles.manualTitle} allowFontScaling={false}>
+        Velocidade inicial
+      </Text>
+      <Text style={styles.manualHelp}>
+        Ajuste para o ritmo que você vai começar. Você pode mudar durante o
+        treino.
+      </Text>
+
+      <View style={styles.speedRow}>
+        <SpeedRoundBtn
+          icon="remove"
+          onPress={onDecrement}
+          accessibilityLabel="Diminuir 1 km/h"
+        />
+        <View style={styles.speedValueWrap}>
+          <Text style={styles.speedValue} allowFontScaling={false}>
+            {value.toFixed(1)}
+          </Text>
+          <Text style={styles.speedUnit} allowFontScaling={false}>
+            km/h
+          </Text>
+        </View>
+        <SpeedRoundBtn
+          icon="add"
+          onPress={onIncrement}
+          accessibilityLabel="Aumentar 1 km/h"
+        />
+      </View>
+
+      <View style={styles.fineRow}>
+        <FineBtn
+          label="−0.1"
+          onPress={onDecrementFine}
+          accessibilityLabel="Diminuir 0,1 km/h"
+        />
+        <FineBtn
+          label="Resetar"
+          onPress={onReset}
+          accessibilityLabel="Resetar para padrão"
+        />
+        <FineBtn
+          label="+0.1"
+          onPress={onIncrementFine}
+          accessibilityLabel="Aumentar 0,1 km/h"
+        />
+      </View>
+    </View>
+  );
+});
+
+const SpeedRoundBtn = React.memo(function SpeedRoundBtn({
+  icon,
+  onPress,
+  accessibilityLabel,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+  accessibilityLabel: string;
+}) {
+  const scale = useSharedValue(1);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={() => {
+        scale.value = withSpring(0.9, { damping: 18, stiffness: 360 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { damping: 18, stiffness: 360 });
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+    >
+      <Animated.View style={[styles.speedBtn, style]}>
+        <Ionicons name={icon} size={26} color={T.cyan} />
+      </Animated.View>
+    </Pressable>
+  );
+});
+
+const FineBtn = React.memo(function FineBtn({
+  label,
+  onPress,
+  accessibilityLabel,
+}: {
+  label: string;
+  onPress: () => void;
+  accessibilityLabel: string;
+}) {
+  const scale = useSharedValue(1);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={() => {
+        scale.value = withSpring(0.95, { damping: 20, stiffness: 360 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { damping: 20, stiffness: 360 });
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={{ flex: 1 }}
+    >
+      <Animated.View style={[styles.fineBtn, style]}>
+        <Text style={styles.fineBtnText} allowFontScaling={false}>
+          {label}
+        </Text>
+      </Animated.View>
+    </Pressable>
+  );
+});
+
+/* ───────────────────────────── Styles ──────────────────────────────────── */
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: T.bg,
+  },
+  safeTop: {
+    backgroundColor: T.bg,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 56,
   },
   iconBtn: {
     width: 44,
@@ -413,284 +674,431 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerTitleWrap: {
+    flex: 1,
+    alignItems: 'center',
+  },
   headerTitle: {
-    color: colors.white,
+    color: T.textPrimary,
     fontFamily: fonts.semibold,
-    fontSize: typography.fontSizes.lg,
-    fontWeight: typography.fontWeights.semibold,
+    fontSize: 17,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   content: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing['2xl'],
+    paddingHorizontal: 20,
+    paddingTop: 8,
   },
-  sectionLabel: {
-    color: colors.textSecondary,
+  statusOverline: {
+    color: T.textMuted,
     fontFamily: fonts.medium,
-    fontSize: typography.fontSizes.sm,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    marginBottom: spacing.md,
+    fontSize: 11,
+    letterSpacing: 1.6,
+    marginBottom: 14,
   },
+
+  // Warning card
   warningCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    flexWrap: 'wrap',
-    backgroundColor: 'rgba(255, 196, 0, 0.10)',
-    borderColor: colors.warning,
+    backgroundColor: T.warningBg,
+    borderColor: T.warningBorder,
     borderWidth: 1,
-    borderRadius: borderRadius.lg,
-    padding: spacing.base,
-    marginBottom: spacing.lg,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 18,
+    gap: 10,
+  },
+  warningIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 196, 0, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   warningText: {
     flex: 1,
-    color: colors.textLight,
-    fontSize: typography.fontSizes.md,
-    lineHeight: typography.fontSizes.md * typography.lineHeights.normal,
+    color: T.textPrimary,
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    lineHeight: 18,
   },
   warningCta: {
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.warning,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: T.warning,
+    borderRadius: 12,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   warningCtaText: {
-    color: colors.background,
-    fontFamily: fonts.semibold,
-    fontSize: typography.fontSizes.sm,
-    fontWeight: typography.fontWeights.semibold,
+    color: T.bg,
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    fontWeight: '700',
   },
-  devicesSection: {
-    marginBottom: spacing.lg,
-  },
-  scanningRow: {
-    flexDirection: 'row',
+
+  // Radar scanning
+  radarCard: {
     alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.base,
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    minHeight: 64,
-    marginBottom: spacing.sm,
+    backgroundColor: T.card,
+    borderRadius: 20,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: T.cardBorderSubtle,
+    overflow: 'hidden',
   },
-  scanningText: {
-    color: colors.textLight,
-    fontSize: typography.fontSizes.md,
-  },
-  emptyState: {
+  radarStage: {
+    width: 160,
+    height: 160,
     alignItems: 'center',
-    padding: spacing.xl,
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.xl,
-    gap: spacing.sm,
+    justifyContent: 'center',
+    marginBottom: 22,
+  },
+  radarRing: {
+    position: 'absolute',
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 2,
+    borderColor: T.cyan,
+  },
+  radarCore: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(0, 212, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: T.cyan,
+    shadowColor: T.cyan,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 18,
+    elevation: 12,
+  },
+  radarTitle: {
+    color: T.textPrimary,
+    fontFamily: fonts.bold,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  radarSubtitle: {
+    color: T.textSecondary,
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 19,
+    maxWidth: 280,
+  },
+
+  // Empty state
+  emptyCard: {
+    alignItems: 'center',
+    backgroundColor: T.card,
+    borderRadius: 20,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: T.cardBorderSubtle,
+  },
+  emptyIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(235, 235, 245, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
   },
   emptyTitle: {
-    color: colors.white,
-    fontFamily: fonts.semibold,
-    fontSize: typography.fontSizes.lg,
-    fontWeight: typography.fontWeights.semibold,
-    marginTop: spacing.sm,
+    color: T.textPrimary,
+    fontFamily: fonts.bold,
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 6,
   },
   emptySubtitle: {
-    color: colors.textSecondary,
-    fontSize: typography.fontSizes.md,
+    color: T.textSecondary,
+    fontFamily: fonts.regular,
+    fontSize: 13,
     textAlign: 'center',
-    lineHeight: typography.fontSizes.md * typography.lineHeights.normal,
-    marginBottom: spacing.sm,
+    lineHeight: 19,
+    marginBottom: 16,
+    maxWidth: 280,
   },
-  secondaryBtn: {
+  retryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    borderColor: colors.primary,
+    gap: 6,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 999,
+    borderColor: T.cyan,
     borderWidth: 1,
     minHeight: 44,
   },
-  secondaryBtnText: {
-    color: colors.primary,
+  retryBtnText: {
+    color: T.cyan,
     fontFamily: fonts.semibold,
-    fontSize: typography.fontSizes.md,
-    fontWeight: typography.fontWeights.semibold,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  // Devices header (Figma)
+  devicesHeader: {
+    color: T.cyan,
+    fontFamily: fonts.bold,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 10,
+  },
+  devicesDivider: {
+    height: 1,
+    backgroundColor: T.cardBorderSubtle,
+    marginBottom: 14,
+  },
+  // Device list
+  devicesList: {
+    gap: 10,
+    marginBottom: 12,
   },
   deviceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.base,
-    minHeight: 64,
-    marginBottom: spacing.sm,
-  },
-  deviceLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+    backgroundColor: T.card,
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 22,
+    borderWidth: 1,
+    borderColor: T.cardBorderSubtle,
+    minHeight: 78,
   },
   deviceName: {
-    color: colors.white,
-    fontFamily: fonts.semibold,
-    fontSize: typography.fontSizes.lg,
-    fontWeight: typography.fontWeights.semibold,
+    flex: 1,
+    color: T.textPrimary,
+    fontFamily: fonts.bold,
+    fontSize: 17,
+    fontWeight: '700',
+    marginRight: 12,
   },
-  deviceMeta: {
-    color: colors.textSecondary,
-    fontSize: typography.fontSizes.sm,
-    marginTop: 2,
+  deviceRight: {
+    minWidth: 30,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
-  errorText: {
-    color: colors.error,
-    fontSize: typography.fontSizes.sm,
-    marginBottom: spacing.sm,
+  signalRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 3,
   },
+  signalBar: {
+    width: 4,
+    borderRadius: 1,
+  },
+  signalBarInactive: {
+    backgroundColor: 'rgba(235, 235, 245, 0.14)',
+  },
+
+  // Connected card
   connectedCard: {
     alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.xl,
+    backgroundColor: T.card,
+    borderRadius: 20,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: 'rgba(16, 185, 129, 0.30)',
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    gap: spacing.xs,
+  },
+  connectedCheck: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: T.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+    shadowColor: T.success,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 16,
+    elevation: 10,
   },
   connectedTitle: {
-    color: colors.white,
+    color: T.textPrimary,
     fontFamily: fonts.bold,
-    fontSize: typography.fontSizes.xl,
-    fontWeight: typography.fontWeights.bold,
-    marginTop: spacing.sm,
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 6,
   },
   connectedSubtitle: {
-    color: colors.textSecondary,
-    fontSize: typography.fontSizes.md,
+    color: T.textSecondary,
+    fontFamily: fonts.regular,
+    fontSize: 13,
     textAlign: 'center',
-    lineHeight: typography.fontSizes.md * typography.lineHeights.normal,
+    lineHeight: 19,
+    maxWidth: 280,
   },
-  linkBtn: {
-    marginTop: spacing.sm,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
+  disconnectBtn: {
+    marginTop: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     minHeight: 44,
     justifyContent: 'center',
   },
-  linkBtnText: {
-    color: colors.textSecondary,
-    fontSize: typography.fontSizes.sm,
+  disconnectText: {
+    color: T.textSecondary,
+    fontFamily: fonts.medium,
+    fontSize: 13,
     textDecorationLine: 'underline',
   },
+
+  // Manual speed card — clean, no neon glow, just a subtle card with cyan
+  // accents on the number and round buttons.
   manualCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
+    backgroundColor: T.card,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: T.cardBorderSubtle,
   },
   manualTitle: {
-    color: colors.white,
-    fontFamily: fonts.semibold,
-    fontSize: typography.fontSizes.lg,
-    fontWeight: typography.fontWeights.semibold,
+    color: T.textPrimary,
+    fontFamily: fonts.bold,
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 4,
   },
-  manualSubtitle: {
-    color: colors.textSecondary,
-    fontSize: typography.fontSizes.sm,
-    lineHeight: typography.fontSizes.sm * typography.lineHeights.normal,
-    marginTop: spacing.xs,
-    marginBottom: spacing.base,
+  manualHelp: {
+    color: T.textSecondary,
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 22,
   },
-  manualRow: {
+  speedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.base,
+    marginBottom: 16,
   },
-  manualBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.primary,
+  speedBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: T.cyan,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  manualValueBox: {
+  speedValueWrap: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  manualValue: {
-    color: colors.primary,
+  speedValue: {
+    color: T.cyan,
     fontFamily: fonts.bold,
     fontSize: 44,
-    fontWeight: typography.fontWeights.bold,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+    lineHeight: 50,
   },
-  manualUnit: {
-    color: colors.textSecondary,
-    fontSize: typography.fontSizes.md,
-    marginTop: -4,
+  speedUnit: {
+    color: T.textSecondary,
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    marginTop: -2,
   },
   fineRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
+    gap: 8,
   },
   fineBtn: {
-    flex: 1,
     minHeight: 44,
-    backgroundColor: colors.backgroundLight,
-    borderRadius: borderRadius.md,
+    borderRadius: 12,
+    backgroundColor: T.bg,
+    borderWidth: 1,
+    borderColor: T.cardBorderSubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
   fineBtnText: {
-    color: colors.textLight,
+    color: T.textPrimary,
     fontFamily: fonts.medium,
-    fontSize: typography.fontSizes.md,
-    fontWeight: typography.fontWeights.medium,
+    fontSize: 13,
+    fontWeight: '500',
   },
+
+  errorText: {
+    color: T.danger,
+    fontFamily: fonts.medium,
+    fontSize: 13,
+    marginBottom: 10,
+  },
+
+  // Footer
   footer: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.base,
-    paddingTop: spacing.base,
-    gap: spacing.sm,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    gap: 10,
+    backgroundColor: T.bg,
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    backgroundColor: colors.background,
+    borderTopColor: T.cardBorderSubtle,
   },
-  outlinedBtn: {
-    minHeight: 50,
-    borderRadius: borderRadius.xl,
+  secondaryBtn: {
+    minHeight: 52,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: T.cardBorderSubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  outlinedBtnText: {
-    color: colors.textLight,
+  secondaryBtnText: {
+    color: T.textPrimary,
     fontFamily: fonts.medium,
-    fontSize: typography.fontSizes.md,
-    fontWeight: typography.fontWeights.medium,
+    fontSize: 14,
+    fontWeight: '500',
   },
   primaryBtn: {
-    minHeight: 54,
-    borderRadius: borderRadius.xl,
-    backgroundColor: colors.primary,
+    minHeight: 56,
+    borderRadius: 16,
+    backgroundColor: T.cyan,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: T.cyan,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 8,
   },
   primaryBtnDisabled: {
     opacity: 0.4,
+    shadowOpacity: 0,
   },
   primaryBtnText: {
-    color: colors.background,
+    color: T.bg,
     fontFamily: fonts.bold,
-    fontSize: typography.fontSizes.lg,
-    fontWeight: typography.fontWeights.bold,
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
 
