@@ -184,6 +184,33 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
             const resolvedEnv: 'outdoor' | 'treadmill' | undefined =
                 activityEnv ?? workoutEnv ?? undefined;
 
+            // Normalize treadmill_data: it may come as an object (Supabase
+            // JSONB) or as a JSON string in degraded paths.
+            const rawTm = (activity as any)?.treadmill_data;
+            let parsedTm: TreadmillSummary | null = null;
+            if (rawTm && typeof rawTm === 'object') {
+                parsedTm = rawTm as TreadmillSummary;
+            } else if (typeof rawTm === 'string' && rawTm.length > 0) {
+                try {
+                    parsedTm = JSON.parse(rawTm) as TreadmillSummary;
+                } catch {
+                    parsedTm = null;
+                }
+            }
+
+            if (__DEV__) {
+                console.log('[CoachAnalysis] hydrate', {
+                    workoutId,
+                    workoutEnv,
+                    activityId: (activity as any)?.id,
+                    activityEnv,
+                    resolvedEnv,
+                    rawTmType: typeof rawTm,
+                    parsedTmHasSamples:
+                        parsedTm?.speed_samples && parsedTm.speed_samples.length > 0,
+                });
+            }
+
             setEnriched({
                 routePoints: gps,
                 routeCoordinates: coords,
@@ -198,7 +225,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                 workoutTitle: details.title ?? undefined,
                 startDate: activity?.start_date,
                 environment: resolvedEnv,
-                treadmillData: (activity as any)?.treadmill_data ?? null,
+                treadmillData: parsedTm,
             });
             setEnriching(false);
         })();

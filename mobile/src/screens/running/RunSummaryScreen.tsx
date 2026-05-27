@@ -218,6 +218,41 @@ export function RunSummaryScreen() {
       const resolvedEnv: 'outdoor' | 'treadmill' | undefined =
         activityEnv ?? workoutEnv ?? undefined;
 
+      // Treadmill payload may arrive as a parsed object (Supabase JSONB) or
+      // as a JSON string in degraded paths (column scanned as text, REST
+      // proxy that doesn't deserialize, etc.). Normalize defensively so the
+      // UI is immune to both shapes.
+      const rawTm = (activity as any)?.treadmill_data;
+      let parsedTm: TreadmillSummaryData | null = null;
+      if (rawTm && typeof rawTm === 'object') {
+        parsedTm = rawTm as TreadmillSummaryData;
+      } else if (typeof rawTm === 'string' && rawTm.length > 0) {
+        try {
+          parsedTm = JSON.parse(rawTm) as TreadmillSummaryData;
+        } catch {
+          parsedTm = null;
+        }
+      }
+
+      // Diagnostic logging — verbose on purpose. Filter Metro logs with
+      // `[RunSummary] hydrate` to see exactly what the backend returned for
+      // this workout, including whether treadmill_data was preserved.
+      if (__DEV__) {
+        console.log('[RunSummary] hydrate', {
+          workoutId,
+          workoutEnv,
+          activityId: (activity as any)?.id,
+          activityEnv,
+          resolvedEnv,
+          rawTmType: typeof rawTm,
+          rawTmIsNull: rawTm === null,
+          rawTmIsUndefined: rawTm === undefined,
+          parsedTmHasSamples:
+            parsedTm?.speed_samples && parsedTm.speed_samples.length > 0,
+          parsedTmAvgSpeed: parsedTm?.avg_speed_kmh,
+        });
+      }
+
       setEnriched({
         routePoints: gps,
         routeCoordinates: coords,
@@ -232,7 +267,7 @@ export function RunSummaryScreen() {
         calories: activity?.calories ?? null,
         activitySource: activity?.source ?? null,
         environment: resolvedEnv,
-        treadmillData: ((activity as any)?.treadmill_data as TreadmillSummaryData | null | undefined) ?? null,
+        treadmillData: parsedTm,
       });
       setEnriching(false);
     })();
