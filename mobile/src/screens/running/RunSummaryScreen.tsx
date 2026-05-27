@@ -28,6 +28,10 @@ import {
   type SplitData,
 } from '../../utils/runMetrics';
 import { loadTreadmillCache } from '../../utils/treadmillCache';
+import {
+  downsampleSpeedSamples,
+  computeSpeedChartSpacing,
+} from '../../utils/treadmillChart';
 import type { RunMode } from './RunningScreen';
 
 export interface TreadmillSummaryData {
@@ -495,6 +499,35 @@ export function RunSummaryScreen() {
     [paceChart, summary.avgPaceSecondsPerKm, chartAvailableWidth],
   );
 
+  // Treadmill speed chart — memo a downsampled copy of the samples plus
+  // the calculated per-point spacing. Keeps the render branch tiny and
+  // the downsample work out of the hot path.
+  const treadmillChart = useMemo(() => {
+    const raw = treadmillData?.speed_samples;
+    if (!raw || raw.length < 2) return null;
+    const samples = downsampleSpeedSamples(raw, 120);
+    if (samples.length < 2) return null;
+    const spacing = computeSpeedChartSpacing(
+      samples.length,
+      chartAvailableWidth,
+      CHART_INITIAL_SPACING,
+      CHART_END_SPACING,
+    );
+    return {
+      data: samples.map((s) => ({ value: s.kmh, label: '' })),
+      spacing,
+    };
+  }, [treadmillData?.speed_samples, chartAvailableWidth]);
+
+  if (__DEV__) {
+    console.log('[RunSummary] treadmill render', {
+      isTreadmill,
+      hasTreadmillData: !!treadmillData,
+      rawSampleCount: treadmillData?.speed_samples?.length ?? 0,
+      chartPoints: treadmillChart?.data.length ?? 0,
+    });
+  }
+
   // Cold-start loading guard. When we were opened as a "dumb redirect"
   // (no live route data passed, only workoutId) and the hydration hasn't
   // resolved yet, render a clean spinner instead of a half-populated UI
@@ -764,25 +797,30 @@ export function RunSummaryScreen() {
             </View>
           )}
 
-          {/* Card de velocidade da esteira — só aparece no modo treadmill */}
-          {isTreadmill && treadmillData ? (
+          {/* Card de velocidade da esteira — aparece sempre que o treino é
+              em esteira. O chart usa downsample + spacing explícito pra
+              evitar o crash do Canvas Android com bitmap gigante. Quando
+              `treadmillData` ou `speed_samples` faltam (ex.: workout
+              legado sem cache local nem coluna populada no backend), o
+              card ainda aparece com fallback explicativo — o usuário
+              precisa enxergar que aquilo foi um treino interno. */}
+          {isTreadmill ? (
             <View style={styles.treadmillChartCard}>
               <Text style={styles.treadmillChartTitle}>Velocidade na esteira</Text>
               <Text style={styles.treadmillChartSubtitle}>
-                {treadmillData.is_smart
+                {treadmillData?.is_smart
                   ? 'Dados lidos diretamente da esteira via Bluetooth FTMS.'
-                  : 'Modo manual — velocidade configurada pelo usuário.'}
+                  : treadmillData?.is_smart === false
+                    ? 'Modo manual — velocidade configurada pelo usuário.'
+                    : 'Treino executado em esteira.'}
               </Text>
-              {treadmillData.speed_samples &&
-              treadmillData.speed_samples.length > 1 ? (
+              {treadmillChart ? (
                 <View style={styles.chartWrap}>
                   <LineChart
-                    data={treadmillData.speed_samples.map((s) => ({
-                      value: s.kmh,
-                      label: '',
-                    }))}
+                    data={treadmillChart.data}
                     height={150}
                     width={chartAvailableWidth}
+                    spacing={treadmillChart.spacing}
                     thickness={2}
                     color={T.cyan}
                     areaChart
@@ -803,11 +841,17 @@ export function RunSummaryScreen() {
                     hideDataPoints
                   />
                 </View>
-              ) : null}
+              ) : (
+                <View style={styles.chartEmpty}>
+                  <Text style={styles.chartEmptyText}>
+                    Sem variação de velocidade registrada para este treino.
+                  </Text>
+                </View>
+              )}
               <View style={styles.treadmillStatsRow}>
                 <View style={styles.treadmillStatBlock}>
                   <Text style={styles.treadmillStatValue}>
-                    {treadmillData.avg_speed_kmh != null
+                    {treadmillData?.avg_speed_kmh != null
                       ? treadmillData.avg_speed_kmh.toFixed(1)
                       : '—'}
                   </Text>
@@ -815,7 +859,7 @@ export function RunSummaryScreen() {
                 </View>
                 <View style={styles.treadmillStatBlock}>
                   <Text style={styles.treadmillStatValue}>
-                    {treadmillData.max_speed_kmh != null
+                    {treadmillData?.max_speed_kmh != null
                       ? treadmillData.max_speed_kmh.toFixed(1)
                       : '—'}
                   </Text>
@@ -823,7 +867,7 @@ export function RunSummaryScreen() {
                 </View>
                 <View style={styles.treadmillStatBlock}>
                   <Text style={styles.treadmillStatValue}>
-                    {treadmillData.avg_incline != null
+                    {treadmillData?.avg_incline != null
                       ? `${treadmillData.avg_incline.toFixed(1)}%`
                       : '—'}
                   </Text>
@@ -1540,6 +1584,16 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     minHeight: 200,
     overflow: 'hidden',
+  },
+  chartEmpty: {
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chartEmptyText: {
+    color: T.textSecondary,
+    fontSize: 12,
+    textAlign: 'center',
   },
   chartAxisText: {
     color: T.textSecondary,

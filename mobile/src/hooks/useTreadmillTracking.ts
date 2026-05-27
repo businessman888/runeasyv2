@@ -179,11 +179,18 @@ export function useTreadmillTracking(
       sessionStartRef.current != null
         ? Math.floor((Date.now() - sessionStartRef.current) / 1000)
         : sample.elapsedTime;
-    samplesRef.current.push({
-      t: elapsedSec,
-      kmh: sample.speed,
-      incline: sample.incline,
-    });
+    // FTMS notifies at 5–10 Hz, but we only need 1 sample/second for the
+    // RunSummary speed chart. Without this guard, a 30-min workout would
+    // accumulate 9k+ samples and the LineChart's underlying SVG bitmap
+    // exceeded Android's draw budget on finish, crashing the activity.
+    const last = samplesRef.current[samplesRef.current.length - 1];
+    if (!last || last.t !== elapsedSec) {
+      samplesRef.current.push({
+        t: elapsedSec,
+        kmh: sample.speed,
+        incline: sample.incline,
+      });
+    }
   }, [currentSample, sessionState, mode]);
 
   const startResumeTracking = useCallback(() => {

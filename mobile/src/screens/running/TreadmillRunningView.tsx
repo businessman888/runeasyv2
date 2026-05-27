@@ -37,6 +37,9 @@ import {
 } from '../../stores';
 import { MANUAL_TREADMILL_SPEED } from '../../constants/bluetooth';
 import { saveTreadmillCache } from '../../utils/treadmillCache';
+import { useWorkoutGoals } from '../../hooks/useWorkoutGoals';
+import { GoalsModal } from '../../components/GoalsModal';
+import type { WorkoutBlockAPI } from '../../types/workoutGoals';
 import { fonts } from '../../theme';
 
 // ─── Visual tokens (Figma-aligned) ────────────────────────────────────────────
@@ -60,6 +63,7 @@ interface Props {
   mode: 'planned' | 'manual' | 'free';
   targetPaceSeconds?: number;
   targetDistanceKm?: number;
+  workoutBlocks?: WorkoutBlockAPI[];
 }
 
 export function TreadmillRunningView({
@@ -69,10 +73,12 @@ export function TreadmillRunningView({
   mode,
   targetPaceSeconds,
   targetDistanceKm,
+  workoutBlocks,
 }: Props) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [isFinishing, setIsFinishing] = useState(false);
+  const [goalsModalVisible, setGoalsModalVisible] = useState(false);
 
   const treadmillMode = useTreadmillStore((s) => s.mode);
   const manualSpeed = useTreadmillStore((s) => s.manualSpeedKmh);
@@ -105,6 +111,17 @@ export function TreadmillRunningView({
   const isCalculating = sessionState === 'calculating';
   const isTraining = sessionState === 'training';
   const isPaused = sessionState === 'paused';
+
+  // Goals system — mirrors OutdoorRunningView. Plan/manual workouts ship
+  // `workoutBlocks` (warmup/main/cooldown segments with distance + pace
+  // targets); the hook computes completion based on distance/timeMs/state
+  // and exposes `hasGoals` so the button is hidden for free runs.
+  const { goalSteps, allCompleted, hasGoals } = useWorkoutGoals({
+    workoutBlocks,
+    distance,
+    timeMs,
+    sessionState,
+  });
 
   // Reactive backdrop gradient — only visible during an active session:
   //   - training   → cyan layer fades in
@@ -320,7 +337,30 @@ export function TreadmillRunningView({
             <View style={styles.workoutPillFlex} />
           )}
 
-          {showWorkoutPill ? (
+          {/* Right slot:
+                - plan/manual com metas → botão de metas (abre GoalsModal),
+                  com check verde quando todas estão concluídas;
+                - sem metas mas com pill → ícone neutro (mantém balanço
+                  visual com o chevron à esquerda);
+                - free sem pill → spacer pra equilibrar o flex. */}
+          {hasGoals && !isFreeMode ? (
+            <Pressable
+              style={[
+                styles.goalsBtn,
+                allCompleted && styles.goalsBtnCompleted,
+              ]}
+              onPress={() => setGoalsModalVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Ver metas do treino"
+              hitSlop={10}
+            >
+              {allCompleted ? (
+                <Ionicons name="checkmark-circle" size={24} color="#32CD32" />
+              ) : (
+                <Ionicons name="cellular" size={22} color={T.cyan} />
+              )}
+            </Pressable>
+          ) : showWorkoutPill ? (
             <View style={styles.modeBadge}>
               <Ionicons name="locate" size={20} color={T.bg} />
             </View>
@@ -507,6 +547,14 @@ export function TreadmillRunningView({
           </View>
         </View>
       )}
+
+      {/* Goals modal — same component used in OutdoorRunningView so the
+          treadmill flow is consistent for plan/manual workouts. */}
+      <GoalsModal
+        visible={goalsModalVisible}
+        onClose={() => setGoalsModalVisible(false)}
+        goalSteps={goalSteps}
+      />
     </View>
   );
 }
@@ -668,6 +716,20 @@ const styles = StyleSheet.create({
     backgroundColor: T.cyan,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  goalsBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: T.cardSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: T.cardBorder,
+  },
+  goalsBtnCompleted: {
+    borderWidth: 2,
+    borderColor: '#32CD32',
   },
   deviceCaption: {
     color: T.textMuted,

@@ -30,6 +30,10 @@ import {
     type SplitData,
 } from '../utils/runMetrics';
 import { loadTreadmillCache } from '../utils/treadmillCache';
+import {
+    downsampleSpeedSamples,
+    computeSpeedChartSpacing,
+} from '../utils/treadmillChart';
 import { SharingModal } from './sharing/SharingModal';
 
 // ─── Design Tokens (alinhados ao RunSummary/Figma) ────────────────────────────
@@ -468,6 +472,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
         [paceChart, avgPaceSeconds, chartAvailableWidth],
     );
 
+
     // ── Bottom sheet snap ──────────────────────────────────────────────────
     const snapPoints = useMemo(() => ['35%', '92%'], []);
 
@@ -486,6 +491,34 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
     const environment: 'outdoor' | 'treadmill' = enriched?.environment ?? 'outdoor';
     const treadmillData = enriched?.treadmillData ?? null;
     const isTreadmill = environment === 'treadmill';
+
+    // Treadmill speed chart — memo a downsampled copy of the samples plus
+    // the calculated per-point spacing so the chart fits the card width.
+    const treadmillChart = useMemo(() => {
+        const raw = treadmillData?.speed_samples;
+        if (!raw || raw.length < 2) return null;
+        const samples = downsampleSpeedSamples(raw, 120);
+        if (samples.length < 2) return null;
+        const spacing = computeSpeedChartSpacing(
+            samples.length,
+            chartAvailableWidth,
+            CHART_INITIAL_SPACING,
+            CHART_END_SPACING,
+        );
+        return {
+            data: samples.map((s) => ({ value: s.kmh, label: '' })),
+            spacing,
+        };
+    }, [treadmillData?.speed_samples, chartAvailableWidth]);
+
+    if (__DEV__) {
+        console.log('[CoachAnalysis] treadmill render', {
+            isTreadmill,
+            hasTreadmillData: !!treadmillData,
+            rawSampleCount: treadmillData?.speed_samples?.length ?? 0,
+            chartPoints: treadmillChart?.data.length ?? 0,
+        });
+    }
 
     // Cold-start loading guard. Coach analysis depends on two async
     // sources (feedback + workout details). If neither resolved yet,
@@ -730,24 +763,30 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                         />
                     </View>
 
-                    {/* Card de velocidade da esteira — só aparece em treinos de esteira */}
-                    {isTreadmill && treadmillData ? (
+                    {/* Card de velocidade da esteira — aparece sempre que o
+                        treino foi em esteira. Mesmo sem speed_samples (workout
+                        legado, cache ausente, backend sem deploy novo) o card
+                        renderiza com fallback explicativo. */}
+                    {isTreadmill ? (
                         <View style={styles.treadmillChartCard}>
                             <Text style={styles.treadmillChartTitle}>Velocidade na esteira</Text>
                             <Text style={styles.treadmillChartSubtitle}>
-                                {treadmillData.is_smart
+                                {treadmillData?.is_smart
                                     ? 'Dados lidos diretamente da esteira via Bluetooth FTMS.'
-                                    : 'Modo manual — velocidade configurada pelo usuário.'}
+                                    : treadmillData?.is_smart === false
+                                        ? 'Modo manual — velocidade configurada pelo usuário.'
+                                        : 'Treino executado em esteira.'}
                             </Text>
-                            {treadmillData.speed_samples && treadmillData.speed_samples.length > 1 ? (
+                            {/* Downsample + spacing explícito (ver memo
+                                `treadmillChart`): impede que o LineChart aloque
+                                um SVG path enorme e crashe o Canvas. */}
+                            {treadmillChart ? (
                                 <View style={styles.chartWrap}>
                                     <LineChart
-                                        data={treadmillData.speed_samples.map((s) => ({
-                                            value: s.kmh,
-                                            label: '',
-                                        }))}
+                                        data={treadmillChart.data}
                                         height={150}
                                         width={chartAvailableWidth}
+                                        spacing={treadmillChart.spacing}
                                         thickness={2}
                                         color={T.cyan}
                                         areaChart
@@ -768,11 +807,17 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                                         hideDataPoints
                                     />
                                 </View>
-                            ) : null}
+                            ) : (
+                                <View style={styles.chartEmpty}>
+                                    <Text style={styles.chartEmptyText}>
+                                        Sem variação de velocidade registrada para este treino.
+                                    </Text>
+                                </View>
+                            )}
                             <View style={styles.treadmillStatsRow}>
                                 <View style={styles.treadmillStatBlock}>
                                     <Text style={styles.treadmillStatValue}>
-                                        {treadmillData.avg_speed_kmh != null
+                                        {treadmillData?.avg_speed_kmh != null
                                             ? treadmillData.avg_speed_kmh.toFixed(1)
                                             : '—'}
                                     </Text>
@@ -780,7 +825,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                                 </View>
                                 <View style={styles.treadmillStatBlock}>
                                     <Text style={styles.treadmillStatValue}>
-                                        {treadmillData.max_speed_kmh != null
+                                        {treadmillData?.max_speed_kmh != null
                                             ? treadmillData.max_speed_kmh.toFixed(1)
                                             : '—'}
                                     </Text>
@@ -788,7 +833,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                                 </View>
                                 <View style={styles.treadmillStatBlock}>
                                     <Text style={styles.treadmillStatValue}>
-                                        {treadmillData.avg_incline != null
+                                        {treadmillData?.avg_incline != null
                                             ? `${treadmillData.avg_incline.toFixed(1)}%`
                                             : '—'}
                                     </Text>
@@ -1640,6 +1685,16 @@ const styles = StyleSheet.create({
         color: T.textSecondary, fontSize: 11, fontWeight: '500',
     },
     chartWrap: { paddingTop: 4, paddingBottom: 8, minHeight: 200, overflow: 'hidden' },
+    chartEmpty: {
+        paddingVertical: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    chartEmptyText: {
+        color: T.textSecondary,
+        fontSize: 12,
+        textAlign: 'center',
+    },
     chartAxisText: { color: T.textSecondary, fontSize: 10 },
     chartAxisLabelText: {
         color: T.textSecondary, fontSize: 10, width: 48,

@@ -76,6 +76,7 @@ export function RunningScreen() {
         mode={mode}
         targetPaceSeconds={route.params?.targetPaceSeconds}
         targetDistanceKm={route.params?.targetDistanceKm}
+        workoutBlocks={route.params?.workoutBlocks}
       />
     );
   }
