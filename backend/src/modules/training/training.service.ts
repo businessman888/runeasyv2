@@ -1050,7 +1050,7 @@ export class TrainingService {
       const { data: act, error: actErr } = await this.supabaseService
         .from('activities')
         .select(
-          'id, name, distance, moving_time, elapsed_time, average_pace, average_speed, total_elevation_gain, elevation_gain, start_date, gps_route, average_heartrate, max_heartrate, calories, source, environment, treadmill_data',
+          'id, name, distance, moving_time, elapsed_time, average_pace, elevation_gain, start_date, gps_route, average_heartrate, max_heartrate, calories, source, environment, treadmill_data',
         )
         .eq('id', data.activity_id)
         .single();
@@ -1074,7 +1074,7 @@ export class TrainingService {
       const { data: orphaned } = await this.supabaseService
         .from('activities')
         .select(
-          'id, name, distance, moving_time, elapsed_time, average_pace, average_speed, total_elevation_gain, elevation_gain, start_date, gps_route, average_heartrate, max_heartrate, calories, source, environment, treadmill_data',
+          'id, name, distance, moving_time, elapsed_time, average_pace, elevation_gain, start_date, gps_route, average_heartrate, max_heartrate, calories, source, environment, treadmill_data',
         )
         .eq('user_id', userId)
         .like('external_id', `%${workoutId}`)
