@@ -461,10 +461,13 @@ export function HomeScreen({ navigation }: any) {
     const pointsToNext = stats?.points_to_next_level ?? 100;
     const currentStreak = stats?.current_streak ?? 0;
 
-    // Coach-analysis card locked state. Free users get a premium Pro upsell;
-    // Pro users without a completed plan workout get the "complete first workout" hint.
+    // Coach-analysis card premium styling. Free SEMPRE recebe o estilo
+    // premium (borda cyan + glow) — independente de plan-activity órfã —
+    // porque o body sempre mostra o upsell, nunca o feedback real.
+    // Pro users without a completed plan workout get the "complete first workout" hint
+    // (estilo neutro, sem highlight premium).
     const isAiLocked = !latestPlanActivityLoading && !latestPlanActivity?.activity;
-    const isFreeAiLock = isAiLocked && !isProUser;
+    const isFreeAiLock = !isProUser;
 
     // Check if workout is for today (used for button enable/disable)
     const isWorkoutToday = (dateStr: string): boolean => {
@@ -542,6 +545,9 @@ export function HomeScreen({ navigation }: any) {
     const handleActivityCardPress = (w: any) => {
         const src: 'plan' | 'manual' | 'free' | undefined = w?.source;
         if (w?.status === 'completed') {
+            // Sem id válido evitamos a navegação — RunSummary abriria vazio
+            // (sem cold-start loading) e o usuário veria o tap como "sem ação".
+            if (!w?.id) return;
             navigation.navigate('RunSummary', {
                 workoutId: w.id,
                 mode: src === 'manual' ? 'manual' : 'free',
@@ -570,14 +576,25 @@ export function HomeScreen({ navigation }: any) {
         const source = data.workout_source;
         const isPlanWorkout = source === 'plan';
         const isCoachReady = isPlanWorkout && !!data.feedback;
+
+        // Sem workout_id (caso degradado: linkedWorkout query retornou null por
+        // múltiplas linhas, ou activity sem workout linkado) o RunSummary abre
+        // em estado vazio — sem dados, sem cold-start loading (pois `!!workoutId`
+        // é false). Para o usuário parece "clique sem ação". Desabilitamos o
+        // botão e refletimos no rótulo. Mesma lógica para CoachAnalysis quando
+        // feedbackId/activityId ausentes.
+        const hasSummaryTarget = !!data.workout_id;
+        const hasCoachTarget = !!data.feedback?.id;
+        const canOpen = isPlanWorkout ? (isCoachReady && hasCoachTarget) : hasSummaryTarget;
+
         const cardTitle = isPlanWorkout ? 'Análise do Treinador' : 'Resumo do treino';
         const cardCta = isPlanWorkout
             ? (isCoachReady ? 'Ver feedback completo' : 'Análise em preparo...')
-            : 'Ver resumo do treino';
+            : (hasSummaryTarget ? 'Ver resumo do treino' : 'Resumo indisponível');
 
         const handleOpen = () => {
+            if (!canOpen) return;
             if (isPlanWorkout) {
-                if (!isCoachReady) return;
                 navigation.navigate('CoachAnalysis', {
                     feedbackId: data.feedback?.id,
                     activityId: data.activity?.id,
@@ -586,7 +603,7 @@ export function HomeScreen({ navigation }: any) {
                 // Dumb redirect — RunSummaryScreen fetches everything via
                 // workoutId and handles outdoor/treadmill internally.
                 navigation.navigate('RunSummary', {
-                    workoutId: data.workout_id ?? undefined,
+                    workoutId: data.workout_id as string,
                     mode: source === 'manual' ? 'manual' : 'free',
                 });
             }
@@ -632,10 +649,10 @@ export function HomeScreen({ navigation }: any) {
                 <TouchableOpacity
                     style={[
                         styles.feedbackButton,
-                        isPlanWorkout && !isCoachReady && { opacity: 0.5 },
+                        !canOpen && { opacity: 0.5 },
                     ]}
                     onPress={handleOpen}
-                    disabled={isPlanWorkout && !isCoachReady}
+                    disabled={!canOpen}
                 >
                     <Text style={styles.feedbackButtonText}>{cardCta}</Text>
                     <ArrowRightIcon size={18} color="#00D4FF" />
@@ -863,21 +880,16 @@ export function HomeScreen({ navigation }: any) {
                 </View>
                 {/* ── fim Seus treinos ─────────────────────────────────────────── */}
 
-                {/* Análise / resultados de treino — exibido para todos. Free vê os
-                    resumos de corrida livre/manual aqui, ou o estado "sem resultados".
-                    A análise do Coach AI só aparece para treinos de plano (Pro). */}
+                {/* Análise / resultados de treino do plano.
+                    Free: SEMPRE upsell premium — nunca exibe dados reais, mesmo
+                    que exista plan-activity órfã (treino feito antes do gating
+                    ou quando ainda era Pro). Isso corrige o vazamento em que o
+                    card de "Análise do Treinador" aparecia com pace/eficiência
+                    no override Free.
+                    Pro: feedback real ou estado bloqueado. */}
                 <View style={[styles.aiCard, isFreeAiLock && styles.aiCardPremium]}>
-                    {latestPlanActivityLoading ? (
-                        <View style={styles.aiLoadingContainer}>
-                            <Skeleton width="50%" height={20} style={{ marginBottom: 8 }} />
-                            <Skeleton width="30%" height={14} style={{ marginBottom: 16 }} />
-                            <Skeleton width="40%" height={36} style={{ marginBottom: 8 }} />
-                            <Skeleton width="60%" height={24} />
-                        </View>
-                    ) : latestPlanActivity?.activity ? (
-                        renderResultCardBody(latestPlanActivity)
-                    ) : !isProUser ? (
-                        /* Free: premium Pro upsell for the Coach analysis. */
+                    {!isProUser ? (
+                        /* Free: upsell premium do Coach (independente de plan-activity órfão). */
                         <View style={styles.lockedContainer}>
                             <View style={styles.aiHeader}>
                                 <View>
@@ -897,6 +909,15 @@ export function HomeScreen({ navigation }: any) {
                                 </Text>
                             </View>
                         </View>
+                    ) : latestPlanActivityLoading ? (
+                        <View style={styles.aiLoadingContainer}>
+                            <Skeleton width="50%" height={20} style={{ marginBottom: 8 }} />
+                            <Skeleton width="30%" height={14} style={{ marginBottom: 16 }} />
+                            <Skeleton width="40%" height={36} style={{ marginBottom: 8 }} />
+                            <Skeleton width="60%" height={24} />
+                        </View>
+                    ) : latestPlanActivity?.activity ? (
+                        renderResultCardBody(latestPlanActivity)
                     ) : (
                         /* Pro without a completed workout yet. */
                         <View style={styles.lockedContainer}>

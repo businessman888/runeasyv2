@@ -97,8 +97,15 @@ export function TrainingHistoryScreen({ navigation }: any) {
         }
 
         if (source === 'manual' || source === 'free') {
+            // Sem workout_id (legacy/órfão) o RunSummary abriria vazio,
+            // sem cold-start loading — para o usuário pareceria "tap sem ação".
+            // Abortamos o redirect aqui e logamos para investigação.
+            if (!workout.workout_id) {
+                console.log('[TrainingHistory] Workout sem workout_id — sem destino');
+                return;
+            }
             navigation.navigate('RunSummary', {
-                workoutId: workout.workout_id ?? undefined,
+                workoutId: workout.workout_id,
                 mode: source,
             });
             return;

@@ -485,6 +485,10 @@ export function CalendarScreen({ navigation }: any) {
                 return;
             }
 
+            // Sem id, o RunSummary abriria vazio (sem cold-start loading)
+            // e o tap pareceria "sem ação". Aborta o redirect.
+            if (!workout?.id) return;
+
             // Dumb redirect: only `workoutId` + `mode` (for the layout
             // branch — manual shows "Planejado vs Executado", free does
             // not). RunSummaryScreen owns hydration and persistence; this

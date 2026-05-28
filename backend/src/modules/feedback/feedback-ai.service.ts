@@ -337,13 +337,20 @@ Regras:
     //    - scope='plan'     → most recent activity linked to a plan workout
     //    - scope='activity' → most recent activity linked to a manual/free workout
     let latestActivity: any = null;
+    // Hint passado para buildLatestActivityResponse: garante workout_id
+    // mesmo quando há múltiplas linhas em `workouts` apontando para a mesma
+    // activity (caso degradado: workout órfão + recompletion). Sem isso o
+    // `.maybeSingle()` lá embaixo pode retornar null e o card abre o
+    // RunSummary com workoutId undefined → tela vazia, sem cold-start
+    // loading. Esse hint é o "último workout escopeado" para essa activity.
+    let scopedWorkoutIdHint: string | null = null;
 
     if (scope === 'plan' || scope === 'activity') {
       const sourceValues = scope === 'plan' ? ['plan'] : ['manual', 'free'];
 
       const { data: scopedWorkouts } = await this.supabaseService
         .from('workouts')
-        .select('activity_id')
+        .select('id, activity_id')
         .eq('user_id', userId)
         .in('source', sourceValues)
         .not('activity_id', 'is', null);
@@ -367,6 +374,14 @@ Regras:
 
       if (error || !data) return empty;
       latestActivity = data;
+
+      // Pega a row de workouts do scope para essa activity (qualquer uma,
+      // se houver múltiplas) — usada como fallback robusto do workout_id
+      // quando o lookup por activity_id devolver múltiplas linhas.
+      const scopedRow = (scopedWorkouts ?? []).find(
+        (w: any) => w.activity_id === latestActivity.id,
+      );
+      scopedWorkoutIdHint = scopedRow?.id ?? null;
     } else {
       const { data, error } = await this.supabaseService
         .from('activities')
@@ -380,16 +395,27 @@ Regras:
       latestActivity = data;
     }
 
-    return this.buildLatestActivityResponse(userId, latestActivity);
+    return this.buildLatestActivityResponse(
+      userId,
+      latestActivity,
+      scopedWorkoutIdHint,
+    );
   }
 
   /**
    * Build the rich home-screen activity payload (feedback, linked workout,
    * conquest, VO2 estimate) from an already-selected activity row.
+   *
+   * `scopedWorkoutIdHint` é o workout id pré-resolvido pela query de escopo
+   * (Treinos/Atividades). Quando o lookup por activity_id devolver múltiplas
+   * rows (workout órfão + recompletion → `.maybeSingle()` retorna null) ou
+   * nenhuma, usamos esse hint para garantir que o card sempre tenha um
+   * workout_id navegável.
    */
   private async buildLatestActivityResponse(
     userId: string,
     latestActivity: any,
+    scopedWorkoutIdHint: string | null = null,
   ) {
     // 2. Get associated feedback if exists
     const { data: feedback } = await this.supabaseService
@@ -398,16 +424,27 @@ Regras:
         'id, hero_message, hero_tone, strengths, improvements, metrics_comparison, workout_id',
       )
       .eq('activity_id', latestActivity.id)
-      .single();
+      .maybeSingle();
 
-    // 3. Get linked workout to check goal
-    const { data: linkedWorkout } = await this.supabaseService
+    // 3. Get linked workout to check goal.
+    // Usar .maybeSingle() em vez de .single() — .single() retornava erro
+    // (e data:null) quando havia múltiplas rows em workouts apontando para
+    // a mesma activity (cenário real: workout órfão + recompletion via
+    // upsert). Com null, `workout_id` caía para null e o RunSummary abria
+    // em estado vazio sem cold-start loading, parecendo "clique sem ação".
+    // Pegamos a row mais recente como representante quando há duplicatas.
+    const { data: linkedWorkouts } = await this.supabaseService
       .from('workouts')
       .select(
-        'id, distance_km, type, source, title, target_pace_seconds, target_duration_seconds',
+        'id, distance_km, type, source, title, target_pace_seconds, target_duration_seconds, created_at',
       )
       .eq('activity_id', latestActivity.id)
-      .single();
+      .order('created_at', { ascending: false });
+
+    const linkedWorkout =
+      Array.isArray(linkedWorkouts) && linkedWorkouts.length > 0
+        ? linkedWorkouts[0]
+        : null;
 
     // 4. Calculate if goal was met (distance comparison)
     let goalMet = false;
@@ -531,7 +568,14 @@ Regras:
           }
         : null,
       efficiency_percent: Math.round(efficiencyPercent * 10) / 10,
-      workout_id: linkedWorkout?.id || feedback?.workout_id || null,
+      // Cadeia de fallback do workout_id: lookup direto → feedback → hint
+      // pré-resolvido pelo escopo. Garante que o card sempre tenha um id
+      // navegável; sem isso, o RunSummary abre vazio (clique "sem ação").
+      workout_id:
+        linkedWorkout?.id ||
+        feedback?.workout_id ||
+        scopedWorkoutIdHint ||
+        null,
       workout_source: linkedWorkout?.source || null,
       workout_title: linkedWorkout?.title || null,
       target_pace_seconds: linkedWorkout?.target_pace_seconds || null,
