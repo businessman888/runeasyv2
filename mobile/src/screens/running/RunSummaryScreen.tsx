@@ -207,6 +207,13 @@ export function RunSummaryScreen() {
     // round-trip resolves. The fetch below still runs to confirm/refresh
     // server-side fields — but the chart never disappears while we wait.
     const cachedTreadmill = loadTreadmillCache(workoutId);
+    if (__DEV__) {
+      console.log('[RunSummary] cache lookup', {
+        workoutId,
+        hit: !!cachedTreadmill,
+        sampleCount: cachedTreadmill?.speed_samples?.length ?? 0,
+      });
+    }
     if (cachedTreadmill) {
       setEnriched((prev) => ({
         routePoints: prev?.routePoints ?? [],
@@ -523,8 +530,17 @@ export function RunSummaryScreen() {
     console.log('[RunSummary] treadmill render', {
       isTreadmill,
       hasTreadmillData: !!treadmillData,
+      isSmart: treadmillData?.is_smart,
+      avgSpeed: treadmillData?.avg_speed_kmh,
       rawSampleCount: treadmillData?.speed_samples?.length ?? 0,
+      firstSample: treadmillData?.speed_samples?.[0],
+      lastSample:
+        treadmillData?.speed_samples?.[
+          (treadmillData?.speed_samples?.length ?? 0) - 1
+        ],
       chartPoints: treadmillChart?.data.length ?? 0,
+      cameFromLiveFinish: hasInitialRoute,
+      hasInitialTreadmillData: initialTreadmillData != null,
     });
   }
 

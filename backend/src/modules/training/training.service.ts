@@ -731,43 +731,72 @@ export class TrainingService {
         ? payload.avg_pace_seconds_per_km / 60
         : paceMinPerKm || null;
 
+    // Use UPSERT so retries (user restarted the workout, network glitch
+    // resubmitted, etc.) overwrite the previous row instead of failing the
+    // `activities.external_id` UNIQUE constraint. The previous INSERT-only
+    // code lost the activity row entirely when this race happened — and
+    // because the downstream `workouts.activity_id` update gates on the
+    // returned id, the link silently broke and the speed-variation chart
+    // disappeared on subsequent re-opens.
     const { data: insertedActivity, error: activityError } =
       await this.supabaseService
         .from('activities')
-        .insert({
-          user_id: userId,
-          external_id: externalId,
-          source,
-          name: workout.title || 'Corrida RunEasy',
-          type: 'Run',
-          start_date: startDateIso,
-          distance: finalDistanceKm * 1000, // meters
-          moving_time: payload.duration_seconds || 0,
-          elapsed_time: payload.duration_seconds || 0,
-          average_pace: finalPaceMinPerKm,
-          max_pace: finalPaceMinPerKm,
-          elevation_gain: elevationGain,
-          gps_route: isTreadmill ? null : payload.route_points || null,
-          average_heartrate: payload.average_heartrate ?? null,
-          max_heartrate: payload.max_heartrate ?? null,
-          calories: payload.calories ?? null,
-          environment,
-          treadmill_data: isTreadmill ? (payload.treadmill_data ?? null) : null,
-        })
+        .upsert(
+          {
+            user_id: userId,
+            external_id: externalId,
+            source,
+            name: workout.title || 'Corrida RunEasy',
+            type: 'Run',
+            start_date: startDateIso,
+            distance: finalDistanceKm * 1000, // meters
+            moving_time: payload.duration_seconds || 0,
+            elapsed_time: payload.duration_seconds || 0,
+            average_pace: finalPaceMinPerKm,
+            max_pace: finalPaceMinPerKm,
+            elevation_gain: elevationGain,
+            gps_route: isTreadmill ? null : payload.route_points || null,
+            average_heartrate: payload.average_heartrate ?? null,
+            max_heartrate: payload.max_heartrate ?? null,
+            calories: payload.calories ?? null,
+            environment,
+            treadmill_data: isTreadmill ? (payload.treadmill_data ?? null) : null,
+          },
+          { onConflict: 'external_id' },
+        )
         .select()
         .single();
 
     if (activityError) {
       this.logger.error(
-        `Failed to create activity row for workout ${workoutId}: ${activityError.message}`,
+        `Failed to upsert activity row for workout ${workoutId}: ${activityError.message}`,
         activityError,
       );
       // Non-blocking: we still want to mark the workout completed even if
-      // the activity insert fails. The feedback pipeline will degrade
+      // the activity upsert fails. The feedback pipeline will degrade
       // gracefully and the user can see the workout in the calendar.
     }
 
-    const activityId: string | null = insertedActivity?.id ?? null;
+    let activityId: string | null = insertedActivity?.id ?? null;
+
+    // Last-resort recovery: if the upsert returned without an id (rare,
+    // happens when Supabase returns a partial response or RLS strips the
+    // row from the response). Look it up by external_id so we can still
+    // link the workout — keeps treadmill_data reachable on re-open.
+    if (!activityId) {
+      const { data: foundAct } = await this.supabaseService
+        .from('activities')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('external_id', externalId)
+        .maybeSingle();
+      if (foundAct?.id) {
+        activityId = foundAct.id;
+        this.logger.warn(
+          `[completeWorkout] recovered activity ${activityId} by external_id ${externalId}`,
+        );
+      }
+    }
 
     // 2. Update Workout Status (and link to the new activity row)
     const { error: updateError, data: updatedWorkout } =
@@ -1018,7 +1047,7 @@ export class TrainingService {
     // Home/History — the route is stored on `activities`, not `workouts`.
     let activity: any = null;
     if (data?.activity_id) {
-      const { data: act } = await this.supabaseService
+      const { data: act, error: actErr } = await this.supabaseService
         .from('activities')
         .select(
           'id, name, distance, moving_time, elapsed_time, average_pace, average_speed, total_elevation_gain, elevation_gain, start_date, gps_route, average_heartrate, max_heartrate, calories, source, environment, treadmill_data',
@@ -1026,6 +1055,52 @@ export class TrainingService {
         .eq('id', data.activity_id)
         .single();
       activity = act ?? null;
+      this.logger.log(
+        `[getWorkout] workout=${workoutId} activity_id=${data.activity_id} hit=${!!act} hasTreadmillData=${!!act?.treadmill_data} sampleCount=${act?.treadmill_data?.speed_samples?.length ?? 0} ${actErr ? `error=${actErr.message}` : ''}`,
+      );
+    } else {
+      this.logger.log(
+        `[getWorkout] workout=${workoutId} has NO activity_id (status=${data?.status})`,
+      );
+    }
+
+    // Recovery: when `workouts.activity_id` is null (insert race, retry
+    // that hit the UNIQUE on external_id under the old INSERT-only flow,
+    // etc.) but an activity row was actually written under a predictable
+    // external_id pattern (`phone_<workoutId>`, `apple_watch_<workoutId>`,
+    // etc.), look it up by `external_id` and backfill the link so the
+    // next read short-circuits to the normal path.
+    if (!activity && data?.status === 'completed') {
+      const { data: orphaned } = await this.supabaseService
+        .from('activities')
+        .select(
+          'id, name, distance, moving_time, elapsed_time, average_pace, average_speed, total_elevation_gain, elevation_gain, start_date, gps_route, average_heartrate, max_heartrate, calories, source, environment, treadmill_data',
+        )
+        .eq('user_id', userId)
+        .like('external_id', `%${workoutId}`)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (orphaned) {
+        activity = orphaned;
+        // Backfill the link in the background — fire-and-forget so the
+        // current request doesn't pay the write latency.
+        this.supabaseService
+          .from('workouts')
+          .update({ activity_id: orphaned.id })
+          .eq('id', workoutId)
+          .then(({ error: backfillErr }) => {
+            if (backfillErr) {
+              this.logger.warn(
+                `[getWorkout] backfill activity_id failed for workout ${workoutId}: ${backfillErr.message}`,
+              );
+            } else {
+              this.logger.log(
+                `[getWorkout] backfilled activity_id=${orphaned.id} for workout ${workoutId}`,
+              );
+            }
+          });
+      }
     }
 
     // Fallback: when `activities.gps_route` is null/empty (legacy rows
