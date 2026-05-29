@@ -15,6 +15,10 @@ export function useTracking(workoutId?: string) {
   const [currentPace, setCurrentPace] = useState(0); // minutos por km
   const [isReady, setIsReady] = useState(false);
   const [initialPosition, setInitialPosition] = useState<[number, number] | null>(null);
+  // Precisão crua do último update de GPS, em metros (-1 = desconhecida).
+  // Alimenta o indicador de qualidade de sinal. Escrita pela locationTask antes
+  // dos filtros, lida aqui no sync de 500ms enquanto está treinando.
+  const [gpsAccuracy, setGpsAccuracy] = useState(-1);
 
   // Usa refs para manter valores mutáveis dentro do intervalo de tempo sem causar re-renders exaustivos
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -125,6 +129,9 @@ export function useTracking(workoutId?: string) {
         // Sync Distance (barato: leitura numérica direta do MMKV)
         const currentDist = trackingStorage.getNumber('current_distance') || 0;
         setDistance(currentDist);
+
+        // Sync precisão do GPS (leitura numérica barata) para o indicador de sinal
+        setGpsAccuracy(trackingStorage.getNumber('last_accuracy') ?? -1);
 
         // Só re-parseia a rota se houve novo ponto desde o último tick.
         const updateTs = trackingStorage.getNumber('last_update_ts') || 0;
@@ -318,11 +325,14 @@ export function useTracking(workoutId?: string) {
     trackingStorage.remove('tracking_workout_id');
     trackingStorage.remove('tracking_finished');
     trackingStorage.remove('tracking_date');
+    trackingStorage.remove('last_accuracy');
+    trackingStorage.remove('last_accuracy_ts');
 
     setRouteCoordinates([]);
     setDistance(0);
     setTimeMs(0);
     setCurrentPace(0);
+    setGpsAccuracy(-1);
     accumulatedTimeRef.current = 0;
     startTimeRef.current = null;
     setSessionState('calculating');
@@ -354,6 +364,7 @@ export function useTracking(workoutId?: string) {
     timeMs,
     currentPace: getFormattedPace(),
     formattedTime: getFormattedTime(),
+    gpsAccuracy,
     initialPosition,
     startResumeTracking,
     pauseTracking,

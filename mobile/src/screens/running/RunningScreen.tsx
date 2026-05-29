@@ -16,6 +16,11 @@ import { useWorkoutGoals } from '../../hooks/useWorkoutGoals';
 import { useTrainingStore } from '../../stores';
 import { GoalsModal } from '../../components/GoalsModal';
 import { MapLocationPuck } from '../../components/map/MapLocationPuck';
+import { GpsSignalBars } from '../../components/map/GpsSignalBars';
+import { LowPowerBanner } from '../../components/map/LowPowerBanner';
+import { OSMOverlayLayers } from '../../components/map/OSMOverlayLayers';
+import { useLowPowerMode } from '../../hooks/useLowPowerMode';
+import { trackingStorage } from '../../tasks/locationTask';
 import { TreadmillRunningView } from './TreadmillRunningView';
 import type { WorkoutBlockAPI } from '../../types/workoutGoals';
 
@@ -93,6 +98,18 @@ function OutdoorRunningView() {
   const [isFollowingUser, setIsFollowingUser] = useState(true);
   const [isFinishing, setIsFinishing] = useState(false);
   const cameraRef = useRef<Mapbox.Camera>(null);
+  const isLowPower = useLowPowerMode();
+  // Camada de trilhas/parques OSM — preferência persistida; default OFF (mapa limpo).
+  const [showTrails, setShowTrails] = useState(
+    () => trackingStorage.getBoolean('pref_show_trails') ?? false,
+  );
+  const toggleTrails = useCallback(() => {
+    setShowTrails((prev) => {
+      const next = !prev;
+      trackingStorage.set('pref_show_trails', next);
+      return next;
+    });
+  }, []);
 
   const {
     isReady,
@@ -102,6 +119,7 @@ function OutdoorRunningView() {
     timeMs,
     currentPace,
     formattedTime,
+    gpsAccuracy,
     initialPosition,
     startResumeTracking,
     pauseTracking,
@@ -339,6 +357,11 @@ function OutdoorRunningView() {
             centerCoordinate: initialPosition,
           }}
         />
+
+        {/* Realce de trilhas/parques (OSM) — opt-in. Declarado ANTES da rota para
+            ficar por baixo do traçado da corrida. */}
+        {showTrails && <OSMOverlayLayers />}
+
         {/* Rastro da corrida — declarado ANTES do puck para que o traçado fique
             ABAIXO do indicador do corredor (Mapbox empilha na ordem de declaração).
             Halo + linha principal no cyan da marca, estilo Strava. */}
@@ -360,6 +383,7 @@ function OutdoorRunningView() {
                 lineColor: T.routeColor,
                 lineWidth: 6,
                 lineOpacity: 1,
+                lineBlur: 1, // brilho sutil na borda — visual premium
                 lineJoin: 'round',
                 lineCap: 'round',
               }}
@@ -413,13 +437,38 @@ function OutdoorRunningView() {
             </Pressable>
           )}
 
+          {/* Spacer: empurra o indicador GPS para a direita quando não há card central */}
+          {isFreeMode && <View style={{ flex: 1 }} />}
+
+          {/* Indicador de qualidade do sinal GPS — canto superior direito (estilo Runna) */}
+          <GpsSignalBars accuracy={gpsAccuracy} />
+
         </View>
+
+        {/* Banner de modo de economia de bateria — só aparece se o aparelho estiver
+            economizando energia (pode degradar a precisão do GPS). */}
+        <LowPowerBanner active={isLowPower} />
       </SafeAreaView>
+
+      {/* ── TOGGLE DE TRILHAS — realça paths/parques OSM (opt-in) ───────── */}
+      <Pressable
+        style={[
+          styles.mapToggleBtn,
+          { top: insets.top + 70 },
+          showTrails && styles.mapToggleBtnActive,
+        ]}
+        onPress={toggleTrails}
+        accessibilityRole="button"
+        accessibilityLabel={showTrails ? 'Ocultar trilhas e parques' : 'Mostrar trilhas e parques'}
+        accessibilityState={{ selected: showTrails }}
+      >
+        <Ionicons name="leaf" size={20} color={showTrails ? T.cyan : T.textSecondary} />
+      </Pressable>
 
       {/* ── RECENTER FAB — aparece quando o usuário arrasta o mapa ──────── */}
       {!isFollowingUser && (
         <Pressable
-          style={[styles.recenterBtn, { top: insets.top + 70 }]}
+          style={[styles.recenterBtn, { top: insets.top + 124 }]}
           onPress={() => {
             // Re-habilita follow: seta false primeiro para forçar re-mount do Camera
             setIsFollowingUser(false);
@@ -673,6 +722,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 20,
+    shadowColor: '#00D4FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+
+  // ── Toggle de trilhas/parques (OSM)
+  mapToggleBtn: {
+    position: 'absolute',
+    right: 16,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#1C1C2E',
+    borderWidth: 1,
+    borderColor: 'rgba(235, 235, 245, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 20,
+  },
+  mapToggleBtnActive: {
+    borderColor: '#00D4FF',
     shadowColor: '#00D4FF',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,

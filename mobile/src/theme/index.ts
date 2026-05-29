@@ -153,6 +153,51 @@ export const shadows = {
     },
 };
 
+// Map visualization palette — premium map/tracking overlays (Stat Maps, GPS
+// signal, elevation). Reuses the existing design-system tokens so the map stays
+// visually coherent with the rest of the app; the few gradient stops that don't
+// exist as semantic tokens are declared here once (single source of truth) and
+// never hardcoded in screens. Mirrors the approach of theme/zoneColors.ts.
+export const mapViz = {
+    // Route line — brand cyan with a glow halo behind it.
+    routeColor: colors.primary,
+    routeGlow: colors.primary,
+
+    // Pace gradient (fast → slow). Numeric thresholds live in utils/runMetrics.
+    pace: {
+        fast: '#1E3A8A', // < 4:30 — deep blue
+        midFast: '#2563EB', // 4:30–5:30 — blue
+        mid: colors.primary, // 5:30–6:00 — cyan
+        midSlow: colors.success, // 6:00–7:00 — green
+        slow: colors.warning, // 7:00–8:00 — yellow
+        verySlow: colors.error, // > 8:00 — red
+    },
+
+    // Elevation gradient (low → high), normalized per-run min↔max.
+    elevation: {
+        low: colors.success, // green — lowest
+        mid: colors.warning, // yellow
+        high: colors.accent, // amber/orange
+        peak: colors.recovery, // purple — highest
+    },
+
+    // GPS signal quality buckets.
+    gps: {
+        excellent: colors.success,
+        good: colors.success,
+        weak: colors.warning,
+        poor: colors.error,
+        inactive: 'rgba(235, 235, 245, 0.15)', // empty bar
+    },
+
+    // OSM overlay (trilhas/paths + parques), realçado para corredores.
+    osm: {
+        trail: colors.primary, // dashed cyan paths/tracks
+        parkFill: 'rgba(16, 185, 129, 0.12)', // success @ 12%
+        parkOutline: 'rgba(16, 185, 129, 0.40)', // success @ 40%
+    },
+};
+
 export default {
     colors,
     typography,
@@ -160,4 +205,5 @@ export default {
     borderRadius,
     shadows,
     fonts,
+    mapViz,
 };

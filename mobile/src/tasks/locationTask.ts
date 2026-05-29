@@ -46,6 +46,16 @@ TaskManager.defineTask(LOCATION_TRACKING_TASK, async ({ data, error }) => {
   const { locations } = data as { locations: Location.LocationObject[] };
   const loc = locations[0];
 
+  // ── Sinal GPS cru (para o indicador de qualidade) ──────────────────────────
+  // Gravado ANTES dos filtros: os pontos salvos em route_points são pré-filtrados
+  // a ≤10m de precisão, então não refletem o sinal real. O indicador da UI precisa
+  // da accuracy bruta de cada update, mesmo dos pontos que serão descartados.
+  // Aditivo: não altera nenhum filtro nem o cálculo de distância.
+  if (loc?.coords) {
+    trackingStorage.set('last_accuracy', loc.coords.accuracy ?? -1);
+    trackingStorage.set('last_accuracy_ts', Date.now());
+  }
+
   // ── FILTRO 1: Precisão do GPS ──────────────────────────────────────────────
   // Após resume, GPS precisa de "warm-up" — primeiros pontos podem ter accuracy pior.
   // Grace period: aceita até 30m nos primeiros pontos pós-resume.

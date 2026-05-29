@@ -9,6 +9,8 @@
  * Pace chart: agrupado a cada 200 m com média móvel de 5 amostras.
  */
 
+import { mapViz } from '../theme';
+
 export interface RoutePoint {
     latitude: number;
     longitude: number;
@@ -266,6 +268,165 @@ export function formatPaceSeconds(secondsPerKm: number): string {
     const minutes = Math.floor(secondsPerKm / 60);
     const seconds = Math.round(secondsPerKm % 60);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Premium map: altimetria + Stat Maps (polyline colorida por métrica)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ElevationPoint {
+    /** Distância acumulada em km (eixo X) */
+    distanceKm: number;
+    /** Altitude suavizada em metros (eixo Y) */
+    altitudeM: number;
+}
+
+/**
+ * Gera o perfil de altimetria a partir da altitude já gravada nos pontos GPS.
+ * Agrupa por intervalos de distância (espelha calculatePaceChart) e aplica média
+ * móvel para suavizar o ruído do sensor barométrico/GPS. Pontos sem altitude são
+ * ignorados; retorna [] quando não há altitude utilizável.
+ */
+export function calculateElevationProfile(
+    points: RoutePoint[],
+    intervalMeters = 100,
+): ElevationPoint[] {
+    if (points.length < 2) return [];
+
+    const raw: ElevationPoint[] = [];
+    let cumulativeDistance = 0;
+    let segmentStartDistance = 0;
+    let altSum = 0;
+    let altCount = 0;
+
+    if (points[0].altitude != null) {
+        altSum += points[0].altitude;
+        altCount += 1;
+    }
+
+    for (let i = 1; i < points.length; i++) {
+        const prev = points[i - 1];
+        const curr = points[i];
+        cumulativeDistance += haversineMeters(prev, curr);
+
+        if (curr.altitude != null) {
+            altSum += curr.altitude;
+            altCount += 1;
+        }
+
+        if (cumulativeDistance - segmentStartDistance >= intervalMeters) {
+            if (altCount > 0) {
+                raw.push({ distanceKm: cumulativeDistance / 1000, altitudeM: altSum / altCount });
+            }
+            segmentStartDistance = cumulativeDistance;
+            altSum = 0;
+            altCount = 0;
+        }
+    }
+
+    const remaining = cumulativeDistance - segmentStartDistance;
+    if (remaining > intervalMeters / 2 && altCount > 0) {
+        raw.push({ distanceKm: cumulativeDistance / 1000, altitudeM: altSum / altCount });
+    }
+
+    if (raw.length === 0) return [];
+
+    // Média móvel de 5 amostras (mesma janela do pace chart)
+    const window = 5;
+    return raw.map((point, idx) => {
+        const start = Math.max(0, idx - Math.floor(window / 2));
+        const end = Math.min(raw.length, idx + Math.ceil(window / 2));
+        const slice = raw.slice(start, end);
+        const avg = slice.reduce((sum, p) => sum + p.altitudeM, 0) / slice.length;
+        return { distanceKm: point.distanceKm, altitudeM: avg };
+    });
+}
+
+export type StatMapMetric = 'pace' | 'elevation';
+
+/** Segmento da rota colorido por métrica (uma feature LineString por par de pontos). */
+export interface StatMapFeatureCollection {
+    type: 'FeatureCollection';
+    features: Array<{
+        type: 'Feature';
+        properties: { color: string };
+        geometry: { type: 'LineString'; coordinates: number[][] };
+    }>;
+}
+
+/**
+ * Mapeia o pace (segundos por km) para uma cor da escala mapViz.pace.
+ * Limiares: <4:30 / 4:30–5:30 / 5:30–6:00 / 6:00–7:00 / 7:00–8:00 / >8:00.
+ */
+export function paceToColor(paceSecondsPerKm: number): string {
+    if (!isFinite(paceSecondsPerKm) || paceSecondsPerKm <= 0) return mapViz.pace.mid;
+    if (paceSecondsPerKm < 270) return mapViz.pace.fast; // < 4:30
+    if (paceSecondsPerKm < 330) return mapViz.pace.midFast; // 4:30–5:30
+    if (paceSecondsPerKm < 360) return mapViz.pace.mid; // 5:30–6:00
+    if (paceSecondsPerKm < 420) return mapViz.pace.midSlow; // 6:00–7:00
+    if (paceSecondsPerKm < 480) return mapViz.pace.slow; // 7:00–8:00
+    return mapViz.pace.verySlow; // > 8:00
+}
+
+/** Mapeia a altitude normalizada (entre min e max da corrida) para a escala mapViz.elevation. */
+export function elevationToColor(altitude: number, minAlt: number, maxAlt: number): string {
+    if (maxAlt <= minAlt) return mapViz.elevation.mid;
+    const t = (altitude - minAlt) / (maxAlt - minAlt); // 0..1
+    if (t < 0.25) return mapViz.elevation.low;
+    if (t < 0.5) return mapViz.elevation.mid;
+    if (t < 0.75) return mapViz.elevation.high;
+    return mapViz.elevation.peak;
+}
+
+/**
+ * Constrói uma FeatureCollection com um segmento por par de pontos consecutivos,
+ * colorido pela métrica escolhida (pace ou elevação). Renderizada no Mapbox com
+ * `lineColor: ['get', 'color']`. Os pontos GPS já vêm filtrados (~≥10m de espaço),
+ * o que dá segmentos estáveis o suficiente para colorir por buckets.
+ */
+export function buildStatMapRoute(points: RoutePoint[], metric: StatMapMetric): StatMapFeatureCollection {
+    const features: StatMapFeatureCollection['features'] = [];
+    if (points.length < 2) return { type: 'FeatureCollection', features };
+
+    let minAlt = Infinity;
+    let maxAlt = -Infinity;
+    if (metric === 'elevation') {
+        for (const p of points) {
+            if (p.altitude == null) continue;
+            if (p.altitude < minAlt) minAlt = p.altitude;
+            if (p.altitude > maxAlt) maxAlt = p.altitude;
+        }
+    }
+
+    for (let i = 1; i < points.length; i++) {
+        const prev = points[i - 1];
+        const curr = points[i];
+
+        let color: string;
+        if (metric === 'pace') {
+            const distM = haversineMeters(prev, curr);
+            const timeS = (curr.timestamp - prev.timestamp) / 1000;
+            const paceSecondsPerKm = distM > 0 ? (timeS / distM) * 1000 : 0;
+            color = paceToColor(paceSecondsPerKm);
+        } else {
+            const alt = curr.altitude ?? prev.altitude ?? 0;
+            color = elevationToColor(alt, minAlt, maxAlt);
+        }
+
+        features.push({
+            type: 'Feature',
+            properties: { color },
+            geometry: {
+                type: 'LineString',
+                coordinates: [
+                    [prev.longitude, prev.latitude],
+                    [curr.longitude, curr.latitude],
+                ],
+            },
+        });
+    }
+
+    return { type: 'FeatureCollection', features };
 }
 
 /** Formata duração em ms como "MM:SS" ou "H:MM:SS" */

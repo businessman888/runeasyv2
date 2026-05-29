@@ -22,11 +22,17 @@ import {
   calculateSplits,
   calculatePaceChart,
   calculatePaceSummary,
+  calculateElevationProfile,
+  buildStatMapRoute,
   formatPaceSeconds,
   formatDurationMs,
   type RoutePoint,
   type SplitData,
+  type ElevationPoint,
 } from '../../utils/runMetrics';
+import { Terrain3DLayers } from '../../components/map/Terrain3DLayers';
+import { StatMapRoute } from '../../components/map/StatMapRoute';
+import { StatMapSelector, type StatMapMode } from '../../components/map/StatMapSelector';
 import { loadTreadmillCache } from '../../utils/treadmillCache';
 import {
   downsampleSpeedSamples,
@@ -150,6 +156,10 @@ export function RunSummaryScreen() {
   const insets = useSafeAreaInsets();
   const sheetRef = useRef<BottomSheet>(null);
   const [sharingVisible, setSharingVisible] = useState(false);
+  // Stat Maps: coloração da rota. 'default' = polyline cyan original (estado inicial).
+  const [statMapMode, setStatMapMode] = useState<StatMapMode>('default');
+  // Terreno 3D: desligado por padrão (preserva o comportamento atual do mapa).
+  const [is3D, setIs3D] = useState(false);
 
   const {
     workoutId,
@@ -429,6 +439,19 @@ export function RunSummaryScreen() {
     () => calculatePaceSummary(routePoints, distance, timeMs),
     [routePoints, distance, timeMs],
   );
+  const elevationProfile: ElevationPoint[] = useMemo(
+    () => (routePoints.length > 1 ? calculateElevationProfile(routePoints) : []),
+    [routePoints],
+  );
+  const hasElevation = elevationProfile.length > 1;
+  // Rota colorida por métrica — só recalcula quando sai do modo 'default'.
+  const statMapRoute = useMemo(
+    () =>
+      statMapMode === 'default' || routePoints.length < 2
+        ? null
+        : buildStatMapRoute(routePoints, statMapMode),
+    [statMapMode, routePoints],
+  );
 
   const distanceKm = formatDistanceKm(distance);
   const timeStr = formatDurationMs(timeMs);
@@ -442,6 +465,10 @@ export function RunSummaryScreen() {
   const hasRoute = routeCoordinates.length > 1;
   let centerCoord = routeCoordinates[0] || [-46.6333, -23.5505];
   let bounds: { ne: number[]; sw: number[] } | undefined;
+  // Zoom que enquadra a rota — usado no modo 3D, onde a câmera usa center+zoom+pitch
+  // em vez de bounds (bounds e pitch conflitam no rnmapbox). Mantém a rota visível
+  // mesmo num mapa travado.
+  let fit3DZoom = 14;
   if (hasRoute) {
     const lngs = routeCoordinates.map((c) => c[0]);
     const lats = routeCoordinates.map((c) => c[1]);
@@ -454,6 +481,13 @@ export function RunSummaryScreen() {
       (bounds.ne[0] + bounds.sw[0]) / 2,
       (bounds.ne[1] + bounds.sw[1]) / 2,
     ];
+    const maxSpan = Math.max(
+      Math.abs(bounds.ne[0] - bounds.sw[0]),
+      Math.abs(bounds.ne[1] - bounds.sw[1]),
+      0.0005,
+    );
+    // Aproximação log2(360 / span) com folga; clamp para um range usável.
+    fit3DZoom = Math.max(11, Math.min(16, Math.log2(360 / maxSpan) - 0.8));
   }
   const geoJsonSource = {
     type: 'FeatureCollection' as const,
@@ -504,6 +538,10 @@ export function RunSummaryScreen() {
   const chartCfg = useMemo(
     () => buildChartConfig(paceChart, summary.avgPaceSecondsPerKm, chartAvailableWidth),
     [paceChart, summary.avgPaceSecondsPerKm, chartAvailableWidth],
+  );
+  const elevCfg = useMemo(
+    () => buildElevationChartConfig(elevationProfile, chartAvailableWidth),
+    [elevationProfile, chartAvailableWidth],
   );
 
   // Treadmill speed chart — memo a downsampled copy of the samples plus
@@ -620,9 +658,10 @@ export function RunSummaryScreen() {
         >
           <Mapbox.Camera
             centerCoordinate={centerCoord}
-            zoomLevel={hasRoute ? undefined : 15}
+            zoomLevel={is3D ? fit3DZoom : hasRoute ? undefined : 15}
+            pitch={is3D ? 55 : 0}
             bounds={
-              bounds
+              !is3D && bounds
                 ? {
                     ne: bounds.ne,
                     sw: bounds.sw,
@@ -633,9 +672,14 @@ export function RunSummaryScreen() {
                   }
                 : undefined
             }
-            animationDuration={0}
+            animationDuration={is3D ? 800 : 0}
           />
-          {hasRoute && (
+
+          {/* Terreno 3D (relevo + céu) — só montado quando o usuário ativa o 3D */}
+          {is3D && <Terrain3DLayers />}
+
+          {/* Rota padrão (cyan) — estado inicial, idêntico ao original */}
+          {hasRoute && statMapMode === 'default' && (
             <Mapbox.ShapeSource id="summaryRoute" shape={geoJsonSource as any}>
               <Mapbox.LineLayer
                 id="summaryRouteGlow"
@@ -658,7 +702,29 @@ export function RunSummaryScreen() {
               />
             </Mapbox.ShapeSource>
           )}
+
+          {/* Rota colorida por métrica (Stat Maps) — substitui a polyline padrão */}
+          {hasRoute && statMapRoute && <StatMapRoute shape={statMapRoute} />}
         </Mapbox.MapView>
+
+        {/* Toggle de Terreno 3D — chip flutuante no canto do mapa */}
+        {hasRoute && (
+          <Pressable
+            style={[styles.chip3d, { top: insets.top + 52 }, is3D && styles.chip3dActive]}
+            onPress={() => setIs3D((v) => !v)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={is3D ? 'Desativar terreno 3D' : 'Ativar terreno 3D'}
+            accessibilityState={{ selected: is3D }}
+          >
+            <Ionicons
+              name="triangle-outline"
+              size={14}
+              color={is3D ? T.cyan : T.textSecondary}
+            />
+            <Text style={[styles.chip3dText, is3D && { color: T.cyan }]}>3D</Text>
+          </Pressable>
+        )}
 
         {/* Overlay no mapa: rota indisponível ou hidratando */}
         {!hasRoute && (
@@ -756,6 +822,20 @@ export function RunSummaryScreen() {
             <MetricCell label="Elev. Gan" value={`${summary.totalElevationGainM} m`} />
             <MetricCell label="Elev Max" value={`${summary.maxAltitudeM} m`} />
           </View>
+
+          {/* Card Mapa — seletor de coloração da rota (Stat Maps). Só outdoor com rota. */}
+          {!isTreadmill && hasRoute && (
+            <View style={styles.cardDark}>
+              <Text style={styles.cardTitle}>Mapa</Text>
+              <View style={{ marginTop: 12 }}>
+                <StatMapSelector
+                  mode={statMapMode}
+                  onChange={setStatMapMode}
+                  hasElevation={hasElevation}
+                />
+              </View>
+            </View>
+          )}
 
           {/* Card Saúde — métricas vindas de wearable (FC + calorias). Só renderiza
               quando há dados, então corridas sem Watch/Garmin/etc. seguem com o
@@ -1014,6 +1094,63 @@ export function RunSummaryScreen() {
               </>
             )}
           </View>
+
+          {/* Card Altimetria — perfil de elevação (outdoor com altitude de GPS) */}
+          {!isTreadmill && (
+            <View style={styles.cardDark}>
+              <View style={styles.paceCardHeader}>
+                <Text style={styles.cardTitle}>Altimetria</Text>
+                <Text style={styles.chartUnitInline}>
+                  ↑ +{summary.totalElevationGainM}m · máx {summary.maxAltitudeM}m
+                </Text>
+              </View>
+
+              {hasElevation ? (
+                <View style={styles.chartWrap}>
+                  <LineChart
+                    data={elevCfg.data}
+                    height={140}
+                    width={elevCfg.width}
+                    thickness={2}
+                    color={T.cyan}
+                    areaChart
+                    curved
+                    startFillColor={T.cyan}
+                    endFillColor={T.cyan}
+                    startOpacity={0.45}
+                    endOpacity={0.05}
+                    initialSpacing={CHART_INITIAL_SPACING}
+                    endSpacing={CHART_END_SPACING}
+                    spacing={elevCfg.spacing}
+                    yAxisColor="transparent"
+                    xAxisColor={T.divider}
+                    rulesType="solid"
+                    rulesColor="rgba(235,235,245,0.06)"
+                    yAxisTextStyle={styles.chartAxisText}
+                    xAxisLabelTextStyle={styles.chartAxisLabelText}
+                    yAxisLabelTexts={elevCfg.yAxisLabelTexts}
+                    noOfSections={elevCfg.yAxisLabelTexts.length - 1}
+                    maxValue={elevCfg.maxValue}
+                    yAxisLabelWidth={CHART_Y_AXIS_LABEL_WIDTH}
+                    xAxisLabelTexts={elevCfg.xLabels}
+                    showVerticalLines={false}
+                    hideDataPoints
+                  />
+                </View>
+              ) : (
+                <CardEmptyState
+                  icon="trending-up-outline"
+                  title={enriching ? 'Carregando altimetria...' : 'Sem dados de elevação'}
+                  subtitle={
+                    enriching
+                      ? undefined
+                      : 'Este treino não registrou variação de altitude pelo GPS.'
+                  }
+                  loading={enriching}
+                />
+              )}
+            </View>
+          )}
         </BottomSheetScrollView>
       </BottomSheet>
 
@@ -1239,11 +1376,91 @@ function buildChartConfig(
   };
 }
 
+interface ElevationChartConfig {
+  data: { value: number }[];
+  yAxisLabelTexts: string[];
+  maxValue: number;
+  xLabels: string[];
+  width: number;
+  spacing: number;
+}
+
+// Config do chart de altimetria. Diferente do pace: NÃO é invertido (altitude
+// maior = mais alto no gráfico) e a baseline é o ponto mais baixo da corrida
+// (subtraído de cada valor), com labels do eixo Y em metros reais.
+function buildElevationChartConfig(
+  profile: ElevationPoint[],
+  availableWidth: number,
+): ElevationChartConfig {
+  if (profile.length === 0) {
+    return { data: [], yAxisLabelTexts: [], maxValue: 0, xLabels: [], width: availableWidth, spacing: 0 };
+  }
+
+  const alts = profile.map((p) => p.altitudeM);
+  const rawMin = Math.min(...alts);
+  const rawMax = Math.max(...alts);
+  const minFloor = Math.floor(rawMin / 10) * 10;
+  const maxCeil = Math.max(minFloor + 10, Math.ceil(rawMax / 10) * 10);
+  const range = maxCeil - minFloor;
+
+  const data = profile.map((p) => ({ value: p.altitudeM - minFloor }));
+
+  const ySteps = 4;
+  const yAxisLabelTexts: string[] = [];
+  for (let i = 0; i <= ySteps; i++) {
+    const meters = minFloor + (range / ySteps) * i;
+    yAxisLabelTexts.push(`${Math.round(meters)}`);
+  }
+
+  const targetLabels = 4;
+  const stride = Math.max(1, Math.round((profile.length - 1) / (targetLabels - 1)));
+  const xLabels: string[] = profile.map((p, i) => {
+    const isLast = i === profile.length - 1;
+    if (i === 0 || isLast || i % stride === 0) {
+      return `${p.distanceKm.toFixed(1)} km`;
+    }
+    return '';
+  });
+
+  const drawableWidth = Math.max(
+    1,
+    availableWidth - CHART_Y_AXIS_LABEL_WIDTH - CHART_INITIAL_SPACING - CHART_END_SPACING,
+  );
+  const spacing = drawableWidth / Math.max(profile.length - 1, 1);
+
+  return { data, yAxisLabelTexts, maxValue: range, xLabels, width: availableWidth, spacing };
+}
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: T.bgPrimary,
+  },
+
+  // Toggle de Terreno 3D — chip flutuante sobre o mapa
+  chip3d: {
+    position: 'absolute',
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    minHeight: 36,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(28, 28, 46, 0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(235, 235, 245, 0.12)',
+    zIndex: 20,
+  },
+  chip3dActive: {
+    borderColor: T.cyan,
+    backgroundColor: 'rgba(0, 212, 255, 0.12)',
+  },
+  chip3dText: {
+    color: T.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
   },
 
   // Cold-start loading state — shown when opened via dumb-redirect entry
