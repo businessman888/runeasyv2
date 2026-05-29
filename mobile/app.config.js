@@ -137,7 +137,21 @@ export default {
     // Android-only: injects the `androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE`
     // intent filter on MainActivity so Health Connect can deep-link back to the
     // app when the user denies permission and needs the rationale screen.
-    "react-native-health-connect"
+    "react-native-health-connect",
+    // Bumps the Android `minSdkVersion` to 26 (Android 8.0). Required by
+    // `androidx.health.connect:connect-client`, which is the transitive
+    // dependency that powers `react-native-health-connect`. Without this the
+    // manifest merger fails with "minSdkVersion 24 cannot be smaller than 26".
+    // Android 8.0+ already covers ~99% of active devices, so the user-facing
+    // impact is negligible.
+    [
+      "expo-build-properties",
+      {
+        "android": {
+          "minSdkVersion": 26
+        }
+      }
+    ]
   ],
   notification: {
     icon: "./assets/notification-icon.png",
