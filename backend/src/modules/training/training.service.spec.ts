@@ -4,6 +4,7 @@ import { TrainingService } from './training.service';
 import { SupabaseService } from '../../database';
 import { TrainingAIService } from './training-ai.service';
 import { GamificationService } from '../gamification/gamification.service';
+import { SubscriptionService } from '../subscription/subscription.service';
 
 describe('TrainingService', () => {
   let service: TrainingService;
@@ -76,6 +77,13 @@ describe('TrainingService', () => {
         { provide: SupabaseService, useValue: mockSupabaseService },
         { provide: TrainingAIService, useValue: mockTrainingAIService },
         { provide: GamificationService, useValue: { awardPoints: jest.fn() } },
+        // Default Pro for tests so completeWorkout doesn't degrade to the
+        // free path. Override per-test with .mockResolvedValueOnce(false)
+        // when explicitly testing the Free degradation flow.
+        {
+          provide: SubscriptionService,
+          useValue: { isProUser: jest.fn().mockResolvedValue(true) },
+        },
         {
           provide: getQueueToken('feedback-queue'),
           useValue: { add: jest.fn() },

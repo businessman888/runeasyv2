@@ -17,6 +17,7 @@ import { useTrainingStore, type ScheduleDay } from '../stores/trainingStore';
 import { useAuthStore, getDisplayName, getAvatarUrl } from '../stores/authStore';
 import { useGamificationStore } from '../stores/gamificationStore';
 import { useAppleWatchStore } from '../stores/appleWatchStore';
+import { useSubscriptionStore } from '../stores/subscriptionStore';
 import type {
     TodayWorkoutForWatch,
     WeekStatsForWatch,
@@ -166,6 +167,10 @@ export function useWatchSync() {
     const stats = useGamificationStore((s) => s.stats);
     const sendContextToWatch = useAppleWatchStore((s) => s.sendContextToWatch);
     const isPaired = useAppleWatchStore((s) => s.isPaired);
+    // Source of truth for plan visibility. Already incorporates the DevMenu
+    // override, so toggling "Forçar Free" propagates to the Watch on the next
+    // schedule rebuild without any extra wiring.
+    const isProUser = useSubscriptionStore((s) => s.isProUser);
 
     const lastSentRef = useRef<string | null>(null);
 
@@ -173,11 +178,27 @@ export function useWatchSync() {
         if (Platform.OS !== 'ios') return;
         if (!isPaired) return;
 
+        // Free/Pro gate at the data source — same pattern the CalendarScreen
+        // already uses. Free users must never see plan workouts on the Watch:
+        // the Home swaps the WorkoutCard for an UpgradeProCard, and the Watch
+        // mirrors that by falling back to the RestDayCard (which still lets
+        // the user start a free run — that's gratuita pra todos os planos).
+        //
+        // Plano órfão guard: even Free users whose account still has a plan
+        // row in the DB (legacy accounts pre-gating, see project_free_pro_gating
+        // memory) get an empty schedule here, closing the orphan-plan leak on
+        // the Watch surface.
+        const effectiveToday = isProUser ? today : null;
+        const effectiveSchedule = isProUser ? schedule : [];
+
         const userName = getDisplayName(user) || 'Atleta';
         const avatarUrl = getAvatarUrl(user);
-        const todayWorkout = buildTodayWorkout(today);
-        const weekStats = computeWeekStats(schedule, stats?.current_streak ?? 0);
-        const nextWorkout = findNextWorkout(schedule);
+        const todayWorkout = buildTodayWorkout(effectiveToday);
+        const weekStats = computeWeekStats(
+            effectiveSchedule,
+            stats?.current_streak ?? 0,
+        );
+        const nextWorkout = findNextWorkout(effectiveSchedule);
 
         const ctx = { userName, avatarUrl, todayWorkout, weekStats, nextWorkout };
         const cacheKey = JSON.stringify(ctx);
@@ -188,12 +209,13 @@ export function useWatchSync() {
         console.log('[useWatchSync] pushed to watch:', {
             userName,
             avatarUrl: avatarUrl ? '✓' : '–',
-            todayDate: today?.date ?? null,
-            todayType: today?.type ?? null,
-            todayStatus: today?.status ?? null,
+            isProUser,
+            todayDate: effectiveToday?.date ?? null,
+            todayType: effectiveToday?.type ?? null,
+            todayStatus: effectiveToday?.status ?? null,
             workoutId: todayWorkout?.id ?? null,
             weekStats,
             nextWorkout,
         });
-    }, [today, schedule, user, stats, isPaired, sendContextToWatch]);
+    }, [today, schedule, user, stats, isPaired, isProUser, sendContextToWatch]);
 }

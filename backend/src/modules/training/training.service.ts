@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { SupabaseService } from '../../database';
@@ -9,6 +9,7 @@ import {
   GeneratedWeek,
 } from './training-ai.service';
 import { GamificationService } from '../gamification/gamification.service';
+import { SubscriptionService } from '../subscription/subscription.service';
 import {
   PlanOverviewResponseDto,
   PlanWeekDto,
@@ -48,6 +49,10 @@ export class TrainingService {
     private readonly supabaseService: SupabaseService,
     private readonly trainingAIService: TrainingAIService,
     private readonly gamificationService: GamificationService,
+    // forwardRef: SubscriptionModule imports TrainingModule, so we need to
+    // defer this lookup to avoid a "cannot resolve dependency" cycle.
+    @Inject(forwardRef(() => SubscriptionService))
+    private readonly subscriptionService: SubscriptionService,
     @InjectQueue('feedback-queue') private feedbackQueue: Queue,
   ) {}
 
@@ -629,6 +634,53 @@ export class TrainingService {
     payload: import('./dto/workout-tracking.dto').CreateWorkoutTrackingDto,
   ) {
     const turf = await import('@turf/turf'); // Dynamic import to prevent initial load overhead
+
+    // ── Pro gate (defense in depth) ────────────────────────────────────────
+    // Free users must never reach this method with a plan workout — Home
+    // shows UpgradeProCard, Calendar hides plan rows, and useWatchSync
+    // (after the recent fix) sends `todayWorkout: null` to the Apple Watch.
+    //
+    // But three real paths can still slip through:
+    //   1. Manipulated payload (mobile bypassed, direct POST).
+    //   2. Pending offline queue: user completed runs while Pro, lost Pro
+    //      before the MMKV queue drained.
+    //   3. Apple Watch payload sitting on the watch during a Pro→Free
+    //      downgrade window (sync arrives after subscription expired).
+    //
+    // When isPro is false, we degrade to completeFreeWorkout — the run
+    // still lands in the user's history (no data loss, no user-visible
+    // failure), but no plan workout is marked completed and no AI feedback
+    // is enqueued. Matches the rule applied in ActivitySyncService.
+    let isPro = false;
+    try {
+      isPro = await this.subscriptionService.isProUser(userId);
+    } catch (e) {
+      this.logger.warn(
+        `[completeWorkout] isProUser lookup failed for ${userId}, defaulting FREE: ${
+          (e as Error).message
+        }`,
+      );
+    }
+
+    if (!isPro) {
+      this.logger.log(
+        `[completeWorkout] User ${userId} is FREE — degrading workout ${workoutId} to free run (no plan link, no AI feedback)`,
+      );
+      return this.completeFreeWorkout(userId, {
+        route_points: payload.route_points,
+        total_distance_meters: payload.total_distance_meters,
+        duration_seconds: payload.duration_seconds,
+        started_at: payload.started_at,
+        source: payload.source,
+        external_id: payload.external_id,
+        average_heartrate: payload.average_heartrate,
+        max_heartrate: payload.max_heartrate,
+        calories: payload.calories,
+        avg_pace_seconds_per_km: payload.avg_pace_seconds_per_km,
+        environment: payload.environment,
+        treadmill_data: payload.treadmill_data,
+      });
+    }
 
     // Validate workout
     const { data: workout, error: workoutError } = await this.supabaseService
