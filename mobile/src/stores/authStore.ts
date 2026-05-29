@@ -9,6 +9,8 @@ import {
     addSubscriptionListener,
 } from '../services/paywall';
 import { useSubscriptionStore } from './subscriptionStore';
+import { HealthKitManager } from '../services/healthkit';
+import { HealthConnectManager } from '../services/healthConnect';
 
 interface User {
     id: string;
@@ -192,10 +194,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             }
 
             await clearAllAuthTokens();
+
+            // Wipe all device-local sync caches before the next user logs in
+            // on the same device. Each Manager.resetLocalState clears its MMKV
+            // synced-id cache, pending queue, last-sync timestamp, and
+            // permission cache — otherwise user B inherits user A's caches
+            // and silently skips brand-new runs (idempotency false positives).
+            try { HealthKitManager.resetLocalState(); } catch (err) {
+                console.warn('[AUTH] HealthKit resetLocalState failed:', err);
+            }
+            try { HealthConnectManager.resetLocalState(); } catch (err) {
+                console.warn('[AUTH] HealthConnect resetLocalState failed:', err);
+            }
+
             useSubscriptionStore.getState().reset();
             set({ user: null, isAuthenticated: false });
         } catch (error) {
             console.error('[AUTH] Logout error:', error);
+            try { HealthKitManager.resetLocalState(); } catch { /* noop */ }
+            try { HealthConnectManager.resetLocalState(); } catch { /* noop */ }
             useSubscriptionStore.getState().reset();
             set({ user: null, isAuthenticated: false });
         }

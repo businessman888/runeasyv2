@@ -36,13 +36,27 @@ export class CompleteFreeWorkoutDto {
   city?: string;
 
   /**
-   * Origem do registro. Default 'phone'. 'apple_watch' indica corrida livre
-   * iniciada/finalizada no app companion do Apple Watch. 'garmin_watch' indica
-   * corrida vinda do app Connect IQ no relógio Garmin via Bluetooth.
+   * Origem do registro. Default 'phone'.
+   *  'apple_watch'    — corrida livre iniciada/finalizada no app companion do Apple Watch.
+   *  'garmin_watch'   — corrida vinda do app Connect IQ no relógio Garmin via Bluetooth.
+   *  'apple_health'   — corrida ingerida do HealthKit (iOS) via /devices/apple-health/sync.
+   *  'health_connect' — corrida ingerida do Google Health Connect (Android) via
+   *                     /devices/health-connect/sync (Galaxy Watch, Samsung Health, etc.).
    */
   @IsOptional()
-  @IsIn(['phone', 'apple_watch', 'garmin_watch'])
-  source?: 'phone' | 'apple_watch' | 'garmin_watch';
+  @IsIn([
+    'phone',
+    'apple_watch',
+    'garmin_watch',
+    'apple_health',
+    'health_connect',
+  ])
+  source?:
+    | 'phone'
+    | 'apple_watch'
+    | 'garmin_watch'
+    | 'apple_health'
+    | 'health_connect';
 
   /** Identificador externo (ex.: HKWorkout UUID, Garmin activity id) para dedup cross-source. */
   @IsOptional()

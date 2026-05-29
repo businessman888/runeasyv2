@@ -17,6 +17,7 @@ import {
     isWatchAppInstalled as appleWatchIsInstalled,
 } from '../../services/appleWatch';
 import { connectDeviceManual } from '../../services/devices';
+import { HealthConnectManager } from '../../services/healthConnect';
 import {
     initGarmin,
     isGarminConnectInstalled,
@@ -89,6 +90,21 @@ const AppleWatchIcon = () => (
     </Svg>
 );
 
+// Health Connect icon — generic Galaxy-Watch-style smartwatch with a heart
+// pulse glyph to convey "fitness data from any Android wearable".
+const HealthConnectIcon = () => (
+    <Svg width={32} height={32} viewBox="0 0 24 24" fill="none">
+        <Rect x={5} y={4} width={14} height={16} rx={4} stroke={DS.cyan} strokeWidth={1.5} />
+        <Path d="M9 3v1M15 3v1M9 20v1M15 20v1" stroke={DS.cyan} strokeWidth={1.5} strokeLinecap="round" />
+        <Path
+            d="M8 13c0-1 .8-2 2-2 1 0 1.5.7 2 1.3.5-.6 1-1.3 2-1.3 1.2 0 2 1 2 2 0 1.7-4 4-4 4s-4-2.3-4-4z"
+            stroke={DS.cyan}
+            strokeWidth={1.5}
+            strokeLinejoin="round"
+        />
+    </Svg>
+);
+
 // ============================================
 // PROVIDERS DATA
 // ============================================
@@ -99,12 +115,29 @@ interface Provider {
     Icon: React.FC;
 }
 
-const PROVIDERS: Provider[] = [
+// Cross-platform providers (shown on both iOS and Android via OAuth):
+//   Garmin, Polar, Fitbit
+// Platform-exclusive providers:
+//   - apple_watch    iOS only (WatchConnectivity + HealthKit on the watch)
+//   - health_connect Android only (Galaxy Watch via Samsung Health → HC)
+// We filter at render time so the modal stays one component for both
+// platforms instead of branching into two parallel implementations.
+const ALL_PROVIDERS: Array<Provider & { platform?: 'ios' | 'android' }> = [
     { id: 'garmin', name: 'Garmin', Icon: GarminIcon },
     { id: 'polar', name: 'Polar', Icon: PolarIcon },
     { id: 'fitbit', name: 'Fitbit', Icon: FitbitIcon },
-    { id: 'apple_watch', name: 'Apple Watch', Icon: AppleWatchIcon },
+    { id: 'apple_watch', name: 'Apple Watch', Icon: AppleWatchIcon, platform: 'ios' },
+    {
+        id: 'health_connect',
+        name: 'Galaxy Watch (Health Connect)',
+        Icon: HealthConnectIcon,
+        platform: 'android',
+    },
 ];
+
+const PROVIDERS: Provider[] = ALL_PROVIDERS.filter(
+    (p) => !p.platform || p.platform === Platform.OS,
+);
 
 // ============================================
 // CIRCULAR RADIO
@@ -159,6 +192,83 @@ export function WearableSelectionModal({
 
     const handleConfirm = async () => {
         if (!localSelection) return;
+
+        // Health Connect — Android only, sem OAuth. Verifica se o app
+        // system está instalado, pede permissões de leitura (ExerciseSession,
+        // HeartRate, Distance, TotalCaloriesBurned) e registra em
+        // connected_devices. O foreground sync na HomeScreen cuida do resto.
+        if (localSelection === 'health_connect') {
+            if (Platform.OS !== 'android') {
+                Alert.alert(
+                    'Health Connect indisponível',
+                    'Health Connect só funciona no Android.',
+                );
+                return;
+            }
+            setIsConnecting(true);
+            try {
+                const available = await HealthConnectManager.isAvailable();
+                if (!available) {
+                    Alert.alert(
+                        'Health Connect necessário',
+                        'Instale o app Health Connect pela Play Store para sincronizar seu Galaxy Watch (e outros relógios Android).',
+                        [
+                            { text: 'Cancelar', style: 'cancel' },
+                            {
+                                text: 'Abrir Play Store',
+                                onPress: () => {
+                                    HealthConnectManager.openPlayStoreForHealthConnect();
+                                },
+                            },
+                        ],
+                    );
+                    setIsConnecting(false);
+                    return;
+                }
+
+                const initialized = await HealthConnectManager.initialize();
+                if (!initialized) {
+                    Alert.alert(
+                        'Erro ao inicializar',
+                        'Não foi possível inicializar o Health Connect. Tente novamente.',
+                    );
+                    setIsConnecting(false);
+                    return;
+                }
+
+                const { granted } = await HealthConnectManager.requestPermissions();
+                if (!granted) {
+                    Alert.alert(
+                        'Permissão necessária',
+                        'Abra o Health Connect e habilite a leitura de Exercício para o RunEasy.',
+                        [
+                            { text: 'Continuar sem', style: 'cancel' },
+                            {
+                                text: 'Abrir Health Connect',
+                                onPress: () => {
+                                    HealthConnectManager.openHealthConnectSettings();
+                                },
+                            },
+                        ],
+                    );
+                    setIsConnecting(false);
+                    return;
+                }
+
+                // Persiste em connected_devices (sem token — HC é permissão local).
+                await connectDeviceManual('health_connect', 'Health Connect');
+                onSelect(localSelection);
+            } catch (e) {
+                Alert.alert(
+                    'Erro ao conectar',
+                    e instanceof Error ? e.message : 'Tente novamente.',
+                );
+                setIsConnecting(false);
+                return;
+            }
+            setIsConnecting(false);
+            return;
+        }
 
         // Apple Watch — sem OAuth. Detecta pareamento + instala via WatchConnectivity
         // e registra em connected_devices. Permissões HealthKit já são solicitadas

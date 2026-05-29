@@ -9,6 +9,7 @@ const VALID_PROVIDERS = [
   'polar',
   'apple_watch',
   'apple_health',
+  'health_connect',
 ] as const;
 type Provider = (typeof VALID_PROVIDERS)[number];
 

@@ -119,6 +119,8 @@ export function getProviderLabel(provider: string): string {
         polar: 'Polar',
         fitbit: 'Fitbit',
         apple_watch: 'Apple Watch',
+        apple_health: 'Apple Health',
+        health_connect: 'Health Connect',
     };
     return labels[provider] || provider;
 }

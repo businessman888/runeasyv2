@@ -18,6 +18,7 @@ import { useSubscriptionStore } from '../stores/subscriptionStore';
 import { useProFeature } from '../hooks/useProFeature';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { AppleHealthCard } from '../components/AppleHealthCard';
+import { HealthConnectCard } from '../components/HealthConnectCard';
 import { GarminCard } from '../components/GarminCard';
 import { PolarCard } from '../components/PolarCard';
 import { FitbitCard } from '../components/FitbitCard';
@@ -173,11 +174,16 @@ export function SettingsScreen({ navigation }: any) {
                 </View>
 
 
-                {/* DISPOSITIVOS Section — Apple Health (iOS) + Garmin/Polar/Fitbit (iOS + Android) */}
+                {/* DISPOSITIVOS Section
+                    iOS:     Apple Health + Garmin/Polar/Fitbit (OAuth)
+                    Android: Health Connect + Garmin/Polar/Fitbit (OAuth)
+                    Cada card retorna null na plataforma errada, mas mantemos
+                    o Platform.OS gate aqui para deixar a intenção explícita. */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>DISPOSITIVOS</Text>
                     <View style={{ gap: 10 }}>
                         {Platform.OS === 'ios' && <AppleHealthCard />}
+                        {Platform.OS === 'android' && <HealthConnectCard />}
                         <GarminCard />
                         <PolarCard />
                         <FitbitCard />

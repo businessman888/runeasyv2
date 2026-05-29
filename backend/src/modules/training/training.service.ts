@@ -760,7 +760,9 @@ export class TrainingService {
             max_heartrate: payload.max_heartrate ?? null,
             calories: payload.calories ?? null,
             environment,
-            treadmill_data: isTreadmill ? (payload.treadmill_data ?? null) : null,
+            treadmill_data: isTreadmill
+              ? (payload.treadmill_data ?? null)
+              : null,
           },
           { onConflict: 'external_id' },
         )
@@ -1148,8 +1150,7 @@ export class TrainingService {
       activity = {
         id: null,
         name: data.title ?? 'Corrida',
-        distance:
-          (Number(data.distance_run ?? data.distance_km ?? 0)) * 1000,
+        distance: Number(data.distance_run ?? data.distance_km ?? 0) * 1000,
         moving_time: Number(data.time_run_seconds ?? 0),
         elapsed_time: Number(data.time_run_seconds ?? 0),
         average_pace: data.pace_seconds_per_km

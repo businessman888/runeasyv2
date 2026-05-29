@@ -48,12 +48,27 @@ export class CreateWorkoutTrackingDto {
 
   /**
    * Origem do registro. Default 'phone' (corrida tracked pelo iPhone via expo-location).
-   * 'apple_watch' indica corrida vinda do app companion no Apple Watch via WatchConnectivity.
-   * 'garmin_watch' indica corrida vinda do app companion no Garmin via Connect IQ Mobile SDK.
+   * 'apple_watch'    — corrida vinda do app companion no Apple Watch via WatchConnectivity.
+   * 'garmin_watch'   — corrida vinda do app companion no Garmin via Connect IQ Mobile SDK.
+   * 'apple_health'   — corrida ingerida do HealthKit (iOS) via /devices/apple-health/sync.
+   *                    Pode ter vindo originalmente do Apple Watch, Nike Run Club, Strava, etc.
+   * 'health_connect' — corrida ingerida do Google Health Connect (Android) via
+   *                    /devices/health-connect/sync. Galaxy Watch publica aqui via Samsung Health.
    */
   @IsOptional()
-  @IsIn(['phone', 'apple_watch', 'garmin_watch'])
-  source?: 'phone' | 'apple_watch' | 'garmin_watch';
+  @IsIn([
+    'phone',
+    'apple_watch',
+    'garmin_watch',
+    'apple_health',
+    'health_connect',
+  ])
+  source?:
+    | 'phone'
+    | 'apple_watch'
+    | 'garmin_watch'
+    | 'apple_health'
+    | 'health_connect';
 
   /**
    * Identificador externo da corrida (ex.: HKWorkout UUID, Garmin activity id

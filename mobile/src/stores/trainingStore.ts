@@ -24,8 +24,12 @@ export interface RoutePoint {
  * (source='phone', sem HR/calorias, pace calculado pelo backend).
  */
 export interface WorkoutSourceMetadata {
-    /** 'phone' (default), 'apple_watch' (Apple Watch) ou 'garmin_watch' (Connect IQ) */
-    source?: 'phone' | 'apple_watch' | 'garmin_watch';
+    /**
+     * 'phone' (default), 'apple_watch' (Apple Watch), 'garmin_watch' (Connect IQ),
+     * 'health_connect' (Android Health Connect — Galaxy Watch via Samsung Health,
+     * or any HC-publishing app) ou 'apple_health' (iOS HealthKit sync).
+     */
+    source?: 'phone' | 'apple_watch' | 'garmin_watch' | 'health_connect' | 'apple_health';
     /** ISO 8601 do início da corrida — relevante quando source != 'phone' */
     started_at?: string;
     /** Identificador externo (ex.: HKWorkout UUID, Garmin activity id) para dedup */

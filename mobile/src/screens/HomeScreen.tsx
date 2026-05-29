@@ -31,6 +31,7 @@ import { OverviewSection } from '../components/home/OverviewSection';
 import { Patent } from '../components/patents/Patent';
 import { getCurrentPatent } from '../utils/patents';
 import { useHealthKitStore } from '../stores/healthKitStore';
+import { useHealthConnectStore } from '../stores/healthConnectStore';
 import { useProFeature } from '../hooks/useProFeature';
 import { UpgradeProCard } from '../components/upgrade/UpgradeProCard';
 import { GlassTeaseOverlay } from '../components/upgrade/GlassTeaseOverlay';
@@ -121,6 +122,10 @@ export function HomeScreen({ navigation }: any) {
     const syncHealthKitRecent = useHealthKitStore((s) => s.syncRecentIfConnected);
     const healthKitLastSyncedCount = useHealthKitStore((s) => s.lastSyncedCount);
     const clearHealthKitSyncedCount = useHealthKitStore((s) => s.clearLastSyncedCount);
+    // Android-only Health Connect counterparts; both stores no-op on the
+    // other platform so the Promise.all stays platform-agnostic.
+    const initializeHealthConnect = useHealthConnectStore((s) => s.initialize);
+    const syncHealthConnectRecent = useHealthConnectStore((s) => s.syncRecentIfConnected);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [recoveryTimeLeft, setRecoveryTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 });
     const [recoveryProgress, setRecoveryProgress] = useState(0);
@@ -346,6 +351,8 @@ export function HomeScreen({ navigation }: any) {
                     retryPendingWorkouts(),
                     // iOS-only Apple HealthKit sync (no-op on Android / if not connected)
                     initializeHealthKit().then(() => syncHealthKitRecent(7)),
+                    // Android-only Health Connect sync (no-op on iOS / if not connected)
+                    initializeHealthConnect().then(() => syncHealthConnectRecent(7)),
                 ]);
 
                 // Check if retrospective is ready

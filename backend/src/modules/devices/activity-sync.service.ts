@@ -1,5 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import { SupabaseService } from '../../database/supabase.service';
+import { SubscriptionService } from '../subscription/subscription.service';
+import { TrainingService } from '../training/training.service';
+import { CreateWorkoutTrackingDto } from '../training/dto/workout-tracking.dto';
+import { CompleteFreeWorkoutDto } from '../training/dto/complete-free-workout.dto';
 
 /**
  * Standardized activity payload from any wearable provider.
@@ -24,23 +28,61 @@ export interface WearableActivity {
   splits_metric?: any[]; // Provider-specific split data
 }
 
+/**
+ * Device-local source payload — Apple HealthKit (iOS) or Google Health Connect
+ * (Android). Same shape as WearableActivity plus the optional GPS route and an
+ * explicit environment flag (treadmill runs never have GPS).
+ */
+export interface DeviceLocalActivity extends WearableActivity {
+  gps_route?: Array<{
+    lat: number;
+    lng: number;
+    altitude?: number;
+    timestamp: number;
+  }>;
+  environment: 'outdoor' | 'treadmill';
+}
+
 // Deduplication window: activities within this range are considered overlapping
 const DEDUP_WINDOW_MINUTES = 10;
 
-// Stricter cross-provider window for HealthKit (Garmin + Apple Watch recording same run)
+// Stricter cross-provider window for device-local sources (Apple Health,
+// Health Connect). Used to skip ingestion when another wearable (Garmin,
+// Fitbit, Polar, Apple Watch, etc.) already wrote the same run.
 const CROSS_PROVIDER_WINDOW_MINUTES = 5;
 const CROSS_PROVIDER_DISTANCE_TOLERANCE = 0.1; // ±10%
+
+// Reconciliation window: search plan workouts whose scheduled_date is within
+// ±1 day of the run's São Paulo date, to cover midnight crossings under TZ.
+const RECONCILE_WINDOW_DAYS = 1;
+const RECONCILE_DISTANCE_TOLERANCE = 0.2; // ±20%
+const SAO_PAULO_OFFSET_HOURS = -3; // UTC-3 (BRT)
+
+// Two device-local sources today; the cross-provider dedup query skips both
+// of them so a user with iPhone + Android wearable in parallel doesn't dup.
+const DEVICE_LOCAL_SOURCES = ['apple_health', 'health_connect'] as const;
+type DeviceLocalSource = (typeof DEVICE_LOCAL_SOURCES)[number];
 
 @Injectable()
 export class ActivitySyncService {
   private readonly logger = new Logger(ActivitySyncService.name);
 
-  constructor(private readonly supabaseService: SupabaseService) {}
+  constructor(
+    private readonly supabaseService: SupabaseService,
+    @Inject(forwardRef(() => TrainingService))
+    private readonly trainingService: TrainingService,
+    private readonly subscriptionService: SubscriptionService,
+  ) {}
 
   /**
-   * Process an incoming wearable activity.
-   * Handles deduplication: if a phone-sourced activity overlaps, marks it as redundant.
-   * Returns the inserted/existing activity.
+   * Process an incoming wearable activity from a server-side webhook (Fitbit,
+   * Polar, Garmin Connect API). Webhooks are fetched by the backend itself —
+   * no reconciliation here; the activity just lands in `activities` and the
+   * Calendar/Home derives the rest. (Plan-workout linking for those sources
+   * happens through a separate path the mobile triggers.)
+   *
+   * Handles deduplication: if a phone-sourced activity overlaps, marks it as
+   * redundant. Returns the inserted/existing activity.
    */
   async processWearableActivity(activity: WearableActivity) {
     // 1. Check if this exact external_id already exists (idempotency)
@@ -136,40 +178,43 @@ export class ActivitySyncService {
   }
 
   /**
-   * Process an Apple HealthKit activity.
+   * Process an activity that was extracted on the device itself — Apple
+   * HealthKit (iOS) or Google Health Connect (Android). Both sources share
+   * one pipeline since the only difference is the external_id prefix and the
+   * permission model on the client.
    *
-   * Unlike Fitbit/Polar (which are fetched server-side from the provider API),
-   * HealthKit data is extracted and pre-normalized on the mobile device, then
-   * posted here. The extra behaviors vs. processWearableActivity:
+   * The full pipeline:
    *
-   * 1. Cross-provider dedup: if the user already has a Garmin/Fitbit/Polar run
-   *    within ±5 min and ±10% distance of this HealthKit run, skip it — the
-   *    other provider is the source of truth.
-   * 2. Stores the GPS route (HKWorkoutRoute) into activities.gps_route jsonb.
+   *  1. Idempotency check (exact `external_id` match).
+   *  2. Cross-provider temporal/distance dedup (±5 min, ±10% distance): if
+   *     another wearable (Garmin, Fitbit, Polar, Apple Watch) already wrote
+   *     the same run, the device-local source is silently dropped.
+   *  3. Phone-tracking redundant marker: any phone-sourced run inside the
+   *     ±10 min window is flipped to `phone_redundant` (the wearable record
+   *     replaces the GPS run as canonical).
+   *  4. NEW — reconciliation with the user's training plan:
+   *       • Free users: ingested as a free run via TrainingService
+   *         (gamification yes, AI feedback no — coherent with the global rule).
+   *       • Pro users: looks up the user's pending plan workouts within
+   *         ±1 day of the run's São Paulo date, filters by distance ±20%,
+   *         picks the best match (temporal proximity first, distance second).
+   *           – Match → completeWorkout(workoutId): links the activity to
+   *             the workout, marks it completed, enqueues AI feedback.
+   *           – No match → completeFreeWorkout(): same path as Free, the
+   *             run appears in the "Atividades" tab.
+   *
+   * NOTE: The legacy direct INSERT into `activities` (used by the old
+   * processAppleHealthActivity) is removed — both `completeWorkout` and
+   * `completeFreeWorkout` already upsert the canonical activity row with all
+   * fields (gps_route, environment, heartrate, calories) and trigger
+   * gamification + feedback-queue automatically.
    */
-  async processAppleHealthActivity(activity: {
-    external_id: string;
-    source: string;
-    user_id: string;
-    name: string;
-    type: string;
-    start_date: string;
-    distance: number;
-    moving_time: number;
-    elapsed_time?: number;
-    average_pace?: number;
-    max_pace?: number;
-    elevation_gain?: number;
-    average_heartrate?: number;
-    max_heartrate?: number;
-    calories?: number;
-    gps_route?: Array<{
-      lat: number;
-      lng: number;
-      altitude?: number;
-      timestamp: number;
-    }>;
-  }) {
+  async processDeviceLocalActivity(
+    activity: DeviceLocalActivity,
+    source: DeviceLocalSource,
+  ) {
+    const userId = activity.user_id;
+
     // 1. Idempotency check — exact external_id match
     const { data: existing } = await this.supabaseService
       .from('activities')
@@ -179,12 +224,15 @@ export class ActivitySyncService {
 
     if (existing) {
       this.logger.log(
-        `Apple Health activity ${activity.external_id} already synced, skipping`,
+        `[${source}] activity ${activity.external_id} already synced, skipping`,
       );
       return { action: 'skipped', activityId: existing.id };
     }
 
-    // 2. Cross-provider temporal/distance dedup (±5 min, ±10% distance)
+    // 2. Cross-provider temporal/distance dedup (±5 min, ±10% distance).
+    //    Excludes other device-local sources too — Apple Health on iOS plus
+    //    Health Connect on a paired Android (rare but possible) would
+    //    otherwise duplicate.
     const startTime = new Date(activity.start_date);
     const crossWindowStart = new Date(
       startTime.getTime() - CROSS_PROVIDER_WINDOW_MINUTES * 60 * 1000,
@@ -193,15 +241,23 @@ export class ActivitySyncService {
       startTime.getTime() + CROSS_PROVIDER_WINDOW_MINUTES * 60 * 1000,
     );
 
-    const { data: crossProviderMatches } = await this.supabaseService
+    let crossProviderQuery = this.supabaseService
       .from('activities')
       .select('id, source, start_date, distance')
-      .eq('user_id', activity.user_id)
+      .eq('user_id', userId)
       .neq('source', 'phone')
       .neq('source', 'phone_redundant')
-      .neq('source', 'apple_health')
       .gte('start_date', crossWindowStart.toISOString())
       .lte('start_date', crossWindowEnd.toISOString());
+
+    // Exclude every device-local source from cross-provider matching — they
+    // can't be authoritative for each other; the dedup above (step 1) handles
+    // re-sync of the same physical run.
+    for (const localSource of DEVICE_LOCAL_SOURCES) {
+      crossProviderQuery = crossProviderQuery.neq('source', localSource);
+    }
+
+    const { data: crossProviderMatches } = await crossProviderQuery;
 
     if (crossProviderMatches && crossProviderMatches.length > 0) {
       const minDistance =
@@ -214,14 +270,14 @@ export class ActivitySyncService {
 
       if (overlap) {
         this.logger.log(
-          `Apple Health activity ${activity.external_id} overlaps with existing ${overlap.source} activity ${overlap.id}, skipping`,
+          `[${source}] activity ${activity.external_id} overlaps with ${overlap.source} activity ${overlap.id}, skipping`,
         );
         return { action: 'skipped_crossprovider', activityId: overlap.id };
       }
     }
 
-    // 3. Mark overlapping phone-sourced activities as redundant (same behavior
-    //    as processWearableActivity — the HealthKit run replaces the GPS run).
+    // 3. Mark overlapping phone-sourced activities as redundant — the
+    //    device-local record replaces the in-app GPS run as canonical.
     const phoneWindowStart = new Date(
       startTime.getTime() - DEDUP_WINDOW_MINUTES * 60 * 1000,
     );
@@ -234,7 +290,7 @@ export class ActivitySyncService {
     const { data: overlappingPhone } = await this.supabaseService
       .from('activities')
       .select('id, source, start_date')
-      .eq('user_id', activity.user_id)
+      .eq('user_id', userId)
       .eq('source', 'phone')
       .gte('start_date', phoneWindowStart.toISOString())
       .lte('start_date', phoneWindowEnd.toISOString());
@@ -247,50 +303,258 @@ export class ActivitySyncService {
         .in('id', redundantIds);
     }
 
-    // 4. Insert the Apple Health activity with gps_route
-    const { data: inserted, error } = await this.supabaseService
-      .from('activities')
-      .insert({
-        user_id: activity.user_id,
-        external_id: activity.external_id,
-        source: activity.source,
-        name: activity.name,
-        type: activity.type,
-        start_date: activity.start_date,
-        distance: activity.distance,
-        moving_time: activity.moving_time,
-        elapsed_time: activity.elapsed_time || activity.moving_time,
-        average_pace: activity.average_pace || null,
-        max_pace: activity.max_pace || null,
-        elevation_gain: activity.elevation_gain || 0,
-        average_heartrate: activity.average_heartrate || null,
-        max_heartrate: activity.max_heartrate || null,
-        calories: activity.calories || null,
-        gps_route: activity.gps_route || null,
-      })
-      .select()
-      .single();
+    // 4. Reconciliation with plan workout (Pro) or fall back to free run.
+    //    Builds the same payload the in-app completeWorkout/completeFreeWorkout
+    //    expects, then delegates — that path owns activities upsert + workouts
+    //    update + gamification + feedback-queue (only fires for source='plan').
+    const trackingPayload = this.toTrackingPayload(activity, source);
+    const freePayload = this.toFreePayload(activity, source);
 
-    if (error) {
-      this.logger.error(
-        `Failed to insert Apple Health activity: ${error.message}`,
-        error,
+    const isPro = await this.safeIsProUser(userId);
+
+    if (!isPro) {
+      const workout = await this.trainingService.completeFreeWorkout(
+        userId,
+        freePayload,
       );
-      throw error;
+      this.logger.log(
+        `[${source}] activity ${activity.external_id} → free run (workout=${workout?.id}, free user)` +
+          (overlappingPhone?.length
+            ? ` (${overlappingPhone.length} phone activities marked redundant)`
+            : ''),
+      );
+      return {
+        action: 'inserted',
+        activityId: workout?.activity_id ?? null,
+        redundantCount: overlappingPhone?.length || 0,
+        reconciliation: 'free_user_no_plan',
+      };
     }
 
+    // Pro path: try to match a pending plan workout within ±1 day & ±20%.
+    const matchedWorkoutId = await this.findMatchingPlanWorkout(
+      userId,
+      activity,
+    );
+
+    if (matchedWorkoutId) {
+      try {
+        await this.trainingService.completeWorkout(
+          userId,
+          matchedWorkoutId,
+          trackingPayload,
+        );
+        this.logger.log(
+          `[${source}] activity ${activity.external_id} → plan workout ${matchedWorkoutId} completed (Pro user)` +
+            (overlappingPhone?.length
+              ? ` (${overlappingPhone.length} phone activities marked redundant)`
+              : ''),
+        );
+        return {
+          action: 'inserted',
+          activityId: null, // resolved internally by completeWorkout
+          workoutId: matchedWorkoutId,
+          redundantCount: overlappingPhone?.length || 0,
+          reconciliation: 'plan_match',
+        };
+      } catch (err) {
+        // If the plan link fails for any reason, degrade to free-run so the
+        // user still sees the activity. This protects against rare cases like
+        // the workout being deleted between query and update.
+        this.logger.warn(
+          `[${source}] completeWorkout failed for workout ${matchedWorkoutId}, falling back to free run: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    const workout = await this.trainingService.completeFreeWorkout(
+      userId,
+      freePayload,
+    );
     this.logger.log(
-      `Apple Health activity synced: ${activity.external_id} → ${inserted.id}` +
+      `[${source}] activity ${activity.external_id} → free run (workout=${workout?.id}, no plan match)` +
         (overlappingPhone?.length
           ? ` (${overlappingPhone.length} phone activities marked redundant)`
           : ''),
     );
-
     return {
       action: 'inserted',
-      activityId: inserted.id,
+      activityId: workout?.activity_id ?? null,
       redundantCount: overlappingPhone?.length || 0,
+      reconciliation: 'no_plan_match',
     };
+  }
+
+  /**
+   * Pro-path candidate search: pending plan workouts in [dataSP − 1 day,
+   * dataSP + 1 day] whose distance is within ±20% of the executed distance.
+   * Ranks by temporal proximity (scheduled_date vs activity.start_date) and
+   * uses distance as the tiebreaker.
+   */
+  private async findMatchingPlanWorkout(
+    userId: string,
+    activity: DeviceLocalActivity,
+  ): Promise<string | null> {
+    const activityStart = new Date(activity.start_date);
+    const saoPauloDate = this.toSaoPauloDateString(activityStart);
+    const windowStart = this.shiftDateString(
+      saoPauloDate,
+      -RECONCILE_WINDOW_DAYS,
+    );
+    const windowEnd = this.shiftDateString(saoPauloDate, RECONCILE_WINDOW_DAYS);
+
+    const { data: candidates, error } = await this.supabaseService
+      .from('workouts')
+      .select('id, distance_km, scheduled_date, type')
+      .eq('user_id', userId)
+      .eq('source', 'plan')
+      .eq('status', 'pending')
+      .gte('scheduled_date', windowStart)
+      .lte('scheduled_date', windowEnd);
+
+    if (error || !candidates || candidates.length === 0) return null;
+
+    const executedKm = activity.distance / 1000;
+    const activityStartMs = activityStart.getTime();
+
+    type ScoredCandidate = {
+      id: string;
+      distanceDiff: number;
+      temporalDiff: number;
+    };
+
+    const scored: ScoredCandidate[] = [];
+    for (const w of candidates) {
+      const plannedKm = Number(w.distance_km ?? 0);
+      if (plannedKm <= 0) continue;
+      const distanceDiff = Math.abs(plannedKm - executedKm) / plannedKm;
+      if (distanceDiff > RECONCILE_DISTANCE_TOLERANCE) continue;
+
+      // scheduled_date is YYYY-MM-DD; anchor at noon SP local (UTC + 3h
+      // because SAO_PAULO is UTC-3) so the temporal distance reflects "same
+      // day" intent rather than midnight-boundary jitter.
+      const scheduledAtMs =
+        new Date(`${w.scheduled_date}T00:00:00Z`).getTime() +
+        (12 - SAO_PAULO_OFFSET_HOURS) * 60 * 60 * 1000;
+      const temporalDiff = Math.abs(scheduledAtMs - activityStartMs);
+
+      scored.push({ id: w.id, distanceDiff, temporalDiff });
+    }
+
+    if (scored.length === 0) return null;
+
+    scored.sort(
+      (a, b) =>
+        a.temporalDiff - b.temporalDiff || a.distanceDiff - b.distanceDiff,
+    );
+
+    return scored[0].id;
+  }
+
+  /**
+   * Wrap isProUser in a safe call: any failure (e.g., user row not found
+   * during a sync from an orphaned device) degrades gracefully to "free"
+   * — the activity still lands in the user's history, just without the
+   * plan link.
+   */
+  private async safeIsProUser(userId: string): Promise<boolean> {
+    try {
+      return await this.subscriptionService.isProUser(userId);
+    } catch (e) {
+      this.logger.warn(
+        `[reconcile] isProUser lookup failed for ${userId}, defaulting to FREE: ${(e as Error).message}`,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Convert a DeviceLocalActivity into the CreateWorkoutTrackingDto shape
+   * that TrainingService.completeWorkout expects. The DTOs accept the source
+   * union (apple_health, health_connect) after the change in this PR.
+   */
+  private toTrackingPayload(
+    activity: DeviceLocalActivity,
+    source: DeviceLocalSource,
+  ): CreateWorkoutTrackingDto {
+    const routePoints = (activity.gps_route ?? []).map((p) => ({
+      latitude: p.lat,
+      longitude: p.lng,
+      altitude: p.altitude ?? null,
+      timestamp: p.timestamp,
+      speed: null,
+      accuracy: null,
+    }));
+
+    return {
+      route_points: routePoints,
+      total_distance_meters: activity.distance,
+      duration_seconds: activity.moving_time,
+      source,
+      external_id: activity.external_id,
+      started_at: activity.start_date,
+      average_heartrate: activity.average_heartrate,
+      max_heartrate: activity.max_heartrate,
+      calories: activity.calories,
+      avg_pace_seconds_per_km:
+        typeof activity.average_pace === 'number' && activity.average_pace > 0
+          ? activity.average_pace * 60
+          : undefined,
+      environment: activity.environment,
+    };
+  }
+
+  /**
+   * Same as toTrackingPayload but shaped for completeFreeWorkout (no
+   * pre-existing workout id; the service creates a free-run workout row).
+   */
+  private toFreePayload(
+    activity: DeviceLocalActivity,
+    source: DeviceLocalSource,
+  ): CompleteFreeWorkoutDto {
+    const routePoints = (activity.gps_route ?? []).map((p) => ({
+      latitude: p.lat,
+      longitude: p.lng,
+      altitude: p.altitude ?? null,
+      timestamp: p.timestamp,
+      speed: null,
+      accuracy: null,
+    }));
+
+    return {
+      route_points: routePoints,
+      total_distance_meters: activity.distance,
+      duration_seconds: activity.moving_time,
+      started_at: activity.start_date,
+      source,
+      external_id: activity.external_id,
+      average_heartrate: activity.average_heartrate,
+      max_heartrate: activity.max_heartrate,
+      calories: activity.calories,
+      avg_pace_seconds_per_km:
+        typeof activity.average_pace === 'number' && activity.average_pace > 0
+          ? activity.average_pace * 60
+          : undefined,
+      environment: activity.environment,
+    };
+  }
+
+  /** Convert a UTC Date into YYYY-MM-DD in São Paulo local time (UTC-3). */
+  private toSaoPauloDateString(date: Date): string {
+    const shifted = new Date(
+      date.getTime() + SAO_PAULO_OFFSET_HOURS * 60 * 60 * 1000,
+    );
+    const y = shifted.getUTCFullYear();
+    const m = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(shifted.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  /** Shift a YYYY-MM-DD string by N days (UTC arithmetic, calendar-safe). */
+  private shiftDateString(dateStr: string, days: number): string {
+    const base = new Date(`${dateStr}T00:00:00Z`);
+    base.setUTCDate(base.getUTCDate() + days);
+    return base.toISOString().slice(0, 10);
   }
 
   /**

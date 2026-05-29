@@ -57,7 +57,12 @@ export default {
       "android.permission.BLUETOOTH_SCAN",
       "android.permission.BLUETOOTH_CONNECT",
       "android.permission.BLUETOOTH",
-      "android.permission.BLUETOOTH_ADMIN"
+      "android.permission.BLUETOOTH_ADMIN",
+      // Health Connect — reads from Galaxy Watch / Samsung Health / any HC writer
+      "android.permission.health.READ_EXERCISE",
+      "android.permission.health.READ_HEART_RATE",
+      "android.permission.health.READ_DISTANCE",
+      "android.permission.health.READ_TOTAL_CALORIES_BURNED"
     ],
     queries: [
       { package: "com.instagram.android" },
@@ -65,7 +70,10 @@ export default {
         intent: {
           action: "com.instagram.share.ADD_TO_STORY"
         }
-      }
+      },
+      // Allows the app to detect whether Health Connect is installed and to
+      // resolve its `read_*` permission rationale activity.
+      { package: "com.google.android.apps.healthdata" }
     ]
   },
   web: {
@@ -125,7 +133,11 @@ export default {
         bluetoothAlwaysPermission: "O RunEasy usa o Bluetooth para conectar à sua esteira e receber dados de treino em tempo real (velocidade, distância, inclinação)."
       }
     ],
-    "./plugins/withBluetoothNeverForLocation"
+    "./plugins/withBluetoothNeverForLocation",
+    // Android-only: injects the `androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE`
+    // intent filter on MainActivity so Health Connect can deep-link back to the
+    // app when the user denies permission and needs the rationale screen.
+    "react-native-health-connect"
   ],
   notification: {
     icon: "./assets/notification-icon.png",
