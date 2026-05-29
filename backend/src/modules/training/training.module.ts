@@ -33,6 +33,9 @@ import { SubscriptionModule } from '../subscription/subscription.module';
     BullModule.registerQueue({
       name: 'feedback-queue',
     }),
+    BullModule.registerQueue({
+      name: 'elevation-queue',
+    }),
   ],
   controllers: [TrainingController, WellnessController],
   providers: [

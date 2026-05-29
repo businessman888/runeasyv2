@@ -31,6 +31,7 @@ import { DevicesModule } from './modules/devices';
 import { AuthModule } from './modules/auth';
 import { SubscriptionModule } from './modules/subscription';
 import { ReferralModule } from './modules/referral';
+import { ElevationModule } from './modules/elevation';
 
 @Module({
   imports: [
@@ -103,6 +104,7 @@ import { ReferralModule } from './modules/referral';
     AuthModule,
     SubscriptionModule,
     ReferralModule,
+    ElevationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

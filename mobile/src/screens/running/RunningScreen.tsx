@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useTracking } from '../../hooks/useTracking';
 import { useWorkoutGoals } from '../../hooks/useWorkoutGoals';
@@ -418,26 +418,8 @@ function OutdoorRunningView() {
             </View>
           )}
 
-          {/* Botão de Metas — check verde quando todas concluídas; oculto no modo livre */}
-          {hasGoals && !isFreeMode && (
-            <Pressable
-              style={[
-                styles.goalsBtn,
-                allCompleted && styles.goalsBtnCompleted,
-              ]}
-              onPress={() => setGoalsModalVisible(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Ver metas do treino"
-            >
-              {allCompleted ? (
-                <Ionicons name="checkmark-circle" size={24} color="#32CD32" />
-              ) : (
-                <Ionicons name="cellular" size={22} color={T.cyan} />
-              )}
-            </Pressable>
-          )}
-
-          {/* Spacer: empurra o indicador GPS para a direita quando não há card central */}
+          {/* Spacer: empurra o indicador GPS para a direita quando não há card central
+              (o botão de Metas agora vive na coluna de controles da lateral direita) */}
           {isFreeMode && <View style={{ flex: 1 }} />}
 
           {/* Indicador de qualidade do sinal GPS — canto superior direito (estilo Runna) */}
@@ -450,36 +432,53 @@ function OutdoorRunningView() {
         <LowPowerBanner active={isLowPower} />
       </SafeAreaView>
 
-      {/* ── TOGGLE DE TRILHAS — realça paths/parques OSM (opt-in) ───────── */}
-      <Pressable
-        style={[
-          styles.mapToggleBtn,
-          { top: insets.top + 70 },
-          showTrails && styles.mapToggleBtnActive,
-        ]}
-        onPress={toggleTrails}
-        accessibilityRole="button"
-        accessibilityLabel={showTrails ? 'Ocultar trilhas e parques' : 'Mostrar trilhas e parques'}
-        accessibilityState={{ selected: showTrails }}
-      >
-        <Ionicons name="leaf" size={20} color={showTrails ? T.cyan : T.textSecondary} />
-      </Pressable>
+      {/* ── COLUNA DE CONTROLES (lateral direita) ───────────────────────────
+          Empilha automaticamente: Metas (topo) → Trilhas → Recentralizar.
+          O recenter fica por último, então aparecer/sumir não desloca os outros. */}
+      <View style={[styles.rightControls, { top: insets.top + 70 }]} pointerEvents="box-none">
+        {/* Metas — primeiro no topo da coluna */}
+        {hasGoals && !isFreeMode && (
+          <Pressable
+            style={[styles.mapCircleBtn, allCompleted && styles.goalsBtnCompleted]}
+            onPress={() => setGoalsModalVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Ver metas do treino"
+          >
+            {allCompleted ? (
+              <Ionicons name="checkmark-circle" size={24} color="#32CD32" />
+            ) : (
+              <MaterialCommunityIcons name="bullseye-arrow" size={24} color={T.cyan} />
+            )}
+          </Pressable>
+        )}
 
-      {/* ── RECENTER FAB — aparece quando o usuário arrasta o mapa ──────── */}
-      {!isFollowingUser && (
+        {/* Trilhas/parques OSM (opt-in) */}
         <Pressable
-          style={[styles.recenterBtn, { top: insets.top + 124 }]}
-          onPress={() => {
-            // Re-habilita follow: seta false primeiro para forçar re-mount do Camera
-            setIsFollowingUser(false);
-            requestAnimationFrame(() => setIsFollowingUser(true));
-          }}
+          style={[styles.mapCircleBtn, showTrails && styles.mapCircleBtnActive]}
+          onPress={toggleTrails}
           accessibilityRole="button"
-          accessibilityLabel="Centralizar no meu local"
+          accessibilityLabel={showTrails ? 'Ocultar trilhas e parques' : 'Mostrar trilhas e parques'}
+          accessibilityState={{ selected: showTrails }}
         >
-          <Ionicons name="locate" size={22} color={T.cyan} />
+          <Ionicons name="leaf" size={20} color={showTrails ? T.cyan : T.textSecondary} />
         </Pressable>
-      )}
+
+        {/* Recentralizar — só quando o usuário arrastou o mapa e quebrou o follow */}
+        {!isFollowingUser && (
+          <Pressable
+            style={[styles.mapCircleBtn, styles.mapCircleBtnActive]}
+            onPress={() => {
+              // Re-habilita follow: seta false primeiro para forçar re-mount do Camera
+              setIsFollowingUser(false);
+              requestAnimationFrame(() => setIsFollowingUser(true));
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Centralizar no meu local"
+          >
+            <Ionicons name="locate" size={22} color={T.cyan} />
+          </Pressable>
+        )}
+      </View>
 
       {/* ── BOTTOM PANEL ────────────────────────────────────────────────── */}
       <View style={styles.bottomPanel}>
@@ -691,48 +690,20 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
   },
-  goalsBtn: {
-    width: 50,
-    height: 50,
-    backgroundColor: '#1C1C2E',
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
-  },
   goalsBtnCompleted: {
     borderWidth: 2,
     borderColor: '#32CD32',
   },
 
-  // ── Recenter FAB
-  recenterBtn: {
+  // ── Coluna de controles da lateral direita (Metas / Trilhas / Recentralizar)
+  rightControls: {
     position: 'absolute',
     right: 16,
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#1C1C2E',
-    borderWidth: 1,
-    borderColor: '#00D4FF',
-    justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
     zIndex: 20,
-    shadowColor: '#00D4FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 6,
   },
-
-  // ── Toggle de trilhas/parques (OSM)
-  mapToggleBtn: {
-    position: 'absolute',
-    right: 16,
+  mapCircleBtn: {
     width: 46,
     height: 46,
     borderRadius: 23,
@@ -741,9 +712,13 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(235, 235, 245, 0.12)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  mapToggleBtnActive: {
+  mapCircleBtnActive: {
     borderColor: '#00D4FF',
     shadowColor: '#00D4FF',
     shadowOffset: { width: 0, height: 0 },

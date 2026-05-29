@@ -325,6 +325,9 @@ export interface WorkoutDetails extends Workout {
         average_speed: number;        // m/s
         total_elevation_gain?: number;
         elevation_gain?: number;
+        /** Perfil de elevação suavizado do DEM (Mapbox Terrain-DEM). Quando presente,
+         *  a RunSummary usa este perfil em vez de recalcular a altimetria do GPS. */
+        elevation_profile?: Array<{ distanceKm: number; altitudeM: number }> | null;
         start_date: string;
         gps_route: Array<{
             latitude: number;

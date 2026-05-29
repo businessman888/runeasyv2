@@ -203,6 +203,11 @@ export function RunSummaryScreen() {
     activitySource?: string | null;
     environment?: 'outdoor' | 'treadmill';
     treadmillData?: TreadmillSummaryData | null;
+    /** Perfil de elevação corrigido pelo DEM (backend). Quando presente, a
+     *  altimetria usa este em vez de recalcular do GPS. */
+    elevationProfile?: ElevationPoint[];
+    /** Ganho de elevação corrigido pelo DEM (m), do backend. */
+    elevationGain?: number | null;
   };
   const [enriched, setEnriched] = useState<Enriched | null>(null);
   const [enriching, setEnriching] = useState(false);
@@ -361,6 +366,13 @@ export function RunSummaryScreen() {
         maxHeartRate: activity?.max_heartrate ?? null,
         calories: activity?.calories ?? null,
         activitySource: activity?.source ?? null,
+        // Perfil/ganho de elevação corrigidos pelo DEM (quando o job já rodou).
+        elevationProfile:
+          Array.isArray(activity?.elevation_profile) &&
+          activity!.elevation_profile!.length > 1
+            ? (activity!.elevation_profile as ElevationPoint[])
+            : undefined,
+        elevationGain: activity?.elevation_gain ?? null,
         // If backend didn't return env but we have local treadmill cache,
         // we know it was a treadmill run.
         environment: resolvedEnv ?? (cachedTreadmill ? 'treadmill' : undefined),
@@ -439,11 +451,27 @@ export function RunSummaryScreen() {
     () => calculatePaceSummary(routePoints, distance, timeMs),
     [routePoints, distance, timeMs],
   );
+  // Prefere o perfil corrigido pelo DEM (backend) quando já enriquecido;
+  // senão recalcula da altitude do GPS (comportamento original).
+  const isDemElevation = (enriched?.elevationProfile?.length ?? 0) > 1;
   const elevationProfile: ElevationPoint[] = useMemo(
-    () => (routePoints.length > 1 ? calculateElevationProfile(routePoints) : []),
-    [routePoints],
+    () =>
+      isDemElevation
+        ? enriched!.elevationProfile!
+        : routePoints.length > 1
+          ? calculateElevationProfile(routePoints)
+          : [],
+    [isDemElevation, enriched, routePoints],
   );
   const hasElevation = elevationProfile.length > 1;
+  // Ganho/altitude máx: usa os valores DEM quando disponíveis, senão o summary GPS.
+  const resolvedElevationGain =
+    isDemElevation && enriched?.elevationGain != null
+      ? Math.round(enriched.elevationGain)
+      : summary.totalElevationGainM;
+  const resolvedMaxAltitude = isDemElevation
+    ? Math.round(Math.max(...elevationProfile.map((p) => p.altitudeM)))
+    : summary.maxAltitudeM;
   // Rota colorida por métrica — só recalcula quando sai do modo 'default'.
   const statMapRoute = useMemo(
     () =>
@@ -819,8 +847,8 @@ export function RunSummaryScreen() {
             <MetricCell label="Distância" value={`${distanceKm} Km`} />
             <MetricCell label="Tempo" value={timeStr} />
             <MetricCell label="Pace" value={`${avgPaceStr} /Km`} />
-            <MetricCell label="Elev. Gan" value={`${summary.totalElevationGainM} m`} />
-            <MetricCell label="Elev Max" value={`${summary.maxAltitudeM} m`} />
+            <MetricCell label="Elev. Gan" value={`${resolvedElevationGain} m`} />
+            <MetricCell label="Elev Max" value={`${resolvedMaxAltitude} m`} />
           </View>
 
           {/* Card Mapa — seletor de coloração da rota (Stat Maps). Só outdoor com rota. */}
@@ -1101,7 +1129,7 @@ export function RunSummaryScreen() {
               <View style={styles.paceCardHeader}>
                 <Text style={styles.cardTitle}>Altimetria</Text>
                 <Text style={styles.chartUnitInline}>
-                  ↑ +{summary.totalElevationGainM}m · máx {summary.maxAltitudeM}m
+                  ↑ +{resolvedElevationGain}m · máx {resolvedMaxAltitude}m
                 </Text>
               </View>
 

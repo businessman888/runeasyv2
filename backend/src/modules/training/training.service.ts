@@ -54,6 +54,7 @@ export class TrainingService {
     @Inject(forwardRef(() => SubscriptionService))
     private readonly subscriptionService: SubscriptionService,
     @InjectQueue('feedback-queue') private feedbackQueue: Queue,
+    @InjectQueue('elevation-queue') private elevationQueue: Queue,
   ) {}
 
   /**
@@ -924,6 +925,25 @@ export class TrainingService {
       // Non-blocking: workout is already completed
     }
 
+    // 4.5 Enqueue precise elevation enrichment (Mapbox Terrain-DEM) for ALL
+    // outdoor runs — independent of plan/free. Async + best-effort: RunSummary
+    // shows GPS altitude immediately and the DEM-corrected profile on re-open
+    // once this job has run. Non-blocking; never fails the completion.
+    if (
+      activityId &&
+      !isTreadmill &&
+      payload.route_points &&
+      payload.route_points.length > 1
+    ) {
+      try {
+        await this.elevationQueue.add('enrich', { activityId }, { delay: 1500 });
+      } catch (enqueueErr) {
+        this.logger.warn(
+          `[completeWorkout] failed to enqueue elevation enrichment for activity ${activityId}: ${(enqueueErr as Error).message}`,
+        );
+      }
+    }
+
     // 5. Queue AI Feedback processing — only for plan-generated workouts.
     // Manual and free workouts have no AI coach, so we skip the enqueue
     // (and skip when the activity row failed to insert, since the feedback
@@ -1104,7 +1124,7 @@ export class TrainingService {
       const { data: act, error: actErr } = await this.supabaseService
         .from('activities')
         .select(
-          'id, name, distance, moving_time, elapsed_time, average_pace, elevation_gain, start_date, gps_route, average_heartrate, max_heartrate, calories, source, environment, treadmill_data',
+          'id, name, distance, moving_time, elapsed_time, average_pace, elevation_gain, elevation_profile, start_date, gps_route, average_heartrate, max_heartrate, calories, source, environment, treadmill_data',
         )
         .eq('id', data.activity_id)
         .single();
@@ -1128,7 +1148,7 @@ export class TrainingService {
       const { data: orphaned } = await this.supabaseService
         .from('activities')
         .select(
-          'id, name, distance, moving_time, elapsed_time, average_pace, elevation_gain, start_date, gps_route, average_heartrate, max_heartrate, calories, source, environment, treadmill_data',
+          'id, name, distance, moving_time, elapsed_time, average_pace, elevation_gain, elevation_profile, start_date, gps_route, average_heartrate, max_heartrate, calories, source, environment, treadmill_data',
         )
         .eq('user_id', userId)
         .like('external_id', `%${workoutId}`)
@@ -1211,6 +1231,7 @@ export class TrainingService {
         average_speed: null,
         elevation_gain: 0,
         total_elevation_gain: 0,
+        elevation_profile: null,
         start_date: data.completed_at ?? data.scheduled_date,
         gps_route:
           fallbackPoints && fallbackPoints.length > 0 ? fallbackPoints : null,
