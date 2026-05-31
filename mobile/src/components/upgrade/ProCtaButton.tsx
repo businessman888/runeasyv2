@@ -4,12 +4,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius, spacing, fonts, shadows } from '../../theme';
 
 const CYAN = colors.primary;
+// Dark ink that reads on the solid-cyan pill (same color as the "Recomendado"
+// badge text over cyan).
+const CTA_INK = colors.backgroundLight;
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
 export interface ProCtaButtonProps {
   label: string;
-  /** Leading icon. Defaults to the upward arrow used across upgrade cards. */
+  /**
+   * Optional leading icon. Omitted by default for the clean, label-only pill
+   * shown in the Figma. When provided, it's tinted to match the dark ink.
+   */
   icon?: IoniconName;
   /** Slightly shorter pill for compact placements. */
   compact?: boolean;
@@ -17,14 +23,15 @@ export interface ProCtaButtonProps {
 }
 
 /**
- * The cyan, neon-glowing CTA pill shared by every upgrade surface
- * (UpgradeProCard, the Home/Calendar glass teasers). Presentational only —
- * the surrounding card/overlay owns the Pressable, so this stays a View.
+ * The solid-cyan, neon-glowing CTA pill shared by every upgrade surface
+ * (UpgradeProCard, the Home/Calendar glass teasers). Solid fill + dark ink for
+ * maximum contrast/premium feel (matches the Figma). Presentational only — the
+ * surrounding card/overlay owns the Pressable, so this stays a View.
  */
-function ProCtaButtonImpl({ label, icon = 'arrow-up', compact, style }: ProCtaButtonProps) {
+function ProCtaButtonImpl({ label, icon, compact, style }: ProCtaButtonProps) {
   return (
     <View style={[styles.cta, compact && styles.ctaCompact, style]}>
-      <Ionicons name={icon} size={18} color={CYAN} style={styles.ctaIcon} />
+      {icon && <Ionicons name={icon} size={18} color={CTA_INK} style={styles.ctaIcon} />}
       <Text style={styles.ctaText}>{label}</Text>
     </View>
   );
@@ -39,10 +46,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: colors.proCtaFill,
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: CYAN,
+    backgroundColor: CYAN,
+    borderRadius: borderRadius.full,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     marginTop: spacing.xs,
@@ -55,7 +60,7 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
   ctaText: {
-    color: CYAN,
+    color: CTA_INK,
     fontFamily: fonts.semibold,
     fontSize: 16,
   },

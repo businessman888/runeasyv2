@@ -36,6 +36,7 @@ import { useProFeature } from '../hooks/useProFeature';
 import { UpgradeProCard } from '../components/upgrade/UpgradeProCard';
 import { GlassTeaseOverlay } from '../components/upgrade/GlassTeaseOverlay';
 import { ProCtaButton } from '../components/upgrade/ProCtaButton';
+import { ProTeaseBadge } from '../components/upgrade/ProTeaseBadge';
 import type { WorkoutData } from '../components/WorkoutCard';
 
 import { BASE_API_URL } from '../config/api.config';
@@ -844,10 +845,11 @@ export function HomeScreen({ navigation }: any) {
                         veilColor={colors.proGlassOverlayStrong}
                         overlay={
                             <View style={styles.homeTeaseOverlay}>
+                                <ProTeaseBadge variant="shield" />
                                 <Text style={styles.homeTeaseTitle}>
                                     Você está usando só uma fração do RunEasy.
                                 </Text>
-                                <ProCtaButton label="Descobrir o que falta" icon="arrow-forward" />
+                                <ProCtaButton label="Descobrir o que falta" />
                             </View>
                         }
                     >

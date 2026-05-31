@@ -13,7 +13,7 @@ import {
     PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows, fonts } from '../theme';
 import { ZONE_COLORS, ZONE_LABELS, PHASE_LABELS, getZoneColor } from '../theme/zoneColors';
 import { useTrainingStore, useStatsStore, useWorkoutScopeStore, useTrialModalStore, ScheduleDay } from '../stores';
@@ -23,6 +23,7 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import { UpgradeProCard } from '../components/upgrade/UpgradeProCard';
 import { GlassTeaseOverlay } from '../components/upgrade/GlassTeaseOverlay';
 import { ProCtaButton } from '../components/upgrade/ProCtaButton';
+import { ProTeaseBadge } from '../components/upgrade/ProTeaseBadge';
 import { SegmentedTabs } from '../components/ui/SegmentedTabs';
 import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
 import { WorkoutDayCard, type DayWorkout } from '../components/training/WorkoutDayCard';
@@ -861,13 +862,14 @@ export function CalendarScreen({ navigation }: any) {
                 {isPlanTease ? (
                     <GlassTeaseOverlay
                         radius={24}
-                        showAnimatedBorder={false}
+                        premiumBorder={false}
                         style={styles.calendarTease}
                         overlay={
                             <UpgradeProCard
                                 variant="medium"
                                 heroVariant="headline"
                                 showHeader={false}
+                                showAnimatedBorder={false}
                                 priceLabel="A diferença entre correr e evoluir é um plano."
                                 tagline="Deixe o Coach AI montar seu cronograma pra você"
                                 ctaLabel="Montar cronograma"
@@ -919,16 +921,14 @@ export function CalendarScreen({ navigation }: any) {
                                 radius={24}
                                 blurIntensity={70}
                                 veilColor={colors.proGlassOverlayStrong}
-                                showAnimatedBorder={false}
-                                borderColor={colors.proGlassBorder}
                                 overlay={
                                     <View style={styles.lockedDayOverlay}>
-                                        <Feather name="lock" size={26} color={colors.primary} />
+                                        <ProTeaseBadge variant="lock" />
                                         <Text style={styles.lockedDayTitle}>Treino do dia bloqueado</Text>
                                         <Text style={styles.lockedDaySubtitle}>
                                             Ative o Pro para ver o treino que o Coach AI preparou pra você.
                                         </Text>
-                                        <ProCtaButton label="Desbloquear treino" icon="arrow-forward" />
+                                        <ProCtaButton label="Desbloquear treino" />
                                     </View>
                                 }
                             >

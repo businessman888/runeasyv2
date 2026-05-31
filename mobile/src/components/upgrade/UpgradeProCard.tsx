@@ -39,6 +39,11 @@ export interface UpgradeProCardProps {
   recommendedLabel?: string;
   /** Show the "Pro" label + "Recomendado" badge row. Hide for headline cards. */
   showHeader?: boolean;
+  /**
+   * Traveling cyan beam around the card. On by default; set false for the clean,
+   * static look (e.g. the Calendar grid tease).
+   */
+  showAnimatedBorder?: boolean;
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
 }
@@ -52,6 +57,7 @@ function UpgradeProCardImpl({
   ctaLabel = 'Upgrade to Pro',
   recommendedLabel = 'Recomendado',
   showHeader = true,
+  showAnimatedBorder = true,
   onPress,
   style,
 }: UpgradeProCardProps) {
@@ -100,7 +106,7 @@ function UpgradeProCardImpl({
       {/* Animated brand-colored border beam — rendered BEFORE content so the
           transparent content layer stays on top for touch (the SVG overlay
           would otherwise swallow taps on Android). Non-interactive. */}
-      <AnimatedBorder radius={CARD_RADIUS} borderWidth={1.5} />
+      {showAnimatedBorder && <AnimatedBorder radius={CARD_RADIUS} borderWidth={1.5} />}
 
       <View style={styles.content}>
         {/* Header: Pro + Recomendado pill */}
