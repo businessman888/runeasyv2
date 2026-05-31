@@ -26,6 +26,7 @@ export function OSMOverlayLayers() {
         style={{
           fillColor: mapViz.osm.parkFill,
           fillOutlineColor: mapViz.osm.parkOutline,
+          fillEmissiveStrength: 1,
         }}
       />
 
@@ -42,6 +43,7 @@ export function OSMOverlayLayers() {
           lineOpacity: 0.5,
           lineDasharray: [2, 2],
           lineCap: 'round',
+          lineEmissiveStrength: 1,
         }}
       />
     </Mapbox.VectorSource>

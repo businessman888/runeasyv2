@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { mapViz, colors, fonts } from '../../theme';
 import type { StatMapMetric } from '../../utils/runMetrics';
 
@@ -8,13 +9,13 @@ export type StatMapMode = StatMapMetric | 'default';
 interface ChipDef {
   mode: StatMapMode;
   label: string;
-  icon: string; // emoji — leve e sem dependência de fonte de ícone
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
 }
 
 const CHIPS: ChipDef[] = [
-  { mode: 'default', label: 'Padrão', icon: '•' },
-  { mode: 'pace', label: 'Pace', icon: '🏃' },
-  { mode: 'elevation', label: 'Elevação', icon: '⛰️' },
+  { mode: 'default', label: 'Padrão', icon: 'vector-polyline' },
+  { mode: 'pace', label: 'Pace', icon: 'run-fast' },
+  { mode: 'elevation', label: 'Elevação', icon: 'image-filter-hdr' },
 ];
 
 interface StatMapSelectorProps {
@@ -46,7 +47,11 @@ export function StatMapSelector({ mode, onChange, hasElevation = true }: StatMap
               accessibilityLabel={`Colorir rota por ${chip.label}`}
               accessibilityState={{ selected: active }}
             >
-              <Text style={styles.chipIcon}>{chip.icon}</Text>
+              <MaterialCommunityIcons
+                name={chip.icon}
+                size={16}
+                color={active ? colors.primary : colors.textSecondary}
+              />
               <Text style={[styles.chipText, active && styles.chipTextActive]}>{chip.label}</Text>
             </Pressable>
           );
@@ -103,9 +108,6 @@ const styles = StyleSheet.create({
   chipActive: {
     borderColor: colors.primary,
     backgroundColor: 'rgba(0, 212, 255, 0.10)',
-  },
-  chipIcon: {
-    fontSize: 13,
   },
   chipText: {
     color: colors.textSecondary,

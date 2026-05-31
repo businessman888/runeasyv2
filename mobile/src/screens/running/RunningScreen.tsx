@@ -375,6 +375,7 @@ function OutdoorRunningView() {
                 lineOpacity: 0.5,
                 lineJoin: 'round',
                 lineCap: 'round',
+                lineEmissiveStrength: 1,
               }}
             />
             <Mapbox.LineLayer
@@ -386,6 +387,7 @@ function OutdoorRunningView() {
                 lineBlur: 1, // brilho sutil na borda — visual premium
                 lineJoin: 'round',
                 lineCap: 'round',
+                lineEmissiveStrength: 1,
               }}
             />
           </Mapbox.ShapeSource>

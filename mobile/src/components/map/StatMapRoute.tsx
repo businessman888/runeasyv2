@@ -26,7 +26,9 @@ export function StatMapRoute({ shape }: StatMapRouteProps) {
           lineOpacity: 1,
           lineJoin: 'round',
           lineCap: 'round',
-          lineBlur: 0.5,
+          // Emite a cor real ignorando a luz do basemap Standard (sem isso a
+          // cena "ilumina" a linha e ela fica escura/apagada). Sem lineBlur.
+          lineEmissiveStrength: 1,
         }}
       />
     </Mapbox.ShapeSource>

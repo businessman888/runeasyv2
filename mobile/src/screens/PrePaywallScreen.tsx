@@ -16,7 +16,6 @@ import { useProFeature } from '../hooks/useProFeature';
 import { PrePaywallBackground } from '../components/upgrade/PrePaywallBackground';
 
 const SHIELD = require('../assets/images/shieldPro.png');
-const LOGO = require('../assets/images/lgRuneasyPro.png');
 
 type BenefitIcon = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
@@ -96,7 +95,6 @@ export function PrePaywallScreen() {
         ]}
       >
         <Image source={SHIELD} style={styles.shield} resizeMode="contain" />
-        <Image source={LOGO} style={styles.logo} resizeMode="contain" />
 
         <Text style={styles.heroTitle}>Seu maior salto de{'\n'}performance começa aqui.</Text>
         <Text style={styles.heroSubtitle}>
@@ -133,11 +131,11 @@ export function PrePaywallScreen() {
         <Pressable
           onPress={handleStartTrial}
           accessibilityRole="button"
-          accessibilityLabel="Iniciar teste grátis"
+          accessibilityLabel="Continuar"
           accessibilityHint="Abre a tela de assinatura para desbloquear as features Pro"
           style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
         >
-          <Text style={styles.ctaText}>Iniciar Teste Grátis</Text>
+          <Text style={styles.ctaText}>Continuar</Text>
         </Pressable>
       </View>
     </View>
@@ -160,11 +158,6 @@ const styles = StyleSheet.create({
   shield: {
     width: 120,
     height: 120,
-  },
-  logo: {
-    width: 220,
-    height: 58,
-    marginTop: 14,
   },
   heroTitle: {
     fontFamily: fonts.bold,

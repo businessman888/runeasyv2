@@ -24,16 +24,23 @@ import {
     calculatePaceChart,
     calculatePaceSummary,
     calculateSplits,
+    calculateElevationProfile,
+    buildStatMapRoute,
     formatDurationMs,
     formatPaceSeconds,
     type RoutePoint,
     type SplitData,
+    type ElevationPoint,
 } from '../utils/runMetrics';
 import { loadTreadmillCache } from '../utils/treadmillCache';
 import {
     downsampleSpeedSamples,
     computeSpeedChartSpacing,
 } from '../utils/treadmillChart';
+import { Terrain3DLayers } from '../components/map/Terrain3DLayers';
+import { StatMapRoute } from '../components/map/StatMapRoute';
+import { StatMapSelector, type StatMapMode } from '../components/map/StatMapSelector';
+import { FinishFlagMarker } from '../components/map/FinishFlagMarker';
 import { SharingModal } from './sharing/SharingModal';
 
 // ─── Design Tokens (alinhados ao RunSummary/Figma) ────────────────────────────
@@ -120,6 +127,10 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
     const fetchWorkoutDetails = useTrainingStore((s) => s.fetchWorkoutDetails);
 
     const [sharingVisible, setSharingVisible] = useState(false);
+    // Stat Maps: coloração da rota. 'default' = polyline cyan original (estado inicial).
+    const [statMapMode, setStatMapMode] = useState<StatMapMode>('default');
+    // Terreno 3D: desligado por padrão (preserva o mapa atual).
+    const [is3D, setIs3D] = useState(false);
 
     useEffect(() => {
         if (feedbackId) fetchFeedback(feedbackId);
@@ -154,6 +165,8 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
         startDate?: string;
         environment?: 'outdoor' | 'treadmill';
         treadmillData?: TreadmillSummary | null;
+        /** Perfil de elevação corrigido pelo DEM (backend); fallback p/ GPS quando ausente. */
+        elevationProfile?: ElevationPoint[];
     };
     const [enriched, setEnriched] = useState<Enriched | null>(null);
     const [enriching, setEnriching] = useState(false);
@@ -180,6 +193,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                 startDate: prev?.startDate,
                 environment: 'treadmill',
                 treadmillData: cachedTreadmill as TreadmillSummary,
+                elevationProfile: prev?.elevationProfile,
             }));
         }
 
@@ -278,6 +292,11 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                 environment:
                     resolvedEnv ?? (cachedTreadmill ? 'treadmill' : undefined),
                 treadmillData: parsedTm ?? (cachedTreadmill as TreadmillSummary | null),
+                elevationProfile:
+                    Array.isArray(activity?.elevation_profile) &&
+                    activity!.elevation_profile!.length > 1
+                        ? (activity!.elevation_profile as ElevationPoint[])
+                        : undefined,
             });
             setEnriching(false);
         })();
@@ -368,6 +387,32 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
         [routePoints, distance, timeMs],
     );
 
+    // ── Elevação (DEM-preferido) + Stat Maps ───────────────────────────────
+    const isDemElevation = (enriched?.elevationProfile?.length ?? 0) > 1;
+    const elevationProfile: ElevationPoint[] = useMemo(
+        () =>
+            isDemElevation
+                ? enriched!.elevationProfile!
+                : routePoints.length > 1
+                    ? calculateElevationProfile(routePoints)
+                    : [],
+        [isDemElevation, enriched, routePoints],
+    );
+    const hasElevation = elevationProfile.length > 1;
+    // `elevationGain` (acima) já reflete o DEM quando o job rodou (activity.elevation_gain).
+    const resolvedElevationGain = Math.round(elevationGain);
+    const resolvedMaxAltitude = isDemElevation
+        ? Math.round(Math.max(...elevationProfile.map((p) => p.altitudeM)))
+        : summary.maxAltitudeM;
+    // Rota colorida por métrica — só recalcula fora do modo 'default'.
+    const statMapRoute = useMemo(
+        () =>
+            statMapMode === 'default' || routePoints.length < 2
+                ? null
+                : buildStatMapRoute(routePoints, statMapMode),
+        [statMapMode, routePoints],
+    );
+
     // Avg pace robusto: usa o GPS se houver, senão cai para average_pace decimal vindo do backend
     const avgPaceSeconds =
         summary.avgPaceSecondsPerKm > 0
@@ -391,6 +436,9 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
     const hasRoute = routeCoordinates.length > 1;
     let centerCoord = routeCoordinates[0] || [-46.6333, -23.5505];
     let bounds: { ne: number[]; sw: number[] } | undefined;
+    // Zoom que enquadra a rota — usado no modo 3D (câmera center+zoom+pitch em vez
+    // de bounds, que conflita com pitch no rnmapbox). Mantém a rota visível.
+    let fit3DZoom = 14;
     if (hasRoute) {
         const lngs = routeCoordinates.map((c) => c[0]);
         const lats = routeCoordinates.map((c) => c[1]);
@@ -403,6 +451,12 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
             (bounds.ne[0] + bounds.sw[0]) / 2,
             (bounds.ne[1] + bounds.sw[1]) / 2,
         ];
+        const maxSpan = Math.max(
+            Math.abs(bounds.ne[0] - bounds.sw[0]),
+            Math.abs(bounds.ne[1] - bounds.sw[1]),
+            0.0005,
+        );
+        fit3DZoom = Math.max(11, Math.min(16, Math.log2(360 / maxSpan) - 0.8));
     }
     const geoJsonSource = {
         type: 'FeatureCollection' as const,
@@ -470,6 +524,10 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
     const chartCfg = useMemo(
         () => buildChartConfig(paceChart, avgPaceSeconds, chartAvailableWidth),
         [paceChart, avgPaceSeconds, chartAvailableWidth],
+    );
+    const elevCfg = useMemo(
+        () => buildElevationChartConfig(elevationProfile, chartAvailableWidth),
+        [elevationProfile, chartAvailableWidth],
     );
 
 
@@ -585,8 +643,9 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                 >
                     <Mapbox.Camera
                         centerCoordinate={centerCoord}
-                        zoomLevel={hasRoute ? undefined : 15}
-                        bounds={bounds ? {
+                        zoomLevel={is3D ? fit3DZoom : hasRoute ? undefined : 15}
+                        pitch={is3D ? 55 : 0}
+                        bounds={!is3D && bounds ? {
                             ne: bounds.ne,
                             sw: bounds.sw,
                             paddingTop: 80,
@@ -594,9 +653,14 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                             paddingLeft: 40,
                             paddingRight: 40,
                         } : undefined}
-                        animationDuration={0}
+                        animationDuration={is3D ? 800 : 0}
                     />
-                    {hasRoute && (
+
+                    {/* Terreno 3D (relevo + céu) — só quando o usuário ativa */}
+                    {is3D && <Terrain3DLayers />}
+
+                    {/* Rota padrão (cyan) — estado inicial, idêntico ao original */}
+                    {hasRoute && statMapMode === 'default' && (
                         <Mapbox.ShapeSource id="coachRoute" shape={geoJsonSource as any}>
                             <Mapbox.LineLayer
                                 id="coachRouteGlow"
@@ -606,6 +670,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                                     lineOpacity: 0.25,
                                     lineJoin: 'round',
                                     lineCap: 'round',
+                                    lineEmissiveStrength: 1,
                                 }}
                             />
                             <Mapbox.LineLayer
@@ -615,11 +680,33 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                                     lineWidth: 5,
                                     lineJoin: 'round',
                                     lineCap: 'round',
+                                    lineEmissiveStrength: 1,
                                 }}
                             />
                         </Mapbox.ShapeSource>
                     )}
+
+                    {/* Rota colorida por métrica (Stat Maps) — substitui a polyline padrão */}
+                    {hasRoute && statMapRoute && <StatMapRoute shape={statMapRoute} />}
+
+                    {/* Linha de chegada — bandeira no último ponto gravado */}
+                    {hasRoute && (
+                        <FinishFlagMarker coordinate={routeCoordinates[routeCoordinates.length - 1]} />
+                    )}
                 </Mapbox.MapView>
+
+                {/* Toggle de Terreno 3D — chip flutuante no canto do mapa */}
+                {hasRoute && (
+                    <Pressable
+                        style={[styles.chip3d, { top: insets.top + 52 }, is3D && styles.chip3dActive]}
+                        onPress={() => setIs3D((v) => !v)}
+                        accessibilityRole="button"
+                        accessibilityLabel={is3D ? 'Desativar terreno 3D' : 'Ativar terreno 3D'}
+                        accessibilityState={{ selected: is3D }}
+                    >
+                        <Text style={[styles.chip3dText, is3D && { color: T.cyan }]}>3D</Text>
+                    </Pressable>
+                )}
 
                 {/* Overlay: rota indisponível ou hidratando */}
                 {!hasRoute && (
@@ -707,9 +794,23 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                         <MetricCell label="Distância" value={`${distanceKmStr} Km`} />
                         <MetricCell label="Tempo" value={timeStr} />
                         <MetricCell label="Pace" value={`${avgPaceStr} /Km`} />
-                        <MetricCell label="Elev. Gan" value={`${Math.round(elevationGain)} m`} />
-                        <MetricCell label="Elev Max" value={`${summary.maxAltitudeM} m`} />
+                        <MetricCell label="Elev. Gan" value={`${resolvedElevationGain} m`} />
+                        <MetricCell label="Elev Max" value={`${resolvedMaxAltitude} m`} />
                     </View>
+
+                    {/* Card Mapa — seletor de coloração da rota (Stat Maps). Só outdoor com rota. */}
+                    {!isTreadmill && hasRoute && (
+                        <View style={styles.cardDark}>
+                            <Text style={styles.cardTitleLeft}>Mapa</Text>
+                            <View style={{ marginTop: 12 }}>
+                                <StatMapSelector
+                                    mode={statMapMode}
+                                    onChange={setStatMapMode}
+                                    hasElevation={hasElevation}
+                                />
+                            </View>
+                        </View>
+                    )}
 
                     {/* Métricas Detalhadas (Planejado vs Real) */}
                     <View style={styles.cardDark}>
@@ -952,6 +1053,58 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                             </>
                         )}
                     </View>
+
+                    {/* Altimetria — perfil de elevação (DEM corrigido, fallback GPS) */}
+                    {!isTreadmill && (
+                        <View style={styles.cardDark}>
+                            <View style={styles.paceCardHeader}>
+                                <Text style={styles.cardTitle}>Altimetria</Text>
+                                <Text style={styles.chartUnitInline}>
+                                    ↑ +{resolvedElevationGain}m · máx {resolvedMaxAltitude}m
+                                </Text>
+                            </View>
+                            {hasElevation ? (
+                                <View style={styles.chartWrap}>
+                                    <LineChart
+                                        data={elevCfg.data}
+                                        height={140}
+                                        width={elevCfg.width}
+                                        thickness={2}
+                                        color={T.cyan}
+                                        areaChart
+                                        curved
+                                        startFillColor={T.cyan}
+                                        endFillColor={T.cyan}
+                                        startOpacity={0.45}
+                                        endOpacity={0.05}
+                                        initialSpacing={CHART_INITIAL_SPACING}
+                                        endSpacing={CHART_END_SPACING}
+                                        spacing={elevCfg.spacing}
+                                        yAxisColor="transparent"
+                                        xAxisColor={T.divider}
+                                        rulesType="solid"
+                                        rulesColor="rgba(235,235,245,0.06)"
+                                        yAxisTextStyle={styles.chartAxisText}
+                                        xAxisLabelTextStyle={styles.chartAxisLabelText}
+                                        yAxisLabelTexts={elevCfg.yAxisLabelTexts}
+                                        noOfSections={elevCfg.yAxisLabelTexts.length - 1}
+                                        maxValue={elevCfg.maxValue}
+                                        yAxisLabelWidth={CHART_Y_AXIS_LABEL_WIDTH}
+                                        xAxisLabelTexts={elevCfg.xLabels}
+                                        showVerticalLines={false}
+                                        hideDataPoints
+                                    />
+                                </View>
+                            ) : (
+                                <CardEmptyState
+                                    icon="trending-up-outline"
+                                    title={enriching ? 'Carregando altimetria...' : 'Sem dados de elevação'}
+                                    subtitle={enriching ? undefined : 'Este treino não registrou variação de altitude.'}
+                                    loading={enriching}
+                                />
+                            )}
+                        </View>
+                    )}
 
                     {/* Análise Inteligente */}
                     <View style={styles.analysisHeader}>
@@ -1433,6 +1586,56 @@ function buildChartConfig(
     return { data, yAxisLabelTexts, maxValue: range, refValue, xLabels, width: availableWidth, spacing };
 }
 
+interface ElevationChartConfig {
+    data: { value: number }[];
+    yAxisLabelTexts: string[];
+    maxValue: number;
+    xLabels: string[];
+    width: number;
+    spacing: number;
+}
+
+// Config do chart de altimetria (mesma lógica do RunSummary): NÃO invertido,
+// baseline = ponto mais baixo da corrida, labels do eixo Y em metros reais.
+function buildElevationChartConfig(
+    profile: ElevationPoint[],
+    availableWidth: number,
+): ElevationChartConfig {
+    if (profile.length === 0) {
+        return { data: [], yAxisLabelTexts: [], maxValue: 0, xLabels: [], width: availableWidth, spacing: 0 };
+    }
+    const alts = profile.map((p) => p.altitudeM);
+    const rawMin = Math.min(...alts);
+    const rawMax = Math.max(...alts);
+    const minFloor = Math.floor(rawMin / 10) * 10;
+    const maxCeil = Math.max(minFloor + 10, Math.ceil(rawMax / 10) * 10);
+    const range = maxCeil - minFloor;
+
+    const data = profile.map((p) => ({ value: p.altitudeM - minFloor }));
+
+    const ySteps = 4;
+    const yAxisLabelTexts: string[] = [];
+    for (let i = 0; i <= ySteps; i++) {
+        yAxisLabelTexts.push(`${Math.round(minFloor + (range / ySteps) * i)}`);
+    }
+
+    const targetLabels = 4;
+    const stride = Math.max(1, Math.round((profile.length - 1) / (targetLabels - 1)));
+    const xLabels: string[] = profile.map((p, i) => {
+        const isLast = i === profile.length - 1;
+        if (i === 0 || isLast || i % stride === 0) return `${p.distanceKm.toFixed(1)} km`;
+        return '';
+    });
+
+    const drawableWidth = Math.max(
+        1,
+        availableWidth - CHART_Y_AXIS_LABEL_WIDTH - CHART_INITIAL_SPACING - CHART_END_SPACING,
+    );
+    const spacing = drawableWidth / Math.max(profile.length - 1, 1);
+
+    return { data, yAxisLabelTexts, maxValue: range, xLabels, width: availableWidth, spacing };
+}
+
 function formatTimeShort(iso: string): string {
     const d = new Date(iso);
     return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -1441,6 +1644,30 @@ function formatTimeShort(iso: string): string {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: T.bgPrimary },
+
+    // Toggle de Terreno 3D — chip flutuante sobre o mapa
+    chip3d: {
+        position: 'absolute',
+        right: 16,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(28, 28, 46, 0.92)',
+        borderWidth: 1,
+        borderColor: 'rgba(235, 235, 245, 0.12)',
+        zIndex: 20,
+    },
+    chip3dActive: {
+        borderColor: T.cyan,
+        backgroundColor: 'rgba(0, 212, 255, 0.12)',
+    },
+    chip3dText: {
+        color: T.textSecondary,
+        fontSize: 14,
+        fontWeight: '700',
+    },
 
     // Cold-start loading state — shown when opened from history / home
     // before feedback + workout details finish hydrating.

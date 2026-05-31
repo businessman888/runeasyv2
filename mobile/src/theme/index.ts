@@ -163,22 +163,24 @@ export const mapViz = {
     routeColor: colors.primary,
     routeGlow: colors.primary,
 
-    // Pace gradient (fast → slow). Numeric thresholds live in utils/runMetrics.
+    // Pace gradient (fast → slow). Vivid, high-saturation stops chosen to pop on
+    // the dark basemap (the old deep-navy "fast" end vanished). Numeric
+    // thresholds live in utils/runMetrics.
     pace: {
-        fast: '#1E3A8A', // < 4:30 — deep blue
-        midFast: '#2563EB', // 4:30–5:30 — blue
-        mid: colors.primary, // 5:30–6:00 — cyan
-        midSlow: colors.success, // 6:00–7:00 — green
-        slow: colors.warning, // 7:00–8:00 — yellow
-        verySlow: colors.error, // > 8:00 — red
+        fast: '#2979FF', // < 4:30 — vivid blue
+        midFast: '#00D4FF', // 4:30–5:30 — cyan
+        mid: '#00E676', // 5:30–6:00 — vivid green
+        midSlow: '#FFD600', // 6:00–7:00 — vivid yellow
+        slow: '#FF9100', // 7:00–8:00 — vivid orange
+        verySlow: '#FF1744', // > 8:00 — vivid red
     },
 
-    // Elevation gradient (low → high), normalized per-run min↔max.
+    // Elevation gradient (low → high), normalized per-run min↔max. Vivid ramp.
     elevation: {
-        low: colors.success, // green — lowest
-        mid: colors.warning, // yellow
-        high: colors.accent, // amber/orange
-        peak: colors.recovery, // purple — highest
+        low: '#00E676', // vivid green — lowest
+        mid: '#FFD600', // vivid yellow
+        high: '#FF9100', // vivid orange
+        peak: '#B14BFF', // vivid purple — highest
     },
 
     // GPS signal quality buckets.

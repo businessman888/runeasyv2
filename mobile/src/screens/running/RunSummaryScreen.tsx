@@ -33,6 +33,7 @@ import {
 import { Terrain3DLayers } from '../../components/map/Terrain3DLayers';
 import { StatMapRoute } from '../../components/map/StatMapRoute';
 import { StatMapSelector, type StatMapMode } from '../../components/map/StatMapSelector';
+import { FinishFlagMarker } from '../../components/map/FinishFlagMarker';
 import { loadTreadmillCache } from '../../utils/treadmillCache';
 import {
   downsampleSpeedSamples,
@@ -717,6 +718,7 @@ export function RunSummaryScreen() {
                   lineOpacity: 0.25,
                   lineJoin: 'round',
                   lineCap: 'round',
+                  lineEmissiveStrength: 1,
                 }}
               />
               <Mapbox.LineLayer
@@ -726,6 +728,7 @@ export function RunSummaryScreen() {
                   lineWidth: 5,
                   lineJoin: 'round',
                   lineCap: 'round',
+                  lineEmissiveStrength: 1,
                 }}
               />
             </Mapbox.ShapeSource>
@@ -733,6 +736,11 @@ export function RunSummaryScreen() {
 
           {/* Rota colorida por métrica (Stat Maps) — substitui a polyline padrão */}
           {hasRoute && statMapRoute && <StatMapRoute shape={statMapRoute} />}
+
+          {/* Linha de chegada — bandeira no último ponto gravado */}
+          {hasRoute && (
+            <FinishFlagMarker coordinate={routeCoordinates[routeCoordinates.length - 1]} />
+          )}
         </Mapbox.MapView>
 
         {/* Toggle de Terreno 3D — chip flutuante no canto do mapa */}
@@ -740,16 +748,10 @@ export function RunSummaryScreen() {
           <Pressable
             style={[styles.chip3d, { top: insets.top + 52 }, is3D && styles.chip3dActive]}
             onPress={() => setIs3D((v) => !v)}
-            hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel={is3D ? 'Desativar terreno 3D' : 'Ativar terreno 3D'}
             accessibilityState={{ selected: is3D }}
           >
-            <Ionicons
-              name="triangle-outline"
-              size={14}
-              color={is3D ? T.cyan : T.textSecondary}
-            />
             <Text style={[styles.chip3dText, is3D && { color: T.cyan }]}>3D</Text>
           </Pressable>
         )}
@@ -1470,12 +1472,11 @@ const styles = StyleSheet.create({
   chip3d: {
     position: 'absolute',
     right: 16,
-    flexDirection: 'row',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
-    gap: 5,
-    minHeight: 36,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    justifyContent: 'center',
     backgroundColor: 'rgba(28, 28, 46, 0.92)',
     borderWidth: 1,
     borderColor: 'rgba(235, 235, 245, 0.12)',
@@ -1487,8 +1488,8 @@ const styles = StyleSheet.create({
   },
   chip3dText: {
     color: T.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
   },
 
   // Cold-start loading state — shown when opened via dumb-redirect entry
