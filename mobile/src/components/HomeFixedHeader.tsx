@@ -11,6 +11,10 @@ import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
 import { colors, typography } from '../theme';
 import { ScheduleDay } from '../stores/trainingStore';
 
+// Free users have no streak/plan counters — the header center shows the brand
+// wordmark instead (cropped to the logo's content, transparent background).
+const HEADER_LOGO = require('../assets/images/lpLogoRuneasyHeader.png');
+
 interface HomeFixedHeaderProps {
     currentStreak: number;
     schedule: ScheduleDay[];
@@ -148,29 +152,32 @@ export function HomeFixedHeader({
                     )}
                 </TouchableOpacity>
 
-                <View style={styles.statsRow}>
-                    <View style={styles.statItem}>
-                        <MaterialCommunityIcons name="fire" size={18} color="#FFFFFF" />
-                        <Text style={styles.statTextWhite}>{currentStreak}</Text>
+                {/* Pro: streak + plan-derived counters. Free: brand wordmark
+                    centered where the streak would be. */}
+                {isProUser ? (
+                    <View style={styles.statsRow}>
+                        <View style={styles.statItem}>
+                            <MaterialCommunityIcons name="fire" size={18} color="#FFFFFF" />
+                            <Text style={styles.statTextWhite}>{currentStreak}</Text>
+                        </View>
+                        <View style={styles.statItem}>
+                            <Ionicons name="flash" size={18} color={colors.recovery} />
+                            <Text style={styles.statTextLight}>
+                                {counters.restDone}/{counters.restTotal}
+                            </Text>
+                        </View>
+                        <View style={styles.statItem}>
+                            <MaterialCommunityIcons name="shoe-sneaker" size={18} color={colors.primary} />
+                            <Text style={styles.statTextWhite}>
+                                {counters.workoutDone}/{counters.workoutTotal}
+                            </Text>
+                        </View>
                     </View>
-                    {/* Rest/workout counters derive from the plan schedule — Pro only. */}
-                    {isProUser && (
-                        <>
-                            <View style={styles.statItem}>
-                                <Ionicons name="flash" size={18} color={colors.recovery} />
-                                <Text style={styles.statTextLight}>
-                                    {counters.restDone}/{counters.restTotal}
-                                </Text>
-                            </View>
-                            <View style={styles.statItem}>
-                                <MaterialCommunityIcons name="shoe-sneaker" size={18} color={colors.primary} />
-                                <Text style={styles.statTextWhite}>
-                                    {counters.workoutDone}/{counters.workoutTotal}
-                                </Text>
-                            </View>
-                        </>
-                    )}
-                </View>
+                ) : (
+                    <View style={styles.logoWrap}>
+                        <Image source={HEADER_LOGO} style={styles.headerLogo} resizeMode="contain" />
+                    </View>
+                )}
 
                 <TouchableOpacity
                     onPress={onPressNotifications}
@@ -305,6 +312,17 @@ const styles = StyleSheet.create({
         gap: 14,
         paddingVertical: 16,
         paddingHorizontal: 14,
+    },
+    // Free: brand wordmark centered between the avatar and the bell.
+    logoWrap: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 16,
+    },
+    headerLogo: {
+        width: 140,
+        height: 30,
     },
     statItem: {
         flexDirection: 'row',

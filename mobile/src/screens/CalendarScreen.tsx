@@ -918,7 +918,7 @@ export function CalendarScreen({ navigation }: any) {
                                 key={`tease-day-${getSelectedDateStr()}`}
                                 pressable
                                 radius={24}
-                                blurIntensity={40}
+                                blurIntensity={30}
                                 overlay={
                                     <View style={styles.lockedDayOverlay}>
                                         <ProTeaseBadge variant="lock" />
