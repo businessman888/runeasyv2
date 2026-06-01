@@ -17,6 +17,7 @@ export * from './TrainingHistoryScreen';
 export * from './NotificationSettingsScreen';
 export * from './HelpScreen';
 export * from './SupportScreen';
+export * from './DeviceConnectScreen';
 export * from './RetrospectiveScreen';
 export * from './CustomizeGoalScreen';
 export * from './ManualWorkoutConfigScreen';

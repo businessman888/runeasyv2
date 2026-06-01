@@ -171,7 +171,7 @@ export function DevMenuScreen({ navigation }: any) {
           <View style={styles.optionTextWrap}>
             <Text style={styles.optionLabel}>Simular Garmin conectado</Text>
             <Text style={styles.optionDescription}>
-              Emite onDeviceStatusChange(connected) — útil pra testar GarminCard
+              Emite onDeviceStatusChange(connected) — útil pra testar a linha Garmin
             </Text>
           </View>
           <Ionicons name="bluetooth" size={28} color={colors.primary} />

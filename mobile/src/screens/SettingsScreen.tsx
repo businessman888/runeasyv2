@@ -6,55 +6,41 @@ import {
     ScrollView,
     TouchableOpacity,
     Image,
-    Switch,
-    Platform,
     Pressable,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing } from '../theme';
+import { colors, spacing, fonts, borderRadius } from '../theme';
 import { useAuthStore, useTrialModalStore, getDisplayName, getAvatarUrl } from '../stores';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
 import { useProFeature } from '../hooks/useProFeature';
 import { ScreenContainer } from '../components/ScreenContainer';
-import { AppleHealthCard } from '../components/AppleHealthCard';
-import { HealthConnectCard } from '../components/HealthConnectCard';
-import { GarminCard } from '../components/GarminCard';
-import { PolarCard } from '../components/PolarCard';
-import { FitbitCard } from '../components/FitbitCard';
+import { DeviceRow } from '../components/devices/DeviceRow';
+import { WEARABLE_ORDER } from '../config/wearables.config';
 
-// Icon components using @expo/vector-icons
-function PersonIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
+// Icon components using @expo/vector-icons. Nav icons are neutral (não-CTA):
+// o cyan fica reservado para ações primárias (botão de editar avatar, badge Pro).
+function PersonIcon({ size = 22, color = colors.textLight }: { size?: number; color?: string }) {
     return <Ionicons name="person" size={size} color={color} />;
 }
 
-function PaymentIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <Ionicons name="card" size={size} color={color} />;
-}
-
-function HistoryIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
+function HistoryIcon({ size = 22, color = colors.textLight }: { size?: number; color?: string }) {
     return <MaterialCommunityIcons name="history" size={size} color={color} />;
 }
 
-
-
-function NotificationIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
+function NotificationIcon({ size = 22, color = colors.textLight }: { size?: number; color?: string }) {
     return <Ionicons name="notifications" size={size} color={color} />;
 }
 
-function HelpIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
+function HelpIcon({ size = 22, color = colors.textLight }: { size?: number; color?: string }) {
     return <Ionicons name="help-circle" size={size} color={color} />;
 }
 
-function LogoutIcon({ size = 24, color = '#FF6B6B' }: { size?: number; color?: string }) {
-    return <Ionicons name="log-out" size={size} color={color} />;
-}
-
-function ChevronIcon({ size = 20, color = 'rgba(235,235,245,0.6)' }: { size?: number; color?: string }) {
+function ChevronIcon({ size = 20, color = colors.textSecondary }: { size?: number; color?: string }) {
     return <Ionicons name="chevron-forward" size={size} color={color} />;
 }
 
-function EditIcon({ size = 16, color = '#0A0A18' }: { size?: number; color?: string }) {
+function EditIcon({ size = 14, color = '#0A0A18' }: { size?: number; color?: string }) {
     return <MaterialCommunityIcons name="pencil" size={size} color={color} />;
 }
 
@@ -63,7 +49,7 @@ export function SettingsScreen({ navigation }: any) {
 
     // One-time (per app open) "Iniciar Teste Grátis" promo — Free only, and only
     // once the subscription has resolved (avoids flashing it to a Pro user).
-    const { isProUser } = useProFeature();
+    const { isProUser, openUpgrade } = useProFeature();
     const trialIsLoading = useSubscriptionStore((s) => s.isLoading);
     useFocusEffect(
         useCallback(() => {
@@ -104,7 +90,7 @@ export function SettingsScreen({ navigation }: any) {
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 {/* Header */}
                 <Pressable onPress={handleHeaderTap} style={styles.header} hitSlop={4}>
-                    <Text style={styles.headerTitle}>Configurações da Conta</Text>
+                    <Text style={styles.headerTitle}>Conta</Text>
                 </Pressable>
 
                 {/* Profile Section */}
@@ -129,14 +115,32 @@ export function SettingsScreen({ navigation }: any) {
                         <TouchableOpacity
                             style={styles.editAvatarButton}
                             onPress={() => navigation.navigate('PersonalInfo')}
+                            accessibilityRole="button"
+                            accessibilityLabel="Editar perfil"
                         >
                             <EditIcon size={14} color="#0A0A18" />
                         </TouchableOpacity>
                     </View>
                     <Text style={styles.userName}>{userName}</Text>
-                    <View style={styles.memberBadge}>
-                        <Text style={styles.memberBadgeText}>MEMBRO PRO</Text>
-                    </View>
+
+                    {/* Pro/Free tag — lógica real via subscriptionStore (useProFeature) */}
+                    {isProUser ? (
+                        <View style={styles.badgePro}>
+                            <Ionicons name="shield-checkmark" size={13} color={colors.primary} />
+                            <Text style={styles.badgeProText}>MEMBRO PRO</Text>
+                        </View>
+                    ) : (
+                        <TouchableOpacity
+                            style={styles.badgeFree}
+                            onPress={openUpgrade}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel="Plano grátis, tocar para fazer upgrade"
+                        >
+                            <Text style={styles.badgeFreeText}>PLANO GRÁTIS</Text>
+                            <Ionicons name="chevron-forward" size={13} color={colors.textSecondary} />
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 {/* CONTA Section */}
@@ -149,7 +153,7 @@ export function SettingsScreen({ navigation }: any) {
                         >
                             <View style={styles.menuItemLeft}>
                                 <View style={styles.menuIconContainer}>
-                                    <PersonIcon size={22} color="#00D4FF" />
+                                    <PersonIcon size={20} />
                                 </View>
                                 <Text style={styles.menuItemText}>Informações Pessoais</Text>
                             </View>
@@ -164,7 +168,7 @@ export function SettingsScreen({ navigation }: any) {
                         >
                             <View style={styles.menuItemLeft}>
                                 <View style={styles.menuIconContainer}>
-                                    <HistoryIcon size={22} color="#00D4FF" />
+                                    <HistoryIcon size={20} />
                                 </View>
                                 <Text style={styles.menuItemText}>Histórico de Treinos</Text>
                             </View>
@@ -173,20 +177,16 @@ export function SettingsScreen({ navigation }: any) {
                     </View>
                 </View>
 
-
                 {/* DISPOSITIVOS Section
-                    iOS:     Apple Health + Garmin/Polar/Fitbit (OAuth)
-                    Android: Health Connect + Garmin/Polar/Fitbit (OAuth)
-                    Cada card retorna null na plataforma errada, mas mantemos
-                    o Platform.OS gate aqui para deixar a intenção explícita. */}
+                    DeviceRow trata o gating de plataforma internamente (Apple só iOS,
+                    Galaxy/Health Connect só Android), então listamos todos os providers
+                    e cada um se esconde onde não se aplica. */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>DISPOSITIVOS</Text>
                     <View style={{ gap: 10 }}>
-                        {Platform.OS === 'ios' && <AppleHealthCard />}
-                        {Platform.OS === 'android' && <HealthConnectCard />}
-                        <GarminCard />
-                        <PolarCard />
-                        <FitbitCard />
+                        {WEARABLE_ORDER.map((provider) => (
+                            <DeviceRow key={provider} provider={provider} />
+                        ))}
                     </View>
                 </View>
 
@@ -200,7 +200,7 @@ export function SettingsScreen({ navigation }: any) {
                         >
                             <View style={styles.menuItemLeft}>
                                 <View style={styles.menuIconContainer}>
-                                    <NotificationIcon size={22} color="#FFFFFF" />
+                                    <NotificationIcon size={20} />
                                 </View>
                                 <Text style={styles.menuItemText}>Notificações</Text>
                             </View>
@@ -215,7 +215,7 @@ export function SettingsScreen({ navigation }: any) {
                         >
                             <View style={styles.menuItemLeft}>
                                 <View style={styles.menuIconContainer}>
-                                    <HelpIcon size={22} color="#FFFFFF" />
+                                    <HelpIcon size={20} />
                                 </View>
                                 <Text style={styles.menuItemText}>Ajuda / FAQ</Text>
                             </View>
@@ -226,7 +226,7 @@ export function SettingsScreen({ navigation }: any) {
 
                 {/* Logout Button */}
                 <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                    <LogoutIcon size={20} color="#FF6B6B" />
+                    <Ionicons name="log-out-outline" size={20} color={colors.error} />
                     <Text style={styles.logoutText}>Sair da Conta</Text>
                 </TouchableOpacity>
 
@@ -240,10 +240,6 @@ export function SettingsScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#0E0E1F',
-    },
     scrollView: {
         flex: 1,
     },
@@ -253,9 +249,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     headerTitle: {
+        fontFamily: fonts.semibold,
         fontSize: 18,
-        fontWeight: '600',
-        color: '#FFFFFF',
+        color: colors.text,
     },
     profileSection: {
         alignItems: 'center',
@@ -271,8 +267,8 @@ const styles = StyleSheet.create({
         width: 100,
         height: 100,
         borderRadius: 50,
-        borderWidth: 3,
-        borderColor: '#00D4FF',
+        borderWidth: 2,
+        borderColor: 'rgba(255,255,255,0.12)',
         overflow: 'hidden',
         marginBottom: spacing.md,
     },
@@ -288,9 +284,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     initialsText: {
+        fontFamily: fonts.semibold,
         fontSize: 36,
-        fontWeight: '600',
-        color: '#00D4FF',
+        color: colors.textLight,
         textTransform: 'uppercase',
     },
     editAvatarButton: {
@@ -300,28 +296,50 @@ const styles = StyleSheet.create({
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: '#00D4FF',
+        backgroundColor: colors.primary,
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 3,
-        borderColor: '#0E0E1F',
+        borderColor: '#0A0A18',
     },
     userName: {
+        fontFamily: fonts.bold,
         fontSize: 22,
-        fontWeight: '700',
-        color: '#FFFFFF',
+        color: colors.text,
         marginBottom: spacing.sm,
     },
-    memberBadge: {
-        backgroundColor: '#32CD32',
-        paddingHorizontal: spacing.md,
+    badgePro: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: 'rgba(0,212,255,0.12)',
+        borderWidth: 1,
+        borderColor: 'rgba(0,212,255,0.30)',
+        paddingHorizontal: 12,
         paddingVertical: 6,
-        borderRadius: 16,
+        borderRadius: borderRadius.full,
     },
-    memberBadgeText: {
+    badgeProText: {
+        fontFamily: fonts.bold,
         fontSize: 11,
-        fontWeight: '700',
-        color: '#FFFFFF',
+        color: colors.primary,
+        letterSpacing: 0.5,
+    },
+    badgeFree: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        backgroundColor: 'rgba(255,255,255,0.06)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.10)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: borderRadius.full,
+    },
+    badgeFreeText: {
+        fontFamily: fonts.semibold,
+        fontSize: 11,
+        color: colors.textSecondary,
         letterSpacing: 0.5,
     },
     section: {
@@ -329,15 +347,18 @@ const styles = StyleSheet.create({
         marginBottom: spacing.lg,
     },
     sectionTitle: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: 'rgba(235,235,245,0.6)',
+        fontFamily: fonts.medium,
+        fontSize: 13,
+        color: colors.textSecondary,
+        letterSpacing: 0.6,
         marginBottom: spacing.sm,
         marginLeft: spacing.sm,
     },
     menuCard: {
         backgroundColor: '#1C1C2E',
         borderRadius: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.06)',
         overflow: 'hidden',
     },
     menuItem: {
@@ -355,28 +376,27 @@ const styles = StyleSheet.create({
     menuIconContainer: {
         width: 36,
         height: 36,
-        borderRadius: 18,
-        backgroundColor: 'rgba(0,212,255,0.1)',
+        borderRadius: 10,
+        backgroundColor: 'rgba(255,255,255,0.06)',
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: spacing.md,
     },
     menuItemText: {
+        fontFamily: fonts.medium,
         fontSize: 15,
-        fontWeight: '500',
-        color: '#FFFFFF',
+        color: colors.text,
     },
     menuDivider: {
         height: 1,
-        backgroundColor: 'rgba(255,255,255,0.08)',
+        backgroundColor: 'rgba(255,255,255,0.06)',
         marginLeft: 60,
     },
-
     logoutButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(255,107,107,0.15)',
+        backgroundColor: 'rgba(239,68,68,0.10)',
         marginHorizontal: spacing.lg,
         paddingVertical: 14,
         borderRadius: 12,
@@ -384,11 +404,12 @@ const styles = StyleSheet.create({
         marginTop: spacing.md,
     },
     logoutText: {
+        fontFamily: fonts.semibold,
         fontSize: 15,
-        fontWeight: '600',
-        color: '#FF6B6B',
+        color: colors.error,
     },
     versionText: {
+        fontFamily: fonts.regular,
         fontSize: 12,
         color: 'rgba(235,235,245,0.4)',
         textAlign: 'center',

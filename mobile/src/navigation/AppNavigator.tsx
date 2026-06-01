@@ -32,6 +32,7 @@ import {
     NotificationSettingsScreen,
     HelpScreen,
     SupportScreen,
+    DeviceConnectScreen,
     RetrospectiveScreen,
     CustomizeGoalScreen,
     ManualWorkoutConfigScreen,
@@ -420,6 +421,15 @@ export function AppNavigator() {
                             options={{
                                 headerShown: false,
                                 presentation: 'card',
+                            }}
+                        />
+                        <Stack.Screen
+                            name="DeviceConnect"
+                            component={DeviceConnectScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'modal',
+                                gestureEnabled: true,
                             }}
                         />
                         <Stack.Screen

@@ -6,6 +6,7 @@
  */
 
 import { createNavigationContainerRef } from '@react-navigation/native';
+import type { WearableProvider } from '../config/wearables.config';
 
 // Define the navigation param list types
 export type RootStackParamList = {
@@ -26,6 +27,7 @@ export type RootStackParamList = {
     TrainingHistory: undefined;
     NotificationSettings: undefined;
     Help: undefined;
+    DeviceConnect: { provider: WearableProvider };
     Quiz_Objective: undefined;
     Quiz_Level: undefined;
     Quiz_Frequency: undefined;
