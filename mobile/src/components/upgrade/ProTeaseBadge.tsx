@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
-import { colors, shadows } from '../../theme';
+import { colors } from '../../theme';
 
 const SHIELD_ICON = require('../../assets/images/shieldPro.png');
 
@@ -18,8 +18,9 @@ export interface ProTeaseBadgeProps {
 /**
  * Premium icon for the Free→Pro glass teasers. The crown shield is already a
  * finished cyan→violet glyph (rendered as-is); the lock is a thin Feather glyph
- * inside a soft cyan-tinted, glowing circular badge — same language as the
- * "Análise do Treinador" cyan badges. Springs in on mount (UI thread) so the
+ * inside a soft cyan-tinted circular badge (cyan hairline + tint, no shadow) —
+ * same language as the "Análise do Treinador" cyan badges. Springs in on mount
+ * (UI thread) so the
  * teaser feels alive without costing JS frames. Decorative — the surrounding
  * card already announces the action, so it stays out of the a11y tree.
  */
@@ -54,7 +55,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 212, 255, 0.12)',
     borderWidth: 1,
     borderColor: colors.proGlassBorderCyan,
-    ...shadows.neon,
+    // No elevation/shadow on purpose: Android renders elevation as a dark blob
+    // behind the circle. The cyan border + tint carry the premium look.
   },
 });
 

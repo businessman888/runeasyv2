@@ -22,7 +22,6 @@ import type { TrainingZone, WorkoutPhase } from '../stores/trainingStore';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { UpgradeProCard } from '../components/upgrade/UpgradeProCard';
 import { GlassTeaseOverlay } from '../components/upgrade/GlassTeaseOverlay';
-import { ProCtaButton } from '../components/upgrade/ProCtaButton';
 import { ProTeaseBadge } from '../components/upgrade/ProTeaseBadge';
 import { SegmentedTabs } from '../components/ui/SegmentedTabs';
 import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
@@ -919,8 +918,7 @@ export function CalendarScreen({ navigation }: any) {
                                 key={`tease-day-${getSelectedDateStr()}`}
                                 pressable
                                 radius={24}
-                                blurIntensity={70}
-                                veilColor={colors.proGlassOverlayStrong}
+                                blurIntensity={40}
                                 overlay={
                                     <View style={styles.lockedDayOverlay}>
                                         <ProTeaseBadge variant="lock" />
@@ -928,7 +926,6 @@ export function CalendarScreen({ navigation }: any) {
                                         <Text style={styles.lockedDaySubtitle}>
                                             Ative o Pro para ver o treino que o Coach AI preparou pra você.
                                         </Text>
-                                        <ProCtaButton label="Desbloquear treino" />
                                     </View>
                                 }
                             >

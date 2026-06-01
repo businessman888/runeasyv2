@@ -841,8 +841,7 @@ export function HomeScreen({ navigation }: any) {
                 {!isProUser ? (
                     <GlassTeaseOverlay
                         pressable
-                        blurIntensity={70}
-                        veilColor={colors.proGlassOverlayStrong}
+                        blurIntensity={40}
                         overlay={
                             <View style={styles.homeTeaseOverlay}>
                                 <ProTeaseBadge variant="shield" />
