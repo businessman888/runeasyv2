@@ -51,6 +51,12 @@ export const colors = {
     proCtaFill: 'rgba(8, 34, 42, 0.92)',            // CTA pill — near-opaque dark teal so the card blur doesn't bleed through
     proDivider: 'rgba(235, 235, 245, 0.1)',         // hairline under header
     proMutedText: 'rgba(235, 235, 245, 0.6)',       // tagline + bullets
+
+    // Floating tab bar — translucent navy veil over the frosted BlurView, so the
+    // scroll content behind the pill blurs through while labels/icons stay legible
+    // (matches the streakCard #15152A identity at ~55% opacity).
+    tabBarGlassFill: 'rgba(21, 21, 42, 0.55)',
+    tabBarIdleBorder: 'rgba(235, 235, 245, 0.18)', // subtle hairline on the idle profile avatar ring
 };
 
 // Plus Jakarta Sans — loaded at runtime in App.tsx via @expo-google-fonts.
