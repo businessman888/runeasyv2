@@ -31,9 +31,13 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 interface DeviceRowProps {
     provider: WearableProvider;
+    /** Overrides the default navigation to the DeviceConnect route. */
+    onPress?: () => void;
+    /** When true, only render the status line if connected (cleaner pickers). */
+    connectedStatusOnly?: boolean;
 }
 
-function DeviceRowComponent({ provider }: DeviceRowProps) {
+function DeviceRowComponent({ provider, onPress, connectedStatusOnly }: DeviceRowProps) {
     const navigation = useNavigation<Nav>();
     const config = WEARABLES[provider];
     const { isApplicable, status, lastSyncedAt } = useWearableConnection(provider);
@@ -42,6 +46,7 @@ function DeviceRowComponent({ provider }: DeviceRowProps) {
 
     const isConnected = status === 'connected';
     const needsInstall = status === 'needsInstall';
+    const showStatusRow = isConnected || !connectedStatusOnly;
 
     const statusLabel = isConnected
         ? lastSyncedAt
@@ -61,7 +66,7 @@ function DeviceRowComponent({ provider }: DeviceRowProps) {
         <TouchableOpacity
             style={styles.row}
             activeOpacity={0.7}
-            onPress={() => navigation.navigate('DeviceConnect', { provider })}
+            onPress={onPress ?? (() => navigation.navigate('DeviceConnect', { provider }))}
             accessibilityRole="button"
             accessibilityLabel={`${config.rowLabel}, ${statusLabel}`}
             accessibilityHint="Abre as instruções de conexão"
@@ -74,12 +79,14 @@ function DeviceRowComponent({ provider }: DeviceRowProps) {
                 <Text style={styles.title} numberOfLines={1}>
                     {config.rowLabel}
                 </Text>
-                <View style={styles.statusRow}>
-                    {dotColor && <View style={[styles.dot, { backgroundColor: dotColor }]} />}
-                    <Text style={styles.statusText} numberOfLines={1}>
-                        {statusLabel}
-                    </Text>
-                </View>
+                {showStatusRow && (
+                    <View style={styles.statusRow}>
+                        {dotColor && <View style={[styles.dot, { backgroundColor: dotColor }]} />}
+                        <Text style={styles.statusText} numberOfLines={1}>
+                            {statusLabel}
+                        </Text>
+                    </View>
+                )}
             </View>
 
             <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />

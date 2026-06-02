@@ -2,14 +2,18 @@
  * Normalized wearable connection state + actions for a single provider.
  *
  * This is the single home for the connect/disconnect logic that used to live
- * (duplicated) inside the per-device Settings cards. It is consumed by:
- *   - `DeviceRow`            → reads status to render the Profile list row
- *   - `DeviceConnectScreen`  → drives the primary button (connect/disconnect)
+ * (duplicated) inside the per-device Settings cards AND the onboarding modal.
+ * It is consumed by:
+ *   - `DeviceRow`          → reads status to render a list row
+ *   - `DeviceConnectBody`  → drives the primary button (connect/disconnect)
  *
- * The three platform store hooks are always called (they are cheap zustand
- * selectors); side-effects (`initialize`, backend status fetch) are guarded by
- * `provider` so 5 mounted rows don't trigger redundant work. The connect /
- * disconnect handlers preserve the exact Alert flows of the original cards.
+ * `connect()` resolves to a boolean success flag so callers (e.g. onboarding)
+ * can advance on success without reading the post-await `isConnected` (stale).
+ *
+ * Provider notes:
+ *   - `apple`       → Apple Health / HealthKit (Profile).
+ *   - `appleWatch`  → Apple Watch companion app via WatchConnectivity (onboarding).
+ *   - `healthConnect` / `garmin` / `polar` / `fitbit` → shared everywhere.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -30,7 +34,13 @@ import {
     getConnectedDevice,
     isAppInstalledOnDevice as isGarminAppInstalled,
     openAppStoreOnDevice as openGarminAppStore,
+    performHandshake,
 } from '../services/garminConnect';
+import {
+    isWatchPaired as appleWatchIsPaired,
+    isWatchAppInstalled as appleWatchIsInstalled,
+} from '../services/appleWatch';
+import * as Storage from '../utils/storage';
 import { WEARABLES, type WearableProvider } from '../config/wearables.config';
 
 export type WearableConnectionStatus =
@@ -49,8 +59,24 @@ export interface WearableConnectionState {
     /** Apple Health / Health Connect — ISO timestamp of last passive sync. */
     lastSyncedAt: string | null;
     isBusy: boolean;
-    connect: () => Promise<void> | void;
+    /** Runs the connect flow; resolves true on success. */
+    connect: () => Promise<boolean>;
     disconnect: () => void;
+}
+
+/** Backend provider string for a config provider (used by devices service). */
+function backendProvider(provider: WearableProvider): string {
+    return provider === 'appleWatch' ? 'apple_watch' : provider;
+}
+
+/** Providers whose connection state comes from `connected_devices` (backend). */
+function isBackendProvider(provider: WearableProvider): boolean {
+    return (
+        provider === 'garmin' ||
+        provider === 'polar' ||
+        provider === 'fitbit' ||
+        provider === 'appleWatch'
+    );
 }
 
 export function useWearableConnection(
@@ -76,11 +102,11 @@ export function useWearableConnection(
         else if (provider === 'healthConnect') hc.initialize();
     }, [provider, isApplicable, hk.initialize, hc.initialize]);
 
-    // Backend status for garmin/polar/fitbit (mirrors the old per-card fetch).
+    // Backend status for garmin/polar/fitbit/appleWatch (mirrors the old fetch).
     useEffect(() => {
         if (!isApplicable) return;
-        if (provider === 'garmin' || provider === 'polar' || provider === 'fitbit') {
-            checkProviderStatus(provider)
+        if (isBackendProvider(provider)) {
+            checkProviderStatus(backendProvider(provider))
                 .then(setBackendConnected)
                 .catch(() => setBackendConnected(false));
         }
@@ -88,9 +114,9 @@ export function useWearableConnection(
 
     // ---- connect handlers (one per integration kind) ----------------------
 
-    const connectApple = useCallback(async () => {
+    const connectApple = useCallback(async (): Promise<boolean> => {
         const result = await hk.connect();
-        if (result.success) return;
+        if (result.success) return true;
         if (result.needsSettings) {
             Alert.alert(
                 'Permissão necessária',
@@ -107,14 +133,57 @@ export function useWearableConnection(
                     },
                 ],
             );
-            return;
+            return false;
         }
         if (result.error) {
             Alert.alert('Não foi possível conectar', result.error);
         }
+        return false;
     }, [hk]);
 
-    const connectHealthConnect = useCallback(async () => {
+    const connectAppleWatch = useCallback(async (): Promise<boolean> => {
+        if (Platform.OS !== 'ios') {
+            Alert.alert(
+                'Apple Watch indisponível',
+                'Apple Watch só funciona em iPhones com iOS.',
+            );
+            return false;
+        }
+        setIsBusyLocal(true);
+        try {
+            const [paired, installed] = await Promise.all([
+                appleWatchIsPaired(),
+                appleWatchIsInstalled(),
+            ]);
+            if (!paired) {
+                Alert.alert(
+                    'Apple Watch não pareado',
+                    'Pareie seu Apple Watch com o iPhone (app Watch da Apple) e tente novamente.',
+                );
+                return false;
+            }
+            if (!installed) {
+                Alert.alert(
+                    'App não instalado no Watch',
+                    'Abra o app Watch no seu iPhone e instale o RunEasy. Depois volte aqui pra concluir.',
+                );
+                return false;
+            }
+            await connectDeviceManual('apple_watch', 'Apple Watch');
+            setBackendConnected(true);
+            return true;
+        } catch (e) {
+            Alert.alert(
+                'Erro ao conectar',
+                e instanceof Error ? e.message : 'Tente novamente.',
+            );
+            return false;
+        } finally {
+            setIsBusyLocal(false);
+        }
+    }, []);
+
+    const connectHealthConnect = useCallback(async (): Promise<boolean> => {
         // Pre-check: if HC isn't installed, send the user to Play Store instead
         // of running the SDK and getting an opaque error.
         if (hc.needsInstall) {
@@ -126,11 +195,11 @@ export function useWearableConnection(
                     { text: 'Instalar', onPress: () => hc.openPlayStore() },
                 ],
             );
-            return;
+            return false;
         }
 
         const result = await hc.connect();
-        if (result.success) return;
+        if (result.success) return true;
 
         if (result.needsInstall) {
             Alert.alert(
@@ -141,7 +210,7 @@ export function useWearableConnection(
                     { text: 'Instalar', onPress: () => hc.openPlayStore() },
                 ],
             );
-            return;
+            return false;
         }
 
         if (result.needsSettings) {
@@ -156,15 +225,16 @@ export function useWearableConnection(
                     },
                 ],
             );
-            return;
+            return false;
         }
 
         if (result.error) {
             Alert.alert('Não foi possível conectar', result.error);
         }
+        return false;
     }, [hc]);
 
-    const connectGarmin = useCallback(async () => {
+    const connectGarmin = useCallback(async (): Promise<boolean> => {
         setIsBusyLocal(true);
         try {
             const gcmInstalled = await isGarminConnectInstalled();
@@ -177,7 +247,7 @@ export function useWearableConnection(
                         { text: 'Abrir loja', onPress: () => { void openGarminConnectStore(); } },
                     ],
                 );
-                return;
+                return false;
             }
 
             await initGarmin();
@@ -187,7 +257,7 @@ export function useWearableConnection(
                     'Nenhum Garmin encontrado',
                     'Pareie seu relógio via Garmin Connect Mobile e tente novamente.',
                 );
-                return;
+                return false;
             }
 
             const appInstalled = await isGarminAppInstalled(detected.id);
@@ -200,40 +270,48 @@ export function useWearableConnection(
                         { text: 'Abrir Connect IQ Store', onPress: () => { void openGarminAppStore(detected.id); } },
                     ],
                 );
-                return;
+                return false;
             }
+
+            // Handshake — envia token, aguarda HANDSHAKE_ACK (best-effort, 5s).
+            const token = (await Storage.getItemAsync('access_token')) || '';
+            await performHandshake(detected, token, 5000);
 
             await connectDeviceManual('garmin', detected.name);
             setBackendConnected(true);
+            return true;
         } catch (e) {
             Alert.alert(
                 'Erro ao conectar',
                 e instanceof Error ? e.message : 'Tente novamente.',
             );
+            return false;
         } finally {
             setIsBusyLocal(false);
         }
     }, []);
 
-    const connectOAuth = useCallback(async (p: 'polar' | 'fitbit') => {
+    const connectOAuth = useCallback(async (p: 'polar' | 'fitbit'): Promise<boolean> => {
         setIsBusyLocal(true);
         try {
             const result = await connectWearable(p);
             if (result.success) {
                 setBackendConnected(true);
-            } else if (result.error === 'Authorization cancelled') {
-                // Usuário cancelou no browser — silencioso.
-            } else if (result.error) {
+                return true;
+            }
+            if (result.error && result.error !== 'Authorization cancelled') {
                 Alert.alert(
                     'Erro na conexão',
                     result.error || 'Não foi possível conectar. Tente novamente.',
                 );
             }
+            return false;
         } catch (e) {
             Alert.alert(
                 'Erro ao conectar',
                 e instanceof Error ? e.message : 'Tente novamente.',
             );
+            return false;
         } finally {
             setIsBusyLocal(false);
         }
@@ -242,7 +320,7 @@ export function useWearableConnection(
     // ---- disconnect handlers ---------------------------------------------
 
     const disconnectBackend = useCallback(
-        (p: WearableProvider, title: string, message: string) => {
+        (p: string, title: string, message: string) => {
             Alert.alert(title, message, [
                 { text: 'Cancelar', style: 'cancel' },
                 {
@@ -290,6 +368,13 @@ export function useWearableConnection(
                     ],
                 );
                 return;
+            case 'appleWatch':
+                disconnectBackend(
+                    'apple_watch',
+                    'Desconectar Apple Watch?',
+                    'O RunEasy deixará de receber corridas do seu Apple Watch.',
+                );
+                return;
             case 'garmin':
                 disconnectBackend(
                     'garmin',
@@ -314,10 +399,12 @@ export function useWearableConnection(
         }
     }, [provider, hk, hc, disconnectBackend]);
 
-    const connect = useCallback((): Promise<void> | void => {
+    const connect = useCallback((): Promise<boolean> => {
         switch (provider) {
             case 'apple':
                 return connectApple();
+            case 'appleWatch':
+                return connectAppleWatch();
             case 'healthConnect':
                 return connectHealthConnect();
             case 'garmin':
@@ -326,8 +413,17 @@ export function useWearableConnection(
                 return connectOAuth('polar');
             case 'fitbit':
                 return connectOAuth('fitbit');
+            default:
+                return Promise.resolve(false);
         }
-    }, [provider, connectApple, connectHealthConnect, connectGarmin, connectOAuth]);
+    }, [
+        provider,
+        connectApple,
+        connectAppleWatch,
+        connectHealthConnect,
+        connectGarmin,
+        connectOAuth,
+    ]);
 
     // ---- derive normalized state -----------------------------------------
 
@@ -356,7 +452,7 @@ export function useWearableConnection(
                 : 'disconnected';
             break;
         default:
-            // garmin / polar / fitbit — backend registration is the signal.
+            // appleWatch / garmin / polar / fitbit — backend registration.
             isConnected = backendConnected === true;
             status =
                 backendConnected === null

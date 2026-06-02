@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import { View, Text, StyleSheet, Image, Modal } from 'react-native';
+
 import { WearableSelectionModal } from './WearableSelectionModal';
+import { DeviceConnectBody } from '../../components/devices/DeviceConnectBody';
+import {
+    toPreferredWearable,
+    type WearableProvider,
+} from '../../config/wearables.config';
 
 const DS = {
     bg: '#0F0F1E',
@@ -14,36 +20,43 @@ interface WearableConnectionScreenProps {
     onChange?: (value: string | null) => void;
     onConnect?: () => void;
     onSkip?: () => void;
-    /** Internal: opens the modal — wired from OnboardingScreen via ref/imperative? */
+    /** Parent-driven: OnboardingScreen sets this when the user taps "Sim". */
     openModal?: boolean;
     onModalClose?: () => void;
 }
 
 export function WearableConnectionScreen({
-    value,
     onChange,
     onConnect,
     openModal,
     onModalClose,
 }: WearableConnectionScreenProps) {
-    const [modalVisible, setModalVisible] = useState(false);
+    const [pickerVisible, setPickerVisible] = useState(false);
+    const [connectProvider, setConnectProvider] = useState<WearableProvider | null>(null);
 
-    // Keep modal in sync with parent-driven prop (OnboardingScreen sends `openModal`
-    // when user taps the "Sim" footer button).
+    // Keep the picker in sync with the parent-driven prop (the "Sim" footer button).
     React.useEffect(() => {
-        if (openModal) setModalVisible(true);
+        if (openModal) setPickerVisible(true);
     }, [openModal]);
 
-    const handleDeviceSelected = (provider: string) => {
-        if (onChange) onChange(provider);
-        setModalVisible(false);
-        if (onModalClose) onModalClose();
-        if (onConnect) onConnect();
+    const closePicker = () => {
+        setPickerVisible(false);
+        onModalClose?.();
     };
 
-    const handleModalClose = () => {
-        setModalVisible(false);
-        if (onModalClose) onModalClose();
+    // Tapping a device row opens the reusable config screen over the picker.
+    const handlePick = (provider: WearableProvider) => {
+        setConnectProvider(provider);
+    };
+
+    // Connection succeeded on the config screen → persist the choice, close
+    // everything and advance the onboarding flow (handled by `onConnect`).
+    const handleConnected = () => {
+        if (connectProvider) onChange?.(toPreferredWearable(connectProvider));
+        setConnectProvider(null);
+        setPickerVisible(false);
+        onModalClose?.();
+        onConnect?.();
     };
 
     return (
@@ -67,12 +80,29 @@ export function WearableConnectionScreen({
                 />
             </View>
 
+            {/* Device picker (bottom-sheet) */}
             <WearableSelectionModal
-                visible={modalVisible}
-                onClose={handleModalClose}
-                onSelect={handleDeviceSelected}
-                selectedProvider={value || null}
+                visible={pickerVisible}
+                onClose={closePicker}
+                onPick={handlePick}
             />
+
+            {/* Per-device configuration screen (reused from the Profile). The X
+                returns to the picker; a successful connect advances the flow. */}
+            <Modal
+                visible={!!connectProvider}
+                animationType="slide"
+                onRequestClose={() => setConnectProvider(null)}
+                statusBarTranslucent
+            >
+                {connectProvider && (
+                    <DeviceConnectBody
+                        provider={connectProvider}
+                        onClose={() => setConnectProvider(null)}
+                        onConnected={handleConnected}
+                    />
+                )}
+            </Modal>
         </>
     );
 }

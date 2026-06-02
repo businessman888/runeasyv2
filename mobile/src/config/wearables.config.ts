@@ -9,7 +9,13 @@
 
 import type { ImageSourcePropType } from 'react-native';
 
-export type WearableProvider = 'apple' | 'healthConnect' | 'garmin' | 'polar' | 'fitbit';
+export type WearableProvider =
+    | 'apple'
+    | 'appleWatch'
+    | 'healthConnect'
+    | 'garmin'
+    | 'polar'
+    | 'fitbit';
 
 export type DevicePlatform = 'ios' | 'android';
 
@@ -45,6 +51,24 @@ export const WEARABLES: Record<WearableProvider, WearableConfig> = {
             'A sincronização ocorre de forma passiva assim que o aplicativo RunEasy é aberto em primeiro plano.',
         ],
         connectLabel: 'Conectar Apple Saúde',
+        platforms: ['ios'],
+    },
+
+    // Onboarding-only Apple variant: the WatchConnectivity companion app
+    // (distinct from `apple`/HealthKit used in the Profile).
+    appleWatch: {
+        provider: 'appleWatch',
+        rowLabel: 'Apple Watch',
+        logo: require('../assets/images/wearablesLogo/logoApple.png'),
+        hero: require('../assets/images/wearables/appleWatch.png'),
+        title: 'Conecte seu Apple Watch',
+        bullets: [
+            'Pareie seu Apple Watch ao iPhone pelo aplicativo Watch da Apple.',
+            'Instale o app complementar RunEasy no seu Apple Watch pela App Store do relógio.',
+            'Inicie suas corridas pelo app RunEasy no relógio para capturar GPS, ritmo e frequência cardíaca.',
+            'Ao terminar, o treino é enviado automaticamente para o celular, calculando seu XP e gerando a análise da IA.',
+        ],
+        connectLabel: 'Conectar Apple Watch',
         platforms: ['ios'],
     },
 
@@ -121,3 +145,31 @@ export const WEARABLE_ORDER: WearableProvider[] = [
     'polar',
     'fitbit',
 ];
+
+/**
+ * Ordered list for the onboarding device picker. Uses `appleWatch`
+ * (WatchConnectivity companion) instead of `apple` (HealthKit).
+ */
+export const ONBOARDING_WEARABLE_ORDER: WearableProvider[] = [
+    'appleWatch',
+    'healthConnect',
+    'garmin',
+    'polar',
+    'fitbit',
+];
+
+/**
+ * Maps a config provider to the legacy `preferredWearable` string persisted in
+ * the onboarding store / sent to the backend.
+ */
+export function toPreferredWearable(provider: WearableProvider): string {
+    switch (provider) {
+        case 'apple':
+        case 'appleWatch':
+            return 'apple_watch';
+        case 'healthConnect':
+            return 'health_connect';
+        default:
+            return provider; // garmin | polar | fitbit
+    }
+}
