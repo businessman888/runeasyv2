@@ -33,6 +33,7 @@ import {
     HelpScreen,
     SupportScreen,
     DeviceConnectScreen,
+    DeviceReadMoreScreen,
     RetrospectiveScreen,
     CustomizeGoalScreen,
     ManualWorkoutConfigScreen,
@@ -426,6 +427,15 @@ export function AppNavigator() {
                         <Stack.Screen
                             name="DeviceConnect"
                             component={DeviceConnectScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'modal',
+                                gestureEnabled: true,
+                            }}
+                        />
+                        <Stack.Screen
+                            name="DeviceReadMore"
+                            component={DeviceReadMoreScreen}
                             options={{
                                 headerShown: false,
                                 presentation: 'modal',

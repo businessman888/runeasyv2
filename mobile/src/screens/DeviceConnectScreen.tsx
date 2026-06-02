@@ -16,7 +16,11 @@ type Props = NativeStackScreenProps<RootStackParamList, 'DeviceConnect'>;
 export function DeviceConnectScreen({ navigation, route }: Props) {
     const { provider } = route.params;
     return (
-        <DeviceConnectBody provider={provider} onClose={() => navigation.goBack()} />
+        <DeviceConnectBody
+            provider={provider}
+            onClose={() => navigation.goBack()}
+            onReadMore={() => navigation.navigate('DeviceReadMore', { provider })}
+        />
     );
 }
 

@@ -19,6 +19,20 @@ export type WearableProvider =
 
 export type DevicePlatform = 'ios' | 'android';
 
+/**
+ * Structured content for the "Ler mais" detail screen (`DeviceReadMoreBody`).
+ * Modeled as typed blocks so the long-form copy renders with proper hierarchy
+ * (headings, numbered steps, highlighted notes) using the design-system
+ * typography — instead of one flat wall of text.
+ */
+export type ReadMoreBlock =
+    | { type: 'title'; text: string }
+    | { type: 'heading'; text: string }
+    | { type: 'subheading'; text: string }
+    | { type: 'paragraph'; text: string }
+    | { type: 'steps'; items: string[] }
+    | { type: 'note'; label?: string; text: string };
+
 export interface WearableConfig {
     provider: WearableProvider;
     /** Short brand name shown in the Profile device row. */
@@ -35,7 +49,158 @@ export interface WearableConfig {
     connectLabel: string;
     /** Platforms where the integration is offered. */
     platforms: DevicePlatform[];
+    /**
+     * Long-form explanation shown on the "Ler mais" detail screen. Optional so
+     * a provider without deep docs simply hides the "Ler mais" button.
+     */
+    readMore?: ReadMoreBlock[];
 }
+
+// ---------------------------------------------------------------------------
+// "Ler mais" content — defined once and shared where providers describe the
+// same hardware (apple + appleWatch → Apple Watch; polar + fitbit → cloud
+// integrators). Copy is the verbatim explanation provided by the product.
+// ---------------------------------------------------------------------------
+
+const GARMIN_READMORE: ReadMoreBlock[] = [
+    { type: 'title', text: 'Garmin' },
+    {
+        type: 'paragraph',
+        text: 'Para utilizar um relógio Garmin com a RunEasy, você possui duas rotas distintas de integração. A Opção 1 é o método nativo recomendado para ter a experiência completa de assessoria, enquanto a Opção 2 é uma alternativa básica de leitura secundária.',
+    },
+    { type: 'heading', text: 'Opção 1: Conexão Nativa via Aplicativo RunEasy (Recomendado)' },
+    {
+        type: 'paragraph',
+        text: 'Esta forma estabelece um canal direto bidirecional entre o seu celular e o relógio utilizando o nosso aplicativo exclusivo para a Garmin.',
+    },
+    { type: 'subheading', text: 'Como configurar:' },
+    {
+        type: 'steps',
+        items: [
+            'Abra o aplicativo Garmin Connect IQ Store no seu celular.',
+            'Busque por RunEasy e realize o download do aplicativo para o seu modelo de relógio.',
+            'Abra o aplicativo RunEasy no celular para gerar o seu token de pareamento.',
+            'Abra o app RunEasy no relógio. Ele detectará o celular via Bluetooth e receberá o seu token de acesso automaticamente, sincronizando o seu calendário e exibindo o Treino do Dia.',
+        ],
+    },
+    { type: 'subheading', text: 'Como funciona o envio pós-treino (Bluetooth):' },
+    {
+        type: 'steps',
+        items: [
+            'Ao finalizar a sua corrida, pressione o botão Parar no relógio.',
+            'Selecione a opção Salvar Treino.',
+            'O relógio tentará abrir imediatamente um canal de comunicação Bluetooth com o aplicativo RunEasy que está no seu celular para sincronizar a atividade.',
+        ],
+    },
+    {
+        type: 'note',
+        label: 'Atenção:',
+        text: 'O aplicativo RunEasy deve estar aberto ou em segundo plano no celular no momento do salvamento. Caso o celular esteja longe ou desconectado, o relógio exibirá o status "Envio Pendente" e guardará o treino na memória interna. Assim que o relógio reconectar ao Bluetooth do celular, abra o app RunEasy no smartphone para que os dados sejam descarregados automaticamente.',
+    },
+    { type: 'heading', text: 'Opção 2: Conexão Indireta via Integradores de Saúde (Apenas Leitura)' },
+    {
+        type: 'paragraph',
+        text: 'Se você optar por não instalar o aplicativo da RunEasy no relógio, poderá coletar os dados de forma passiva através dos hubs de saúde do smartphone (Apple HealthKit no iOS ou Google Health Connect no Android).',
+    },
+    { type: 'subheading', text: 'Como configurar:' },
+    {
+        type: 'steps',
+        items: [
+            'Certifique-se de que o aplicativo oficial Garmin Connect está instalado e configurado para exportar seus treinos para o Apple Saúde (iOS) ou Health Connect (Android).',
+            'No aplicativo RunEasy do celular, vá em Configurações > Conexões e ative a permissão de leitura para o hub de saúde correspondente ao seu sistema operacional.',
+        ],
+    },
+    {
+        type: 'note',
+        label: 'Limitações deste método:',
+        text: 'O fluxo é de via única: a RunEasy consegue apenas ler o treino que você terminou. Não é possível enviar o treino planejado da IA para o visor do relógio. Métricas avançadas de dinâmica de corrida (comprimento de passada, oscilação vertical) são descartadas pelos integradores padrão da Apple e Google.',
+    },
+];
+
+const APPLE_WATCH_READMORE: ReadMoreBlock[] = [
+    { type: 'title', text: 'Apple Watch' },
+    {
+        type: 'paragraph',
+        text: 'A integração com o Apple Watch utiliza um aplicativo nativo desenvolvido para o sistema watchOS integrado ao banco de dados local do iOS.',
+    },
+    { type: 'subheading', text: 'Como configurar:' },
+    {
+        type: 'steps',
+        items: [
+            "Ao instalar o RunEasy no seu iPhone, a versão para o Apple Watch será instalada automaticamente no relógio (caso não instale, verifique o app 'Watch' no iPhone e ative a instalação manual).",
+            'Na primeira inicialização no iPhone, o aplicativo solicitará permissão de acesso ao Apple HealthKit (Saúde). Você deve conceder todas as permissões de Leitura e Escrita de atividades físicas.',
+        ],
+    },
+    { type: 'subheading', text: 'Como funciona o fluxo de treino:' },
+    {
+        type: 'steps',
+        items: [
+            'Abra o app RunEasy diretamente no Apple Watch para visualizar os detalhes do treino planejado pela inteligência artificial.',
+            'Inicie e execute a corrida utilizando o aplicativo do relógio.',
+            'Ao finalizar e salvar a atividade no pulso, o watchOS grava os dados diretamente no banco de dados do HealthKit do iPhone de forma nativa e assíncrona via sistema operacional.',
+            'Para receber a análise e o feedback da IA, basta abrir o aplicativo RunEasy no seu iPhone. O app detectará a atualização do banco de dados local através do monitoramento de estado do sistema, capturará os dados da corrida e os enviará ao servidor para gerar o seu relatório.',
+        ],
+    },
+];
+
+const GALAXY_READMORE: ReadMoreBlock[] = [
+    { type: 'title', text: 'Galaxy Watch' },
+    {
+        type: 'paragraph',
+        text: 'O ecossistema da Samsung não utiliza um aplicativo instalado no relógio. O funcionamento baseia-se na sincronização retroativa entre o aplicativo nativo de treinos da Samsung e o hub unificado do Android.',
+    },
+    { type: 'subheading', text: 'Como configurar (Ação Obrigatória do Usuário):' },
+    {
+        type: 'steps',
+        items: [
+            'No seu celular Android, certifique-se de ter o aplicativo Health Connect (Conexão de Saúde) da Google instalado.',
+            'Abra o aplicativo Samsung Health, vá em Configurações e ative a chave de sincronização para exportar os dados para o Health Connect.',
+            'No aplicativo RunEasy do celular, vá em Configurações > Dispositivos e ative a permissão de Leitura para o Health Connect.',
+        ],
+    },
+    { type: 'subheading', text: 'Como funciona o fluxo de treino:' },
+    {
+        type: 'steps',
+        items: [
+            'Você deve iniciar, executar e salvar a sua corrida utilizando o aplicativo de treino padrão (nativo) do seu Galaxy Watch.',
+            'Ao finalizar, o relógio descarrega os dados no aplicativo Samsung Health do celular.',
+            'O Samsung Health repassa automaticamente os dados físicos para o Health Connect do Android.',
+        ],
+    },
+    {
+        type: 'note',
+        label: 'Como receber o feedback:',
+        text: 'Como o processo ocorre localmente no celular, toda vez que você abrir o aplicativo RunEasy no smartphone (ou alternar para ele a partir da lista de apps minimizados), o sistema varrerá o Health Connect. Caso encontre um novo treino correspondente à data atual, o app exibirá uma tela de carregamento, fará o cruzamento dos dados com o cronograma e gerará o feedback da IA em poucos segundos.',
+    },
+];
+
+const POLAR_FITBIT_READMORE: ReadMoreBlock[] = [
+    { type: 'title', text: 'Polar e Fitbit' },
+    {
+        type: 'paragraph',
+        text: 'Para os usuários de dispositivos Polar e Fitbit, o fluxo de dados ignora completamente as conexões locais do celular e opera diretamente em nível de servidor (Nuvem para Nuvem).',
+    },
+    { type: 'subheading', text: 'Como configurar:' },
+    {
+        type: 'steps',
+        items: [
+            'No aplicativo RunEasy do celular, acesse Configurações > Conexões de Terceiros.',
+            'Selecione a marca do seu relógio (Polar ou Fitbit).',
+            'Você será redirecionado para o portal oficial do fabricante em uma janela de navegador segura.',
+            'Faça login com a sua conta da Polar ou Fitbit e autorize o RunEasy a acessar o seu histórico de atividades.',
+        ],
+    },
+    { type: 'subheading', text: 'Como funciona o fluxo de treino:' },
+    {
+        type: 'steps',
+        items: [
+            'Realize a sua corrida normalmente utilizando as telas e sistemas nativos do seu relógio Polar ou Fitbit.',
+            'Ao terminar o treino, sincronize o relógio com o aplicativo oficial da marca no seu celular (Polar Flow ou Fitbit App) via Bluetooth.',
+            'Assim que o aplicativo da marca enviar a sua corrida para a nuvem deles, o servidor da Polar/Fitbit disparará um sinal automático (Webhook) diretamente para o servidor da RunEasy.',
+            'O processamento da IA e a atualização do seu calendário de treinos ocorrem em segundo plano de forma totalmente assíncrona. Você receberá uma notificação no celular assim que o seu feedback estiver pronto, sem a necessidade de manter o aplicativo RunEasy aberto durante a transferência.',
+        ],
+    },
+];
 
 export const WEARABLES: Record<WearableProvider, WearableConfig> = {
     apple: {
@@ -52,6 +217,7 @@ export const WEARABLES: Record<WearableProvider, WearableConfig> = {
         ],
         connectLabel: 'Conectar Apple Saúde',
         platforms: ['ios'],
+        readMore: APPLE_WATCH_READMORE,
     },
 
     // Onboarding-only Apple variant: the WatchConnectivity companion app
@@ -70,6 +236,7 @@ export const WEARABLES: Record<WearableProvider, WearableConfig> = {
         ],
         connectLabel: 'Conectar Apple Watch',
         platforms: ['ios'],
+        readMore: APPLE_WATCH_READMORE,
     },
 
     healthConnect: {
@@ -86,6 +253,7 @@ export const WEARABLES: Record<WearableProvider, WearableConfig> = {
         ],
         connectLabel: 'Ativar Health Connect',
         platforms: ['android'],
+        readMore: GALAXY_READMORE,
     },
 
     garmin: {
@@ -102,6 +270,7 @@ export const WEARABLES: Record<WearableProvider, WearableConfig> = {
         ],
         connectLabel: 'Conectar ao Garmin',
         platforms: ['ios', 'android'],
+        readMore: GARMIN_READMORE,
     },
 
     polar: {
@@ -118,6 +287,7 @@ export const WEARABLES: Record<WearableProvider, WearableConfig> = {
         ],
         connectLabel: 'Autorizar Polar Flow',
         platforms: ['ios', 'android'],
+        readMore: POLAR_FITBIT_READMORE,
     },
 
     fitbit: {
@@ -134,6 +304,7 @@ export const WEARABLES: Record<WearableProvider, WearableConfig> = {
         ],
         connectLabel: 'Conectar Conta Fitbit',
         platforms: ['ios', 'android'],
+        readMore: POLAR_FITBIT_READMORE,
     },
 };
 

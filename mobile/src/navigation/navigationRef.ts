@@ -28,6 +28,7 @@ export type RootStackParamList = {
     NotificationSettings: undefined;
     Help: undefined;
     DeviceConnect: { provider: WearableProvider };
+    DeviceReadMore: { provider: WearableProvider };
     Quiz_Objective: undefined;
     Quiz_Level: undefined;
     Quiz_Frequency: undefined;

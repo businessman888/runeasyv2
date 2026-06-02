@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Image, Modal } from 'react-native';
 
 import { WearableSelectionModal } from './WearableSelectionModal';
 import { DeviceConnectBody } from '../../components/devices/DeviceConnectBody';
+import { DeviceReadMoreBody } from '../../components/devices/DeviceReadMoreBody';
 import {
     toPreferredWearable,
     type WearableProvider,
@@ -33,6 +34,10 @@ export function WearableConnectionScreen({
 }: WearableConnectionScreenProps) {
     const [pickerVisible, setPickerVisible] = useState(false);
     const [connectProvider, setConnectProvider] = useState<WearableProvider | null>(null);
+    // Onboarding read-more: a nested Modal over the config Modal (a navigation
+    // route would render *under* the RN Modal here, so we mirror the same Modal
+    // pattern used for the config screen).
+    const [readMoreProvider, setReadMoreProvider] = useState<WearableProvider | null>(null);
 
     // Keep the picker in sync with the parent-driven prop (the "Sim" footer button).
     React.useEffect(() => {
@@ -100,6 +105,23 @@ export function WearableConnectionScreen({
                         provider={connectProvider}
                         onClose={() => setConnectProvider(null)}
                         onConnected={handleConnected}
+                        onReadMore={() => setReadMoreProvider(connectProvider)}
+                    />
+                )}
+            </Modal>
+
+            {/* "Ler mais" detail — nested Modal over the config screen. The X
+                returns to the config screen (does not break the onboarding flow). */}
+            <Modal
+                visible={!!readMoreProvider}
+                animationType="slide"
+                onRequestClose={() => setReadMoreProvider(null)}
+                statusBarTranslucent
+            >
+                {readMoreProvider && (
+                    <DeviceReadMoreBody
+                        provider={readMoreProvider}
+                        onClose={() => setReadMoreProvider(null)}
                     />
                 )}
             </Modal>

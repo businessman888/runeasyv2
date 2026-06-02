@@ -46,9 +46,15 @@ export interface DeviceConnectBodyProps {
      * advance the flow, instead of exposing a disconnect action.
      */
     onConnected?: () => void;
+    /**
+     * When provided, shows a "Ler mais" outline button above the primary action
+     * that opens the in-depth explanation screen for this device. Omitted →
+     * button hidden (e.g. a provider without `readMore` content).
+     */
+    onReadMore?: () => void;
 }
 
-export function DeviceConnectBody({ provider, onClose, onConnected }: DeviceConnectBodyProps) {
+export function DeviceConnectBody({ provider, onClose, onConnected, onReadMore }: DeviceConnectBodyProps) {
     const config = WEARABLES[provider];
     const { status, isConnected, lastSyncedAt, isBusy, connect, disconnect } =
         useWearableConnection(provider);
@@ -126,6 +132,20 @@ export function DeviceConnectBody({ provider, onClose, onConnected }: DeviceConn
                         </Text>
                     </View>
                 )}
+
+                {/* "Ler mais" — opens the in-depth explanation screen (Figma
+                    node 1355-1529). Shown only when a handler + content exist. */}
+                {onReadMore && config.readMore?.length ? (
+                    <TouchableOpacity
+                        style={styles.readMoreButton}
+                        onPress={onReadMore}
+                        activeOpacity={0.85}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Ler mais sobre a conexão com ${config.rowLabel}`}
+                    >
+                        <Text style={styles.readMoreText}>Ler mais</Text>
+                    </TouchableOpacity>
+                ) : null}
 
                 {/* Primary action */}
                 <TouchableOpacity
@@ -234,6 +254,24 @@ const styles = StyleSheet.create({
         fontFamily: fonts.medium,
         fontSize: 14,
         color: colors.textLight,
+    },
+    // "Ler mais" outline pill (Figma node 1355-1529): dark fill + subtle muted
+    // hairline + muted semibold label. Sits above the primary CTA.
+    readMoreButton: {
+        height: 52,
+        borderRadius: 28,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.streakDayCard,
+        borderWidth: 1,
+        borderColor: colors.proMutedText,
+        marginTop: spacing.sm,
+        marginBottom: spacing.sm,
+    },
+    readMoreText: {
+        fontFamily: fonts.semibold,
+        fontSize: 14,
+        color: colors.proMutedText,
     },
     button: {
         height: 56,
