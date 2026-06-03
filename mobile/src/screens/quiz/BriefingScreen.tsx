@@ -17,6 +17,7 @@ import {
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useSubscriptionStore } from '../../stores/subscriptionStore';
+import { usePurchaseOutcomeStore } from '../../stores/purchaseOutcomeStore';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop, Circle as SvgCircle } from 'react-native-svg';
 import { usePlacement } from 'expo-superwall';
@@ -120,28 +121,9 @@ export function BriefingScreen({ navigation, route }: any) {
         return () => handler.remove();
     }, []);
 
-    // Trigger paywall placement on mount. Hits /referral/status first to decide
-    // between the discounted paywall (REFERRAL_ACTIVATED) and the standard
-    // onboarding paywall. Reading from the server guarantees correctness
-    // across cold-restart, since the onboarding Zustand store does not persist.
-    useEffect(() => {
-        if (!isPro) {
-            (async () => {
-                try {
-                    const status = await referralService.getStatus();
-                    const placement = status.has_referral
-                        ? PAYWALL_PLACEMENTS.REFERRAL_ACTIVATED
-                        : PAYWALL_PLACEMENTS.ONBOARDING_COMPLETE;
-                    const params = status.has_referral
-                        ? { influencer_code: status.code }
-                        : undefined;
-                    await registerPlacement({ placement, params });
-                } catch (err: unknown) {
-                    console.warn('[Paywall] Erro ao registrar placement onboarding:', err);
-                }
-            })();
-        }
-    }, []);
+    // NOTE: the paywall is presented once, on confirm (handleConfirmAndStart),
+    // not on mount — showing the archetype reveal first, then a single
+    // referral-aware paywall. (Previously a second paywall fired here on mount.)
 
     // Data from quiz
     const goal = data.goal || '10k';
@@ -172,18 +154,42 @@ export function BriefingScreen({ navigation, route }: any) {
     };
 
     const handleConfirmAndStart = async () => {
-        // If not Pro, give the user a chance to upgrade via paywall.
-        // If they close it (Free path), we still save onboarding and let them
-        // into the app — they will see UpgradeProCard in gated sections.
+        // If not Pro, present the (single) paywall. Referral-aware: a valid
+        // influencer code routes to the discounted paywall, otherwise the
+        // standard onboarding paywall. Reading /referral/status from the server
+        // keeps this correct across cold restart (the onboarding store doesn't
+        // persist). If they close it (Free path), we still save onboarding and
+        // let them in — they'll see UpgradeProCard in gated sections.
         if (!isPro) {
             try {
-                await registerPlacement({ placement: PAYWALL_PLACEMENTS.VIEW_TRAINING_PLAN });
+                const status = await referralService.getStatus();
+                const placement = status.has_referral
+                    ? PAYWALL_PLACEMENTS.REFERRAL_ACTIVATED
+                    : PAYWALL_PLACEMENTS.ONBOARDING_COMPLETE;
+                const params = status.has_referral
+                    ? { influencer_code: status.code }
+                    : undefined;
+                await registerPlacement({ placement, params });
             } catch (err) {
-                console.warn('[Paywall] Erro ao registrar view_training_plan:', err);
+                console.warn('[Paywall] Erro ao registrar placement onboarding:', err);
             }
 
             // Pull fresh status — webhook may have flipped them to Pro mid-call
             await useSubscriptionStore.getState().fetchSubscription();
+
+            // Distinguish "closed the paywall to stay Free" from "the purchase
+            // actually failed". Only the latter blocks + alerts; closing just
+            // proceeds into the app as Free.
+            const stillFree = !useSubscriptionStore.getState().isProUser;
+            const outcome = usePurchaseOutcomeStore.getState().lastOutcome;
+            usePurchaseOutcomeStore.getState().reset();
+            if (stillFree && outcome === 'failed') {
+                Alert.alert(
+                    'Pagamento não concluído',
+                    'Não conseguimos concluir sua assinatura. Você pode tentar novamente ou seguir no plano gratuito.',
+                );
+                return;
+            }
         }
 
         // Save onboarding regardless of plan.

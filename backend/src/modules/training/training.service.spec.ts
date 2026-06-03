@@ -47,6 +47,9 @@ describe('TrainingService', () => {
         limit: jest.fn().mockResolvedValue({ data: mockWorkouts, error: null }),
         single: jest.fn().mockResolvedValue({ data: mockPlan, error: null }),
       }),
+      getClient: jest.fn().mockReturnValue({
+        rpc: jest.fn().mockResolvedValue({ data: 0, error: null }),
+      }),
     };
 
     mockTrainingAIService = {
@@ -86,6 +89,10 @@ describe('TrainingService', () => {
         },
         {
           provide: getQueueToken('feedback-queue'),
+          useValue: { add: jest.fn() },
+        },
+        {
+          provide: getQueueToken('elevation-queue'),
           useValue: { add: jest.fn() },
         },
       ],
@@ -134,8 +141,11 @@ describe('TrainingService', () => {
         '2024-01-01',
         '2024-01-31',
       );
-      expect(result).toEqual(mockWorkouts);
-      expect(result.length).toBe(2);
+      // Behavior: returns the workouts in range. (The service enriches each row
+      // with feedback_id, so assert on identity/length rather than deep-equality
+      // with the raw fixture.)
+      expect(result).toHaveLength(2);
+      expect(result.map((w: { id: string }) => w.id)).toEqual(['w1', 'w2']);
     });
   });
 
@@ -193,6 +203,85 @@ describe('TrainingService', () => {
 
       const result = await service.getWorkout('user-123', 'w1');
       expect(result.training_plans).toBeDefined();
+    });
+  });
+
+  describe('resolvePlanStartDate (Q2 — clamp start date to today)', () => {
+    // Private, pure date math (no DB) — exercised via a typed cast.
+    const resolve = (s: string | null) =>
+      (
+        service as unknown as {
+          resolvePlanStartDate: (x: string | null) => Date;
+        }
+      ).resolvePlanStartDate(s);
+
+    it('keeps a future start date untouched', () => {
+      expect(resolve('2999-01-01').toISOString().slice(0, 10)).toBe('2999-01-01');
+    });
+
+    it('clamps a past start date to today (== the null/today result)', () => {
+      expect(resolve('2000-01-01').getTime()).toBe(resolve(null).getTime());
+    });
+
+    it('uses today when start date is null (future > today)', () => {
+      expect(resolve('2999-01-01').getTime()).toBeGreaterThan(
+        resolve(null).getTime(),
+      );
+    });
+  });
+
+  describe('reanchorPendingWorkoutsToToday (Q3 — resume frozen plan)', () => {
+    const setup = (
+      pendingRows: Array<{ id: string; scheduled_date: string }>,
+    ) => {
+      const rpc = jest
+        .fn()
+        .mockResolvedValue({ data: pendingRows.length, error: null });
+      (mockSupabaseService.from as jest.Mock).mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        order: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue({ data: pendingRows, error: null }),
+      });
+      (mockSupabaseService.getClient as jest.Mock).mockReturnValue({ rpc });
+      return rpc;
+    };
+
+    it('shifts stale pending workouts forward by a multiple of 7 days', async () => {
+      const rpc = setup([{ id: 'w1', scheduled_date: '2000-01-01' }]);
+
+      const result = await service.reanchorPendingWorkoutsToToday(
+        'user-1',
+        'plan-1',
+      );
+
+      expect(rpc).toHaveBeenCalledTimes(1);
+      const args = rpc.mock.calls[0][1] as { p_plan_id: string; p_days: number };
+      expect(args.p_plan_id).toBe('plan-1');
+      expect(args.p_days).toBeGreaterThan(0);
+      expect(args.p_days % 7).toBe(0); // preserves the chosen weekday
+      expect(result.deltaDays % 7).toBe(0);
+      expect(result.shifted).toBe(1);
+    });
+
+    it('is a no-op when there are no pending workouts', async () => {
+      const rpc = setup([]);
+      const result = await service.reanchorPendingWorkoutsToToday(
+        'user-1',
+        'plan-1',
+      );
+      expect(rpc).not.toHaveBeenCalled();
+      expect(result).toEqual({ shifted: 0, deltaDays: 0 });
+    });
+
+    it('is a no-op when the earliest pending is already in the future', async () => {
+      const rpc = setup([{ id: 'w1', scheduled_date: '2999-01-01' }]);
+      const result = await service.reanchorPendingWorkoutsToToday(
+        'user-1',
+        'plan-1',
+      );
+      expect(rpc).not.toHaveBeenCalled();
+      expect(result).toEqual({ shifted: 0, deltaDays: 0 });
     });
   });
 });

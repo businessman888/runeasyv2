@@ -18,7 +18,8 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "ai:stress-test": "ts-node scripts/ai-audit-stress-test.ts"
+    "ai:stress-test": "ts-node scripts/ai-audit-stress-test.ts",
+    "qa:sim-revenuecat": "ts-node scripts/sim-revenuecat.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",

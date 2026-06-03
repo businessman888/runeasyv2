@@ -147,8 +147,32 @@ export class RetrospectiveService {
         return generatedRetros;
       }
 
+      // Pause plan aging for owners who are not currently Pro. A lapsed/Free
+      // user's plan must not auto-complete + spawn a retrospective in the
+      // background while they aren't paying — its remaining workouts are
+      // re-anchored when they reactivate (TrainingService.reanchorPendingWorkoutsToToday).
+      // handleExpiration() already downgrades plan→'free', so gating on
+      // subscription_plan='pro' is enough (covers cancelled-but-active too).
+      const planUserIds = Array.from(
+        new Set((activePlans || []).map((p) => p.user_id)),
+      );
+      const proUserIds = new Set<string>();
+      if (planUserIds.length > 0) {
+        const { data: subs } = await supabase
+          .from('users')
+          .select('id, subscription_plan')
+          .in('id', planUserIds);
+        for (const u of subs || []) {
+          if ((u.subscription_plan ?? 'free') === 'pro') proUserIds.add(u.id);
+        }
+      }
+
       // Check each plan to see if it has ended and needs retrospective
       for (const plan of activePlans || []) {
+        if (!proUserIds.has(plan.user_id)) {
+          continue; // owner not Pro — freeze the plan instead of completing it
+        }
+
         // Check if retrospective already exists
         const { data: existingRetro } = await supabase
           .from('plan_retrospectives')

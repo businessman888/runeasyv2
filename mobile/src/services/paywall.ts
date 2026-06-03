@@ -43,8 +43,17 @@ let revenueCatInitialized = false;
  * Valida se a chave de API do RevenueCat tem o formato esperado.
  * Chaves válidas começam com `appl_` (iOS) ou `goog_` (Android).
  */
-function isValidRevenueCatKey(apiKey: string): boolean {
+export function isValidRevenueCatKey(apiKey: string): boolean {
   return apiKey.startsWith('appl_') || apiKey.startsWith('goog_');
+}
+
+/**
+ * True once RevenueCat is configured with a valid key. The Superwall custom
+ * purchase controller uses this to decide between a real purchase and the dev
+ * no-op (paywalls still present in dev, but buying can't complete without keys).
+ */
+export function isRevenueCatReady(): boolean {
+  return revenueCatInitialized;
 }
 
 /**
@@ -164,6 +173,58 @@ export async function checkProStatus(): Promise<{
   } catch (error) {
     console.error('[Paywall] Erro ao verificar status Pro:', error);
     return { isPro: false, customerInfo: null };
+  }
+}
+
+/**
+ * Compra um produto pelo seu identificador (vindo do paywall do Superwall via
+ * onPurchase). Resolve o StoreProduct no RevenueCat e efetua a compra,
+ * retornando o desfecho no vocabulário do Superwall. No-op seguro (`cancelled`)
+ * se o RevenueCat não estiver inicializado (dev sem chaves reais).
+ */
+export async function purchaseProductById(
+  productId: string,
+): Promise<'purchased' | 'cancelled' | 'failed'> {
+  if (!revenueCatInitialized) {
+    return 'cancelled';
+  }
+  try {
+    const products = await Purchases.getProducts([productId]);
+    if (!products.length) {
+      console.warn('[Paywall] Produto não encontrado no RevenueCat:', productId);
+      return 'failed';
+    }
+    const { customerInfo } = await Purchases.purchaseStoreProduct(products[0]);
+    const isPro =
+      customerInfo.entitlements.active[PRO_ENTITLEMENT_ID] !== undefined;
+    return isPro ? 'purchased' : 'failed';
+  } catch (error) {
+    const userCancelled = (error as { userCancelled?: boolean })?.userCancelled;
+    if (!userCancelled) {
+      console.error('[Paywall] Erro na compra:', error);
+    }
+    return userCancelled ? 'cancelled' : 'failed';
+  }
+}
+
+/**
+ * Restaura compras anteriores. Retorna 'restored' se o entitlement Pro voltou
+ * ativo, senão 'failed'. No-op ('failed') se o RevenueCat não estiver pronto.
+ */
+export async function restoreRevenueCatPurchases(): Promise<
+  'restored' | 'failed'
+> {
+  if (!revenueCatInitialized) {
+    return 'failed';
+  }
+  try {
+    const customerInfo = await Purchases.restorePurchases();
+    const isPro =
+      customerInfo.entitlements.active[PRO_ENTITLEMENT_ID] !== undefined;
+    return isPro ? 'restored' : 'failed';
+  } catch (error) {
+    console.error('[Paywall] Erro ao restaurar compras:', error);
+    return 'failed';
   }
 }
 

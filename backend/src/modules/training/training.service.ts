@@ -224,9 +224,9 @@ export class TrainingService {
 
       // STEP 3: Create ALL workouts at once
       this.logger.log(`[FullGen] STEP 3: Creating workout rows...`);
-      const planStartDate = this.parsePlanStartAsUTC(onboardingData.startDate);
+      const planStartDate = this.resolvePlanStartDate(onboardingData.startDate);
       this.logger.log(
-        `[FullGen] STEP 3: planStartDate=${planStartDate.toISOString()} (input startDate=${onboardingData.startDate ?? 'null'})`,
+        `[FullGen] STEP 3: planStartDate=${planStartDate.toISOString()} (input startDate=${onboardingData.startDate ?? 'null'}, clamped to >= today)`,
       );
       const allWorkoutsToInsert: any[] = [];
 
@@ -344,6 +344,19 @@ export class TrainingService {
     // schedule and the calendar agree on the start day.
     const { dateStr } = this.getSaoPauloToday();
     return new Date(`${dateStr}T00:00:00Z`);
+  }
+
+  /**
+   * Effective plan start, never in the past. Free users who upgrade days
+   * after the start date they picked in onboarding must not get week 1
+   * scheduled in the past — clamp to max(chosen, today). The per-workout
+   * weekday snapping in createWorkoutsForWeek() still aligns each session to
+   * the user's selected days, so clamping only the base date is enough.
+   */
+  private resolvePlanStartDate(startDate: string | null | undefined): Date {
+    const chosen = this.parsePlanStartAsUTC(startDate);
+    const today = this.parsePlanStartAsUTC(null); // today in SP, UTC-anchored
+    return chosen.getTime() < today.getTime() ? today : chosen;
   }
 
   /**
@@ -484,7 +497,7 @@ export class TrainingService {
 
       // Create individual workouts
       const workoutsToInsert = [];
-      const today = this.parsePlanStartAsUTC(onboardingData.startDate);
+      const today = this.resolvePlanStartDate(onboardingData.startDate);
 
       for (const week of generatedPlan.weeks) {
         const weekWorkouts = this.createWorkoutsForWeek(
@@ -539,6 +552,71 @@ export class TrainingService {
 
     if (error && error.code !== 'PGRST116') throw error;
     return data;
+  }
+
+  /**
+   * Re-anchor the remaining (pending) workouts of a frozen plan so they resume
+   * from today, preserving each session's weekday. Used when a lapsed Pro
+   * reactivates: while they weren't paying, the plan's pending workouts may be
+   * stranded in the past. We shift them forward by whole weeks (a multiple of 7
+   * days) so the weekday the user picked stays intact. Completed/skipped
+   * workouts are left untouched and nothing is marked as done.
+   *
+   * Returns { shifted, deltaDays } for logging/tests.
+   */
+  async reanchorPendingWorkoutsToToday(
+    userId: string,
+    planId: string,
+  ): Promise<{ shifted: number; deltaDays: number }> {
+    const { data: pending, error } = await this.supabaseService
+      .from('workouts')
+      .select('id, scheduled_date')
+      .eq('plan_id', planId)
+      .eq('user_id', userId)
+      .eq('status', 'pending')
+      .order('scheduled_date', { ascending: true })
+      .limit(1);
+
+    if (error) {
+      this.logger.warn(
+        `[reanchor] Failed to read pending workouts for plan ${planId}: ${error.message}`,
+      );
+      return { shifted: 0, deltaDays: 0 };
+    }
+
+    const first = pending?.[0]?.scheduled_date as string | undefined;
+    if (!first) {
+      return { shifted: 0, deltaDays: 0 }; // nothing pending to move
+    }
+
+    const firstUtc = this.parsePlanStartAsUTC(first);
+    const todayUtc = this.parsePlanStartAsUTC(null);
+    const diffMs = todayUtc.getTime() - firstUtc.getTime();
+    if (diffMs <= 0) {
+      return { shifted: 0, deltaDays: 0 }; // earliest pending is already in the future
+    }
+
+    const ONE_DAY_MS = 86400000;
+    const weeksToShift = Math.ceil(diffMs / ONE_DAY_MS / 7);
+    const deltaDays = weeksToShift * 7; // multiple of 7 keeps the weekday
+
+    const { data: shifted, error: rpcError } = await this.supabaseService
+      .getClient()
+      .rpc('shift_pending_workouts', { p_plan_id: planId, p_days: deltaDays });
+
+    if (rpcError) {
+      this.logger.error(
+        `[reanchor] shift_pending_workouts failed for plan ${planId}`,
+        rpcError,
+      );
+      return { shifted: 0, deltaDays };
+    }
+
+    const count = typeof shifted === 'number' ? shifted : 0;
+    this.logger.log(
+      `[reanchor] Plan ${planId}: shifted ${count} pending workout(s) +${deltaDays}d (weeksToShift=${weeksToShift}, firstPending=${first})`,
+    );
+    return { shifted: count, deltaDays };
   }
 
   /**

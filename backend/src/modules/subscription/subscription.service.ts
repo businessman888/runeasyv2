@@ -77,15 +77,24 @@ export class SubscriptionService {
       : null;
     const now = Date.now();
 
+    // A billing issue keeps Pro alive during the grace window the webhook sets
+    // (handleBillingIssue → grace_period_expires_at = now + 7d). Without this,
+    // the 7-day grace granted no access at all.
+    const graceActive =
+      row.grace_period_expires_at !== null &&
+      new Date(row.grace_period_expires_at).getTime() > now;
+
     // Pro access if plan='pro' AND status grants active access. 'cancelled' keeps
-    // Pro until subscription_expires_at; expired/billing_issue drop the access.
+    // Pro until subscription_expires_at; 'billing_issue' keeps it during grace;
+    // 'expired' drops access.
     const isPro =
       plan === 'pro' &&
       (status === 'active' ||
         status === 'trial' ||
         (status === 'cancelled' &&
           row.subscription_expires_at !== null &&
-          new Date(row.subscription_expires_at).getTime() > now));
+          new Date(row.subscription_expires_at).getTime() > now) ||
+        (status === 'billing_issue' && graceActive));
 
     const daysRemainingInTrial =
       trialExpires && status === 'trial'

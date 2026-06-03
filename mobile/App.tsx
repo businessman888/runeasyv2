@@ -17,7 +17,14 @@ import Mapbox from '@rnmapbox/maps';
 import { SuperwallProvider, CustomPurchaseControllerProvider } from 'expo-superwall';
 import type { CustomPurchaseControllerContext } from 'expo-superwall';
 import { SuperwallBridge } from './src/components/paywall/SuperwallBridge';
-import { initializeRevenueCat, getSuperwallApiKey } from './src/services/paywall';
+import {
+  initializeRevenueCat,
+  getSuperwallApiKey,
+  isRevenueCatReady,
+  purchaseProductById,
+  restoreRevenueCatPurchases,
+} from './src/services/paywall';
+import { usePurchaseOutcomeStore } from './src/stores/purchaseOutcomeStore';
 import { initSubscriptionListener } from './src/stores/authStore';
 import { useSubscriptionStore } from './src/stores/subscriptionStore';
 import { useDevMenuStore } from './src/stores/devMenuStore';
@@ -46,19 +53,33 @@ Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? '');
  * never present. In manual mode our setSubscriptionStatus (Free→INACTIVE) takes
  * effect and paywalls present.
  *
- * Purchases themselves aren't wired (RevenueCat keys are `test_*` / invalid), so
- * the handlers are graceful no-ops for now — the goal is to PRESENT the paywall.
- * TODO: route onPurchase/onPurchaseRestore through RevenueCat once real
- * `goog_`/`appl_` keys are configured.
+ * Purchases route through RevenueCat when a valid `goog_`/`appl_` key is
+ * configured (isRevenueCatReady()). Without valid keys (dev), onPurchase stays a
+ * graceful no-op returning `cancelled` so paywalls still PRESENT. Either way the
+ * outcome is recorded in purchaseOutcomeStore so call sites can tell a real
+ * purchase failure from a user-closed paywall.
  */
 const superwallPurchaseController: CustomPurchaseControllerContext = {
   onPurchase: async (params) => {
-    console.log('[Superwall] onPurchase →', JSON.stringify(params));
-    return { type: 'cancelled' };
+    usePurchaseOutcomeStore.getState().setOutcome('pending');
+    // Dev / no valid keys: keep the no-op (buying can't complete without real
+    // store keys), but report it so the UI treats it as "stayed Free", not error.
+    if (!isRevenueCatReady()) {
+      usePurchaseOutcomeStore.getState().setOutcome('cancelled');
+      return { type: 'cancelled' };
+    }
+    const outcome = await purchaseProductById(params.productId);
+    usePurchaseOutcomeStore.getState().setOutcome(outcome);
+    return { type: outcome };
   },
   onPurchaseRestore: async () => {
-    console.log('[Superwall] onPurchaseRestore');
-    return { type: 'failed', error: 'Restore não configurado (dev)' };
+    if (!isRevenueCatReady()) {
+      usePurchaseOutcomeStore.getState().setOutcome('failed');
+      return { type: 'failed', error: 'Restore não configurado (dev)' };
+    }
+    const outcome = await restoreRevenueCatPurchases();
+    usePurchaseOutcomeStore.getState().setOutcome(outcome);
+    return { type: outcome };
   },
 };
 

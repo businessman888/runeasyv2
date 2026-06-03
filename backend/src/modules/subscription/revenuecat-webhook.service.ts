@@ -157,9 +157,24 @@ export class RevenueCatWebhookService {
       }
     }
 
-    // First transition to Pro → generate plan if onboarding exists and no plan yet
+    // First transition (back) to Pro. Two cases:
+    //  - User already has an active plan that went stale while they were Free
+    //    (lapsed Pro returning) → re-anchor the remaining pending workouts so
+    //    the plan resumes from today (Q3), preserving the chosen weekdays.
+    //  - No active plan (Free who just upgraded after onboarding) → generate it
+    //    now (Q1); generation already clamps the start date to today (Q2).
     if (!prior?.isPro) {
-      await this.maybeGeneratePlan(userId);
+      const activePlan = await this.trainingService
+        .getActivePlan(userId)
+        .catch(() => null);
+      if (activePlan) {
+        await this.trainingService.reanchorPendingWorkoutsToToday(
+          userId,
+          activePlan.id,
+        );
+      } else {
+        await this.maybeGeneratePlan(userId);
+      }
     }
   }
 

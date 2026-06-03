@@ -140,6 +140,40 @@ export class TrainingController {
   }
 
   /**
+   * Award the welcome badge idempotently on onboarding completion. The badge is
+   * seeded by migration (slug='welcome', xp_reward=0 so it never double-credits
+   * XP). Guarded by an existing user_badges row, so it's safe on retries. Makes
+   * the onboarding "Badge de Boas-Vindas: CONQUISTADO" claim actually true.
+   */
+  private async awardWelcomeBadge(userId: string) {
+    try {
+      const { data: badge } = await this.supabaseService
+        .from('badges')
+        .select('id')
+        .eq('slug', 'welcome')
+        .maybeSingle();
+      if (!badge?.id) return; // badge not seeded yet — skip silently
+
+      const { data: existing } = await this.supabaseService
+        .from('user_badges')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('badge_id', badge.id)
+        .limit(1);
+      if (existing && existing.length > 0) return;
+
+      await this.supabaseService
+        .from('user_badges')
+        .insert({ user_id: userId, badge_id: badge.id });
+      this.logger.log(`[WelcomeBadge] Awarded to user ${userId}`);
+    } catch (err: any) {
+      this.logger.warn(
+        `[WelcomeBadge] Failed to award for user ${userId}: ${err?.message ?? err}`,
+      );
+    }
+  }
+
+  /**
    * Save onboarding data and create training plan (FAST - uses Prompt Chaining)
    * Note: Auth via x-user-id header
    * Response time: ~3-5 seconds (background process generates remaining weeks)
@@ -218,6 +252,9 @@ export class TrainingController {
 
       // Credit XP earned during the onboarding quiz (idempotent)
       await this.creditOnboardingXP(userId, dto.onboarding_xp ?? 0);
+
+      // Award the welcome badge (idempotent)
+      await this.awardWelcomeBadge(userId);
 
       // Free users: persist onboarding data but skip AI plan generation.
       // The mobile shows UpgradeProCard in place of the workout sections.
@@ -378,6 +415,9 @@ export class TrainingController {
 
       // Credit onboarding XP earned during the quiz (idempotent)
       await this.creditOnboardingXP(userId, dto.onboarding_xp ?? 0);
+
+      // Award the welcome badge (idempotent)
+      await this.awardWelcomeBadge(userId);
 
       return { success: true };
     } catch (error) {
