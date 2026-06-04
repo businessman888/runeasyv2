@@ -230,43 +230,62 @@ describe('TrainingService', () => {
     });
   });
 
-  describe('reanchorPendingWorkoutsToToday (Q3 — resume frozen plan)', () => {
+  describe('reanchorRemainingWorkoutsToToday (Q3 — resume frozen plan)', () => {
     const setup = (
-      pendingRows: Array<{ id: string; scheduled_date: string }>,
+      rows: Array<{ id: string; scheduled_date: string; status: string }>,
     ) => {
-      const rpc = jest
-        .fn()
-        .mockResolvedValue({ data: pendingRows.length, error: null });
+      const rpc = jest.fn().mockResolvedValue({ data: 99, error: null });
+      const inFn = jest.fn().mockResolvedValue({ error: null });
       (mockSupabaseService.from as jest.Mock).mockReturnValue({
         select: jest.fn().mockReturnThis(),
         eq: jest.fn().mockReturnThis(),
-        order: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue({ data: pendingRows, error: null }),
+        order: jest.fn().mockResolvedValue({ data: rows, error: null }),
+        update: jest.fn().mockReturnValue({ in: inFn }),
       });
       (mockSupabaseService.getClient as jest.Mock).mockReturnValue({ rpc });
-      return rpc;
+      return { rpc, inFn };
     };
 
-    it('shifts stale pending workouts forward by a multiple of 7 days', async () => {
-      const rpc = setup([{ id: 'w1', scheduled_date: '2000-01-01' }]);
+    it('reclaims lapse-missed sessions and shifts the block by whole weeks', async () => {
+      const { rpc, inFn } = setup([
+        { id: 'w1', scheduled_date: '2000-01-01', status: 'missed' },
+        { id: 'w2', scheduled_date: '2000-01-03', status: 'pending' },
+      ]);
 
-      const result = await service.reanchorPendingWorkoutsToToday(
+      const result = await service.reanchorRemainingWorkoutsToToday(
         'user-1',
         'plan-1',
       );
 
+      // Reclaimed the missed session back to pending...
+      expect(inFn).toHaveBeenCalledWith('id', ['w1']);
+      // ...then shifted by a whole number of weeks (preserves the weekday).
       expect(rpc).toHaveBeenCalledTimes(1);
       const args = rpc.mock.calls[0][1] as { p_plan_id: string; p_days: number };
       expect(args.p_plan_id).toBe('plan-1');
       expect(args.p_days).toBeGreaterThan(0);
-      expect(args.p_days % 7).toBe(0); // preserves the chosen weekday
+      expect(args.p_days % 7).toBe(0);
       expect(result.deltaDays % 7).toBe(0);
-      expect(result.shifted).toBe(1);
     });
 
-    it('is a no-op when there are no pending workouts', async () => {
-      const rpc = setup([]);
-      const result = await service.reanchorPendingWorkoutsToToday(
+    it('is a no-op when nothing is left to run', async () => {
+      const { rpc, inFn } = setup([
+        { id: 'c1', scheduled_date: '2000-01-01', status: 'completed' },
+      ]);
+      const result = await service.reanchorRemainingWorkoutsToToday(
+        'user-1',
+        'plan-1',
+      );
+      expect(rpc).not.toHaveBeenCalled();
+      expect(inFn).not.toHaveBeenCalled();
+      expect(result).toEqual({ shifted: 0, deltaDays: 0 });
+    });
+
+    it('is a no-op when the remaining plan already resumes in the future', async () => {
+      const { rpc } = setup([
+        { id: 'w1', scheduled_date: '2999-01-01', status: 'pending' },
+      ]);
+      const result = await service.reanchorRemainingWorkoutsToToday(
         'user-1',
         'plan-1',
       );
@@ -274,12 +293,19 @@ describe('TrainingService', () => {
       expect(result).toEqual({ shifted: 0, deltaDays: 0 });
     });
 
-    it('is a no-op when the earliest pending is already in the future', async () => {
-      const rpc = setup([{ id: 'w1', scheduled_date: '2999-01-01' }]);
-      const result = await service.reanchorPendingWorkoutsToToday(
+    it('does not resurrect sessions missed before the progress frontier', async () => {
+      // m1 (missed) is BEFORE the last completed workout (c1) — a legit earlier
+      // miss that must not be reclaimed. The only remaining session (p1) is future.
+      const { rpc, inFn } = setup([
+        { id: 'm1', scheduled_date: '2000-01-01', status: 'missed' },
+        { id: 'c1', scheduled_date: '2000-02-01', status: 'completed' },
+        { id: 'p1', scheduled_date: '2999-01-01', status: 'pending' },
+      ]);
+      const result = await service.reanchorRemainingWorkoutsToToday(
         'user-1',
         'plan-1',
       );
+      expect(inFn).not.toHaveBeenCalled();
       expect(rpc).not.toHaveBeenCalled();
       expect(result).toEqual({ shifted: 0, deltaDays: 0 });
     });

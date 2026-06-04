@@ -555,51 +555,89 @@ export class TrainingService {
   }
 
   /**
-   * Re-anchor the remaining (pending) workouts of a frozen plan so they resume
-   * from today, preserving each session's weekday. Used when a lapsed Pro
-   * reactivates: while they weren't paying, the plan's pending workouts may be
-   * stranded in the past. We shift them forward by whole weeks (a multiple of 7
-   * days) so the weekday the user picked stays intact. Completed/skipped
-   * workouts are left untouched and nothing is marked as done.
+   * Re-anchor a frozen plan's REMAINING workouts (pending + lapse-missed) so
+   * they resume from today. Used when a lapsed Pro reactivates.
+   *
+   * - "Remaining" = non-completed workouts scheduled AFTER the user's progress
+   *   frontier (their last completed/skipped day). The frontier guard avoids
+   *   resurrecting sessions legitimately missed during an EARLIER active period.
+   * - Sessions marked `missed` only because the user was lapsed are reclaimed
+   *   back to `pending` so the shift moves them too (heals what was stamped
+   *   before the Pro-gated missed-marking in getScheduleWithStatus).
+   * - The shift is a whole number of WEEKS (a multiple of 7 days), so every
+   *   session keeps the exact weekday the user chose in onboarding
+   *   (available_days) — the calendar never gets scrambled.
+   * - Completed/skipped workouts are untouched; nothing is marked as done.
    *
    * Returns { shifted, deltaDays } for logging/tests.
    */
-  async reanchorPendingWorkoutsToToday(
+  async reanchorRemainingWorkoutsToToday(
     userId: string,
     planId: string,
   ): Promise<{ shifted: number; deltaDays: number }> {
-    const { data: pending, error } = await this.supabaseService
+    const { data: rows, error } = await this.supabaseService
       .from('workouts')
-      .select('id, scheduled_date')
+      .select('id, scheduled_date, status')
       .eq('plan_id', planId)
-      .eq('user_id', userId)
-      .eq('status', 'pending')
-      .order('scheduled_date', { ascending: true })
-      .limit(1);
+      .order('scheduled_date', { ascending: true });
 
-    if (error) {
+    if (error || !rows) {
       this.logger.warn(
-        `[reanchor] Failed to read pending workouts for plan ${planId}: ${error.message}`,
+        `[reanchor] Failed to read workouts for plan ${planId}: ${error?.message}`,
       );
       return { shifted: 0, deltaDays: 0 };
     }
 
-    const first = pending?.[0]?.scheduled_date as string | undefined;
-    if (!first) {
-      return { shifted: 0, deltaDays: 0 }; // nothing pending to move
+    type WorkoutRow = { id: string; scheduled_date: string; status: string };
+    const all = rows as WorkoutRow[];
+
+    // Progress frontier: last completed/skipped day (null if none yet).
+    const frontier = all
+      .filter((w) => w.status === 'completed' || w.status === 'skipped')
+      .reduce<string | null>(
+        (max, w) =>
+          max === null || w.scheduled_date > max ? w.scheduled_date : max,
+        null,
+      );
+
+    // The part of the plan still to run: non-completed sessions after the frontier.
+    const remaining = all.filter(
+      (w) =>
+        (w.status === 'pending' || w.status === 'missed') &&
+        (frontier === null || w.scheduled_date > frontier),
+    );
+    if (remaining.length === 0) {
+      return { shifted: 0, deltaDays: 0 };
     }
 
-    const firstUtc = this.parsePlanStartAsUTC(first);
+    const firstRemaining = remaining[0].scheduled_date; // rows are date-ordered
+    const firstUtc = this.parsePlanStartAsUTC(firstRemaining);
     const todayUtc = this.parsePlanStartAsUTC(null);
     const diffMs = todayUtc.getTime() - firstUtc.getTime();
     if (diffMs <= 0) {
-      return { shifted: 0, deltaDays: 0 }; // earliest pending is already in the future
+      return { shifted: 0, deltaDays: 0 }; // already resumes in the future — clean
     }
 
     const ONE_DAY_MS = 86400000;
-    const weeksToShift = Math.ceil(diffMs / ONE_DAY_MS / 7);
-    const deltaDays = weeksToShift * 7; // multiple of 7 keeps the weekday
+    const deltaDays = Math.ceil(diffMs / ONE_DAY_MS / 7) * 7; // whole weeks → weekday preserved
 
+    // Reclaim lapse-missed sessions back to pending so the shift moves them too.
+    const missedIds = remaining
+      .filter((w) => w.status === 'missed')
+      .map((w) => w.id);
+    if (missedIds.length > 0) {
+      const { error: unmissError } = await this.supabaseService
+        .from('workouts')
+        .update({ status: 'pending' })
+        .in('id', missedIds);
+      if (unmissError) {
+        this.logger.warn(
+          `[reanchor] Failed to reclaim ${missedIds.length} missed workout(s) for plan ${planId}: ${unmissError.message}`,
+        );
+      }
+    }
+
+    // Shift all pending workouts forward by whole weeks (atomic RPC).
     const { data: shifted, error: rpcError } = await this.supabaseService
       .getClient()
       .rpc('shift_pending_workouts', { p_plan_id: planId, p_days: deltaDays });
@@ -614,7 +652,7 @@ export class TrainingService {
 
     const count = typeof shifted === 'number' ? shifted : 0;
     this.logger.log(
-      `[reanchor] Plan ${planId}: shifted ${count} pending workout(s) +${deltaDays}d (weeksToShift=${weeksToShift}, firstPending=${first})`,
+      `[reanchor] Plan ${planId}: reclaimed ${missedIds.length} missed, shifted ${count} workout(s) +${deltaDays}d (firstRemaining=${firstRemaining}, frontier=${frontier ?? 'none'})`,
     );
     return { shifted: count, deltaDays };
   }
@@ -1345,6 +1383,14 @@ export class TrainingService {
     // Use São Paulo timezone for consistent date calculation
     const { date: today, dateStr: todayStr } = this.getSaoPauloToday();
 
+    // Only an active Pro should have past-due workouts persisted as 'missed'.
+    // While the owner is lapsed/Free the plan is frozen (and hidden), so stamping
+    // missed would wrongly penalize the lapse AND block the reanchor from
+    // resuming those sessions on return. The display below still derives 'missed'.
+    const ownerIsPro = await this.subscriptionService
+      .isProUser(userId)
+      .catch(() => false);
+
     this.logger.debug(
       `[getScheduleWithStatus] Today: ${todayStr}, range: ${startDate} to ${endDate}`,
     );
@@ -1440,8 +1486,10 @@ export class TrainingService {
           // Past workout not completed = missed (retroactive check)
           status = 'missed';
 
-          // Update database to mark as missed if still pending
-          if (workout.status === 'pending') {
+          // Persist 'missed' only while the plan owner is Pro. While lapsed/Free
+          // the plan is frozen, so we must NOT stamp missed — that would block
+          // the reanchor from resuming those sessions on return.
+          if (workout.status === 'pending' && ownerIsPro) {
             await this.supabaseService
               .from('workouts')
               .update({ status: 'missed' })

@@ -168,7 +168,7 @@ export class RevenueCatWebhookService {
         .getActivePlan(userId)
         .catch(() => null);
       if (activePlan) {
-        await this.trainingService.reanchorPendingWorkoutsToToday(
+        await this.trainingService.reanchorRemainingWorkoutsToToday(
           userId,
           activePlan.id,
         );
