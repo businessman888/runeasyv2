@@ -8,9 +8,7 @@ import {
     TouchableOpacity,
     Platform,
     Animated,
-    ActivityIndicator,
 } from 'react-native';
-import LottieView from 'lottie-react-native';
 import * as Storage from '../utils/storage';
 import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows, fonts } from '../theme';
@@ -37,11 +35,10 @@ import { UpgradeProCard } from '../components/upgrade/UpgradeProCard';
 import { GlassTeaseOverlay } from '../components/upgrade/GlassTeaseOverlay';
 import { ProCtaButton } from '../components/upgrade/ProCtaButton';
 import { ProTeaseBadge } from '../components/upgrade/ProTeaseBadge';
+import { PlanGeneratingOverlay } from '../components/loading/PlanGeneratingOverlay';
 import type { WorkoutData } from '../components/WorkoutCard';
 
 import { BASE_API_URL } from '../config/api.config';
-
-const MarathonAnimation = require('../../telas frontend/icons/icons second card/Marathon.json');
 
 // Stable reference so the memoized SegmentedTabs doesn't re-render on every
 // parent re-render (e.g. while focus-effect fetches resolve).
@@ -139,8 +136,6 @@ export function HomeScreen({ navigation }: any) {
     const { triggerPlanGeneration, pendingPlanId } = useOnboardingStore();
     const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const generationTriggeredRef = useRef(false);
-    const overlayFadeAnim = useRef(new Animated.Value(0)).current;
-
     // Stop polling and reset generation guard on unmount
     useEffect(() => {
         return () => {
@@ -148,15 +143,6 @@ export function HomeScreen({ navigation }: any) {
             generationTriggeredRef.current = false;
         };
     }, []);
-
-    // Overlay fade animation
-    useEffect(() => {
-        Animated.timing(overlayFadeAnim, {
-            toValue: isPlanGenerating ? 1 : 0,
-            duration: 300,
-            useNativeDriver: true,
-        }).start();
-    }, [isPlanGenerating]);
 
     // Poll for plan status
     const startPolling = useCallback(async (planId: string) => {
@@ -1001,48 +987,11 @@ export function HomeScreen({ navigation }: any) {
 
             {/* Plan Generation Overlay */}
             {(isPlanGenerating || planGenError) && (
-                <Animated.View style={[styles.planOverlay, { opacity: overlayFadeAnim }]} pointerEvents="auto">
-                    <View style={styles.planOverlayContent}>
-                        {!planGenError ? (
-                            <>
-                                <LottieView
-                                    source={MarathonAnimation}
-                                    autoPlay
-                                    loop
-                                    style={styles.planOverlayLottie}
-                                />
-                                <Text style={styles.planOverlayTitle}>
-                                    Gerando seu plano personalizado...
-                                </Text>
-                                <Text style={styles.planOverlaySubtitle}>
-                                    A IA está criando treinos sob medida para você
-                                </Text>
-                                <ActivityIndicator size="small" color="#00D4FF" style={{ marginTop: 16 }} />
-                            </>
-                        ) : (
-                            <>
-                                <MaterialCommunityIcons name="alert-circle-outline" size={60} color="#FF6B6B" />
-                                <Text style={styles.planOverlayTitle}>
-                                    Erro ao gerar seu plano
-                                </Text>
-                                <Text style={styles.planOverlaySubtitle}>
-                                    {planGenRetries >= 3
-                                        ? 'Entre em contato com o suporte para ajuda.'
-                                        : 'Houve um problema. Tente novamente.'}
-                                </Text>
-                                {planGenRetries < 3 && (
-                                    <TouchableOpacity
-                                        style={styles.planOverlayRetryButton}
-                                        onPress={handleRetryGeneration}
-                                        activeOpacity={0.8}
-                                    >
-                                        <Text style={styles.planOverlayRetryText}>Tentar novamente</Text>
-                                    </TouchableOpacity>
-                                )}
-                            </>
-                        )}
-                    </View>
-                </Animated.View>
+                <PlanGeneratingOverlay
+                    mode={planGenError ? 'error' : 'generating'}
+                    onRetry={handleRetryGeneration}
+                    canRetry={planGenRetries < 3}
+                />
             )}
 
             <HomeFab
@@ -1579,51 +1528,4 @@ const styles = StyleSheet.create({
         elevation: 6,
     },
 
-    // Plan Generation Overlay
-    planOverlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(14, 14, 31, 0.95)',
-        zIndex: 999,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    planOverlayContent: {
-        alignItems: 'center',
-        paddingHorizontal: 40,
-    },
-    planOverlayLottie: {
-        width: 180,
-        height: 180,
-        marginBottom: 20,
-    },
-    planOverlayTitle: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: '#EBEBF5',
-        textAlign: 'center',
-        marginBottom: 8,
-    },
-    planOverlaySubtitle: {
-        fontSize: 15,
-        fontWeight: '400',
-        color: 'rgba(235, 235, 245, 0.6)',
-        textAlign: 'center',
-        lineHeight: 22,
-    },
-    planOverlayRetryButton: {
-        marginTop: 24,
-        backgroundColor: '#00D4FF',
-        borderRadius: 30,
-        paddingVertical: 14,
-        paddingHorizontal: 40,
-    },
-    planOverlayRetryText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#0E0E1F',
-    },
 });

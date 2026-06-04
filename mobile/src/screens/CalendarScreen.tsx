@@ -23,6 +23,7 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import { UpgradeProCard } from '../components/upgrade/UpgradeProCard';
 import { GlassTeaseOverlay } from '../components/upgrade/GlassTeaseOverlay';
 import { ProTeaseBadge } from '../components/upgrade/ProTeaseBadge';
+import { PlanGeneratingOverlay } from '../components/loading/PlanGeneratingOverlay';
 import { SegmentedTabs } from '../components/ui/SegmentedTabs';
 import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
 import { WorkoutDayCard, type DayWorkout } from '../components/training/WorkoutDayCard';
@@ -125,10 +126,6 @@ function RunFastIcon({ size = 30, color = '#0E0E1F' }: { size?: number; color?: 
 
 function CloseIcon({ size = 24, color = '#EBEBF5' }: { size?: number; color?: string }) {
     return <Ionicons name="close" size={size} color={color} />;
-}
-
-function LockIcon({ size = 60, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <Ionicons name="lock-closed" size={size} color={color} />;
 }
 
 /**
@@ -763,23 +760,8 @@ export function CalendarScreen({ navigation }: any) {
 
     return (
         <ScreenContainer>
-            {/* Locked State Overlay */}
-            {isScheduleLocked && (
-                <View style={styles.lockedOverlay}>
-                    <View style={styles.lockedContent}>
-                        <LockIcon size={80} color="#00D4FF" />
-                        <Text style={styles.lockedTitle}>Cronograma em Preparação</Text>
-                        <Text style={styles.lockedMessage}>
-                            Aguarde alguns instantes até que seu cronograma de treino fique completo.
-                        </Text>
-                        <View style={styles.lockedLoadingDots}>
-                            <View style={[styles.loadingDot, styles.loadingDot1]} />
-                            <View style={[styles.loadingDot, styles.loadingDot2]} />
-                            <View style={[styles.loadingDot, styles.loadingDot3]} />
-                        </View>
-                    </View>
-                </View>
-            )}
+            {/* Locked State Overlay — premium glass + ripple while the plan generates */}
+            {isScheduleLocked && <PlanGeneratingOverlay mode="generating" />}
 
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 {/* Header */}
@@ -2038,54 +2020,6 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.base,
         fontWeight: typography.fontWeights.bold as any,
         color: '#0E0E1F',
-    },
-
-    // Locked State Overlay Styles
-    lockedOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(14, 14, 31, 0.95)',
-        zIndex: 100,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    lockedContent: {
-        alignItems: 'center',
-        paddingHorizontal: 40,
-    },
-    lockedTitle: {
-        fontSize: 22,
-        fontWeight: '700' as any,
-        color: '#EBEBF5',
-        marginTop: 24,
-        marginBottom: 12,
-        textAlign: 'center',
-    },
-    lockedMessage: {
-        fontSize: 15,
-        fontWeight: '400' as any,
-        color: 'rgba(235, 235, 245, 0.6)',
-        textAlign: 'center',
-        lineHeight: 22,
-    },
-    lockedLoadingDots: {
-        flexDirection: 'row',
-        marginTop: 24,
-        gap: 8,
-    },
-    loadingDot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-        backgroundColor: '#00D4FF',
-    },
-    loadingDot1: {
-        opacity: 0.4,
-    },
-    loadingDot2: {
-        opacity: 0.7,
-    },
-    loadingDot3: {
-        opacity: 1,
     },
 
     // Recovery Card Styles
