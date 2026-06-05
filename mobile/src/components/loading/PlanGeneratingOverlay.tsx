@@ -83,7 +83,11 @@ function PlanGeneratingOverlayImpl({
       entering={FadeIn.duration(250)}
       exiting={FadeOut.duration(250)}
       // pointerEvents 'auto' (default) captures all touches → blocks the screen.
-      style={StyleSheet.absoluteFill}
+      // zIndex + elevation lift it above sibling content (iOS uses zIndex, Android
+      // needs elevation) so the blur frosts the real screen. The floating tab bar
+      // lives in the navigator (above the scene), so it stays on top — exactly
+      // "covers everything except the tab bar".
+      style={[StyleSheet.absoluteFill, styles.lift]}
       accessibilityViewIsModal
       accessibilityRole={isError ? 'alert' : 'progressbar'}
       accessibilityLabel={
@@ -158,6 +162,10 @@ function PlanGeneratingOverlayImpl({
 export const PlanGeneratingOverlay = memo(PlanGeneratingOverlayImpl);
 
 const styles = StyleSheet.create({
+  lift: {
+    zIndex: 50,
+    elevation: 50,
+  },
   content: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',

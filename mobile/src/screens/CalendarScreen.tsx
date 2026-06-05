@@ -24,6 +24,7 @@ import { UpgradeProCard } from '../components/upgrade/UpgradeProCard';
 import { GlassTeaseOverlay } from '../components/upgrade/GlassTeaseOverlay';
 import { ProTeaseBadge } from '../components/upgrade/ProTeaseBadge';
 import { PlanGeneratingOverlay } from '../components/loading/PlanGeneratingOverlay';
+import { usePlanGenerationGate } from '../hooks/usePlanGenerationGate';
 import { SegmentedTabs } from '../components/ui/SegmentedTabs';
 import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
 import { WorkoutDayCard, type DayWorkout } from '../components/training/WorkoutDayCard';
@@ -190,7 +191,17 @@ export function CalendarScreen({ navigation }: any) {
     const isPlanTease = !isProUser && scope === 'plan';
     const [selectedDate, setSelectedDate] = React.useState(new Date().getDate());
     const [currentMonth, setCurrentMonth] = React.useState(new Date());
-    const [isScheduleLocked, setIsScheduleLocked] = React.useState(false);
+    // Plan-generation lock — shared gate hook (reads trainingStore.generationStatus
+    // + polls while focused, independent of the Pro flag).
+    const { isGenerating: isScheduleLocked } = usePlanGenerationGate({
+        onComplete: () => {
+            const start = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+            const end = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 2, 0);
+            fetchSchedule(start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
+            fetchWorkouts(start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
+            fetchUpcomingWorkouts();
+        },
+    });
 
     // Modal states
     const [modalVisible, setModalVisible] = React.useState(false);
@@ -204,9 +215,6 @@ export function CalendarScreen({ navigation }: any) {
     const [showStartButton, setShowStartButton] = React.useState(false);
     const modalSlideAnim = React.useRef(new Animated.Value(0)).current;
     const panY = React.useRef(new Animated.Value(0)).current;
-    const pollingInterval = React.useRef<NodeJS.Timeout | null>(null);
-
-    const POLLING_INTERVAL = 3000; // 3 seconds
     const SCREEN_HEIGHT = Dimensions.get('window').height;
     const DISMISS_THRESHOLD = 150;
 
@@ -238,48 +246,6 @@ export function CalendarScreen({ navigation }: any) {
             },
         })
     ).current;
-
-    // Fetch plan on mount
-    React.useEffect(() => {
-        fetchPlan();
-    }, []);
-
-    // Check if schedule is locked based on generation status
-    React.useEffect(() => {
-        const isLocked = generationStatus === 'generating';
-        setIsScheduleLocked(isLocked);
-
-        // Start polling if locked — stop when complete or failed
-        if (isLocked && plan?.id) {
-            pollingInterval.current = setInterval(async () => {
-                const isComplete = await checkPlanStatus(plan.id);
-                const currentStatus = useTrainingStore.getState().generationStatus;
-
-                if (isComplete || currentStatus === 'failed') {
-                    setIsScheduleLocked(false);
-                    if (pollingInterval.current) {
-                        clearInterval(pollingInterval.current);
-                        pollingInterval.current = null;
-                    }
-                    // Refresh calendar data after generation completes
-                    if (isComplete) {
-                        const start = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-                        const end = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 2, 0);
-                        fetchSchedule(start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
-                        fetchWorkouts(start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
-                        fetchUpcomingWorkouts();
-                    }
-                }
-            }, POLLING_INTERVAL);
-        }
-
-        return () => {
-            if (pollingInterval.current) {
-                clearInterval(pollingInterval.current);
-                pollingInterval.current = null;
-            }
-        };
-    }, [generationStatus, plan?.id]);
 
     // Fetch schedule when month changes
     React.useEffect(() => {
@@ -760,9 +726,6 @@ export function CalendarScreen({ navigation }: any) {
 
     return (
         <ScreenContainer>
-            {/* Locked State Overlay — premium glass + ripple while the plan generates */}
-            {isScheduleLocked && <PlanGeneratingOverlay mode="generating" />}
-
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 {/* Header */}
                 <View style={styles.header}>
@@ -1292,6 +1255,9 @@ export function CalendarScreen({ navigation }: any) {
                     </Animated.View>
                 </View>
             </Modal>
+
+            {/* Plan Generation Overlay — top layer (below only the floating tab bar) */}
+            {isScheduleLocked && <PlanGeneratingOverlay mode="generating" />}
         </ScreenContainer>
     );
 }

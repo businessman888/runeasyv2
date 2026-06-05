@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
   useFonts,
@@ -154,6 +154,77 @@ function NetworkRetryManager() {
 }
 
 /**
+ * SubscriptionReconciler Component
+ *
+ * Closes the post-purchase Free→Pro gap. When a plan is generating, the backend
+ * has ALREADY been marked Pro by the RevenueCat webhook (generation is triggered
+ * by the same activation handler) — but the client's subscriptionStore may still
+ * read Free, since fetchSubscription only runs at discrete moments (paywall close,
+ * AppState→active, Dev Menu). That left gated screens (e.g. Wellness) locked for
+ * the whole ~3 min generation window.
+ *
+ * This polls fetchSubscription while `generationStatus === 'generating'` and the
+ * client is still Free, app-wide (not bound to any screen's focus), and stops the
+ * instant Pro lands — so every screen unlocks within ~3 s of the purchase, well
+ * before generation finishes. Self-terminating: no perpetual polling once Pro is
+ * reconciled or generation ends.
+ */
+function SubscriptionReconciler() {
+  const generationStatus = useTrainingStore((s) => s.generationStatus);
+  const isProUser = useSubscriptionStore((s) => s.isProUser);
+  const prevStatusRef = useRef(generationStatus);
+
+  // (1) Poll while a plan is generating and the client still reads Free — flips
+  // every screen to Pro within ~3 s, app-wide, well before generation ends.
+  useEffect(() => {
+    if (generationStatus !== 'generating' || isProUser) return;
+
+    const reconcile = () => useSubscriptionStore.getState().fetchSubscription();
+    void reconcile(); // immediate — don't wait a full interval to unlock
+    const id = setInterval(() => {
+      if (useSubscriptionStore.getState().isProUser) {
+        clearInterval(id);
+        return;
+      }
+      void reconcile();
+    }, 3000);
+
+    return () => clearInterval(id);
+  }, [generationStatus, isProUser]);
+
+  // (2) Belt-and-suspenders: when generation reaches a terminal state
+  // (generating → complete/failed) while the client is still Free, run a bounded
+  // reconcile burst. Covers the race where the plan finishes before poll (1) saw
+  // Pro — which otherwise left the WHOLE app stuck on Free after completion until
+  // a forced refetch. Transition-gated (not status-gated), so a cold start that
+  // lands on a stale 'complete' plan for a legitimately-Free user never triggers
+  // it — no perpetual polling.
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = generationStatus;
+
+    const justFinished = prev === 'generating' && generationStatus !== 'generating';
+    if (!justFinished || isProUser) return;
+
+    let attempts = 0;
+    const reconcile = () => useSubscriptionStore.getState().fetchSubscription();
+    void reconcile();
+    const id = setInterval(() => {
+      attempts += 1;
+      if (useSubscriptionStore.getState().isProUser || attempts >= 4) {
+        clearInterval(id);
+        return;
+      }
+      void reconcile();
+    }, 3000);
+
+    return () => clearInterval(id);
+  }, [generationStatus, isProUser]);
+
+  return null;
+}
+
+/**
  * Notification Manager Component
  *
  * Handles push notification lifecycle.
@@ -292,6 +363,8 @@ export default function App() {
             <StatusBar style="light" translucent backgroundColor="transparent" />
             {/* Bridge que conecta Superwall hooks ao authStore */}
             <SuperwallBridge />
+            {/* SubscriptionReconciler: destrava Pro app-wide durante a geração do plano */}
+            <SubscriptionReconciler />
             {/* NotificationManager is safe to use here because it uses navigationRef */}
             <NotificationManager />
             {/* WatchSyncManager: pushes today's workout + user name to Apple Watch */}

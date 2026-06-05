@@ -16,6 +16,7 @@ import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore,
 import type { LatestActivityData } from '../stores/feedbackStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useStartWorkoutFlow } from '../hooks/useStartWorkoutFlow';
+import { usePlanGenerationGate } from '../hooks/usePlanGenerationGate';
 import { SegmentedTabs } from '../components/ui/SegmentedTabs';
 import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
 import { CircularProgress } from '../components/CircularProgress';
@@ -129,73 +130,36 @@ export function HomeScreen({ navigation }: any) {
     const [recoveryProgress, setRecoveryProgress] = useState(0);
     const [retrospectiveReady, setRetrospectiveReady] = useState(false);
 
-    // Plan generation overlay state
-    const [isPlanGenerating, setIsPlanGenerating] = useState(false);
-    const [planGenError, setPlanGenError] = useState(false);
+    // Plan generation overlay — driven by the shared gate hook (reads
+    // trainingStore.generationStatus + polls while focused, independent of the
+    // client's Pro flag, so it shows even right after a webhook upgrade).
+    const { triggerPlanGeneration } = useOnboardingStore();
     const [planGenRetries, setPlanGenRetries] = useState(0);
-    const { triggerPlanGeneration, pendingPlanId } = useOnboardingStore();
-    const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const generationTriggeredRef = useRef(false);
-    // Stop polling and reset generation guard on unmount
-    useEffect(() => {
-        return () => {
-            if (pollingRef.current) clearInterval(pollingRef.current);
-            generationTriggeredRef.current = false;
-        };
-    }, []);
 
-    // Poll for plan status
-    const startPolling = useCallback(async (planId: string) => {
-        const userId = await Storage.getItemAsync('user_id');
-        if (!userId) return;
+    const { isGenerating, isFailed, retry } = usePlanGenerationGate({
+        onComplete: () => {
+            const now = new Date();
+            const startStr = new Date(now.getFullYear(), now.getMonth(), 1)
+                .toISOString()
+                .split('T')[0];
+            const endDate = new Date(now);
+            endDate.setMonth(endDate.getMonth() + 1);
+            const endStr = endDate.toISOString().split('T')[0];
+            void Promise.all([
+                fetchUpcomingWorkouts(),
+                fetchSchedule(startStr, endStr),
+                fetchStats(),
+            ]);
+        },
+    });
 
-        // Clear any existing polling interval to prevent leaks
-        if (pollingRef.current) {
-            clearInterval(pollingRef.current);
-            pollingRef.current = null;
-        }
-
-        pollingRef.current = setInterval(async () => {
-            try {
-                const response = await fetch(`${BASE_API_URL}/training/plan/${planId}/status`, {
-                    headers: { 'x-user-id': userId },
-                });
-                if (!response.ok) return;
-
-                const result = await response.json();
-                if (result.generation_status === 'complete') {
-                    // Plan is fully ready — dismiss overlay and refresh data
-                    if (pollingRef.current) clearInterval(pollingRef.current);
-                    pollingRef.current = null;
-                    setIsPlanGenerating(false);
-                    setPlanGenError(false);
-
-                    // Re-fetch all home data
-                    const now = new Date();
-                    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-                    const startStr = startOfMonth.toISOString().split('T')[0];
-                    const endDate = new Date(now);
-                    endDate.setMonth(endDate.getMonth() + 1);
-                    const endStr = endDate.toISOString().split('T')[0];
-
-                    await Promise.all([
-                        fetchUpcomingWorkouts(),
-                        fetchSchedule(startStr, endStr),
-                        fetchStats(),
-                    ]);
-                } else if (result.generation_status === 'failed') {
-                    // Generation failed — dismiss overlay and show error
-                    if (pollingRef.current) clearInterval(pollingRef.current);
-                    pollingRef.current = null;
-                    setIsPlanGenerating(false);
-                    setPlanGenError(true);
-                    generationTriggeredRef.current = false; // Allow retry
-                }
-            } catch (e) {
-                console.log('[HomeScreen] Polling error:', e);
-            }
-        }, 3000);
-    }, []);
+    const handleRetry = useCallback(async () => {
+        if (planGenRetries >= 3) return;
+        setPlanGenRetries((prev) => prev + 1);
+        generationTriggeredRef.current = true;
+        await retry();
+    }, [planGenRetries, retry]);
 
     // Trigger plan generation if no workouts exist
     const checkAndTriggerGeneration = useCallback(async () => {
@@ -248,12 +212,8 @@ export function HomeScreen({ navigation }: any) {
                 }
 
                 if (status === 'generating') {
-                    // Plan is still generating — resume polling instead of re-triggering
-                    console.log('[HomeScreen] Plan still generating, resuming polling...');
+                    // Plan is generating — the gate hook shows the overlay + polls.
                     generationTriggeredRef.current = true;
-                    setIsPlanGenerating(true);
-                    setPlanGenError(false);
-                    startPolling(result.plan.id);
                     return;
                 }
 
@@ -270,43 +230,23 @@ export function HomeScreen({ navigation }: any) {
         // No plan OR plan failed — trigger generation (set guard BEFORE async call)
         generationTriggeredRef.current = true;
         console.log('[HomeScreen] No plan found, triggering AI generation for userId:', userId);
-        setIsPlanGenerating(true);
-        setPlanGenError(false);
 
         const planId = await triggerPlanGeneration();
         if (planId) {
-            startPolling(planId);
+            // Refresh plan status so the gate hook shows the overlay + polls.
+            await useTrainingStore.getState().fetchPlan();
         } else {
             // Check if it was a 400 (onboarding data missing) — session is inconsistent, force logout
             const status = useOnboardingStore.getState().lastGenerationStatus;
             if (status === 400) {
                 console.warn('[HomeScreen] Plan generation returned 400 (onboarding missing) — forcing logout to resync session');
-                setIsPlanGenerating(false);
                 generationTriggeredRef.current = false;
                 await useAuthStore.getState().logout();
                 return;
             }
-            setPlanGenError(true);
             generationTriggeredRef.current = false; // Allow retry on error
         }
-    }, [triggerPlanGeneration, startPolling, isProUser]);
-
-    // Retry plan generation
-    const handleRetryGeneration = useCallback(async () => {
-        if (planGenRetries >= 3) return;
-        setPlanGenRetries((prev) => prev + 1);
-        setPlanGenError(false);
-        setIsPlanGenerating(true);
-        generationTriggeredRef.current = true;
-
-        const planId = await triggerPlanGeneration();
-        if (planId) {
-            startPolling(planId);
-        } else {
-            setPlanGenError(true);
-            generationTriggeredRef.current = false;
-        }
-    }, [planGenRetries, triggerPlanGeneration, startPolling]);
+    }, [triggerPlanGeneration, isProUser]);
 
     // Use useFocusEffect to refetch data when screen gains focus (revalidate on every visit)
     useFocusEffect(
@@ -985,19 +925,19 @@ export function HomeScreen({ navigation }: any) {
             </ScrollView>
 
 
-            {/* Plan Generation Overlay */}
-            {(isPlanGenerating || planGenError) && (
-                <PlanGeneratingOverlay
-                    mode={planGenError ? 'error' : 'generating'}
-                    onRetry={handleRetryGeneration}
-                    canRetry={planGenRetries < 3}
-                />
-            )}
-
             <HomeFab
                 onPressFreeRun={handleStartFreeRun}
                 onPressManual={handleOpenManualConfig}
             />
+
+            {/* Plan Generation Overlay — top layer (below only the floating tab bar) */}
+            {(isGenerating || isFailed) && (
+                <PlanGeneratingOverlay
+                    mode={isFailed ? 'error' : 'generating'}
+                    onRetry={handleRetry}
+                    canRetry={planGenRetries < 3}
+                />
+            )}
         </ScreenContainer >
     );
 }
