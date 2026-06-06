@@ -100,15 +100,21 @@ export function LoginScreen({ navigation }: { navigation: unknown }) {
 
             const authData = await authResponse.json();
 
-            // Set the session in the local Supabase client for session persistence
-            const { error: sessionError } = await supabase.auth.setSession({
-                access_token: authData.session.access_token,
-                refresh_token: authData.session.refresh_token,
-            });
-
-            if (sessionError) {
-                console.warn('[LOGIN] Could not persist session locally:', sessionError.message);
-            }
+            // Persist the session in the local Supabase client — BEST-EFFORT and
+            // NON-BLOCKING. This is a direct call to the Supabase domain, which can
+            // be slow/unreachable on some networks (the token exchange already goes
+            // through the backend for exactly this reason). Awaiting it would hang
+            // login until the request times out. The backend already validated the
+            // token and cold-start auth falls back to the stored userId, so a
+            // failure here is safe to ignore.
+            void supabase.auth
+                .setSession({
+                    access_token: authData.session.access_token,
+                    refresh_token: authData.session.refresh_token,
+                })
+                .catch(() => {
+                    console.warn('[LOGIN] Local session persist skipped (Supabase unreachable)');
+                });
 
             console.log('[LOGIN] Auth successful, userId:', authData.user.id);
             const data = { user: authData.user, session: authData.session };
@@ -199,26 +205,23 @@ export function LoginScreen({ navigation }: { navigation: unknown }) {
 
             const authData = await authResponse.json();
 
-            // Set the session in the local Supabase client for session persistence
-            const { error: sessionError } = await supabase.auth.setSession({
-                access_token: authData.session.access_token,
-                refresh_token: authData.session.refresh_token,
-            });
-
-            if (sessionError) {
-                console.warn('[LOGIN] Could not persist session locally:', sessionError.message);
-            }
-
-            // 5. Update user metadata with fullName if available (first login only)
-            if (displayName) {
-                try {
-                    await supabase.auth.updateUser({
-                        data: { full_name: displayName },
-                    });
-                } catch {
-                    console.warn('[LOGIN] Could not update displayName locally, will sync via backend');
-                }
-            }
+            // Persist the session locally — BEST-EFFORT and NON-BLOCKING (direct
+            // Supabase call; see the Google handler for the full rationale).
+            void supabase.auth
+                .setSession({
+                    access_token: authData.session.access_token,
+                    refresh_token: authData.session.refresh_token,
+                })
+                .then(() => {
+                    // 5. Update user metadata with fullName if available (first login
+                    // only). Also best-effort; the backend is the source of truth.
+                    if (displayName) {
+                        return supabase.auth.updateUser({ data: { full_name: displayName } });
+                    }
+                })
+                .catch(() => {
+                    console.warn('[LOGIN] Local session persist skipped (Supabase unreachable)');
+                });
 
             console.log('[LOGIN] Auth successful, userId:', authData.user.id);
             const data = { user: authData.user, session: authData.session };

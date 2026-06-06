@@ -7,6 +7,8 @@ import {
     ScrollView,
     Platform,
     Dimensions,
+    TouchableOpacity,
+    Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,7 +17,6 @@ import Animated, {
     useAnimatedStyle,
     withTiming,
     Easing,
-    runOnJS,
     FadeIn,
 } from 'react-native-reanimated';
 import { useOnboardingStore } from '../stores/onboardingStore';
@@ -49,14 +50,11 @@ import { TimeCompareScreen } from './quiz/TimeCompareScreen';
 import { FixedNavigationButtons } from '../components/FixedNavigationButtons';
 import { AnimatedXP } from '../components/AnimatedXP';
 import { Ionicons } from '@expo/vector-icons';
-import { TouchableOpacity } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Back chevron lives to the left of the progress bar; its footprint is always
-// reserved so the bar width stays constant between steps.
-const CHEVRON_SIZE = 44;
-const PROGRESS_ROW_GAP = 8;
+// Back arrow sits to the left of the progress bar on a single clean row.
+const CHEVRON_SIZE = 32;
 
 // ============================================
 // FORCED COLORS (Figma exact values)
@@ -71,9 +69,6 @@ const FORCED_GLASS_STROKE = 'rgba(235, 235, 245, 0.1)';
 // XP economy
 const XP_PER_QUESTION = 5;        // ~15 questions × 5 = 75
 const XP_COMPLETION_BONUS = 25;   // total ≈ 100
-// Inner content width is SCREEN_WIDTH - 48; the chevron + gap eat into it so the
-// bar is a bit shorter than before, per the new back-button placement.
-const PROGRESS_TRACK_WIDTH = SCREEN_WIDTH - 48 - CHEVRON_SIZE - PROGRESS_ROW_GAP;
 
 // ============================================
 // ANIMATED PROGRESS BAR
@@ -83,66 +78,41 @@ interface AnimatedProgressBarProps {
 }
 
 const AnimatedProgressBar: React.FC<AnimatedProgressBarProps> = ({ fraction }) => {
-    const widthSv = useSharedValue(0);
-    const shimmerX = useSharedValue(-PROGRESS_TRACK_WIDTH);
+    // Percentage-based fill so the track can flex to fill the row (clean, premium,
+    // no fixed width to keep in sync with the layout).
+    const progress = useSharedValue(0);
 
     useEffect(() => {
-        widthSv.value = withTiming(
-            Math.max(0, Math.min(1, fraction)) * PROGRESS_TRACK_WIDTH,
-            { duration: 600, easing: Easing.out(Easing.cubic) },
+        progress.value = withTiming(
+            Math.max(0, Math.min(1, fraction)),
+            { duration: 500, easing: Easing.out(Easing.cubic) },
         );
-    }, [fraction, widthSv]);
+    }, [fraction, progress]);
 
-    useEffect(() => {
-        // Shimmer loops left → right indefinitely
-        const loop = () => {
-            shimmerX.value = -PROGRESS_TRACK_WIDTH;
-            shimmerX.value = withTiming(
-                PROGRESS_TRACK_WIDTH,
-                { duration: 2200, easing: Easing.inOut(Easing.cubic) },
-                (finished) => {
-                    if (finished) runOnJS(loop)();
-                },
-            );
-        };
-        loop();
-    }, [shimmerX]);
-
-    const fillStyle = useAnimatedStyle(() => ({ width: widthSv.value }));
-    const shimmerStyle = useAnimatedStyle(() => ({
-        transform: [{ translateX: shimmerX.value }],
+    const fillStyle = useAnimatedStyle(() => ({
+        width: `${progress.value * 100}%`,
     }));
 
     return (
         <View style={progressStyles.track}>
-            <Animated.View style={[progressStyles.fill, fillStyle]}>
-                <Animated.View style={[progressStyles.shimmer, shimmerStyle]} />
-            </Animated.View>
+            <Animated.View style={[progressStyles.fill, fillStyle]} />
         </View>
     );
 };
 
 const progressStyles = StyleSheet.create({
     track: {
-        width: PROGRESS_TRACK_WIDTH,
-        height: 4,
+        flex: 1,
+        height: 8,
         backgroundColor: FORCED_GLASS_STROKE,
-        borderRadius: 20,
+        borderRadius: 999,
         overflow: 'hidden',
     },
     fill: {
-        height: 4,
+        height: 8,
         backgroundColor: FORCED_CYAN,
-        borderRadius: 20,
-        overflow: 'hidden',
-    },
-    shimmer: {
-        position: 'absolute',
-        top: 0,
-        bottom: 0,
-        width: 60,
-        backgroundColor: 'rgba(255,255,255,0.4)',
-        opacity: 0.5,
+        borderRadius: 999,
+        minWidth: 8,
     },
 });
 
@@ -196,6 +166,9 @@ export function OnboardingScreen({ navigation, route }: any) {
     const { data, updateData, xpEarned, addXP } = useOnboardingStore();
     const [currentStep, setCurrentStep] = useState(0);
     const [wearableModalOpen, setWearableModalOpen] = useState(false);
+    // Lets a child (e.g. the height ruler) lock the parent scroll while dragging,
+    // so vertical pans don't fight the ScrollView and feel "stuck".
+    const [scrollEnabled, setScrollEnabled] = useState(true);
     const scrollViewRef = useRef<ScrollView>(null);
     const insets = useSafeAreaInsets();
 
@@ -224,6 +197,10 @@ export function OnboardingScreen({ navigation, route }: any) {
     const progressFraction = displayedStep / TOTAL_QUESTIONS;
 
     useEffect(() => {
+        // Dismiss the keyboard between steps so a lingering input focus (e.g. the
+        // race search field) doesn't swallow the first tap on the next step.
+        Keyboard.dismiss();
+        setScrollEnabled(true);
         scrollViewRef.current?.scrollTo({ y: 0, animated: true });
     }, [currentStep]);
 
@@ -451,35 +428,24 @@ export function OnboardingScreen({ navigation, route }: any) {
             />
 
             <View style={[styles.headerContainer, { paddingTop: topInset + 8 }]}>
-                <View style={headerStyles.container}>
-                    <View style={headerStyles.topRow}>
-                        <Text style={headerStyles.pontuacaoText}>Pontuação</Text>
-                        <AnimatedXP value={xpEarned} />
-                    </View>
-                    <View style={headerStyles.progressRow}>
-                        <TouchableOpacity
-                            style={headerStyles.backChevron}
-                            onPress={handleBack}
-                            disabled={!showBackButton}
-                            hitSlop={8}
-                            activeOpacity={0.7}
-                            accessibilityRole="button"
-                            accessibilityLabel="Voltar"
-                        >
-                            <Ionicons
-                                name="chevron-back"
-                                size={24}
-                                color={showBackButton ? FORCED_TEXT : 'transparent'}
-                            />
-                        </TouchableOpacity>
-                        <AnimatedProgressBar fraction={progressFraction} />
-                    </View>
-                    <View style={headerStyles.progressTextRow}>
-                        <Text style={headerStyles.progressLabel}>Progresso:</Text>
-                        <Text style={headerStyles.progressPercent}>
-                            {Math.round(progressFraction * 100)}%
-                        </Text>
-                    </View>
+                <View style={headerStyles.row}>
+                    <TouchableOpacity
+                        style={headerStyles.backChevron}
+                        onPress={handleBack}
+                        disabled={!showBackButton}
+                        hitSlop={12}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel="Voltar"
+                    >
+                        <Ionicons
+                            name="arrow-back"
+                            size={24}
+                            color={showBackButton ? FORCED_TEXT : 'transparent'}
+                        />
+                    </TouchableOpacity>
+                    <AnimatedProgressBar fraction={progressFraction} />
+                    <AnimatedXP value={xpEarned} />
                 </View>
             </View>
 
@@ -491,6 +457,9 @@ export function OnboardingScreen({ navigation, route }: any) {
                     { paddingBottom: FOOTER_RESERVED_HEIGHT + bottomInset },
                 ]}
                 showsVerticalScrollIndicator={false}
+                scrollEnabled={scrollEnabled}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
             >
                 {/*
                     Key change forces remount on step transition. Reanimated's
@@ -508,6 +477,8 @@ export function OnboardingScreen({ navigation, route }: any) {
                             {...(currentStepData.keys ? getValue() : { value: getValue() })}
                             onChange={handleChange}
                             onAdvance={handleContinue}
+                            onLockScroll={() => setScrollEnabled(false)}
+                            onUnlockScroll={() => setScrollEnabled(true)}
                             {...extraProps}
                             {...wearableProps}
                         />
@@ -537,46 +508,20 @@ export function OnboardingScreen({ navigation, route }: any) {
 }
 
 const headerStyles = StyleSheet.create({
-    container: { width: '100%', alignItems: 'center', gap: 9, paddingHorizontal: 12 },
-    topRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        width: '100%',
-        height: 43,
-    },
-    pontuacaoText: { fontFamily: 'Poppins-Regular', fontSize: 14, color: FORCED_TEXT },
-    progressRow: {
+    // Single clean row: [← back] [progress bar (flex)] [XP pill]
+    row: {
         flexDirection: 'row',
         alignItems: 'center',
         width: '100%',
-        gap: PROGRESS_ROW_GAP,
+        gap: 12,
+        paddingHorizontal: 4,
     },
     backChevron: {
         width: CHEVRON_SIZE,
         height: CHEVRON_SIZE,
         alignItems: 'center',
         justifyContent: 'center',
-        marginLeft: -10, // optically align the chevron glyph to the edge
-    },
-    progressTextRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        width: '100%',
-        height: 28,
-        gap: 4,
-        paddingLeft: CHEVRON_SIZE + PROGRESS_ROW_GAP, // align under the bar start
-    },
-    progressLabel: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 11,
-        color: FORCED_TEXT_SECONDARY,
-    },
-    progressPercent: {
-        fontFamily: 'Inter-Bold',
-        fontSize: 11,
-        fontWeight: '700',
-        color: FORCED_CYAN,
+        marginLeft: -6, // optically align the arrow glyph to the edge
     },
 });
 

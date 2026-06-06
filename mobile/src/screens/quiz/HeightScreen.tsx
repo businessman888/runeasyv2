@@ -33,9 +33,11 @@ const RULER_MARKS = [200, 190, 180, 170, 160, 150];
 interface HeightScreenProps {
     value?: number | null;
     onChange?: (value: number) => void;
+    onLockScroll?: () => void;
+    onUnlockScroll?: () => void;
 }
 
-export function HeightScreen({ value, onChange }: HeightScreenProps) {
+export function HeightScreen({ value, onChange, onLockScroll, onUnlockScroll }: HeightScreenProps) {
     const [selectedHeight, setSelectedHeight] = useState<number>(value || 175);
     const [showCustomInput, setShowCustomInput] = useState(false);
     const [customValue, setCustomValue] = useState('');
@@ -75,6 +77,8 @@ export function HeightScreen({ value, onChange }: HeightScreenProps) {
             // Android: block native ScrollView from capturing the gesture during drag.
             onShouldBlockNativeResponder: () => true,
             onPanResponderGrant: () => {
+                // Lock the parent ScrollView so it can't reclaim the vertical pan.
+                onLockScroll?.();
                 panY.setOffset(lastOffset.current);
                 panY.setValue(0);
             },
@@ -95,6 +99,12 @@ export function HeightScreen({ value, onChange }: HeightScreenProps) {
                 if (onChange) {
                     onChange(newHeight);
                 }
+                onUnlockScroll?.();
+            },
+            onPanResponderTerminate: () => {
+                // Safety: if the gesture is interrupted, always restore scrolling.
+                panY.flattenOffset();
+                onUnlockScroll?.();
             },
         })
     ).current;

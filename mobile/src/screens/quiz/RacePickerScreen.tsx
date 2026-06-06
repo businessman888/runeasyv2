@@ -9,6 +9,7 @@ import {
     Modal,
     Pressable,
     Alert,
+    Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, borderRadius } from '../../theme';
@@ -54,6 +55,13 @@ export function RacePickerScreen({ onAdvance }: RacePickerScreenProps) {
     const [dateMonths, setDateMonths] = useState<number | undefined>(undefined);
     const [openFilter, setOpenFilter] = useState<FilterKey>(null);
     const [detailRace, setDetailRace] = useState<Race | null>(null);
+
+    // Dismiss the keyboard first so the tap that opens the sheet isn't "eaten"
+    // dismissing the search keyboard (which felt like needing a double tap).
+    const openDetail = (race: Race) => {
+        Keyboard.dismiss();
+        setDetailRace(race);
+    };
 
     const dateTo = useMemo(() => {
         if (!dateMonths) return undefined;
@@ -157,7 +165,7 @@ export function RacePickerScreen({ onAdvance }: RacePickerScreenProps) {
             )}
             {!loading && !error &&
                 races.map((race) => (
-                    <RaceCard key={race.id} race={race} onPress={setDetailRace} />
+                    <RaceCard key={race.id} race={race} onPress={openDetail} />
                 ))}
 
             {/* Manual fallback */}
