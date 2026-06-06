@@ -5,11 +5,12 @@ import {
     StyleSheet,
     Animated,
     PanResponder,
-    TextInput,
     TouchableOpacity,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Line } from 'react-native-svg';
+import { QuizHeader, Hl } from '../../components/onboarding/QuizHeader';
+import { ValueInputSheet } from '../../components/onboarding/ValueInputSheet';
 
 // Design System Colors (Figma)
 const DS = {
@@ -39,8 +40,7 @@ interface HeightScreenProps {
 
 export function HeightScreen({ value, onChange, onLockScroll, onUnlockScroll }: HeightScreenProps) {
     const [selectedHeight, setSelectedHeight] = useState<number>(value || 175);
-    const [showCustomInput, setShowCustomInput] = useState(false);
-    const [customValue, setCustomValue] = useState('');
+    const [sheetOpen, setSheetOpen] = useState(false);
 
     const panY = useRef(new Animated.Value(0)).current;
     const lastOffset = useRef(0);
@@ -123,30 +123,15 @@ export function HeightScreen({ value, onChange, onLockScroll, onUnlockScroll }: 
         }
     };
 
-    const handleCustomSubmit = () => {
-        const num = parseInt(customValue, 10);
-        if (num >= MIN_HEIGHT && num <= MAX_HEIGHT) {
-            handleMarkerPress(num);
-            setShowCustomInput(false);
-            setCustomValue('');
-        }
-    };
-
     // Avatar scale based on height (0.8 to 1.2)
     const avatarScale = 0.8 + ((selectedHeight - MIN_HEIGHT) / HEIGHT_RANGE) * 0.4;
 
     return (
         <>
-            {/* Title Section */}
-            <View style={styles.titleContainer}>
-                <Text style={styles.title}>
-                    Qual é a sua{'\n'}
-                    <Text style={styles.titleHighlight}>altura</Text>?
-                </Text>
-                <Text style={styles.subtitle}>
-                    Arraste a régua ou toque em um valor.
-                </Text>
-            </View>
+            <QuizHeader
+                title={<>Qual é a sua <Hl>altura</Hl>?</>}
+                subtitle="Arraste a régua ou toque em um valor."
+            />
 
             {/* Main Content: Ruler + Avatar */}
             <View style={styles.contentContainer}>
@@ -228,36 +213,27 @@ export function HeightScreen({ value, onChange, onLockScroll, onUnlockScroll }: 
                 </View>
             </View>
 
-            {/* Custom Input Toggle */}
+            {/* Custom Input Toggle → premium sheet */}
             <TouchableOpacity
                 style={styles.customToggle}
-                onPress={() => setShowCustomInput(!showCustomInput)}
+                onPress={() => setSheetOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Inserir altura exata"
             >
-                <Text style={styles.customToggleText}>
-                    {showCustomInput ? 'Fechar' : 'Inserir valor exato'}
-                </Text>
+                <Text style={styles.customToggleText}>Inserir valor exato</Text>
             </TouchableOpacity>
 
-            {/* Custom Input */}
-            {showCustomInput && (
-                <View style={styles.customInputContainer}>
-                    <TextInput
-                        style={styles.customInput}
-                        value={customValue}
-                        onChangeText={setCustomValue}
-                        keyboardType="number-pad"
-                        placeholder="Ex: 173"
-                        placeholderTextColor={DS.textSecondary}
-                        maxLength={3}
-                    />
-                    <TouchableOpacity
-                        style={styles.customSubmitButton}
-                        onPress={handleCustomSubmit}
-                    >
-                        <Text style={styles.customSubmitText}>OK</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
+            <ValueInputSheet
+                visible={sheetOpen}
+                onClose={() => setSheetOpen(false)}
+                onConfirm={handleMarkerPress}
+                title="Altura exata"
+                suffix="cm"
+                min={MIN_HEIGHT}
+                max={MAX_HEIGHT}
+                initialValue={selectedHeight}
+                placeholder="Ex: 173"
+            />
         </>
     );
 }

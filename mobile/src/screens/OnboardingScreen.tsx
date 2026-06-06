@@ -9,6 +9,7 @@ import {
     Dimensions,
     TouchableOpacity,
     Keyboard,
+    AccessibilityInfo,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -69,6 +70,21 @@ const FORCED_GLASS_STROKE = 'rgba(235, 235, 245, 0.1)';
 // XP economy
 const XP_PER_QUESTION = 5;        // ~15 questions × 5 = 75
 const XP_COMPLETION_BONUS = 25;   // total ≈ 100
+
+// Subtle slide-fade for each step (enters from +24px X). Reduce-motion users get
+// a plain quick fade instead (see reduceMotion below).
+function slideFadeEntering() {
+    'worklet';
+    return {
+        initialValues: { opacity: 0, transform: [{ translateX: 24 }] },
+        animations: {
+            opacity: withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) }),
+            transform: [
+                { translateX: withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) }) },
+            ],
+        },
+    };
+}
 
 // ============================================
 // ANIMATED PROGRESS BAR
@@ -166,6 +182,7 @@ export function OnboardingScreen({ navigation, route }: any) {
     const { data, updateData, xpEarned, addXP } = useOnboardingStore();
     const [currentStep, setCurrentStep] = useState(0);
     const [wearableModalOpen, setWearableModalOpen] = useState(false);
+    const [reduceMotion, setReduceMotion] = useState(false);
     // Lets a child (e.g. the height ruler) lock the parent scroll while dragging,
     // so vertical pans don't fight the ScrollView and feel "stuck".
     const [scrollEnabled, setScrollEnabled] = useState(true);
@@ -195,6 +212,12 @@ export function OnboardingScreen({ navigation, route }: any) {
     const displayedStep = activeSteps.slice(0, safeStep + 1)
         .filter(s => !s.isInterstitial).length;
     const progressFraction = displayedStep / TOTAL_QUESTIONS;
+
+    useEffect(() => {
+        AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+        const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+        return () => sub.remove();
+    }, []);
 
     useEffect(() => {
         // Dismiss the keyboard between steps so a lingering input focus (e.g. the
@@ -468,7 +491,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                 */}
                 <Animated.View
                     key={`step-${currentStep}`}
-                    entering={FadeIn.duration(260).easing(Easing.out(Easing.cubic))}
+                    entering={reduceMotion ? FadeIn.duration(150) : slideFadeEntering}
                 >
                     {isInterstitial ? (
                         <StepComponent />

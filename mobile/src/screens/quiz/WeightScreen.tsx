@@ -1,37 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    TouchableOpacity,
-    TextInput,
-} from 'react-native';
-import Svg, { Path } from 'react-native-svg';
-
-// Design System Colors (Figma)
-const DS = {
-    bg: '#0F0F1E',
-    card: '#1C1C2E',
-    cyan: '#00D4FF',
-    cyanSelected: 'rgba(0, 212, 255, 0.1)',
-    text: '#EBEBF5',
-    textSecondary: 'rgba(235, 235, 245, 0.6)',
-    glassBorder: 'rgba(235, 235, 245, 0.1)',
-};
-
-// Circular checkbox component
-const CircularCheckbox = ({ selected }: { selected: boolean }) => (
-    <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
-        {selected && (
-            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-                <Path
-                    d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"
-                    fill="#FFFFFF"
-                />
-            </Svg>
-        )}
-    </View>
-);
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { QuizHeader, Hl } from '../../components/onboarding/QuizHeader';
+import { SelectableOption } from '../../components/onboarding/SelectableOption';
+import { ValueInputSheet } from '../../components/onboarding/ValueInputSheet';
+import { QUIZ } from './_tokens';
 
 const WEIGHT_OPTIONS = [
     { value: 50, label: '50 kg', range: '45-55 kg' },
@@ -49,209 +21,80 @@ interface WeightScreenProps {
 
 export function WeightScreen({ value, onChange }: WeightScreenProps) {
     const [selectedWeight, setSelectedWeight] = useState<number | null>(value || null);
-    const [customWeight, setCustomWeight] = useState<string>(value ? String(value) : '');
-    const [showCustom, setShowCustom] = useState(false);
+    const [sheetOpen, setSheetOpen] = useState(false);
 
     useEffect(() => {
-        if (value) {
-            setSelectedWeight(value);
-            setCustomWeight(String(value));
-        }
+        if (value) setSelectedWeight(value);
     }, [value]);
 
     const handleSelect = (weight: number) => {
         setSelectedWeight(weight);
-        setCustomWeight(String(weight));
-        setShowCustom(false);
-        if (onChange) {
-            onChange(weight);
-        }
+        onChange?.(weight);
     };
 
-    const handleCustomChange = (text: string) => {
-        const numericText = text.replace(/[^0-9]/g, '');
-        setCustomWeight(numericText);
-
-        const weight = parseInt(numericText, 10);
-        if (!isNaN(weight) && weight > 0 && weight <= 300) {
-            setSelectedWeight(weight);
-            if (onChange) {
-                onChange(weight);
-            }
-        } else if (numericText === '') {
-            setSelectedWeight(null);
-        }
-    };
+    const isPreset = WEIGHT_OPTIONS.some((o) => o.value === selectedWeight);
+    const hasCustom = selectedWeight != null && !isPreset;
 
     return (
         <>
-            {/* Title Section */}
-            <View style={styles.titleContainer}>
-                <Text style={styles.title}>
-                    Qual é o seu{'\n'}
-                    <Text style={styles.titleHighlight}>peso atual</Text>?
-                </Text>
-                <Text style={styles.subtitle}>
-                    Usamos para calcular suas zonas de esforço e calorias.
-                </Text>
-            </View>
+            <QuizHeader
+                title={<>Qual é o seu <Hl>peso atual</Hl>?</>}
+                subtitle="Usamos para calcular suas zonas de esforço e calorias."
+            />
 
-            {/* Weight Cards - Full Width Vertical */}
-            <View style={styles.cardsContainer}>
+            <View style={styles.options}>
                 {WEIGHT_OPTIONS.map((option) => (
-                    <TouchableOpacity
+                    <SelectableOption
                         key={option.value}
-                        style={[
-                            styles.card,
-                            selectedWeight === option.value && styles.cardSelected,
-                        ]}
+                        title={option.label}
+                        subtitle={option.range}
+                        selected={selectedWeight === option.value}
                         onPress={() => handleSelect(option.value)}
-                        activeOpacity={0.7}
-                    >
-                        <CircularCheckbox selected={selectedWeight === option.value} />
-                        <View style={styles.cardContent}>
-                            <Text style={[
-                                styles.cardTitle,
-                                selectedWeight === option.value && styles.cardTitleSelected,
-                            ]}>
-                                {option.label}
-                            </Text>
-                            <Text style={styles.cardSubtitle}>{option.range}</Text>
-                        </View>
-                    </TouchableOpacity>
+                    />
                 ))}
             </View>
 
-            {/* Custom Input Toggle */}
             <TouchableOpacity
                 style={styles.customToggle}
-                onPress={() => setShowCustom(!showCustom)}
+                onPress={() => setSheetOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Inserir peso exato"
             >
                 <Text style={styles.customToggleText}>
-                    {showCustom ? 'Escolher opção' : 'Inserir peso exato'}
+                    {hasCustom ? `Peso exato: ${selectedWeight} kg · editar` : 'Inserir peso exato'}
                 </Text>
             </TouchableOpacity>
 
-            {/* Custom Input (conditional) */}
-            {showCustom && (
-                <View style={styles.customInputContainer}>
-                    <TextInput
-                        style={styles.input}
-                        value={customWeight}
-                        onChangeText={handleCustomChange}
-                        keyboardType="numeric"
-                        placeholder="Ex: 73"
-                        placeholderTextColor={DS.textSecondary}
-                        maxLength={3}
-                    />
-                    <Text style={styles.inputSuffix}>kg</Text>
-                </View>
-            )}
+            <ValueInputSheet
+                visible={sheetOpen}
+                onClose={() => setSheetOpen(false)}
+                onConfirm={handleSelect}
+                title="Peso exato"
+                suffix="kg"
+                min={30}
+                max={250}
+                initialValue={selectedWeight}
+                placeholder="Ex: 73"
+            />
         </>
     );
 }
 
 const styles = StyleSheet.create({
-    titleContainer: {
-        marginBottom: 24,
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: DS.text,
-        lineHeight: 32,
-        marginBottom: 12,
-    },
-    titleHighlight: {
-        color: DS.cyan,
-    },
-    subtitle: {
-        fontSize: 15,
-        fontWeight: '400',
-        color: DS.textSecondary,
-        lineHeight: 22,
-    },
-    cardsContainer: {
-        gap: 10,
+    options: {
+        gap: QUIZ.gapOptions,
         marginBottom: 16,
-    },
-    card: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        width: '100%',
-        backgroundColor: DS.card,
-        borderRadius: 15,
-        padding: 16,
-        borderWidth: 1.5,
-        borderColor: 'transparent',
-        gap: 14,
-    },
-    cardSelected: {
-        borderColor: DS.cyan,
-        backgroundColor: DS.cyanSelected,
-    },
-    checkbox: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        borderWidth: 2,
-        borderColor: DS.textSecondary,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    checkboxSelected: {
-        backgroundColor: DS.cyan,
-        borderColor: DS.cyan,
-    },
-    cardContent: {
-        flex: 1,
-    },
-    cardTitle: {
-        fontSize: 17,
-        fontWeight: '600',
-        color: DS.text,
-    },
-    cardTitleSelected: {
-        color: DS.cyan,
-    },
-    cardSubtitle: {
-        fontSize: 13,
-        fontWeight: '400',
-        color: DS.textSecondary,
-        marginTop: 2,
     },
     customToggle: {
         alignSelf: 'center',
-        paddingVertical: 8,
+        paddingVertical: 10,
         paddingHorizontal: 16,
     },
     customToggleText: {
+        fontFamily: QUIZ.optionSubtitle.fontFamily,
         fontSize: 14,
-        fontWeight: '500',
-        color: DS.cyan,
+        color: QUIZ.color.cyan,
         textDecorationLine: 'underline',
-    },
-    customInputContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: DS.card,
-        borderRadius: 16,
-        borderWidth: 2,
-        borderColor: DS.cyan,
-        paddingHorizontal: 20,
-        marginTop: 12,
-    },
-    input: {
-        flex: 1,
-        fontSize: 24,
-        fontWeight: '700',
-        color: DS.text,
-        paddingVertical: 16,
-    },
-    inputSuffix: {
-        fontSize: 18,
-        fontWeight: '500',
-        color: DS.textSecondary,
     },
 });
 

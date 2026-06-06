@@ -1,3 +1,5 @@
+import { deriveGoalFromDistance } from '../stores/onboardingStore';
+
 type Goal = '5k' | '10k' | 'half_marathon' | 'marathon' | 'general_fitness';
 type Level = 'beginner' | 'intermediate' | 'advanced';
 
@@ -48,12 +50,37 @@ const DIFFICULTY_MATRIX: Record<Goal, Record<Level, DifficultyCopy>> = {
     },
 };
 
-export function getGoalAchievableCopy(goal: string | undefined, level: string | undefined) {
-    const safeGoal = (goal as Goal) in GOAL_LABEL ? (goal as Goal) : '10k';
+interface GoalAchievableOpts {
+    goalType?: string | null;
+    raceDistance?: number | null;
+    raceName?: string | null;
+}
+
+export function getGoalAchievableCopy(
+    goal: string | undefined,
+    level: string | undefined,
+    opts?: GoalAchievableOpts,
+) {
+    const isRace = opts?.goalType === 'race';
+
+    // On the race path ObjectiveScreen is skipped, so `goal` is empty. Derive the
+    // difficulty bucket from the chosen race distance instead of falling back to 10k.
+    const effectiveGoal: Goal = isRace
+        ? (deriveGoalFromDistance(opts?.raceDistance) as Goal)
+        : ((goal as Goal) in GOAL_LABEL ? (goal as Goal) : '10k');
+
     const safeLevel = (level as Level) in LEVEL_LABEL ? (level as Level) : 'beginner';
+
+    // Label with the real race name/distance when available; otherwise the
+    // standard distance label.
+    const goalLabel = isRace
+        ? (opts?.raceName?.trim()
+            || (opts?.raceDistance != null ? `${opts.raceDistance} km` : GOAL_LABEL[effectiveGoal]))
+        : GOAL_LABEL[effectiveGoal];
+
     return {
-        goalLabel: GOAL_LABEL[safeGoal],
+        goalLabel,
         levelLabel: LEVEL_LABEL[safeLevel],
-        ...DIFFICULTY_MATRIX[safeGoal][safeLevel],
+        ...DIFFICULTY_MATRIX[effectiveGoal][safeLevel],
     };
 }

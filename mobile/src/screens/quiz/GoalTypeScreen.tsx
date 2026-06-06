@@ -1,26 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, borderRadius } from '../../theme';
-import { OptionCard } from '../../components/onboarding/OptionCard';
+import { View, StyleSheet } from 'react-native';
+import { QuizHeader, Hl } from '../../components/onboarding/QuizHeader';
+import { SelectableOption } from '../../components/onboarding/SelectableOption';
+import { QUIZ } from './_tokens';
+import { GOAL_TYPE_ICONS } from './_icons';
 
 type GoalType = 'distance' | 'race';
 
-const RadioButton = ({ selected }: { selected: boolean }) => (
-    <View style={[styles.radioOuter, selected && styles.radioOuterSelected]}>
-        {selected && <View style={styles.radioInner} />}
-    </View>
-);
-
-const IconBox = ({ name }: { name: keyof typeof Ionicons.glyphMap }) => (
-    <View style={styles.iconBox}>
-        <Ionicons name={name} size={24} color={colors.textLight} />
-    </View>
-);
-
 interface GoalTypeOption {
     id: GoalType;
-    icon: React.ReactNode;
     title: string;
     subtitle: string;
 }
@@ -28,13 +16,11 @@ interface GoalTypeOption {
 const OPTIONS: GoalTypeOption[] = [
     {
         id: 'distance',
-        icon: <IconBox name="location-outline" />,
         title: 'Distância',
         subtitle: 'Treinar progressivamente até minha meta',
     },
     {
         id: 'race',
-        icon: <IconBox name="flag" />,
         title: 'Tenho uma prova',
         subtitle: 'Me preparar para uma corrida específica',
     },
@@ -52,37 +38,28 @@ export function GoalTypeScreen({ value, onChange }: GoalTypeScreenProps) {
         setSelected(value ?? null);
     }, [value]);
 
-    const handleSelect = (option: GoalTypeOption) => {
-        setSelected(option.id);
-        onChange?.(option.id);
+    const handleSelect = (id: GoalType) => {
+        setSelected(id);
+        onChange?.(id);
     };
 
     return (
         <>
-            <View style={styles.titleContainer}>
-                <Text style={styles.title}>Qual a sua meta{'\n'}principal?</Text>
-                <Text style={styles.subtitle}>
-                    Isso ajuda o Coach AI a montar o{'\n'}plano ideal para você.
-                </Text>
-            </View>
+            <QuizHeader
+                title={<>Qual a sua meta <Hl>principal</Hl>?</>}
+                subtitle="Isso ajuda o Coach AI a montar o plano ideal para você."
+            />
 
-            <View style={styles.optionsContainer}>
+            <View style={styles.options}>
                 {OPTIONS.map((option) => (
-                    <OptionCard
+                    <SelectableOption
                         key={option.id}
+                        icon={GOAL_TYPE_ICONS[option.id]}
+                        title={option.title}
+                        subtitle={option.subtitle}
                         selected={selected === option.id}
-                        onPress={() => handleSelect(option)}
-                        accessibilityLabel={`${option.title}, ${option.subtitle}`}
-                        style={styles.optionCard}
-                        selectedStyle={styles.optionCardSelected}
-                    >
-                        {option.icon}
-                        <View style={styles.optionTextContainer}>
-                            <Text style={styles.optionTitle}>{option.title}</Text>
-                            <Text style={styles.optionSubtitle}>{option.subtitle}</Text>
-                        </View>
-                        <RadioButton selected={selected === option.id} />
-                    </OptionCard>
+                        onPress={() => handleSelect(option.id)}
+                    />
                 ))}
             </View>
         </>
@@ -90,70 +67,8 @@ export function GoalTypeScreen({ value, onChange }: GoalTypeScreenProps) {
 }
 
 const styles = StyleSheet.create({
-    titleContainer: { marginBottom: 24 },
-    title: {
-        fontSize: typography.fontSizes['3xl'],
-        fontWeight: typography.fontWeights.bold,
-        color: colors.text,
-        lineHeight: 36,
-        marginBottom: 8,
-    },
-    subtitle: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.textSecondary,
-        lineHeight: 22,
-    },
-    optionsContainer: { gap: 12 },
-    iconBox: {
-        width: 47,
-        height: 47,
-        borderRadius: 10,
-        backgroundColor: colors.card,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    optionCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: colors.card,
-        borderRadius: borderRadius.xl,
-        padding: 12,
-        marginBottom: 12,
-        borderWidth: 2,
-        borderColor: 'transparent',
-    },
-    optionCardSelected: {
-        borderColor: colors.primary,
-        backgroundColor: 'rgba(0, 212, 255, 0.08)',
-    },
-    optionTextContainer: { flex: 1, marginLeft: 12 },
-    optionTitle: {
-        fontSize: typography.fontSizes.xl,
-        fontWeight: typography.fontWeights.semibold,
-        color: colors.text,
-        marginBottom: 2,
-    },
-    optionSubtitle: {
-        fontSize: typography.fontSizes.md,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.textSecondary,
-    },
-    radioOuter: {
-        width: 30,
-        height: 30,
-        borderRadius: borderRadius.full,
-        borderWidth: 2,
-        borderColor: colors.border,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    radioOuterSelected: { borderColor: colors.primary },
-    radioInner: {
-        width: 18,
-        height: 18,
-        borderRadius: borderRadius.full,
-        backgroundColor: colors.primary,
+    options: {
+        gap: QUIZ.gapOptions,
     },
 });
 

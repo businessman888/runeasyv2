@@ -14,28 +14,29 @@ export function GoalAchievableScreen() {
     const { goalLabel, levelLabel, difficulty, realistic } = getGoalAchievableCopy(
         data.goal,
         data.experience_level,
+        {
+            goalType: data.goal_type,
+            raceDistance: data.race_distance,
+            raceName: data.race_name,
+        },
     );
 
     return (
         <View style={styles.container}>
             <Text style={styles.mainText}>
-                Alcançar a meta de{'\n'}
+                Alcançar a meta de{' '}
                 <Text style={styles.highlight}>{goalLabel}</Text>{' '}
-                com o nível{'\n'}
+                com o nível{' '}
                 <Text style={styles.highlight}>{levelLabel}</Text>{' '}
-                é uma tarefa{'\n'}
-                <Text style={styles.highlight}>{difficulty}</Text>.{'\n'}
-                É uma meta considerada{'\n'}
-                {realistic}.
+                é uma tarefa{' '}
+                <Text style={styles.highlight}>{difficulty}</Text>.{' '}
+                É uma meta considerada {realistic}.
             </Text>
 
             <Text style={styles.secondaryText}>
-                90% dos usuários dizem que as suas{'\n'}
-                metas são batidas em menos tempo{'\n'}
-                e com extrema tranquilidade após{'\n'}
-                usarem a RunEasy. Alcançando cada{'\n'}
-                vez mais níveis mais altos de distância,{'\n'}
-                com menos tempo e com 0 lesões.
+                90% dos usuários dizem que as suas metas são batidas em menos tempo
+                e com extrema tranquilidade após usarem a RunEasy. Alcançando cada
+                vez mais níveis mais altos de distância, com menos tempo e com 0 lesões.
             </Text>
         </View>
     );

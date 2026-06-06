@@ -1,5 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withTiming,
+    Easing,
+} from 'react-native-reanimated';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { toSeconds, fromSeconds, formatHMS } from '../../utils/timeFormat';
 
@@ -19,31 +25,62 @@ const COL_GAP = 4;
 const COL_WIDTH = (CARD_WIDTH - 16 * 2 - COL_GAP) / 2; // inner padding 16
 const INNER_CARD_HEIGHT = 170;
 
-// Bar visual ratios (inverse: short bar = without RunEasy / tall bar = with RunEasy)
-const BAR_HEIGHT_WITHOUT = INNER_CARD_HEIGHT * 0.28; // small
-const BAR_HEIGHT_WITH = INNER_CARD_HEIGHT * 0.70;    // tall
+// RunEasy makes you ~12% faster over the SAME distance. Honest, defensible.
+// Bars represent SPEED (taller = faster = better); since speed ∝ 1/time, the
+// "without" bar is exactly (1 - SPEEDUP) as tall as the "with" bar.
+const SPEEDUP = 0.12;
+const BAR_HEIGHT_WITH = INNER_CARD_HEIGHT * 0.72;        // faster → tallest
+const BAR_HEIGHT_WITHOUT = BAR_HEIGHT_WITH * (1 - SPEEDUP); // ~12% shorter
+
+// A single bar that grows from its base on mount.
+const AnimatedBar: React.FC<{
+    targetHeight: number;
+    color: string;
+    label: string;
+    labelColor: string;
+}> = ({ targetHeight, color, label, labelColor }) => {
+    const h = useSharedValue(0);
+
+    useEffect(() => {
+        h.value = withTiming(targetHeight, {
+            duration: 900,
+            easing: Easing.out(Easing.cubic),
+        });
+    }, [targetHeight, h]);
+
+    const animStyle = useAnimatedStyle(() => ({ height: h.value }));
+
+    return (
+        <Animated.View style={[styles.bar, { backgroundColor: color }, animStyle]}>
+            <Text style={[styles.barLabel, { color: labelColor }]}>{label}</Text>
+        </Animated.View>
+    );
+};
 
 export function TimeCompareScreen() {
     const { data } = useOnboardingStore();
 
     const userDistance = data.recentDistance ?? 10;
     const userTimeSec = data.distanceTime ? toSeconds(data.distanceTime) : 6050; // fallback 1:40:50
-
-    const doubleDistance = userDistance * 2;
-    const fasterTimeSec = Math.max(60, Math.round(userTimeSec * 0.2)); // 5x faster
+    const fasterTimeSec = Math.round(userTimeSec * (1 - SPEEDUP));
 
     const userTimeLabel = formatHMS(fromSeconds(userTimeSec));
     const fasterTimeLabel = formatHMS(fromSeconds(fasterTimeSec));
+    const distanceLabel = `${userDistance} km`;
 
     return (
         <>
             <View style={styles.titleContainer}>
                 <Text style={styles.title}>
-                    Corra <Text style={styles.titleHighlight}>o dobro</Text> de distância com{'\n'}
-                    <Text style={styles.titleHighlight}>a metade</Text> do tempo com a{'\n'}
-                    <Text style={styles.titleHighlight}>RunEasy</Text>{'\n'}
-                    VS Treinando sozinho.
+                    Corra a <Text style={styles.titleHighlight}>mesma distância</Text>{'\n'}
+                    em <Text style={styles.titleHighlight}>menos tempo</Text> com a{' '}
+                    <Text style={styles.titleHighlight}>RunEasy</Text> vs treinando sozinho.
                 </Text>
+            </View>
+
+            {/* Distance context — same on both sides, stated once. */}
+            <View style={styles.distancePill}>
+                <Text style={styles.distancePillText}>{distanceLabel}</Text>
             </View>
 
             <View style={styles.card}>
@@ -52,10 +89,13 @@ export function TimeCompareScreen() {
                     <View style={styles.column}>
                         <View style={styles.innerCard}>
                             <Text style={styles.innerHeader}>Sem RunEasy</Text>
-                            <View style={styles.barFillerWithout}>
-                                <View style={[styles.bar, styles.barWithout]}>
-                                    <Text style={styles.barLabelGray}>{userDistance} km</Text>
-                                </View>
+                            <View style={styles.barFiller}>
+                                <AnimatedBar
+                                    targetHeight={BAR_HEIGHT_WITHOUT}
+                                    color={DS.cardLabel}
+                                    label={distanceLabel}
+                                    labelColor={DS.textSecondary}
+                                />
                             </View>
                         </View>
                         <View style={styles.timeWrap}>
@@ -67,16 +107,20 @@ export function TimeCompareScreen() {
                     <View style={styles.column}>
                         <View style={styles.innerCard}>
                             <Text style={styles.innerHeader}>Com RunEasy</Text>
-                            <View style={styles.barFillerWith}>
-                                <View style={[styles.bar, styles.barWith]}>
-                                    <Text style={styles.barLabelDark}>
-                                        {doubleDistance} km
-                                    </Text>
-                                </View>
+                            <View style={styles.barFiller}>
+                                <AnimatedBar
+                                    targetHeight={BAR_HEIGHT_WITH}
+                                    color={DS.cyan}
+                                    label={distanceLabel}
+                                    labelColor={DS.cardInner}
+                                />
                             </View>
                         </View>
                         <View style={styles.timeWrap}>
                             <Text style={styles.timeLabelCyan}>{fasterTimeLabel}</Text>
+                            <View style={styles.badge}>
+                                <Text style={styles.badgeText}>~12% mais rápido</Text>
+                            </View>
                         </View>
                     </View>
                 </View>
@@ -105,6 +149,20 @@ const styles = StyleSheet.create({
     titleHighlight: {
         color: DS.cyan,
         fontWeight: '600',
+    },
+    distancePill: {
+        alignSelf: 'center',
+        backgroundColor: DS.card,
+        borderRadius: 999,
+        paddingHorizontal: 16,
+        paddingVertical: 6,
+        marginBottom: 14,
+    },
+    distancePillText: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 13,
+        fontWeight: '500',
+        color: DS.textSecondary,
     },
     card: {
         width: CARD_WIDTH,
@@ -139,12 +197,7 @@ const styles = StyleSheet.create({
         color: DS.text,
         marginLeft: 16,
     },
-    barFillerWithout: {
-        flex: 1,
-        justifyContent: 'flex-end',
-        alignItems: 'center',
-    },
-    barFillerWith: {
+    barFiller: {
         flex: 1,
         justifyContent: 'flex-end',
         alignItems: 'center',
@@ -153,32 +206,19 @@ const styles = StyleSheet.create({
         width: COL_WIDTH - 8,
         borderRadius: 16,
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: 'flex-end',
+        paddingBottom: 8,
         marginBottom: 2,
+        overflow: 'hidden',
     },
-    barWithout: {
-        height: BAR_HEIGHT_WITHOUT,
-        backgroundColor: DS.cardLabel,
-    },
-    barWith: {
-        height: BAR_HEIGHT_WITH,
-        backgroundColor: DS.cyan,
-    },
-    barLabelGray: {
+    barLabel: {
         fontFamily: 'Poppins-Medium',
         fontSize: 13,
         fontWeight: '500',
-        color: DS.textSecondary,
-    },
-    barLabelDark: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 13,
-        fontWeight: '500',
-        color: DS.cardInner,
     },
     timeWrap: {
         marginTop: 10,
-        height: 30,
+        minHeight: 30,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -192,6 +232,19 @@ const styles = StyleSheet.create({
         fontFamily: 'Poppins-Medium',
         fontSize: 16,
         fontWeight: '500',
+        color: DS.cyan,
+    },
+    badge: {
+        marginTop: 6,
+        backgroundColor: 'rgba(0, 212, 255, 0.12)',
+        borderRadius: 999,
+        paddingHorizontal: 10,
+        paddingVertical: 3,
+    },
+    badgeText: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 11,
+        fontWeight: '600',
         color: DS.cyan,
     },
     footer: {
