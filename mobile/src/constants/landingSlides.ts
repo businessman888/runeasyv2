@@ -46,9 +46,9 @@ export const LANDING_SLIDES: LandingSlide[] = [
         key: 'device',
         variant: 'default',
         title: 'Conecte ao seu dispositivo e\ntenha seu coach com você 24h por dia',
-        image: require('../assets/images/imagesLP/imgThreeCarrosselLPII.png'),
+        image: require('../assets/images/imagesLP/imgItemCarrosselLPThreeII.png'),
         imageMode: 'contained',
-        aspectRatio: 1709 / 2000,
+        aspectRatio: 1703 / 2008,
     },
     {
         key: 'reports',

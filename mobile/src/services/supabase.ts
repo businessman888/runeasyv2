@@ -12,6 +12,31 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 /**
+ * Custom fetch for the Supabase client.
+ *
+ * Some ISP DNS can't resolve the Supabase host, so all REAL auth goes through our
+ * backend. The client still issues direct calls internally (e.g. setSession →
+ * _getUser). When the host is unreachable, the native fetch rejects with
+ * `TypeError: Network request failed`; in some internal/background paths that
+ * throw escapes and surfaces a red LogBox error even though login works.
+ *
+ * Converting the network failure into a synthetic 503 Response means auth-js
+ * always gets a normal `{ error }` result (handled gracefully by callers) instead
+ * of a thrown exception — so nothing noisy is shown. Real (reachable) responses
+ * pass through untouched.
+ */
+const resilientFetch: typeof fetch = async (input, init) => {
+    try {
+        return await fetch(input, init);
+    } catch {
+        return new Response(
+            JSON.stringify({ message: 'Supabase host unreachable (handled via backend)' }),
+            { status: 503, headers: { 'Content-Type': 'application/json' } },
+        );
+    }
+};
+
+/**
  * Supabase client configured with ExpoSecureStoreAdapter for persistent sessions.
  * autoRefreshToken is DISABLED because some ISP DNS can't resolve the Supabase host.
  * Token refresh is handled manually via the backend (POST /api/auth/refresh).
@@ -32,6 +57,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         autoRefreshToken: false,
         persistSession: true,
         detectSessionInUrl: false,
+    },
+    global: {
+        fetch: resilientFetch,
     },
 });
 
@@ -85,11 +113,12 @@ export async function refreshSessionViaBackend(): Promise<boolean> {
  */
 export async function getAuthenticatedUserId(): Promise<string | null> {
     try {
-        const { data: { user }, error } = await supabase.auth.getUser();
-        if (error || !user) return null;
-        return user.id;
-    } catch (error) {
-        console.error('[Supabase] Error getting authenticated user:', error);
+        // Use the locally stored session (no network) — getUser() would hit the
+        // Supabase host, which we intentionally avoid (auth goes via the backend).
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error || !session?.user) return null;
+        return session.user.id;
+    } catch {
         return null;
     }
 }
