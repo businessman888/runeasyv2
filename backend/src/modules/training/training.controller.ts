@@ -63,8 +63,27 @@ interface CreatePlanDto {
   calculated_pace: number | null; // min/km
   start_date: string | null; // ISO string
 
+  // Race goal (Fase 2) — set when the user picks/enters a race instead of a
+  // pure distance goal. goal_timeframe stays null; the horizon is the race date.
+  goal_type?: 'distance' | 'race';
+  race_id?: string | null;
+  race_date?: string | null; // 'YYYY-MM-DD'
+  race_name?: string | null;
+  race_distance?: number | null; // km
+
   // Onboarding XP (credited once on successful completion)
   onboarding_xp?: number;
+}
+
+// Whole weeks from today (São Paulo-naive; day granularity is enough here) to a
+// 'YYYY-MM-DD' race date. Returns null for missing/invalid dates.
+function weeksUntil(raceDate?: string | null): number | null {
+  if (!raceDate) return null;
+  const race = new Date(`${raceDate}T00:00:00`);
+  if (Number.isNaN(race.getTime())) return null;
+  const today = new Date();
+  const days = Math.ceil((race.getTime() - today.getTime()) / 86_400_000);
+  return Math.max(Math.ceil(days / 7), 1);
 }
 
 interface SkipWorkoutDto {
@@ -215,6 +234,12 @@ export class TrainingController {
           has_limitations: !!dto.limitations,
           limitations: dto.limitations,
           preferred_days: dto.preferred_days,
+          // Race goal
+          goal_type: dto.goal_type ?? 'distance',
+          race_id: dto.race_id ?? null,
+          race_date: dto.race_date ?? null,
+          race_name: dto.race_name ?? null,
+          race_distance: dto.race_distance ?? null,
           // Performance Baseline
           recent_distance: dto.recent_distance,
           distance_time: dto.distance_time,
@@ -294,10 +319,20 @@ export class TrainingController {
         // Performance baseline measured in onboarding — drives VDOT estimation.
         calculatedPace: dto.calculated_pace ?? null,
         recentDistanceKm: dto.recent_distance ?? null,
-        targetWeeks: dto.target_weeks,
+        targetWeeks:
+          dto.goal_type === 'race' && weeksUntil(dto.race_date)
+            ? (weeksUntil(dto.race_date) as number)
+            : dto.target_weeks,
         limitations: dto.limitations,
         preferredDays: selectedDays,
         startDate: dto.start_date,
+        // Race goal
+        goalType: dto.goal_type ?? 'distance',
+        raceId: dto.race_id ?? null,
+        raceDate: dto.race_date ?? null,
+        raceName: dto.race_name ?? null,
+        raceDistance: dto.race_distance ?? null,
+        raceWeeksUntil: weeksUntil(dto.race_date),
       });
 
       // Return immediately with first workout data
@@ -360,6 +395,11 @@ export class TrainingController {
           has_limitations: !!dto.limitations,
           limitations: dto.limitations,
           preferred_days: dto.preferred_days,
+          goal_type: dto.goal_type ?? 'distance',
+          race_id: dto.race_id ?? null,
+          race_date: dto.race_date ?? null,
+          race_name: dto.race_name ?? null,
+          race_distance: dto.race_distance ?? null,
           recent_distance: dto.recent_distance,
           distance_time: dto.distance_time,
           calculated_pace: dto.calculated_pace,
@@ -531,10 +571,24 @@ export class TrainingController {
           dto.calculated_pace ?? onboardingData.calculated_pace ?? null,
         recentDistanceKm:
           dto.recent_distance ?? onboardingData.recent_distance ?? null,
-        targetWeeks: dto.target_weeks || onboardingData.target_weeks,
+        targetWeeks: (() => {
+          const goalType = dto.goal_type ?? onboardingData.goal_type;
+          const raceDate = dto.race_date ?? onboardingData.race_date;
+          const w = weeksUntil(raceDate);
+          return goalType === 'race' && w
+            ? w
+            : dto.target_weeks || onboardingData.target_weeks;
+        })(),
         limitations: dto.limitations || onboardingData.limitations,
         preferredDays: selectedDays,
         startDate: dto.start_date || onboardingData.start_date,
+        // Race goal
+        goalType: dto.goal_type ?? onboardingData.goal_type ?? 'distance',
+        raceId: dto.race_id ?? onboardingData.race_id ?? null,
+        raceDate: dto.race_date ?? onboardingData.race_date ?? null,
+        raceName: dto.race_name ?? onboardingData.race_name ?? null,
+        raceDistance: dto.race_distance ?? onboardingData.race_distance ?? null,
+        raceWeeksUntil: weeksUntil(dto.race_date ?? onboardingData.race_date),
       });
 
       this.logger.log(

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
@@ -37,6 +37,9 @@ import { StartDateScreen } from './quiz/StartDateScreen';
 import { GoalTimeframeScreen } from './quiz/GoalTimeframeScreen';
 import { WearableConnectionScreen } from './quiz/WearableConnectionScreen';
 import { ReferralCodeScreen } from './quiz/ReferralCodeScreen';
+import { GoalTypeScreen } from './quiz/GoalTypeScreen';
+import { RacePickerScreen } from './quiz/RacePickerScreen';
+import { ManualRaceDateScreen } from './quiz/ManualRaceDateScreen';
 
 // Interstitial screens
 import { GoalAchievableScreen } from './quiz/GoalAchievableScreen';
@@ -45,8 +48,15 @@ import { TimeCompareScreen } from './quiz/TimeCompareScreen';
 
 import { FixedNavigationButtons } from '../components/FixedNavigationButtons';
 import { AnimatedXP } from '../components/AnimatedXP';
+import { Ionicons } from '@expo/vector-icons';
+import { TouchableOpacity } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Back chevron lives to the left of the progress bar; its footprint is always
+// reserved so the bar width stays constant between steps.
+const CHEVRON_SIZE = 44;
+const PROGRESS_ROW_GAP = 8;
 
 // ============================================
 // FORCED COLORS (Figma exact values)
@@ -59,9 +69,11 @@ const FORCED_TEXT_SECONDARY = 'rgba(235, 235, 245, 0.6)';
 const FORCED_GLASS_STROKE = 'rgba(235, 235, 245, 0.1)';
 
 // XP economy
-const XP_PER_QUESTION = 5;        // 15 questions × 5 = 75
-const XP_COMPLETION_BONUS = 25;   // total = 100
-const PROGRESS_TRACK_WIDTH = SCREEN_WIDTH - 48;
+const XP_PER_QUESTION = 5;        // ~15 questions × 5 = 75
+const XP_COMPLETION_BONUS = 25;   // total ≈ 100
+// Inner content width is SCREEN_WIDTH - 48; the chevron + gap eat into it so the
+// bar is a bit shorter than before, per the new back-button placement.
+const PROGRESS_TRACK_WIDTH = SCREEN_WIDTH - 48 - CHEVRON_SIZE - PROGRESS_ROW_GAP;
 
 // ============================================
 // ANIMATED PROGRESS BAR
@@ -146,6 +158,39 @@ interface QuizStep {
     extraPropsKey?: string;
 }
 
+// Full step catalogue. The active subset is computed per-render from the user's
+// goal_type / use_manual_race_date (see activeSteps below). Everything up to and
+// including 'goal_type' is common to both paths, so currentStep stays valid when
+// the user toggles their goal type.
+const ALL_QUIZ_STEPS: QuizStep[] = [
+    { key: 'birthDate', Component: BirthDateScreen },
+    { key: 'weight', Component: WeightScreen },
+    { key: 'height', Component: HeightScreen },
+    { key: 'goal_type', Component: GoalTypeScreen },                                          // NEW — meta principal
+    { key: 'goal', Component: ObjectiveScreen },                                              // distance path only
+    { key: 'racePicker', Component: RacePickerScreen },                                       // race path only
+    { key: 'manualRaceDate', Component: ManualRaceDateScreen },                               // race + manual only
+    { key: 'experience_level', Component: LevelScreen },
+    { key: '__i1_goal_achievable', Component: GoalAchievableScreen, isInterstitial: true },
+    { key: 'daysPerWeek', Component: FrequencyScreen },
+    { key: '__i2_assessoria_compare', Component: AssessoriaCompareScreen, isInterstitial: true },
+    { key: 'availableDays', Component: AvailableDaysScreen, extraPropsKey: 'availableDays' },
+    { key: 'intenseDayIndex', Component: IntenseDayScreen, extraPropsKey: 'intenseDay' },
+    { key: 'recentDistance', Component: RecentDistanceScreen },
+    { key: 'distanceTime', Component: DistanceTimeScreen, extraPropsKey: 'distanceTime' },
+    { key: '__i3_time_compare', Component: TimeCompareScreen, isInterstitial: true },
+    { keys: ['paceMinutes', 'paceSeconds', 'dontKnowPace'], key: 'pace', Component: PaceConfirmScreen },
+    { key: 'startDate', Component: StartDateScreen },
+    { key: 'limitations', Component: LimitationsScreen },
+    { key: 'goalTimeframe', Component: GoalTimeframeScreen },                                 // skipped on race path
+    { key: 'preferredWearable', Component: WearableConnectionScreen, isWearableStep: true },
+    {
+        keys: ['referralCode', 'referralInfluencerId'],
+        key: 'referralCode',
+        Component: ReferralCodeScreen,
+    },
+];
+
 export function OnboardingScreen({ navigation, route }: any) {
     const userId = route?.params?.userId;
     const { data, updateData, xpEarned, addXP } = useOnboardingStore();
@@ -154,39 +199,27 @@ export function OnboardingScreen({ navigation, route }: any) {
     const scrollViewRef = useRef<ScrollView>(null);
     const insets = useSafeAreaInsets();
 
-    const QUIZ_STEPS: QuizStep[] = [
-        { key: 'birthDate', Component: BirthDateScreen },                                          // 0
-        { key: 'weight', Component: WeightScreen },                                                // 1
-        { key: 'height', Component: HeightScreen },                                                // 2
-        { key: 'goal', Component: ObjectiveScreen },                                               // 3
-        { key: 'experience_level', Component: LevelScreen },                                       // 4
-        { key: '__i1_goal_achievable', Component: GoalAchievableScreen, isInterstitial: true },    // 5 (I1)
-        { key: 'daysPerWeek', Component: FrequencyScreen },                                        // 6
-        { key: '__i2_assessoria_compare', Component: AssessoriaCompareScreen, isInterstitial: true }, // 7 (I2)
-        { key: 'availableDays', Component: AvailableDaysScreen, extraPropsKey: 'availableDays' },  // 8
-        { key: 'intenseDayIndex', Component: IntenseDayScreen, extraPropsKey: 'intenseDay' },      // 9
-        { key: 'recentDistance', Component: RecentDistanceScreen },                                // 10
-        { key: 'distanceTime', Component: DistanceTimeScreen, extraPropsKey: 'distanceTime' },     // 11
-        { key: '__i3_time_compare', Component: TimeCompareScreen, isInterstitial: true },          // 12 (I3)
-        { keys: ['paceMinutes', 'paceSeconds', 'dontKnowPace'], key: 'pace', Component: PaceConfirmScreen }, // 13
-        { key: 'startDate', Component: StartDateScreen },                                          // 14
-        { key: 'limitations', Component: LimitationsScreen },                                      // 15
-        { key: 'goalTimeframe', Component: GoalTimeframeScreen },                                  // 16
-        { key: 'preferredWearable', Component: WearableConnectionScreen, isWearableStep: true },   // 17
-        {
-            keys: ['referralCode', 'referralInfluencerId'],
-            key: 'referralCode',
-            Component: ReferralCodeScreen,
-        },                                                                                          // 18 — referral (último)
-    ];
+    const isRaceGoal = data.goal_type === 'race';
 
-    const TOTAL_QUESTIONS = QUIZ_STEPS.filter(s => !s.isInterstitial).length; // 15
-    const TOTAL_INDICES = QUIZ_STEPS.length;                                  // 18
+    const activeSteps = useMemo(() => {
+        return ALL_QUIZ_STEPS.filter((step) => {
+            if (step.key === 'goal' && isRaceGoal) return false;           // distance objective
+            if (step.key === 'racePicker' && !isRaceGoal) return false;    // race picker
+            if (step.key === 'manualRaceDate' && !(isRaceGoal && data.use_manual_race_date)) return false;
+            if (step.key === 'goalTimeframe' && isRaceGoal) return false;  // horizon = race date
+            return true;
+        });
+    }, [isRaceGoal, data.use_manual_race_date]);
 
-    const currentStepData = QUIZ_STEPS[currentStep];
+    const TOTAL_QUESTIONS = activeSteps.filter(s => !s.isInterstitial).length;
+    const TOTAL_INDICES = activeSteps.length;
+
+    // Clamp currentStep in case the active list shrank under us.
+    const safeStep = Math.min(currentStep, TOTAL_INDICES - 1);
+    const currentStepData = activeSteps[safeStep];
 
     // displayedStep counts only real questions up to (and including) the current one.
-    const displayedStep = QUIZ_STEPS.slice(0, currentStep + 1)
+    const displayedStep = activeSteps.slice(0, safeStep + 1)
         .filter(s => !s.isInterstitial).length;
     const progressFraction = displayedStep / TOTAL_QUESTIONS;
 
@@ -201,6 +234,9 @@ export function OnboardingScreen({ navigation, route }: any) {
             case 'weight': return !!data.weight && data.weight > 0;
             case 'height': return !!data.height && data.height > 0;
             case 'goal': return !!data.goal;
+            case 'goal_type': return !!data.goal_type;
+            case 'racePicker': return !!data.race_id || !!data.race_date;
+            case 'manualRaceDate': return !!data.race_date && !!data.race_distance;
             case 'experience_level': return !!data.experience_level;
             case 'daysPerWeek':
                 return typeof data.daysPerWeek === 'number'
@@ -260,13 +296,13 @@ export function OnboardingScreen({ navigation, route }: any) {
         }
 
         // Award XP for completing this question (idempotent per index)
-        if (!currentStepData.isInterstitial && !xpCreditedRef.current.has(currentStep)) {
+        if (!currentStepData.isInterstitial && !xpCreditedRef.current.has(safeStep)) {
             addXP(XP_PER_QUESTION);
-            xpCreditedRef.current.add(currentStep);
+            xpCreditedRef.current.add(safeStep);
         }
 
         // Last index → completion bonus + navigate
-        if (currentStep === TOTAL_INDICES - 1) {
+        if (safeStep === TOTAL_INDICES - 1) {
             if (!xpCreditedRef.current.has(-1)) {
                 addXP(XP_COMPLETION_BONUS);
                 xpCreditedRef.current.add(-1);
@@ -275,12 +311,12 @@ export function OnboardingScreen({ navigation, route }: any) {
             return;
         }
 
-        setCurrentStep(currentStep + 1);
+        setCurrentStep(safeStep + 1);
     };
 
     const handleBack = () => {
-        if (currentStep > 0) {
-            setCurrentStep(currentStep - 1);
+        if (safeStep > 0) {
+            setCurrentStep(safeStep - 1);
         } else {
             navigation.goBack();
         }
@@ -292,24 +328,24 @@ export function OnboardingScreen({ navigation, route }: any) {
 
     const handleWearableNo = () => {
         updateData({ preferredWearable: null });
-        if (!xpCreditedRef.current.has(currentStep)) {
+        if (!xpCreditedRef.current.has(safeStep)) {
             addXP(XP_PER_QUESTION);
-            xpCreditedRef.current.add(currentStep);
+            xpCreditedRef.current.add(safeStep);
         }
         // Advance to the referral-code step (the new last index). Completion
         // bonus is now awarded only when the user clicks Continue on that step.
-        setCurrentStep(currentStep + 1);
+        setCurrentStep(safeStep + 1);
     };
 
     const handleWearableConnect = () => {
         // User picked a provider in the modal → award per-question XP and
         // advance to the referral-code step. Completion bonus + navigation to
         // Quiz_PlanLoading happen from handleContinue at the final step.
-        if (!xpCreditedRef.current.has(currentStep)) {
+        if (!xpCreditedRef.current.has(safeStep)) {
             addXP(XP_PER_QUESTION);
-            xpCreditedRef.current.add(currentStep);
+            xpCreditedRef.current.add(safeStep);
         }
-        setCurrentStep(currentStep + 1);
+        setCurrentStep(safeStep + 1);
     };
 
     const handleWearableModalClose = () => {
@@ -319,6 +355,17 @@ export function OnboardingScreen({ navigation, route }: any) {
     const handleChange = useCallback((value: any) => {
         if (currentStepData.keys) {
             updateData(value);
+        } else if (currentStepData.key === 'goal_type' && value === 'distance') {
+            // Switching back to a distance goal clears any race selection so a
+            // stale race_id doesn't leak into the distance plan.
+            updateData({
+                goal_type: 'distance',
+                race_id: null,
+                race_date: null,
+                race_name: null,
+                race_distance: null,
+                use_manual_race_date: false,
+            });
         } else if (currentStepData.key) {
             updateData({ [currentStepData.key]: value });
         }
@@ -355,9 +402,9 @@ export function OnboardingScreen({ navigation, route }: any) {
 
     const isWearableStep = !!currentStepData.isWearableStep;
     const isInterstitial = !!currentStepData.isInterstitial;
-    const showBackButton = currentStep > 0;
+    const showBackButton = safeStep > 0;
     const continueDisabled = !canContinue();
-    const isLastStep = currentStep === TOTAL_INDICES - 1;
+    const isLastStep = safeStep === TOTAL_INDICES - 1;
 
     const StepComponent = currentStepData.Component;
     const extraProps = getExtraProps();
@@ -409,7 +456,24 @@ export function OnboardingScreen({ navigation, route }: any) {
                         <Text style={headerStyles.pontuacaoText}>Pontuação</Text>
                         <AnimatedXP value={xpEarned} />
                     </View>
-                    <AnimatedProgressBar fraction={progressFraction} />
+                    <View style={headerStyles.progressRow}>
+                        <TouchableOpacity
+                            style={headerStyles.backChevron}
+                            onPress={handleBack}
+                            disabled={!showBackButton}
+                            hitSlop={8}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel="Voltar"
+                        >
+                            <Ionicons
+                                name="chevron-back"
+                                size={24}
+                                color={showBackButton ? FORCED_TEXT : 'transparent'}
+                            />
+                        </TouchableOpacity>
+                        <AnimatedProgressBar fraction={progressFraction} />
+                    </View>
                     <View style={headerStyles.progressTextRow}>
                         <Text style={headerStyles.progressLabel}>Progresso:</Text>
                         <Text style={headerStyles.progressPercent}>
@@ -443,6 +507,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                         <StepComponent
                             {...(currentStepData.keys ? getValue() : { value: getValue() })}
                             onChange={handleChange}
+                            onAdvance={handleContinue}
                             {...extraProps}
                             {...wearableProps}
                         />
@@ -481,12 +546,26 @@ const headerStyles = StyleSheet.create({
         height: 43,
     },
     pontuacaoText: { fontFamily: 'Poppins-Regular', fontSize: 14, color: FORCED_TEXT },
+    progressRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        width: '100%',
+        gap: PROGRESS_ROW_GAP,
+    },
+    backChevron: {
+        width: CHEVRON_SIZE,
+        height: CHEVRON_SIZE,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: -10, // optically align the chevron glyph to the edge
+    },
     progressTextRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        width: PROGRESS_TRACK_WIDTH,
+        width: '100%',
         height: 28,
         gap: 4,
+        paddingLeft: CHEVRON_SIZE + PROGRESS_ROW_GAP, // align under the bar start
     },
     progressLabel: {
         fontFamily: 'Poppins-Regular',

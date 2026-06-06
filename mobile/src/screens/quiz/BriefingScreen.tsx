@@ -31,6 +31,8 @@ import {
     getGoalGainText,
     formatPace,
 } from '../../utils/archetypes';
+import { RaceCountdownBadge } from '../../components/onboarding/RaceCountdownBadge';
+import { weeksUntilRace } from '../../utils/raceFormat';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -132,7 +134,9 @@ export function BriefingScreen({ navigation, route }: any) {
     const paceMinutes = data.paceMinutes || '7';
     const paceSeconds = data.paceSeconds || '00';
     const paceDisplay = formatPace(paceMinutes, paceSeconds);
-    const durationWeeks = `${(goalTimeframe) * 4} Sem`;
+    const isRaceGoal = data.goal_type === 'race' && !!data.race_date;
+    const raceWeeks = isRaceGoal ? weeksUntilRace(data.race_date as string) : 0;
+    const durationWeeks = isRaceGoal ? `${raceWeeks} Sem` : `${(goalTimeframe) * 4} Sem`;
     const frequencyWeekly = `${daysPerWeek}x/Sem`;
 
     // Archetype data
@@ -255,16 +259,34 @@ export function BriefingScreen({ navigation, route }: any) {
                             Coach RunEasy:{'\n'}
                             <Text style={{ color: accentColor }}>{archetype?.name}</Text>
                         </Text>
-                        <Text style={styles.subtitle}>
-                            Com seu pace de{' '}
-                            <Text style={styles.goalHighlight}>{paceDisplay} min/km</Text>
-                            {' '}e meta de{' '}
-                            <Text style={styles.goalHighlight}>{getGoalDescription(goal)}</Text>
-                            , estruturamos sua jornada de{' '}
-                            <Text style={styles.goalHighlight}>{goalTimeframe} {goalTimeframe === 1 ? 'mês' : 'meses'}</Text>.
-                        </Text>
+                        {isRaceGoal ? (
+                            <Text style={styles.subtitle}>
+                                Com seu pace de{' '}
+                                <Text style={styles.goalHighlight}>{paceDisplay} min/km</Text>
+                                {' '}e a sua prova em{' '}
+                                <Text style={styles.goalHighlight}>{raceWeeks} {raceWeeks === 1 ? 'semana' : 'semanas'}</Text>
+                                , montamos uma periodização ancorada no dia da prova.
+                            </Text>
+                        ) : (
+                            <Text style={styles.subtitle}>
+                                Com seu pace de{' '}
+                                <Text style={styles.goalHighlight}>{paceDisplay} min/km</Text>
+                                {' '}e meta de{' '}
+                                <Text style={styles.goalHighlight}>{getGoalDescription(goal)}</Text>
+                                , estruturamos sua jornada de{' '}
+                                <Text style={styles.goalHighlight}>{goalTimeframe} {goalTimeframe === 1 ? 'mês' : 'meses'}</Text>.
+                            </Text>
+                        )}
                         <Text style={styles.tagline}>{archetype?.tagline}</Text>
                     </View>
+
+                    {isRaceGoal && (
+                        <RaceCountdownBadge
+                            raceName={data.race_name}
+                            raceDate={data.race_date as string}
+                            raceDistance={data.race_distance}
+                        />
+                    )}
 
                     {/* =============================================
                         3. METRICS CARD

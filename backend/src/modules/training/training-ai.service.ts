@@ -22,6 +22,21 @@ export interface TrainingPlanRequest {
   // Manual overrides from Customize Screen
   targetTime?: string; // e.g., "01:55:00"
   targetPace?: string; // e.g., "5:30"
+  // Race goal (Fase 2): when goalType === 'race' the plan is anchored to the
+  // race date and periodized backwards (base → build → peak → taper).
+  goalType?: 'distance' | 'race';
+  raceId?: string | null;
+  raceDate?: string | null; // 'YYYY-MM-DD'
+  raceName?: string | null;
+  raceDistance?: number | null; // km
+  raceWeeksUntil?: number | null; // weeks from today to the race (computed in backend)
+}
+
+export interface RacePhases {
+  base: number;
+  build: number;
+  peak: number;
+  taper: number;
 }
 
 // New interfaces for PlanPreview screen
@@ -491,6 +506,52 @@ Responda APENAS com o JSON contendo as semanas 2 até ${request.targetWeeks}.`;
    * Generate a FULL training plan using a single AI prompt (all weeks at once).
    * Optimized: no fullSchedulePreview (saves ~50% output tokens), concise tips.
    */
+  /**
+   * Periodization split for a race goal. Taper and peak are fixed by distance;
+   * the remainder is divided 40% build / 60% base. Every phase is at least 1 week.
+   */
+  calculateRacePhases(totalWeeks: number, raceDistance: number): RacePhases {
+    const taper = raceDistance >= 42 ? 3 : raceDistance >= 21 ? 2 : 1;
+    const peak = raceDistance >= 21 ? 3 : 2;
+    const remaining = Math.max(totalWeeks - taper - peak, 2);
+    const build = Math.max(Math.floor(remaining * 0.4), 1);
+    const base = Math.max(remaining - build, 1);
+    return { base, build, peak, taper };
+  }
+
+  /** Race-specific periodization block appended to the user prompt. */
+  private buildRacePromptBlock(request: TrainingPlanRequest): string {
+    const weeks =
+      request.raceWeeksUntil ?? request.targetWeeks ?? 0;
+    const distance = request.raceDistance ?? request.recentDistanceKm ?? 10;
+    const { base, build, peak, taper } = this.calculateRacePhases(
+      weeks,
+      distance,
+    );
+    const buildStart = base + 1;
+    const peakStart = base + build + 1;
+    const taperStart = base + build + peak + 1;
+
+    return `
+
+═══ META: PROVA DE CORRIDA ═══
+O usuário tem uma prova marcada:
+- Nome: ${request.raceName ?? 'Prova alvo'}
+- Data: ${request.raceDate} (${weeks} semanas a partir do início do plano)
+- Distância do objetivo: ${distance}km
+
+PERIODIZAÇÃO OBRIGATÓRIA para ${weeks} semanas (ancorada na data da prova):
+- Fase BASE:  semanas 1-${base} (aeróbico, volume moderado, rodagem)
+- Fase BUILD: semanas ${buildStart}-${base + build} (volume crescente, progressões, Z3/Z4)
+- Fase PEAK:  semanas ${peakStart}-${base + build + peak} (intensidade máxima, simulados específicos da distância)
+- Fase TAPER: últimas ${taper} semana(s) (volume -40/-60%, mantém intensidade curta)
+
+REGRAS ADICIONAIS DE PROVA:
+- Não programar treino intenso nos 2 dias anteriores à prova.
+- Semana da prova: apenas 1-2 treinos leves antes do dia D.
+- A última semana culmina na data da prova (${request.raceDate}); o treino do dia da prova é inserido automaticamente pelo sistema — NÃO crie um treino nesse dia.`;
+  }
+
   async generateTrainingPlan(
     request: TrainingPlanRequest,
   ): Promise<GeneratedPlan> {
@@ -637,6 +698,7 @@ EXIGÊNCIAS DO PLANO:
 5. Inclua deload (-25% volume) a cada 3-4 semanas quando o plano permitir.
 ${request.targetPace ? `6. PACE ALVO FINAL: ${request.targetPace} min/km — progrida ritmos das sessões de qualidade gradualmente em direção a este alvo.` : ''}
 ${request.limitations ? `7. ADAPTAÇÃO obrigatória às limitações: ${request.limitations}` : ''}
+${request.goalType === 'race' ? this.buildRacePromptBlock(request) : ''}
 
 Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
 

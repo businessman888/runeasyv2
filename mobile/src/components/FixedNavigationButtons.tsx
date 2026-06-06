@@ -69,26 +69,14 @@ export const FixedNavigationButtons: React.FC<FixedNavigationButtonsProps> = ({
         );
     }
 
-    const buttonWidth = showBack ? (SCREEN_WIDTH - 48) / 2 - 6 : SCREEN_WIDTH - 48;
-
+    // Back now lives next to the progress bar (see OnboardingScreen header).
+    // The footer holds a single full-width, centered primary action.
     return (
         <View style={styles.container}>
-            {showBack && (
-                <TouchableOpacity
-                    style={[styles.backButton, { width: buttonWidth }]}
-                    onPress={onBack}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                    accessibilityLabel="Voltar"
-                >
-                    <Text style={styles.backText}>Voltar</Text>
-                </TouchableOpacity>
-            )}
-
             <TouchableOpacity
                 style={[
                     styles.continueButton,
-                    { width: buttonWidth },
+                    { width: SCREEN_WIDTH - 40 },
                     continueDisabled && styles.continueButtonDisabled,
                 ]}
                 onPress={onContinue}

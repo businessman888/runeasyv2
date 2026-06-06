@@ -245,6 +245,7 @@ export type WorkoutType =
     | 'repetition'
     | 'hill_repeats'
     | 'race_simulation'
+    | 'race_day'
     | 'free_run';
 
 export type TrainingZone = 'Z1' | 'Z2' | 'Z3' | 'Z4' | 'Z5';
@@ -309,6 +310,8 @@ interface Workout {
     time_run_seconds?: number | null;       // segundos
     pace_seconds_per_km?: number | null;    // segundos por km
     completed_at?: string | null;
+    /** TRUE only for the race-day placeholder workout (race goal). */
+    is_race_day?: boolean;
 }
 
 /** Returned by GET /training/workouts/:id — workout row enriched with the

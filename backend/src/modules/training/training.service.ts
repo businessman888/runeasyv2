@@ -122,6 +122,11 @@ export class TrainingService {
           plan_json: {},
           status: 'active',
           generation_status: 'generating',
+          goal_type: onboardingData.goalType ?? 'distance',
+          race_id: onboardingData.raceId ?? null,
+          race_date: onboardingData.raceDate ?? null,
+          race_name: onboardingData.raceName ?? null,
+          race_distance: onboardingData.raceDistance ?? null,
         })
         .select()
         .single();
@@ -272,6 +277,39 @@ export class TrainingService {
             );
             throw workoutsError;
           }
+        }
+      }
+
+      // STEP 4 (race goal only): insert the special race-day workout on the
+      // race date. The AI is instructed NOT to create a workout that day.
+      if (onboardingData.goalType === 'race' && onboardingData.raceDate) {
+        const raceWorkout = {
+          plan_id: planId,
+          user_id: userId,
+          week_number: fullPlan.weeks.length,
+          scheduled_date: onboardingData.raceDate, // 'YYYY-MM-DD'
+          type: 'race_day',
+          title: `DIA DA PROVA — ${onboardingData.raceName ?? 'Sua prova'}`,
+          distance_km: onboardingData.raceDistance ?? null,
+          instructions_json: [],
+          objective: 'Dia da sua prova! Aquecimento leve, hidratação e foco. 🏁',
+          tips: ['Aquecimento de 10 min', 'Hidrate-se bem'],
+          status: 'pending',
+          is_race_day: true,
+          metadata: { zone: 'Z3-Z5', week_phase: 'taper' },
+        };
+        const { error: raceError } = await this.supabaseService
+          .from('workouts')
+          .insert(raceWorkout);
+        if (raceError) {
+          // Non-fatal: the plan itself is valid without the placeholder.
+          this.logger.warn(
+            `[FullGen] STEP 4: failed to insert race-day workout: ${raceError.message}`,
+          );
+        } else {
+          this.logger.log(
+            `[FullGen] STEP 4: race-day workout inserted on ${onboardingData.raceDate}`,
+          );
         }
       }
 

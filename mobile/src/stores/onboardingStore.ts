@@ -41,6 +41,15 @@ interface OnboardingData {
     goalTimeframe: number | null; // Goal timeframe in months (1, 3, 6)
     preferredWearable: string | null; // 'garmin' | 'polar' | 'fitbit' | 'apple_watch' | null
 
+    // Race goal (Fase 2). When goal_type === 'race' the plan is anchored to the
+    // race date; ObjectiveScreen + GoalTimeframeScreen are skipped.
+    goal_type: 'distance' | 'race' | null;
+    race_id: string | null;
+    race_date: string | null; // 'YYYY-MM-DD'
+    race_name: string | null;
+    race_distance: number | null; // km
+    use_manual_race_date: boolean; // user chose "Inserir data manualmente"
+
     // Referral / influencer code (optional). Set by ReferralCodeScreen after
     // a successful POST /referral/apply. Drives Superwall placement choice.
     referralCode: string | null;
@@ -136,9 +145,43 @@ const initialData: Partial<OnboardingData> = {
     preferredDays: [],
     goalTimeframe: null,
     preferredWearable: null,
+    goal_type: 'distance',
+    race_id: null,
+    race_date: null,
+    race_name: null,
+    race_distance: null,
+    use_manual_race_date: false,
     referralCode: null,
     referralInfluencerId: null,
 };
+
+/** Maps a race distance (km) to the legacy distance goal, so archetype/level
+ *  logic still works when ObjectiveScreen is skipped on the race path. */
+export function deriveGoalFromDistance(km: number | null | undefined): string {
+    if (km == null) return 'general_fitness';
+    if (km <= 5) return '5k';
+    if (km <= 10) return '10k';
+    if (km <= 21.1) return 'half_marathon';
+    return 'marathon';
+}
+
+/** Race fields shared by every onboarding request body. */
+function raceRequestFields(data: Partial<OnboardingData>) {
+    return {
+        goal_type: data.goal_type ?? 'distance',
+        race_id: data.race_id ?? null,
+        race_date: data.race_date ?? null,
+        race_name: data.race_name ?? null,
+        race_distance: data.race_distance ?? null,
+    };
+}
+
+/** Resolves the goal sent to the backend (race path derives it from distance). */
+function resolveGoal(data: Partial<OnboardingData>): string {
+    return data.goal_type === 'race'
+        ? deriveGoalFromDistance(data.race_distance)
+        : data.goal || '10k';
+}
 
 export const useOnboardingStore = create<OnboardingState>((set, get) => ({
     currentStep: 0,
@@ -249,7 +292,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                 height: sanitizedHeight,
 
                 // Original fields
-                goal: data.goal || '10k',
+                goal: resolveGoal(data),
                 level: data.experience_level || 'beginner',
                 days_per_week: data.daysPerWeek || 3,
 
@@ -263,13 +306,18 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                 pace_seconds: data.paceSeconds || null,
                 dont_know_pace: data.dontKnowPace || false,
 
-                // Goal duration: convert months → weeks (1 month = 4 weeks)
+                // Goal duration: convert months → weeks (1 month = 4 weeks).
+                // On the race path goal_timeframe is null; backend derives the
+                // horizon from race_date.
                 goal_timeframe: data.goalTimeframe ?? null,
                 target_weeks: data.goalTimeframe ? data.goalTimeframe * 4 : (data.targetWeeks || 8),
 
                 // Map object { hasLimitation, details } to string or null for API
                 limitations: data.limitations?.hasLimitation ? data.limitations.details : null,
                 preferred_days: data.preferredDays || [],
+
+                // Race goal
+                ...raceRequestFields(data),
 
                 // Performance Baseline (New)
                 recent_distance: data.recentDistance ?? null,
@@ -430,7 +478,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                 birth_date: sanitizedBirthDate,
                 weight: sanitizedWeight,
                 height: sanitizedHeight,
-                goal: data.goal || '10k',
+                goal: resolveGoal(data),
                 level: data.experience_level || 'beginner',
                 days_per_week: data.daysPerWeek || 3,
                 available_days: data.availableDays || [],
@@ -443,6 +491,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                 target_weeks: data.goalTimeframe ? data.goalTimeframe * 4 : (data.targetWeeks || 8),
                 limitations: data.limitations?.hasLimitation ? data.limitations.details : null,
                 preferred_days: data.preferredDays || [],
+                ...raceRequestFields(data),
                 recent_distance: data.recentDistance ?? null,
                 distance_time: data.distanceTime ?? null,
                 calculated_pace: data.calculatedPace ?? null,

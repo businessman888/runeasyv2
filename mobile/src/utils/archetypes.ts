@@ -25,6 +25,25 @@ export interface Archetype {
 // ── Archetype Definitions ──
 
 const ARCHETYPES: Record<string, Archetype> = {
+  atleta_de_prova: {
+    key: 'atleta_de_prova',
+    name: 'Atleta de Prova',
+    tagline: 'Cada treino te aproxima da linha de chegada.',
+    description:
+      'Você tem uma data marcada e um objetivo claro. Seu plano foi construído de trás pra frente: partindo do dia da prova, com taper calculado, picos de intensidade no momento certo e base sólida desde o início. Nada é por acaso.',
+    icon: 'flag-checkered',
+    accentColor: '#FFB800',
+    chartPoints: [148, 130, 108, 88, 68, 48, 28, 12],
+    sampleWorkout: {
+      title: 'Progressivo de 8km',
+      duration: '48 min',
+      pace: 'Pace 5:10',
+      type: 'progressive',
+    },
+    coachTip:
+      'A fase de taper pode parecer estranha — você vai sentir vontade de treinar mais. Confie no processo: é quando o corpo absorve todo o trabalho.',
+  },
+
   reabilitacao_segura: {
     key: 'reabilitacao_segura',
     name: 'Reabilitação Segura',
@@ -188,6 +207,7 @@ interface ArchetypeInput {
   calculatedPace: number | null;
   limitations?: { hasLimitation: boolean; details?: string } | null;
   hasInjury?: boolean;
+  goal_type?: 'distance' | 'race' | null;
 }
 
 export function determineArchetype(data: ArchetypeInput): Archetype {
@@ -210,7 +230,12 @@ export function determineArchetype(data: ArchetypeInput): Archetype {
     return ARCHETYPES.reabilitacao_segura;
   }
 
-  // Priority 2: Corredor Express
+  // Priority 2: Atleta de Prova (race goal trumps the generic distance archetypes)
+  if (data.goal_type === 'race') {
+    return ARCHETYPES.atleta_de_prova;
+  }
+
+  // Priority 3: Corredor Express
   if (daysPerWeek <= 3 && timeframe <= 3) {
     return ARCHETYPES.corredor_express;
   }

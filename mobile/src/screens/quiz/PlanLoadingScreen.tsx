@@ -74,6 +74,7 @@ export function PlanLoadingScreen({ navigation, route }: any) {
                 calculatedPace: data.calculatedPace,
                 limitations: data.limitations,
                 hasInjury: data.hasInjury,
+                goal_type: data.goal_type,
             });
 
             navigation.replace('BriefingScreen', {

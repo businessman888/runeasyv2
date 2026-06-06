@@ -32,6 +32,7 @@ import { AuthModule } from './modules/auth';
 import { SubscriptionModule } from './modules/subscription';
 import { ReferralModule } from './modules/referral';
 import { ElevationModule } from './modules/elevation';
+import { RacesModule } from './modules/races';
 
 @Module({
   imports: [
@@ -105,6 +106,7 @@ import { ElevationModule } from './modules/elevation';
     SubscriptionModule,
     ReferralModule,
     ElevationModule,
+    RacesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
