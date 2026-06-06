@@ -251,6 +251,11 @@ export class RevenueCatWebhookService {
         level: dto.level || onboarding.level,
         daysPerWeek: dto.days_per_week || onboarding.days_per_week,
         currentPace5k: dto.current_pace_5k || onboarding.current_pace_5k,
+        // Performance baseline measured in onboarding — drives VDOT estimation.
+        calculatedPace:
+          dto.calculated_pace ?? onboarding.calculated_pace ?? null,
+        recentDistanceKm:
+          dto.recent_distance ?? onboarding.recent_distance ?? null,
         targetWeeks: dto.target_weeks || onboarding.target_weeks,
         limitations: dto.limitations || onboarding.limitations,
         preferredDays: selectedDays,

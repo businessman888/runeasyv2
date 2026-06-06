@@ -291,6 +291,9 @@ export class TrainingController {
         level: dto.level,
         daysPerWeek: dto.days_per_week,
         currentPace5k: dto.current_pace_5k,
+        // Performance baseline measured in onboarding — drives VDOT estimation.
+        calculatedPace: dto.calculated_pace ?? null,
+        recentDistanceKm: dto.recent_distance ?? null,
         targetWeeks: dto.target_weeks,
         limitations: dto.limitations,
         preferredDays: selectedDays,
@@ -523,6 +526,11 @@ export class TrainingController {
         level: dto.level || onboardingData.level,
         daysPerWeek: dto.days_per_week || onboardingData.days_per_week,
         currentPace5k: dto.current_pace_5k || onboardingData.current_pace_5k,
+        // Performance baseline measured in onboarding — drives VDOT estimation.
+        calculatedPace:
+          dto.calculated_pace ?? onboardingData.calculated_pace ?? null,
+        recentDistanceKm:
+          dto.recent_distance ?? onboardingData.recent_distance ?? null,
         targetWeeks: dto.target_weeks || onboardingData.target_weeks,
         limitations: dto.limitations || onboardingData.limitations,
         preferredDays: selectedDays,

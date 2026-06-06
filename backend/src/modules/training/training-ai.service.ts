@@ -14,6 +14,11 @@ export interface TrainingPlanRequest {
   limitations: string | null;
   preferredDays: number[];
   startDate?: string | null; // ISO date string (YYYY-MM-DD)
+  // Performance baseline measured in onboarding (RecentDistance + DistanceTime).
+  // Preferred over currentPace5k for VDOT estimation: estimateVDOTFromRace is
+  // distance-aware, so a 10/15km result is not mistaken for a 5k pace.
+  calculatedPace?: number | null; // min/km on the recent distance
+  recentDistanceKm?: number | null; // 3 | 5 | 10 | 15
   // Manual overrides from Customize Screen
   targetTime?: string; // e.g., "01:55:00"
   targetPace?: string; // e.g., "5:30"
@@ -190,6 +195,79 @@ export class TrainingAIService {
       .sort((a, b) => a - b);
     const named = sorted.map((d) => `${d}=${this.dayNames[d]}`).join(', ');
     return `\nDIAS DA SEMANA OBRIGATÓRIOS: ${sorted.join(', ')} (${named}). Use SOMENTE estes valores no campo day_of_week — não invente outros dias.`;
+  }
+
+  /**
+   * Clamp an unrealistic pace (min/km) into a sane range, mirroring the guard
+   * already applied to currentPace5k. Returns null for missing/invalid input.
+   */
+  private clampPace(pace: number | null | undefined): number | null {
+    if (pace === null || pace === undefined || !Number.isFinite(pace)) {
+      return null;
+    }
+    if (pace > 15.0) {
+      this.logger.warn(
+        `[Pace Guard] Pace ${pace.toFixed(2)} min/km is unrealistic (>15), defaulting to 7.0`,
+      );
+      return 7.0;
+    }
+    if (pace < 2.0) {
+      this.logger.warn(
+        `[Pace Guard] Pace ${pace.toFixed(2)} min/km is impossibly fast (<2), clamping to 3.0`,
+      );
+      return 3.0;
+    }
+    return pace;
+  }
+
+  /**
+   * Resolve the athlete's VDOT from the strongest available signal:
+   *   1) Race-based (preferred): recent distance + measured pace → exact time,
+   *      fed to the distance-aware Daniels–Gilbert formula. This is why a 10/15km
+   *      result is not mistaken for a 5k pace.
+   *   2) Pace-based fallback: any known pace (currentPace5k or calculatedPace)
+   *      interpreted as a 5k pace.
+   *   3) Beginner default when no pace signal exists.
+   *
+   * `safePace` is the already-clamped currentPace5k from the caller.
+   */
+  private resolveVDOT(
+    request: TrainingPlanRequest,
+    safePace: number | null | undefined,
+  ): number {
+    const calculatedPace = this.clampPace(request.calculatedPace);
+    const recentDistanceKm = request.recentDistanceKm;
+
+    if (
+      calculatedPace &&
+      calculatedPace > 0 &&
+      recentDistanceKm &&
+      recentDistanceKm > 0
+    ) {
+      // time = pace (min/km) × distance (km) × 60 → seconds
+      const timeSeconds = calculatedPace * recentDistanceKm * 60;
+      const vdot = this.paceCalculator.estimateVDOTFromRace(
+        recentDistanceKm * 1000,
+        timeSeconds,
+      );
+      this.logger.log(
+        `[VDOT] Race-based: ${recentDistanceKm}km @ ${calculatedPace.toFixed(2)} min/km → VDOT ${vdot.toFixed(1)}`,
+      );
+      return vdot;
+    }
+
+    const pace = safePace ?? calculatedPace ?? null;
+    if (pace) {
+      const vdot = this.paceCalculator.estimateVDOTFromPace5K(pace);
+      this.logger.log(
+        `[VDOT] Pace-based (5k): ${pace.toFixed(2)} min/km → VDOT ${vdot.toFixed(1)}`,
+      );
+      return vdot;
+    }
+
+    const vdot = this.paceCalculator.vdotForBeginner();
+    this.logger.log(`[VDOT] No pace signal → beginner VDOT ${vdot.toFixed(1)}`);
+    return vdot;
   }
 
   /**
@@ -434,9 +512,7 @@ Responda APENAS com o JSON contendo as semanas 2 até ${request.targetWeeks}.`;
 
     // Compute VDOT and zone paces deterministically in the backend so the AI
     // receives ready-made numbers and does not need to estimate them.
-    const vdot = safePace
-      ? this.paceCalculator.estimateVDOTFromPace5K(safePace)
-      : this.paceCalculator.vdotForBeginner();
+    const vdot = this.resolveVDOT(request, safePace);
     const paces = this.paceCalculator.getTrainingPaces(vdot);
     const formattedPaces = this.paceCalculator.formatPaces(paces);
 
