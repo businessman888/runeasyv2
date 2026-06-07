@@ -42,3 +42,7 @@ yarn-error.*
 
 # Figma reference images (downloaded via MCP for visual fidelity checks)
 /figma-refs
+
+# Firebase config files
+google-services.json
+GoogleService-Info.plist
