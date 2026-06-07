@@ -9,3 +9,4 @@ export { BriefingScreen } from './BriefingScreen';
 export { GoalTimeframeScreen } from './GoalTimeframeScreen';
 export { WearableConnectionScreen } from './WearableConnectionScreen';
 export { ReferralCodeScreen } from './ReferralCodeScreen';
+export { TestimonialsScreen } from './TestimonialsScreen';

@@ -1,5 +1,6 @@
 export * from './LandingScreen';
 export * from './LoginScreen';
+export * from './WelcomeScreen';
 export * from './OnboardingScreen';
 export * from './HomeScreen';
 export * from './CalendarScreen';

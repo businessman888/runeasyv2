@@ -22,6 +22,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { borderRadius, colors, fonts, shadows } from '../theme';
 import { StoryProgressBars } from '../components/landing/StoryProgressBars';
+import { PrePaywallBackground } from '../components/upgrade/PrePaywallBackground';
 import {
     LANDING_LOGO,
     LANDING_SLIDES,
@@ -50,10 +51,11 @@ type SlideProps = {
     slide: LandingSlide;
     index: number;
     activeIndex: number;
-    topPadding: number;
+    padTop: number;
+    padBottom: number;
 };
 
-const Slide = memo(({ slide, index, activeIndex, topPadding }: SlideProps) => {
+const Slide = memo(({ slide, index, activeIndex, padTop, padBottom }: SlideProps) => {
     const fadeStyle = useAnimatedStyle(
         () => ({ opacity: withTiming(index === activeIndex ? 1 : 0, { duration: FADE_DURATION }) }),
         [index, activeIndex],
@@ -61,12 +63,17 @@ const Slide = memo(({ slide, index, activeIndex, topPadding }: SlideProps) => {
 
     return (
         <Animated.View
-            style={[StyleSheet.absoluteFill, { opacity: index === 0 ? 1 : 0 }, fadeStyle]}
+            style={[
+                StyleSheet.absoluteFill,
+                styles.slide,
+                { opacity: index === 0 ? 1 : 0, paddingTop: padTop, paddingBottom: padBottom },
+                fadeStyle,
+            ]}
             pointerEvents="none"
             accessibilityElementsHidden={index !== activeIndex}
             importantForAccessibility={index === activeIndex ? 'auto' : 'no-hide-descendants'}
         >
-            <View style={[styles.slideHeader, { paddingTop: topPadding }]}>
+            <View style={styles.slideHeader}>
                 {slide.variant === 'logo' && (
                     <Image source={LANDING_LOGO} style={styles.logo} resizeMode="contain" />
                 )}
@@ -169,11 +176,17 @@ export function LandingScreen({ navigation }: { navigation: any }) {
     const btnScale = useSharedValue(1);
     const btnStyle = useAnimatedStyle(() => ({ transform: [{ scale: btnScale.value }] }));
 
-    const slideTopPadding = insets.top + scaleY(46);
+    // Reserve space for the progress bars (top) and the gradient/button (bottom)
+    // so the centered text+image group sits in the visible middle.
+    const slidePadTop = insets.top + scaleY(40);
+    const slidePadBottom = insets.bottom + scaleY(150);
 
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+
+            {/* Premium radial-glow background (shared with PrePaywall) */}
+            <PrePaywallBackground />
 
             {/* Cross-fading slides (all mounted) */}
             <View style={StyleSheet.absoluteFill}>
@@ -183,7 +196,8 @@ export function LandingScreen({ navigation }: { navigation: any }) {
                         slide={slide}
                         index={i}
                         activeIndex={activeIndex}
-                        topPadding={slideTopPadding}
+                        padTop={slidePadTop}
+                        padBottom={slidePadBottom}
                     />
                 ))}
             </View>
@@ -245,7 +259,12 @@ const styles = StyleSheet.create({
         backgroundColor: colors.background,
     },
     // --- slide ---
+    slide: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     slideHeader: {
+        width: '100%',
         alignItems: 'center',
         paddingHorizontal: scaleX(28),
     },
@@ -271,10 +290,10 @@ const styles = StyleSheet.create({
         marginTop: scaleY(12),
     },
     imageStage: {
-        flex: 1,
+        width: '100%',
         justifyContent: 'center',
         alignItems: 'center',
-        marginTop: scaleY(20),
+        marginTop: scaleY(12),
     },
     bleedImage: {
         width: SCREEN_WIDTH,
@@ -282,7 +301,7 @@ const styles = StyleSheet.create({
     },
     containedImage: {
         width: '86%',
-        height: '100%',
+        height: scaleY(360),
     },
     // --- progress ---
     progressWrap: {

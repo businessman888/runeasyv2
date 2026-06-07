@@ -39,6 +39,7 @@ import { StartDateScreen } from './quiz/StartDateScreen';
 import { GoalTimeframeScreen } from './quiz/GoalTimeframeScreen';
 import { WearableConnectionScreen } from './quiz/WearableConnectionScreen';
 import { ReferralCodeScreen } from './quiz/ReferralCodeScreen';
+import { TestimonialsScreen } from './quiz/TestimonialsScreen';
 import { GoalTypeScreen } from './quiz/GoalTypeScreen';
 import { RacePickerScreen } from './quiz/RacePickerScreen';
 import { ManualRaceDateScreen } from './quiz/ManualRaceDateScreen';
@@ -170,6 +171,7 @@ const ALL_QUIZ_STEPS: QuizStep[] = [
     { key: 'limitations', Component: LimitationsScreen },
     { key: 'goalTimeframe', Component: GoalTimeframeScreen },                                 // skipped on race path
     { key: 'preferredWearable', Component: WearableConnectionScreen, isWearableStep: true },
+    { key: '__i_testimonials', Component: TestimonialsScreen, isInterstitial: true },
     {
         keys: ['referralCode', 'referralInfluencerId'],
         key: 'referralCode',

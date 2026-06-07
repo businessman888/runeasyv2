@@ -10,6 +10,7 @@ import { navigationRef, setNavigationReady } from './navigationRef';
 import {
     LandingScreen,
     LoginScreen,
+    WelcomeScreen,
     OnboardingScreen,
     HomeScreen,
     CalendarScreen,
@@ -279,6 +280,16 @@ export function AppNavigator() {
                        User is LOCKED here - cannot escape to Home
                        ================================================ */
                     <>
+                        {/* Tela de boas-vindas: rota inicial do fluxo de onboarding.
+                            Reaparece a cada cold start enquanto onboarding_completed=false. */}
+                        <Stack.Screen
+                            name="Welcome"
+                            component={WelcomeScreen}
+                            options={{
+                                headerShown: false,
+                                gestureEnabled: false,
+                            }}
+                        />
                         <Stack.Screen
                             name="Onboarding"
                             component={OnboardingScreen}
