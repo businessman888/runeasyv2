@@ -100,6 +100,42 @@ export class UsersService {
   }
 
   /**
+   * Persist a full name into users.profile ONLY if no name is set yet.
+   *
+   * Used by the Apple sign-in flow: Apple returns the user's name solely in the
+   * client-side credential on the first authorization (never in the id_token /
+   * auth metadata), so syncGoogleMetadata can't recover it. The client forwards
+   * that name to the backend, which writes it here via the service role —
+   * reliable, unlike the mobile's direct Supabase calls. Never overwrites a name
+   * the user may have already edited.
+   */
+  async setProfileNameIfMissing(userId: string, fullName: string): Promise<void> {
+    const trimmed = fullName?.trim();
+    if (!trimmed) return;
+
+    try {
+      const { data } = await this.supabaseService
+        .from('users')
+        .select('profile')
+        .eq('id', userId)
+        .single();
+
+      const profile = data?.profile || {};
+      if (profile.full_name) return; // already has a name — don't clobber
+
+      const parts = trimmed.split(/\s+/);
+      await this.updateProfile(userId, {
+        full_name: trimmed,
+        firstname: parts[0] || '',
+        lastname: parts.slice(1).join(' ') || '',
+      });
+      this.logger.log(`Apple name persisted for user ${userId}`);
+    } catch (err) {
+      this.logger.error(`Failed to persist Apple name for user ${userId}`, err);
+    }
+  }
+
+  /**
    * Sync onboarding biometrics (birth_date, weight, height) from user_onboarding to users.profile
    */
   async syncOnboardingBiometrics(userId: string): Promise<void> {

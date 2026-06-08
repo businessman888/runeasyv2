@@ -1,11 +1,15 @@
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../database';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
-  constructor(private readonly supabaseService: SupabaseService) {}
+  constructor(
+    private readonly supabaseService: SupabaseService,
+    private readonly usersService: UsersService,
+  ) {}
 
   async signInWithGoogle(idToken: string) {
     this.logger.log('[AUTH] Exchanging Google ID token with Supabase...');
@@ -72,7 +76,7 @@ export class AuthService {
     };
   }
 
-  async signInWithApple(idToken: string, nonce?: string) {
+  async signInWithApple(idToken: string, nonce?: string, fullName?: string) {
     this.logger.log('[AUTH] Exchanging Apple ID token with Supabase...');
 
     const { data, error } = await this.supabaseService.auth.signInWithIdToken({
@@ -91,6 +95,13 @@ export class AuthService {
     }
 
     this.logger.log(`[AUTH] Apple sign-in successful, userId: ${data.user.id}`);
+
+    // Apple only sends the name on the first authorization (client-side credential,
+    // never in the id_token). Persist it now via the service role — the AFTER
+    // INSERT trigger has already created the public.users row in this transaction.
+    if (fullName) {
+      await this.usersService.setProfileNameIfMissing(data.user.id, fullName);
+    }
 
     return {
       session: {

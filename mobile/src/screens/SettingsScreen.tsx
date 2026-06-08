@@ -18,14 +18,15 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import { DeviceRow } from '../components/devices/DeviceRow';
 import { WEARABLE_ORDER } from '../config/wearables.config';
 
-// Safe initials from a display name. Guards every step: a brand-new user (e.g.
-// a freshly-created staging account) has no name yet, so getDisplayName returns
-// '' — accessing name[0] then yields undefined and .toUpperCase() crashes the
-// whole screen. Returns '?' when there's nothing to derive from.
+// Initials from the user's real name — shown inside the avatar circle when the
+// user has no profile photo (Apple/Google login without a picture), until they
+// set one in "editar perfil". Crash-safe (never indexes undefined), but it does
+// NOT invent placeholder data: returns '' when there's genuinely no name, so the
+// circle simply stays empty rather than showing mock text like '?'.
 function getInitials(name: string): string {
     const parts = name.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return '?';
-    if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '?';
+    if (parts.length === 0) return '';
+    if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '';
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
@@ -94,7 +95,7 @@ export function SettingsScreen({ navigation }: any) {
         });
     };
 
-    const userName = getDisplayName(user) || 'Corredor';
+    const userName = getDisplayName(user);
     const initials = getInitials(userName);
 
     return (

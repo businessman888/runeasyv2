@@ -19,7 +19,7 @@ export class AuthController {
   @Post('apple')
   @HttpCode(200)
   signInWithApple(@Body() dto: AppleSignInDto) {
-    return this.authService.signInWithApple(dto.idToken, dto.nonce);
+    return this.authService.signInWithApple(dto.idToken, dto.nonce, dto.fullName);
   }
 
   @Post('refresh')

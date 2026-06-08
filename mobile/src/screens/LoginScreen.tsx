@@ -194,7 +194,10 @@ export function LoginScreen({ navigation }: { navigation: unknown }) {
             const authResponse = await fetch(`${BASE_API_URL}/auth/apple`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ idToken: identityToken, nonce: rawNonce }),
+                // fullName is only present on Apple's first authorization; the backend
+                // persists it into the profile (reliable, via service role) since it
+                // never arrives in the id_token / auth metadata.
+                body: JSON.stringify({ idToken: identityToken, nonce: rawNonce, fullName: displayName }),
             });
 
             if (!authResponse.ok) {
