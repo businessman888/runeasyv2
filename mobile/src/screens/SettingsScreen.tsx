@@ -18,6 +18,17 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import { DeviceRow } from '../components/devices/DeviceRow';
 import { WEARABLE_ORDER } from '../config/wearables.config';
 
+// Safe initials from a display name. Guards every step: a brand-new user (e.g.
+// a freshly-created staging account) has no name yet, so getDisplayName returns
+// '' — accessing name[0] then yields undefined and .toUpperCase() crashes the
+// whole screen. Returns '?' when there's nothing to derive from.
+function getInitials(name: string): string {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '?';
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 // Icon components using @expo/vector-icons. Nav icons are neutral (não-CTA):
 // o cyan fica reservado para ações primárias (botão de editar avatar, badge Pro).
 function PersonIcon({ size = 22, color = colors.textLight }: { size?: number; color?: string }) {
@@ -83,7 +94,8 @@ export function SettingsScreen({ navigation }: any) {
         });
     };
 
-    const userName = getDisplayName(user);
+    const userName = getDisplayName(user) || 'Corredor';
+    const initials = getInitials(userName);
 
     return (
         <ScreenContainer>
@@ -104,11 +116,7 @@ export function SettingsScreen({ navigation }: any) {
                                 />
                             ) : (
                                 <View style={styles.avatarInitials}>
-                                    <Text style={styles.initialsText}>
-                                        {userName.split(' ').length > 1
-                                            ? (userName.split(' ')[0][0] + userName.split(' ')[userName.split(' ').length - 1][0]).toUpperCase()
-                                            : userName[0].toUpperCase()}
-                                    </Text>
+                                    <Text style={styles.initialsText}>{initials}</Text>
                                 </View>
                             )}
                         </View>

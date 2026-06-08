@@ -16,16 +16,52 @@
 -- FUNCTIONS
 -- ----------------------------------------------------------------------------
 
--- Creates the public.users profile row whenever a new auth user signs up.
--- THIS is the one that unblocks login.
+-- Creates the public.users profile row whenever a new auth user signs up AND
+-- seeds profile.full_name / firstname / lastname / avatar_url / profile_pic from
+-- the OAuth metadata (Apple/Google) carried in raw_user_meta_data. This mirrors
+-- exactly what the backend's UsersService.syncGoogleMetadata() does, but at the
+-- data source — so the profile is never born empty and the mobile (getDisplayName
+-- / getAvatarUrl, which read profile.full_name + profile.avatar_url/profile_pic)
+-- has a name+avatar immediately, with no dependency on the lazy-sync.
+--
+-- Key shape (matches production users.profile):
+--   firstname = first token of the name, lastname = the rest.
+-- The backend lazy-sync stays compatible: it only fills MISSING fields, so it
+-- becomes a no-op once the trigger has populated them.
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
+declare
+  v_full_name text;
+  v_avatar    text;
+  v_first     text;
+  v_last      text;
+  v_profile   jsonb := '{}'::jsonb;
 begin
-  insert into public.users (id, email, onboarding_completed)
-  values (new.id, new.email, false);
+  v_full_name := coalesce(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', '');
+  v_avatar    := coalesce(new.raw_user_meta_data->>'avatar_url', new.raw_user_meta_data->>'picture', '');
+
+  if v_full_name <> '' then
+    v_first := split_part(v_full_name, ' ', 1);
+    v_last  := btrim(substring(v_full_name from char_length(v_first) + 1));
+    v_profile := v_profile || jsonb_build_object(
+      'full_name', v_full_name,
+      'firstname', v_first,
+      'lastname',  coalesce(v_last, '')
+    );
+  end if;
+
+  if v_avatar <> '' then
+    v_profile := v_profile || jsonb_build_object(
+      'avatar_url',  v_avatar,
+      'profile_pic', v_avatar
+    );
+  end if;
+
+  insert into public.users (id, email, profile, onboarding_completed)
+  values (new.id, new.email, v_profile, false);
   return new;
 end;
 $$;
@@ -224,11 +260,61 @@ ON ddl_command_end
 EXECUTE FUNCTION public.rls_auto_enable();
 
 -- ----------------------------------------------------------------------------
--- BACKFILL — create profile rows for any auth users that signed up BEFORE the
+-- BACKFILL 1 — create profile rows for auth users that signed up BEFORE the
 -- trigger existed (e.g. the test user that got bounced back to the landing).
+-- Seeds the same OAuth-derived profile the trigger now produces.
 -- ----------------------------------------------------------------------------
-insert into public.users (id, email, onboarding_completed)
-select u.id, u.email, false
+insert into public.users (id, email, profile, onboarding_completed)
+select u.id, u.email,
+       (case
+          when coalesce(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name', '') <> ''
+          then jsonb_build_object(
+            'full_name', coalesce(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name'),
+            'firstname', split_part(coalesce(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name'), ' ', 1),
+            'lastname',  btrim(substring(coalesce(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name')
+                                from char_length(split_part(coalesce(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name'), ' ', 1)) + 1))
+          )
+          else '{}'::jsonb
+        end)
+       || (case
+            when coalesce(u.raw_user_meta_data->>'avatar_url', u.raw_user_meta_data->>'picture', '') <> ''
+            then jsonb_build_object(
+              'avatar_url',  coalesce(u.raw_user_meta_data->>'avatar_url', u.raw_user_meta_data->>'picture'),
+              'profile_pic', coalesce(u.raw_user_meta_data->>'avatar_url', u.raw_user_meta_data->>'picture')
+            )
+            else '{}'::jsonb
+          end) as profile,
+       false
 from auth.users u
 left join public.users p on p.id = u.id
 where p.id is null;
+
+-- ----------------------------------------------------------------------------
+-- BACKFILL 2 — for rows that ALREADY exist but have an empty profile.full_name
+-- (created by the earlier name-less trigger), fill name + avatar from the OAuth
+-- metadata. Merge (||) preserves any user-edited fields already present.
+-- ----------------------------------------------------------------------------
+update public.users p
+set profile = coalesce(p.profile, '{}'::jsonb)
+   || (case
+        when coalesce(a.raw_user_meta_data->>'full_name', a.raw_user_meta_data->>'name', '') <> ''
+        then jsonb_build_object(
+          'full_name', coalesce(a.raw_user_meta_data->>'full_name', a.raw_user_meta_data->>'name'),
+          'firstname', split_part(coalesce(a.raw_user_meta_data->>'full_name', a.raw_user_meta_data->>'name'), ' ', 1),
+          'lastname',  btrim(substring(coalesce(a.raw_user_meta_data->>'full_name', a.raw_user_meta_data->>'name')
+                              from char_length(split_part(coalesce(a.raw_user_meta_data->>'full_name', a.raw_user_meta_data->>'name'), ' ', 1)) + 1))
+        )
+        else '{}'::jsonb
+      end)
+   || (case
+        when coalesce(a.raw_user_meta_data->>'avatar_url', a.raw_user_meta_data->>'picture', '') <> ''
+        then jsonb_build_object(
+          'avatar_url',  coalesce(a.raw_user_meta_data->>'avatar_url', a.raw_user_meta_data->>'picture'),
+          'profile_pic', coalesce(a.raw_user_meta_data->>'avatar_url', a.raw_user_meta_data->>'picture')
+        )
+        else '{}'::jsonb
+      end),
+    updated_at = now()
+from auth.users a
+where a.id = p.id
+  and coalesce(p.profile->>'full_name', '') = '';
