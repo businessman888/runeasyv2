@@ -4,10 +4,15 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
+    "start:staging": "cross-env APP_ENV=staging expo start --clear",
     "android": "expo run:android",
+    "android:staging": "cross-env APP_ENV=staging expo run:android",
     "ios": "expo run:ios",
+    "ios:staging": "cross-env APP_ENV=staging expo run:ios",
     "web": "expo start --web",
-    "prebuild:clean": "expo prebuild --clean"
+    "prebuild:clean": "expo prebuild --clean",
+    "build:staging": "eas build --profile staging",
+    "build:production": "eas build --profile production"
   },
   "dependencies": {
     "@bacons/apple-targets": "^4.0.6",
@@ -84,6 +89,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "cross-env": "^7.0.3",
     "dotenv": "^17.4.1",
     "react-native-svg-transformer": "^1.5.2",
     "typescript": "~5.9.2"

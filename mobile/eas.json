@@ -32,14 +32,43 @@
         "EXPO_PUBLIC_APP_VARIANT": "preview"
       }
     },
+    "staging": {
+      "distribution": "internal",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_APP_VARIANT": "staging",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://gcaozgnevvmnlxnkfthh.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_c11B_LhCkB2c-F5GtAhcog_zA4GnZYr",
+        "EXPO_PUBLIC_API_URL": "https://runeasyv2-staging.up.railway.app",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "911159721571-3t3nmmu8kvi3lpr1s5dqg8lt7p275bdt.apps.googleusercontent.com"
+      }
+    },
+    "staging:simulator": {
+      "extends": "staging",
+      "ios": {
+        "simulator": true
+      }
+    },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_APP_VARIANT": "production"
+        "EXPO_PUBLIC_APP_VARIANT": "production",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ndlsxgsccyjspbhzccyp.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kbHN4Z3NjY3lqc3BiaHpjY3lwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMTIyNzksImV4cCI6MjA4ODY4ODI3OX0.3mJ9p_Ex3OxNv_SzV7PQSCuPfZ_wxEQq-K_HaX9i9RI",
+        "EXPO_PUBLIC_API_URL": "https://app.runeasy.com.br",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "911159721571-707rgl0s1m5a7irp7at70qmvhp4bd58o.apps.googleusercontent.com"
       }
     }
   },
   "submit": {
-    "production": {}
+    "production": {},
+    "staging": {
+      "android": {
+        "track": "internal"
+      }
+    }
   }
 }

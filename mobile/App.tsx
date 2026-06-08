@@ -17,6 +17,7 @@ import Mapbox from '@rnmapbox/maps';
 import { SuperwallProvider, CustomPurchaseControllerProvider } from 'expo-superwall';
 import type { CustomPurchaseControllerContext } from 'expo-superwall';
 import { SuperwallBridge } from './src/components/paywall/SuperwallBridge';
+import { EnvBadge } from './src/components/dev/EnvBadge';
 import {
   initializeRevenueCat,
   getSuperwallApiKey,
@@ -374,6 +375,8 @@ export default function App() {
             {/* NetworkRetryManager: retries pending workouts/free runs when network comes back */}
             <NetworkRetryManager />
             <AppNavigator />
+            {/* EnvBadge: discreet env indicator — visible only on non-prod builds */}
+            <EnvBadge />
           </GestureHandlerRootView>
         </SuperwallProvider>
         </CustomPurchaseControllerProvider>

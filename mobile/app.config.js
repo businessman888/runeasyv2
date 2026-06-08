@@ -1,4 +1,14 @@
-import 'dotenv/config';
+import { config } from 'dotenv';
+
+// Local env loading. EAS cloud builds inject EXPO_PUBLIC_* from the matching
+// eas.json profile `env` block, so this only affects local runs (expo start /
+// run:*). Base `.env` points at production; setting APP_ENV=staging overlays
+// `.env.staging` (only the 3 environment-defining vars) on top, so a local run
+// can target the staging Supabase + backend without editing `.env`.
+config();
+if (process.env.APP_ENV === 'staging') {
+  config({ path: '.env.staging', override: true });
+}
 
 export default {
   owner: "businessman23",
