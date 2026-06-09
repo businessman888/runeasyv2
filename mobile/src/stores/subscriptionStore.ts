@@ -11,10 +11,23 @@
  */
 
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
 import { DEV_PLAN_OVERRIDE, type DevPlanOverride } from '../utils/devTools';
 import { useDevMenuStore } from './devMenuStore';
+
+/**
+ * Persist adapter backed by SecureStore (native) / localStorage (web) via the
+ * shared Storage util — same backing store as devMenuStore. Keeps the
+ * last-known subscription tier across cold starts so the app renders Pro/Free
+ * instantly instead of defaulting to Free until the backend fetch resolves.
+ */
+const subscriptionPersistStorage = {
+  getItem: (name: string) => Storage.getItemAsync(name),
+  setItem: (name: string, value: string) => Storage.setItemAsync(name, value),
+  removeItem: (name: string) => Storage.deleteItemAsync(name),
+};
 
 export type SubscriptionPlan = 'free' | 'pro';
 export type SubscriptionStatus =
@@ -109,7 +122,9 @@ const INITIAL_STATE: Pick<
   lastFetchedAt: null,
 };
 
-export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
+export const useSubscriptionStore = create<SubscriptionState>()(
+  persist(
+    (set, get) => ({
   ...INITIAL_STATE,
 
   fetchSubscription: async () => {
@@ -175,4 +190,23 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   },
 
   reset: () => set({ ...INITIAL_STATE }),
-}));
+    }),
+    {
+      name: 'subscription-storage',
+      storage: createJSONStorage(() => subscriptionPersistStorage),
+      // Persist only the resolved subscription data — never `isLoading`, which
+      // is transient. On rehydrate the last-known `isProUser` becomes the
+      // starting value (instead of `false`), so cold start shows the correct
+      // tier immediately while `fetchSubscription` reconciles in the background.
+      partialize: (state) => ({
+        plan: state.plan,
+        status: state.status,
+        isProUser: state.isProUser,
+        trialExpiresAt: state.trialExpiresAt,
+        subscriptionExpiresAt: state.subscriptionExpiresAt,
+        daysRemainingInTrial: state.daysRemainingInTrial,
+        lastFetchedAt: state.lastFetchedAt,
+      }),
+    },
+  ),
+);

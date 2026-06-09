@@ -308,6 +308,29 @@ export function AppNavigator() {
                             component={BriefingScreen}
                             options={{ headerShown: false, gestureEnabled: false }}
                         />
+                        {/* Device pre-config + "ler mais", reached from the
+                            onboarding wearable step. Registered here (not only
+                            in State 3) so navigation works while the user is
+                            locked in onboarding — presenting these as native
+                            modal routes avoids the iOS Modal-over-Modal bug. */}
+                        <Stack.Screen
+                            name="DeviceConnect"
+                            component={DeviceConnectScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'modal',
+                                gestureEnabled: true,
+                            }}
+                        />
+                        <Stack.Screen
+                            name="DeviceReadMore"
+                            component={DeviceReadMoreScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'modal',
+                                gestureEnabled: true,
+                            }}
+                        />
                     </>
                 ) : (
                     /* ================================================

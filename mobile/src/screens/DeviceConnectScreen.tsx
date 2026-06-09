@@ -14,11 +14,21 @@ import type { RootStackParamList } from '../navigation/navigationRef';
 type Props = NativeStackScreenProps<RootStackParamList, 'DeviceConnect'>;
 
 export function DeviceConnectScreen({ navigation, route }: Props) {
-    const { provider } = route.params;
+    const { provider, onConnected } = route.params;
     return (
         <DeviceConnectBody
             provider={provider}
             onClose={() => navigation.goBack()}
+            // Onboarding mode: advance the quiz flow, then pop this route so the
+            // (now advanced) onboarding step is revealed underneath.
+            onConnected={
+                onConnected
+                    ? () => {
+                          onConnected();
+                          navigation.goBack();
+                      }
+                    : undefined
+            }
             onReadMore={() => navigation.navigate('DeviceReadMore', { provider })}
         />
     );

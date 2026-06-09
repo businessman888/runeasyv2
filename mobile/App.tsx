@@ -267,6 +267,10 @@ export default function App() {
   useEffect(() => {
     initializeRevenueCat();
     const removeListener = initSubscriptionListener();
+    // Reconcilia a assinatura no boot (cold start). O subscriptionStore já
+    // hidrata o último tier conhecido (persistido), então a UI abre correta;
+    // este fetch corrige em ~1s caso o estado tenha mudado fora do app.
+    void useSubscriptionStore.getState().fetchSubscription();
     // Restaura a aba "Treinos | Atividades" escolhida (Home + Calendário)
     void useWorkoutScopeStore.getState().hydrate();
     // Hidrata DevMenu override em dev/preview (no-op em prod via __DEV__ check inside hydrate consumers)

@@ -268,6 +268,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                     console.log('[AUTH] User validated:', userData.user?.id);
                     await Storage.setItemAsync('user_id', userId);
                     set({ user: userData.user, isAuthenticated: true });
+
+                    // ── Reconcile subscription on cold start ──
+                    // The persisted subscriptionStore already shows the
+                    // last-known tier instantly. We refresh from the backend
+                    // (source of truth) to correct it within ~1s. We do NOT
+                    // push the immediate SDK isPro here: on a cold start the
+                    // RevenueCat SDK may not have loaded customerInfo yet and
+                    // would transiently downgrade a hydrated Pro user to Free.
+                    // The SDK listener (initSubscriptionListener) pushes the
+                    // real value once it resolves.
+                    try {
+                        await identifyRevenueCatUser(userId);
+                        void useSubscriptionStore.getState().fetchSubscription();
+                    } catch (err) {
+                        console.warn('[AUTH] RevenueCat identify (checkAuth) failed:', err);
+                    }
                 } else {
                     console.warn('[AUTH] User not found during checkAuth - clearing');
                     await clearAllAuthTokens();

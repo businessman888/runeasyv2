@@ -76,12 +76,20 @@ export const useHealthKitStore = create<HealthKitState>((set, get) => ({
         }
     },
 
-    /** Fetch connected_devices list and set isConnected if apple_health row exists. */
+    /**
+     * Connected only when BOTH the backend has the apple_health row AND iOS
+     * still holds the authorization. Requiring the native half prevents a stale
+     * backend row from showing Apple Health as connected when the OS has no
+     * authorization — the "mocked" Apple Watch state reported on iOS.
+     */
     async loadConnectionStatus() {
         try {
-            const devices = await devicesService.listDevices();
-            const connected = devices.some((d) => d.provider === APPLE_HEALTH_PROVIDER);
-            set({ isConnected: connected });
+            const [devices, authorized] = await Promise.all([
+                devicesService.listDevices(),
+                HealthKitManager.isAuthorized(),
+            ]);
+            const backendConnected = devices.some((d) => d.provider === APPLE_HEALTH_PROVIDER);
+            set({ isConnected: backendConnected && authorized });
         } catch (e) {
             console.warn('[healthKitStore] loadConnectionStatus failed:', e);
             // Don't flip isConnected on transient errors — keep previous state.

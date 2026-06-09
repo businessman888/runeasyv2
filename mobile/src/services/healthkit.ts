@@ -99,6 +99,22 @@ function setPending(list: NormalizedHealthKitActivity[]) {
 class HealthKitManagerClass {
     private readonly isIOS = Platform.OS === 'ios';
 
+    /**
+     * Read types we request from HealthKit. Single source of truth so the
+     * authorization request and the status check always reference the same set
+     * (a mismatch would make `getRequestStatusForAuthorization` report
+     * `shouldRequest` forever).
+     */
+    private readonly READ_TYPES = [
+        'HKWorkoutTypeIdentifier',
+        'HKWorkoutRouteTypeIdentifier',
+        'HKQuantityTypeIdentifierHeartRate',
+        'HKQuantityTypeIdentifierDistanceWalkingRunning',
+        'HKQuantityTypeIdentifierActiveEnergyBurned',
+        'HKQuantityTypeIdentifierStepCount',
+        'HKQuantityTypeIdentifierRunningSpeed',
+    ] as const;
+
     /** Is HealthKit usable on this device? */
     async isAvailable(): Promise<boolean> {
         if (!this.isIOS) return false;
@@ -112,9 +128,54 @@ class HealthKitManagerClass {
     }
 
     /**
-     * Request read permissions. HealthKit never exposes a real "granted"
-     * status for read types (Apple privacy rule), so we optimistically flag
-     * the permission as granted once the user has passed through the prompt.
+     * Native authorization-request status for our read types.
+     *  - `shouldRequest`: iOS would show the permission sheet (not yet
+     *    determined for at least one type).
+     *  - `unnecessary`: the user has already responded — iOS will NOT show the
+     *    sheet again (expected once-ever behaviour, not a bug).
+     *  - `unknown`: status could not be determined (non-iOS, error).
+     *
+     * For read types Apple never reveals grant vs. deny, so `unnecessary` is
+     * the strongest "the user has authorized us" signal the OS exposes.
+     */
+    async getRequestStatus(): Promise<'shouldRequest' | 'unnecessary' | 'unknown'> {
+        if (!this.isIOS) return 'unknown';
+        try {
+            const hk = await import('@kingstinct/react-native-healthkit');
+            const status = await hk.getRequestStatusForAuthorization({
+                toRead: this.READ_TYPES as unknown as readonly any[],
+                toShare: [],
+            });
+            if (status === hk.AuthorizationRequestStatus.shouldRequest) return 'shouldRequest';
+            if (status === hk.AuthorizationRequestStatus.unnecessary) return 'unnecessary';
+            return 'unknown';
+        } catch (e) {
+            console.warn('[HealthKit] getRequestStatus failed:', e);
+            return 'unknown';
+        }
+    }
+
+    /**
+     * Whether the user has already been through HealthKit authorization for our
+     * read types. Used by the store as the *native* half of the connection
+     * truth (combined with the backend device row) so a stale backend entry
+     * can't make the app look connected when iOS has no authorization.
+     */
+    async isAuthorized(): Promise<boolean> {
+        return (await this.getRequestStatus()) === 'unnecessary';
+    }
+
+    /**
+     * Request read permissions. Shows the iOS system sheet only when the types
+     * are still undetermined (`shouldRequest`); if the user already responded
+     * (`unnecessary`) iOS won't reshow it — that's expected. We derive `granted`
+     * from the post-request status instead of optimistically assuming success,
+     * and persist that truthful value.
+     *
+     * Note: for read-only requests Apple does not distinguish "granted" from
+     * "denied" — `unnecessary` only means the user has made a determination.
+     * A denial surfaces later as zero readable workouts, which the OS does not
+     * let us detect up front.
      */
     async requestPermissions(): Promise<{ granted: boolean }> {
         if (!this.isIOS) return { granted: false };
@@ -122,23 +183,24 @@ class HealthKitManagerClass {
         try {
             const hk = await import('@kingstinct/react-native-healthkit');
 
-            const toRead = [
-                'HKWorkoutTypeIdentifier',
-                'HKWorkoutRouteTypeIdentifier',
-                'HKQuantityTypeIdentifierHeartRate',
-                'HKQuantityTypeIdentifierDistanceWalkingRunning',
-                'HKQuantityTypeIdentifierActiveEnergyBurned',
-                'HKQuantityTypeIdentifierStepCount',
-                'HKQuantityTypeIdentifierRunningSpeed',
-            ] as const;
-
-            await hk.requestAuthorization({
-                toRead: toRead as unknown as readonly any[],
+            const authPayload = {
+                toRead: this.READ_TYPES as unknown as readonly any[],
                 toShare: [],
-            });
+            };
 
-            metadataStorage.set(PERMISSION_GRANTED_KEY, true);
-            return { granted: true };
+            const before = await hk.getRequestStatusForAuthorization(authPayload);
+            if (before === hk.AuthorizationRequestStatus.shouldRequest) {
+                // Presents the system sheet; resolves once the user responds.
+                await hk.requestAuthorization(authPayload);
+            }
+
+            // `unnecessary` post-request → the user has made a determination.
+            // `shouldRequest` still here → the sheet was dismissed without one.
+            const after = await hk.getRequestStatusForAuthorization(authPayload);
+            const granted = after === hk.AuthorizationRequestStatus.unnecessary;
+
+            metadataStorage.set(PERMISSION_GRANTED_KEY, granted);
+            return { granted };
         } catch (e) {
             console.error('[HealthKit] requestPermissions failed:', e);
             return { granted: false };
@@ -146,8 +208,9 @@ class HealthKitManagerClass {
     }
 
     /**
-     * Best-effort check whether the user has previously authorized us.
-     * Used to decide whether foreground sync should run without prompting.
+     * Best-effort cached flag of whether the user authorized us. Backed by the
+     * truthful value persisted in `requestPermissions`. Used for the fast
+     * foreground-sync path; the authoritative check is `isAuthorized()`.
      */
     hasPermissionsCached(): boolean {
         return metadataStorage.getBoolean(PERMISSION_GRANTED_KEY) ?? false;

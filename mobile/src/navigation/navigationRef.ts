@@ -27,7 +27,11 @@ export type RootStackParamList = {
     TrainingHistory: undefined;
     NotificationSettings: undefined;
     Help: undefined;
-    DeviceConnect: { provider: WearableProvider };
+    // `onConnected` is supplied only by the onboarding flow: a successful
+    // connection advances the quiz step (and the route pops itself). Profile
+    // (manage) navigations omit it, so DeviceConnectBody shows the disconnect
+    // action instead.
+    DeviceConnect: { provider: WearableProvider; onConnected?: () => void };
     DeviceReadMore: { provider: WearableProvider };
     Quiz_Objective: undefined;
     Quiz_Level: undefined;

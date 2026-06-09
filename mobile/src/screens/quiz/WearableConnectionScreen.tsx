@@ -1,13 +1,21 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, Modal } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, StyleSheet, Image } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { WearableSelectionModal } from './WearableSelectionModal';
-import { DeviceConnectBody } from '../../components/devices/DeviceConnectBody';
-import { DeviceReadMoreBody } from '../../components/devices/DeviceReadMoreBody';
 import {
     toPreferredWearable,
     type WearableProvider,
 } from '../../config/wearables.config';
+import type { RootStackParamList } from '../../navigation/navigationRef';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+// Time for the picker bottom-sheet to finish its slide-out before we present
+// the DeviceConnect native modal. Presenting a native modal while an RN Modal
+// is still on screen fails silently on iOS — this was the onboarding bug.
+const PICKER_DISMISS_MS = 350;
 
 const DS = {
     bg: '#0F0F1E',
@@ -32,36 +40,45 @@ export function WearableConnectionScreen({
     openModal,
     onModalClose,
 }: WearableConnectionScreenProps) {
+    const navigation = useNavigation<Nav>();
     const [pickerVisible, setPickerVisible] = useState(false);
-    const [connectProvider, setConnectProvider] = useState<WearableProvider | null>(null);
-    // Onboarding read-more: a nested Modal over the config Modal (a navigation
-    // route would render *under* the RN Modal here, so we mirror the same Modal
-    // pattern used for the config screen).
-    const [readMoreProvider, setReadMoreProvider] = useState<WearableProvider | null>(null);
+    const pickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Keep the picker in sync with the parent-driven prop (the "Sim" footer button).
     React.useEffect(() => {
         if (openModal) setPickerVisible(true);
     }, [openModal]);
 
+    React.useEffect(() => {
+        return () => {
+            if (pickTimer.current) clearTimeout(pickTimer.current);
+        };
+    }, []);
+
     const closePicker = () => {
         setPickerVisible(false);
         onModalClose?.();
     };
 
-    // Tapping a device row opens the reusable config screen over the picker.
-    const handlePick = (provider: WearableProvider) => {
-        setConnectProvider(provider);
+    // Connection succeeded on the DeviceConnect route → persist the choice and
+    // advance the onboarding flow. The route pops itself afterwards.
+    const handleConnected = (provider: WearableProvider) => {
+        onChange?.(toPreferredWearable(provider));
+        onConnect?.();
     };
 
-    // Connection succeeded on the config screen → persist the choice, close
-    // everything and advance the onboarding flow (handled by `onConnect`).
-    const handleConnected = () => {
-        if (connectProvider) onChange?.(toPreferredWearable(connectProvider));
-        setConnectProvider(null);
-        setPickerVisible(false);
-        onModalClose?.();
-        onConnect?.();
+    // Tapping a device row dismisses the picker, then (after the sheet animates
+    // out) pushes the reusable DeviceConnect route — the same one the Profile
+    // uses, which presents reliably on iOS (unlike a Modal over a Modal).
+    const handlePick = (provider: WearableProvider) => {
+        closePicker();
+        if (pickTimer.current) clearTimeout(pickTimer.current);
+        pickTimer.current = setTimeout(() => {
+            navigation.navigate('DeviceConnect', {
+                provider,
+                onConnected: () => handleConnected(provider),
+            });
+        }, PICKER_DISMISS_MS);
     };
 
     return (
@@ -85,46 +102,12 @@ export function WearableConnectionScreen({
                 />
             </View>
 
-            {/* Device picker (bottom-sheet) */}
+            {/* Device picker (bottom-sheet) — the single Modal in this flow. */}
             <WearableSelectionModal
                 visible={pickerVisible}
                 onClose={closePicker}
                 onPick={handlePick}
             />
-
-            {/* Per-device configuration screen (reused from the Profile). The X
-                returns to the picker; a successful connect advances the flow. */}
-            <Modal
-                visible={!!connectProvider}
-                animationType="slide"
-                onRequestClose={() => setConnectProvider(null)}
-                statusBarTranslucent
-            >
-                {connectProvider && (
-                    <DeviceConnectBody
-                        provider={connectProvider}
-                        onClose={() => setConnectProvider(null)}
-                        onConnected={handleConnected}
-                        onReadMore={() => setReadMoreProvider(connectProvider)}
-                    />
-                )}
-            </Modal>
-
-            {/* "Ler mais" detail — nested Modal over the config screen. The X
-                returns to the config screen (does not break the onboarding flow). */}
-            <Modal
-                visible={!!readMoreProvider}
-                animationType="slide"
-                onRequestClose={() => setReadMoreProvider(null)}
-                statusBarTranslucent
-            >
-                {readMoreProvider && (
-                    <DeviceReadMoreBody
-                        provider={readMoreProvider}
-                        onClose={() => setReadMoreProvider(null)}
-                    />
-                )}
-            </Modal>
         </>
     );
 }
