@@ -9,17 +9,28 @@
  *
  * Usage:
  *   npx ts-node scripts/sim-revenuecat.ts --user <uuid> [--type INITIAL_PURCHASE] [--trial]
- *   npm run qa:sim-revenuecat -- --user <uuid> --type EXPIRATION
+ *   npm run qa:sim-revenuecat -- --user <uuid> --env staging --type EXPIRATION
  *
  * Flags:
  *   --user <uuid>     (required) app_user_id = your test user's id
+ *   --env <name>      target environment: local | staging | production
+ *                     (default 'local'). Resolves both the base URL AND which
+ *                     webhook secret to send. Override either with --api/--secret.
  *   --type <TYPE>     INITIAL_PURCHASE | RENEWAL | UNCANCELLATION | PRODUCT_CHANGE
  *                     | CANCELLATION | EXPIRATION | BILLING_ISSUE  (default INITIAL_PURCHASE)
  *   --trial           mark the activation as a 7-day TRIAL (period_type=TRIAL)
  *   --product <id>    product_id to send (default 'pro_monthly')
- *   --api <baseUrl>   backend base URL (default $SIM_API_URL or http://localhost:3000)
+ *   --api <baseUrl>   explicit backend base URL (overrides --env's URL)
+ *   --secret <value>  explicit webhook secret (overrides --env's secret)
  *
- * Requires: REVENUECAT_WEBHOOK_SECRET in .env (same value the backend uses).
+ * Each Railway environment has its OWN webhook secret, so the script reads a
+ * DIFFERENT env var per target (the backend validates `Bearer <secret>`):
+ *   local      → REVENUECAT_WEBHOOK_SECRET
+ *   staging    → REVENUECAT_WEBHOOK_SECRET_STAGING (falls back to the base var)
+ *   production → REVENUECAT_WEBHOOK_SECRET
+ * Add the staging value to your local .env as REVENUECAT_WEBHOOK_SECRET_STAGING
+ * (copy it from the staging Railway service's variables). Sending the wrong
+ * secret is what yields a 401 "Invalid webhook signature".
  */
 
 import * as path from 'path';
@@ -33,6 +44,41 @@ import type {
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const DAY_MS = 86400000;
+
+type EnvName = 'local' | 'staging' | 'production';
+
+// Per-environment defaults. `secretVar` is the .env key holding THAT
+// environment's webhook secret (each Railway service has its own).
+const ENVIRONMENTS: Record<
+  EnvName,
+  { url: string; secretVar: string; fallbackSecretVar?: string }
+> = {
+  local: {
+    url: 'http://localhost:3000',
+    secretVar: 'REVENUECAT_WEBHOOK_SECRET',
+  },
+  staging: {
+    url: 'https://runeasyv2-staging.up.railway.app',
+    secretVar: 'REVENUECAT_WEBHOOK_SECRET_STAGING',
+    fallbackSecretVar: 'REVENUECAT_WEBHOOK_SECRET',
+  },
+  production: {
+    url: 'https://app.runeasy.com.br',
+    secretVar: 'REVENUECAT_WEBHOOK_SECRET',
+  },
+};
+
+function resolveEnv(raw: string | boolean | undefined): EnvName {
+  const v = typeof raw === 'string' ? raw.toLowerCase() : '';
+  if (v === 'local' || v === 'staging' || v === 'production') return v;
+  if (v) {
+    console.error(
+      `❌ Invalid --env "${String(raw)}". Use one of: local | staging | production.`,
+    );
+    process.exit(1);
+  }
+  return 'local';
+}
 
 function parseArgs(argv: string[]): Record<string, string | boolean> {
   const out: Record<string, string | boolean> = {};
@@ -58,15 +104,30 @@ async function main() {
   if (!user) {
     console.error('❌ Missing --user <uuid>. Example:');
     console.error(
-      '   npx ts-node scripts/sim-revenuecat.ts --user 23b6389a-3d6f-4d7b-9677-17eeaf7a742b --type INITIAL_PURCHASE --trial',
+      '   npx ts-node scripts/sim-revenuecat.ts --user 23b6389a-3d6f-4d7b-9677-17eeaf7a742b --env staging --type INITIAL_PURCHASE --trial',
     );
     process.exit(1);
   }
 
-  const secret = process.env.REVENUECAT_WEBHOOK_SECRET;
+  const env = resolveEnv(args.env);
+  const target = ENVIRONMENTS[env];
+
+  // Secret: explicit --secret wins, else this env's secret var (with a fallback
+  // to the base var for staging if the staging-specific one isn't set).
+  const secret =
+    (typeof args.secret === 'string' ? args.secret : '') ||
+    process.env[target.secretVar] ||
+    (target.fallbackSecretVar
+      ? process.env[target.fallbackSecretVar]
+      : undefined);
+
   if (!secret) {
+    const hint = target.fallbackSecretVar
+      ? `${target.secretVar} (or ${target.fallbackSecretVar})`
+      : target.secretVar;
     console.error(
-      '❌ REVENUECAT_WEBHOOK_SECRET not set in .env — the webhook will reject the request (401).',
+      `❌ No webhook secret for env "${env}". Set ${hint} in .env, or pass --secret <value>.\n` +
+        `   The webhook rejects mismatched secrets with 401 "Invalid webhook signature".`,
     );
     process.exit(1);
   }
@@ -78,10 +139,11 @@ async function main() {
   const product =
     typeof args.product === 'string' ? args.product : 'pro_monthly';
 
+  // Base URL: explicit --api wins, else this env's URL, else legacy $SIM_API_URL.
   const baseUrl =
     (typeof args.api === 'string' ? args.api : '') ||
     process.env.SIM_API_URL ||
-    'http://localhost:3000';
+    target.url;
   const url = `${baseUrl.replace(/\/$/, '')}/api/webhooks/revenuecat`;
 
   const now = Date.now();
@@ -104,7 +166,9 @@ async function main() {
   const body: RevenueCatWebhookBody = { event, api_version: '1.0' };
 
   console.log(`→ POST ${url}`);
-  console.log(`  type=${type} user=${user} trial=${isTrial} product=${product}`);
+  console.log(
+    `  env=${env} type=${type} user=${user} trial=${isTrial} product=${product}`,
+  );
 
   const res = await fetch(url, {
     method: 'POST',
@@ -120,9 +184,18 @@ async function main() {
   console.log(`  ${text}`);
 
   if (!res.ok) {
-    console.error(
-      '\n⚠️  Non-2xx. Check: secret matches backend .env, backend is running, and URL/--api is correct.',
-    );
+    if (res.status === 401) {
+      console.error(
+        `\n⚠️  401 Unauthorized — the secret sent doesn't match env "${env}".\n` +
+          `   Copy that environment's REVENUECAT_WEBHOOK_SECRET from its Railway\n` +
+          `   service into your local .env (staging → REVENUECAT_WEBHOOK_SECRET_STAGING),\n` +
+          `   or pass --secret <value>.`,
+      );
+    } else {
+      console.error(
+        '\n⚠️  Non-2xx. Check: backend is running and the URL/--api is correct.',
+      );
+    }
     process.exit(1);
   }
   console.log(
