@@ -1,5 +1,6 @@
 import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from './apiClient';
 
 export interface ValidateResult {
     valid: boolean;
@@ -54,7 +55,7 @@ async function authHeaders(): Promise<HeadersInit> {
 export const referralService = {
     async validate(code: string): Promise<ValidateResult> {
         try {
-            const res = await fetch(`${BASE_API_URL}/referral/validate`, {
+            const res = await authedFetch(`${BASE_API_URL}/referral/validate`, {
                 method: 'POST',
                 headers: await authHeaders(),
                 body: JSON.stringify({ code }),
@@ -77,7 +78,7 @@ export const referralService = {
 
     async apply(code: string): Promise<ApplyResult> {
         try {
-            const res = await fetch(`${BASE_API_URL}/referral/apply`, {
+            const res = await authedFetch(`${BASE_API_URL}/referral/apply`, {
                 method: 'POST',
                 headers: await authHeaders(),
                 body: JSON.stringify({ code }),
@@ -109,7 +110,7 @@ export const referralService = {
 
     async getStatus(): Promise<StatusResult> {
         try {
-            const res = await fetch(`${BASE_API_URL}/referral/status`, {
+            const res = await authedFetch(`${BASE_API_URL}/referral/status`, {
                 method: 'GET',
                 headers: await authHeaders(),
             });

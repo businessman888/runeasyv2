@@ -12,6 +12,7 @@ import { Platform } from 'react-native';
 import { create } from 'zustand';
 
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from '../services/apiClient';
 import { HealthKitManager } from '../services/healthkit';
 import * as devicesService from '../services/devices';
 import * as Storage from '../utils/storage';
@@ -138,7 +139,7 @@ export const useHealthKitStore = create<HealthKitState>((set, get) => ({
                 return { success: false, error: 'Usuário não autenticado' };
             }
 
-            const response = await fetch(`${BASE_API_URL}/devices/connect`, {
+            const response = await authedFetch(`${BASE_API_URL}/devices/connect`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

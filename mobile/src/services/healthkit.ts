@@ -18,6 +18,7 @@ import { Linking, Platform } from 'react-native';
 import { createMMKV } from 'react-native-mmkv';
 
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from './apiClient';
 import * as Storage from '../utils/storage';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -373,7 +374,7 @@ class HealthKitManagerClass {
         }
 
         try {
-            const response = await fetch(`${BASE_API_URL}/devices/apple-health/sync`, {
+            const response = await authedFetch(`${BASE_API_URL}/devices/apple-health/sync`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

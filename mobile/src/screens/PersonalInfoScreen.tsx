@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { authedFetch } from '../services/apiClient';
 import {
     View,
     Text,
@@ -118,7 +119,7 @@ export function PersonalInfoScreen({ navigation }: any) {
             type: mimeType,
         } as unknown as Blob);
 
-        const response = await fetch(`${BASE_API_URL}/users/${user.id}/profile/avatar`, {
+        const response = await authedFetch(`${BASE_API_URL}/users/${user.id}/profile/avatar`, {
             method: 'POST',
             headers: {
                 'x-user-id': user.id,
@@ -227,7 +228,7 @@ export function PersonalInfoScreen({ navigation }: any) {
                 height_cm: height ? parseFloat(height) : null,
             };
 
-            const response = await fetch(`${API_URL}/users/${user.id}/profile`, {
+            const response = await authedFetch(`${API_URL}/users/${user.id}/profile`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',

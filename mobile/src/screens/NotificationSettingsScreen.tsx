@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { authedFetch } from '../services/apiClient';
 import {
     View,
     Text,
@@ -139,7 +140,7 @@ export function NotificationSettingsScreen({ navigation }: any) {
 
         try {
             setIsLoading(true);
-            const response = await fetch(`${API_URL}/notifications/preferences`, {
+            const response = await authedFetch(`${API_URL}/notifications/preferences`, {
                 headers: {
                     'x-user-id': user.id,
                 },
@@ -181,7 +182,7 @@ export function NotificationSettingsScreen({ navigation }: any) {
                 });
             });
 
-            const response = await fetch(`${API_URL}/notifications/preferences`, {
+            const response = await authedFetch(`${API_URL}/notifications/preferences`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',

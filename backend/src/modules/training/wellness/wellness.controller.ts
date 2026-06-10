@@ -1,11 +1,11 @@
 import {
   Controller,
   Get,
-  Headers,
   HttpException,
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { User } from '../../../common/decorators';
 import { WellnessService } from './wellness.service';
 import { WellnessSummaryResponseDto } from './dto/wellness-summary.dto';
 
@@ -24,7 +24,7 @@ export class WellnessController {
    */
   @Get('wellness-summary')
   async getWellnessSummary(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
   ): Promise<WellnessSummaryResponseDto> {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);

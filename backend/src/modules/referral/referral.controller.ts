@@ -2,7 +2,6 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   HttpCode,
   HttpException,
   HttpStatus,
@@ -15,6 +14,7 @@ import { ReferralService } from './referral.service';
 import { ValidateCodeDto } from './dto/validate-code.dto';
 import { ApplyCodeDto } from './dto/apply-code.dto';
 import { UserIdThrottlerGuard } from './user-id-throttler.guard';
+import { User } from '../../common/decorators';
 
 @Controller('referral')
 @UseGuards(UserIdThrottlerGuard)
@@ -29,7 +29,7 @@ export class ReferralController {
   @SkipThrottle({ default: false })
   @Throttle({ default: { limit: 10, ttl: 3_600_000 } })
   async validate(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Body() dto: ValidateCodeDto,
   ) {
     if (!userId) {
@@ -40,7 +40,7 @@ export class ReferralController {
 
   @Post('apply')
   @HttpCode(200)
-  async apply(@Headers('x-user-id') userId: string, @Body() dto: ApplyCodeDto) {
+  async apply(@User('id') userId: string, @Body() dto: ApplyCodeDto) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
@@ -48,7 +48,7 @@ export class ReferralController {
   }
 
   @Get('status')
-  async status(@Headers('x-user-id') userId: string) {
+  async status(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }

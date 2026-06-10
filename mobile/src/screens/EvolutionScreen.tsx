@@ -18,6 +18,7 @@ import { colors, typography, spacing } from '../theme';
 import { useReadinessStore, ReadinessAnswers } from '../stores/readinessStore';
 
 import { BASE_API_URL, API_URL, API_ENDPOINTS } from '../config/api.config';
+import { authedFetch } from '../services/apiClient';
 import * as Storage from '../utils/storage';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -324,7 +325,7 @@ export function EvolutionScreen({ navigation }: any) {
                 console.log(`[EvolutionScreen] 📥 Fetching questions (Session ${currentSessionId}) from:`, url);
 
                 try {
-                    const response = await fetch(url, { method: 'GET', headers });
+                    const response = await authedFetch(url, { method: 'GET', headers });
 
                     if (response.ok && isMounted && currentSessionId === fetchSessionId.current) {
                         const data: QuestionSetResponse = await response.json();

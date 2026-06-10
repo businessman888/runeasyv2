@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Platform } from 'react-native';
 import * as Storage from '../utils/storage';
+import { authedFetch } from '../services/apiClient';
 
 // Notification types matching backend
 export type NotificationType = 'recovery_analysis' | 'workout_sync' | 'achievement' | 'reminder' | 'system';
@@ -71,7 +72,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
                 return;
             }
 
-            const response = await fetch(`${API_URL}/notifications`, {
+            const response = await authedFetch(`${API_URL}/notifications`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -105,7 +106,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
             const userId = await getUserId();
             if (!userId) return;
 
-            const response = await fetch(`${API_URL}/notifications/unread-count`, {
+            const response = await authedFetch(`${API_URL}/notifications/unread-count`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -129,7 +130,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
             const userId = await getUserId();
             if (!userId) return;
 
-            await fetch(`${API_URL}/notifications/${notificationId}/read`, {
+            await authedFetch(`${API_URL}/notifications/${notificationId}/read`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',

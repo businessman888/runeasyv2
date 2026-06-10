@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from '../services/apiClient';
 
 interface WeeklyStats {
     week_start: string;
@@ -71,7 +72,7 @@ export const useStatsStore = create<StatsState>((set) => ({
             const userId = await getUserId();
             if (!userId) return;
 
-            const response = await fetch(`${API_URL}/stats/weekly?weeks=${weeks}`, {
+            const response = await authedFetch(`${API_URL}/stats/weekly?weeks=${weeks}`, {
                 headers: { 'x-user-id': userId },
             });
 
@@ -91,7 +92,7 @@ export const useStatsStore = create<StatsState>((set) => ({
             const userId = await getUserId();
             if (!userId) return;
 
-            const response = await fetch(`${API_URL}/stats/monthly?months=${months}`, {
+            const response = await authedFetch(`${API_URL}/stats/monthly?months=${months}`, {
                 headers: { 'x-user-id': userId },
             });
 
@@ -109,7 +110,7 @@ export const useStatsStore = create<StatsState>((set) => ({
             const userId = await getUserId();
             if (!userId) return;
 
-            const response = await fetch(`${API_URL}/stats/pace-progression?limit=${limit}`, {
+            const response = await authedFetch(`${API_URL}/stats/pace-progression?limit=${limit}`, {
                 headers: { 'x-user-id': userId },
             });
 
@@ -127,7 +128,7 @@ export const useStatsStore = create<StatsState>((set) => ({
             const userId = await getUserId();
             if (!userId) return;
 
-            const response = await fetch(`${API_URL}/stats/summary`, {
+            const response = await authedFetch(`${API_URL}/stats/summary`, {
                 headers: { 'x-user-id': userId },
             });
 
@@ -147,10 +148,10 @@ export const useStatsStore = create<StatsState>((set) => ({
             if (!userId) return;
 
             const [weekly, monthly, pace, summary] = await Promise.all([
-                fetch(`${API_URL}/stats/weekly?weeks=12`, { headers: { 'x-user-id': userId } }),
-                fetch(`${API_URL}/stats/monthly?months=6`, { headers: { 'x-user-id': userId } }),
-                fetch(`${API_URL}/stats/pace-progression?limit=20`, { headers: { 'x-user-id': userId } }),
-                fetch(`${API_URL}/stats/summary`, { headers: { 'x-user-id': userId } }),
+                authedFetch(`${API_URL}/stats/weekly?weeks=12`, { headers: { 'x-user-id': userId } }),
+                authedFetch(`${API_URL}/stats/monthly?months=6`, { headers: { 'x-user-id': userId } }),
+                authedFetch(`${API_URL}/stats/pace-progression?limit=20`, { headers: { 'x-user-id': userId } }),
+                authedFetch(`${API_URL}/stats/summary`, { headers: { 'x-user-id': userId } }),
             ]);
 
             const [weeklyData, monthlyData, paceData, summaryData] = await Promise.all([

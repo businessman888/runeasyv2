@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import * as Storage from '../utils/storage';
 import { supabase, refreshSessionViaBackend } from '../services/supabase';
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from '../services/apiClient';
 import {
     identifyRevenueCatUser,
     logoutRevenueCat,
@@ -126,7 +127,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             const userUrl = `${baseUrl}/users/${userId}`;
             console.log('[AUTH] Fetching user from:', userUrl);
 
-            const response = await fetch(userUrl, {
+            const response = await authedFetch(userUrl, {
                 headers: {
                     'x-user-id': userId,
                 },
@@ -259,7 +260,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
             if (userId) {
                 const baseUrl = API_URL.endsWith('/api') ? API_URL : `${API_URL}/api`;
-                const response = await fetch(`${baseUrl}/users/${userId}`, {
+                const response = await authedFetch(`${baseUrl}/users/${userId}`, {
                     headers: { 'x-user-id': userId },
                 });
 

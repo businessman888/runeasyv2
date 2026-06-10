@@ -3,6 +3,7 @@
  * Identification follows the app convention: the `x-user-id` header.
  */
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from './apiClient';
 import { useAuthStore } from '../stores/authStore';
 import type { Race, RaceSearchParams } from '../types/races.types';
 
@@ -27,7 +28,7 @@ function buildQuery(params: RaceSearchParams): string {
 }
 
 export async function searchRaces(params: RaceSearchParams = {}): Promise<Race[]> {
-    const res = await fetch(`${BASE_API_URL}/races${buildQuery(params)}`, {
+    const res = await authedFetch(`${BASE_API_URL}/races${buildQuery(params)}`, {
         headers: authHeaders(),
     });
     if (!res.ok) throw new Error(`searchRaces failed: ${res.status}`);
@@ -35,7 +36,7 @@ export async function searchRaces(params: RaceSearchParams = {}): Promise<Race[]
 }
 
 export async function getSuggestedRaces(): Promise<Race[]> {
-    const res = await fetch(`${BASE_API_URL}/races/suggested`, {
+    const res = await authedFetch(`${BASE_API_URL}/races/suggested`, {
         headers: authHeaders(),
     });
     if (!res.ok) throw new Error(`getSuggestedRaces failed: ${res.status}`);
@@ -43,7 +44,7 @@ export async function getSuggestedRaces(): Promise<Race[]> {
 }
 
 export async function getRace(idOrSlug: string): Promise<Race> {
-    const res = await fetch(`${BASE_API_URL}/races/${idOrSlug}`, {
+    const res = await authedFetch(`${BASE_API_URL}/races/${idOrSlug}`, {
         headers: authHeaders(),
     });
     if (!res.ok) throw new Error(`getRace failed: ${res.status}`);

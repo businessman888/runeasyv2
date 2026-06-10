@@ -1,11 +1,11 @@
 import {
   Controller,
   Get,
-  Headers,
   HttpException,
   HttpStatus,
   Query,
 } from '@nestjs/common';
+import { User } from '../../common/decorators';
 import { GamificationService } from './gamification.service';
 
 @Controller('gamification')
@@ -16,7 +16,7 @@ export class GamificationController {
    * Get user's gamification stats (level, points, streak)
    */
   @Get('stats')
-  async getStats(@Headers('x-user-id') userId: string) {
+  async getStats(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
@@ -65,7 +65,7 @@ export class GamificationController {
    * Get all badges with user's earned status
    */
   @Get('badges')
-  async getBadges(@Headers('x-user-id') userId: string) {
+  async getBadges(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
@@ -84,7 +84,7 @@ export class GamificationController {
    */
   @Get('points/history')
   async getPointsHistory(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Query('limit') limit?: string,
   ) {
     if (!userId) {

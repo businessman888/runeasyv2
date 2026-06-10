@@ -40,6 +40,7 @@ import { PlanGeneratingOverlay } from '../components/loading/PlanGeneratingOverl
 import type { WorkoutData } from '../components/WorkoutCard';
 
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from '../services/apiClient';
 
 // Stable reference so the memoized SegmentedTabs doesn't re-render on every
 // parent re-render (e.g. while focus-effect fetches resolve).
@@ -191,7 +192,7 @@ export function HomeScreen({ navigation }: any) {
 
         // Check if user has an active plan
         try {
-            const response = await fetch(`${BASE_API_URL}/training/plan`, {
+            const response = await authedFetch(`${BASE_API_URL}/training/plan`, {
                 headers: { 'x-user-id': userId },
             });
 
@@ -286,7 +287,7 @@ export function HomeScreen({ navigation }: any) {
                 try {
                     const userId = await Storage.getItemAsync('user_id');
                     if (userId) {
-                        const response = await fetch(`${BASE_API_URL}/training/retrospective/ready`, {
+                        const response = await authedFetch(`${BASE_API_URL}/training/retrospective/ready`, {
                             headers: { 'x-user-id': userId },
                         });
                         const result = await response.json();

@@ -10,6 +10,7 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from './apiClient';
 
 const API_URL = BASE_API_URL;
 
@@ -140,7 +141,7 @@ async function setupAndroidChannels(): Promise<void> {
  */
 export async function savePushTokenToBackend(userId: string, token: string): Promise<boolean> {
     try {
-        const response = await fetch(`${API_URL}/notifications/push-token`, {
+        const response = await authedFetch(`${API_URL}/notifications/push-token`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

@@ -2,10 +2,10 @@ import {
   Controller,
   Post,
   Body,
-  Headers,
   Logger,
   BadRequestException,
 } from '@nestjs/common';
+import { User } from '../../common/decorators';
 import { OnboardingService } from './onboarding.service';
 
 @Controller('onboarding')
@@ -19,7 +19,7 @@ export class OnboardingController {
    */
   @Post('complete')
   async completeOnboarding(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Body() body: { quiz_data: any },
   ) {
     if (!userId) {

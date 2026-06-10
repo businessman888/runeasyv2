@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from '../services/apiClient';
 import { ShareCardData, CardTemplateId } from '../types/sharing.types';
 
 interface SharingState {
@@ -27,7 +28,7 @@ export const useSharingStore = create<SharingState>((set) => ({
       const userId = await Storage.getItemAsync('user_id');
       if (!userId) throw new Error('User not authenticated');
 
-      const response = await fetch(
+      const response = await authedFetch(
         `${BASE_API_URL}/sharing/workout/${workoutId}/card-data`,
         {
           headers: {

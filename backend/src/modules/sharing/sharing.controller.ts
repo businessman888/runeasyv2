@@ -3,11 +3,11 @@ import {
   Get,
   Post,
   Param,
-  Headers,
   HttpException,
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { User } from '../../common/decorators';
 import { SharingService } from './sharing.service';
 
 @Controller('sharing')
@@ -18,7 +18,7 @@ export class SharingController {
 
   @Get('workout/:workoutId/card-data')
   async getCardData(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Param('workoutId') workoutId: string,
   ) {
     if (!userId) {

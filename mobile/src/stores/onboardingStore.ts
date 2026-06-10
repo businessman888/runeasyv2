@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from '../services/apiClient';
 
 // API_URL imported from '../config/api.config' as BASE_API_URL
 const API_URL = BASE_API_URL;
@@ -342,7 +343,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
             console.log('  - height:', typeof requestBody.height, requestBody.height);
             console.log('  - birth_date:', typeof requestBody.birth_date, requestBody.birth_date);
 
-            const response = await fetch(requestUrl, {
+            const response = await authedFetch(requestUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -501,7 +502,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
 
             console.log('[saveOnboardingOnly] Saving onboarding data (no AI)...');
 
-            const response = await fetch(`${API_URL}/training/onboarding/save`, {
+            const response = await authedFetch(`${API_URL}/training/onboarding/save`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -540,7 +541,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
 
             console.log('[triggerPlanGeneration] Triggering AI plan generation for userId:', userId);
 
-            const response = await fetch(`${API_URL}/training/onboarding/generate`, {
+            const response = await authedFetch(`${API_URL}/training/onboarding/generate`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

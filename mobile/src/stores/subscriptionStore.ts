@@ -14,6 +14,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from '../services/apiClient';
 import { DEV_PLAN_OVERRIDE, type DevPlanOverride } from '../utils/devTools';
 import { useDevMenuStore } from './devMenuStore';
 
@@ -143,7 +144,7 @@ export const useSubscriptionStore = create<SubscriptionState>()(
 
     try {
       set({ isLoading: true });
-      const response = await fetch(`${BASE_API_URL}/users/me/subscription`, {
+      const response = await authedFetch(`${BASE_API_URL}/users/me/subscription`, {
         headers: { 'x-user-id': userId },
       });
 

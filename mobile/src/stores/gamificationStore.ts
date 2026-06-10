@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createMMKV } from 'react-native-mmkv';
 import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from '../services/apiClient';
 
 // MMKV-backed cache for stats and earnedBadges so the UI doesn't show zeros
 // during cold start (before fetch resolves).
@@ -135,7 +136,7 @@ export const useGamificationStore = create<GamificationState>((set) => ({
 
             if (!userId) return;
 
-            const response = await fetch(`${API_URL}/gamification/stats`, {
+            const response = await authedFetch(`${API_URL}/gamification/stats`, {
                 headers: { 'x-user-id': userId },
             });
 
@@ -158,7 +159,7 @@ export const useGamificationStore = create<GamificationState>((set) => ({
 
             if (!userId) return;
 
-            const response = await fetch(`${API_URL}/gamification/badges`, {
+            const response = await authedFetch(`${API_URL}/gamification/badges`, {
                 headers: { 'x-user-id': userId },
             });
 
@@ -185,7 +186,7 @@ export const useGamificationStore = create<GamificationState>((set) => ({
 
             if (!userId) return;
 
-            const response = await fetch(`${API_URL}/ranking/global?limit=50`, {
+            const response = await authedFetch(`${API_URL}/ranking/global?limit=50`, {
                 headers: { 'x-user-id': userId },
             });
 
@@ -207,7 +208,7 @@ export const useGamificationStore = create<GamificationState>((set) => ({
 
             if (!userId) return;
 
-            const response = await fetch(`${API_URL}/ranking/cohort?limit=50`, {
+            const response = await authedFetch(`${API_URL}/ranking/cohort?limit=50`, {
                 headers: { 'x-user-id': userId },
             });
 

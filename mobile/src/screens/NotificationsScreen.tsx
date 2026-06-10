@@ -1,9 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback, memo } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     ScrollView,
+    FlatList,
     TouchableOpacity,
     ActivityIndicator,
 } from 'react-native';
@@ -75,6 +76,61 @@ function formatRelativeTime(dateString: string): string {
     return `${diffDays} dias atrás`;
 }
 
+type DisplayNotification = AppNotification & { displayType: DisplayType };
+
+function getNotificationIcon(type: DisplayType) {
+    switch (type) {
+        case 'insight':
+            return <BrainFlashIcon size={24} color="#00D4FF" />;
+        case 'workout':
+            return <SyncIcon size={24} color="rgba(235, 235, 245, 0.6)" />;
+        case 'achievement':
+            return <TrophyIcon size={24} color="rgba(235, 235, 245, 0.6)" />;
+        case 'reminder':
+            return <RunnerIcon size={24} color="rgba(235, 235, 245, 0.6)" />;
+    }
+}
+
+// Memoized row so FlatList only re-renders changed items.
+const NotificationCard = memo(function NotificationCard({
+    notification,
+    onPress,
+}: {
+    notification: DisplayNotification;
+    onPress: (n: DisplayNotification) => void;
+}) {
+    return (
+        <TouchableOpacity
+            style={[
+                styles.notificationCard,
+                notification.displayType === 'insight' && styles.notificationCardInsight,
+            ]}
+            activeOpacity={notification.type === 'recovery_analysis' ? 1 : 0.7}
+            onPress={() => onPress(notification)}
+        >
+            <View style={[
+                styles.iconContainer,
+                notification.displayType === 'insight' && styles.iconContainerInsight,
+            ]}>
+                {getNotificationIcon(notification.displayType)}
+            </View>
+            <View style={styles.notificationContent}>
+                <View style={styles.notificationHeader}>
+                    <Text style={styles.notificationTitle}>{notification.title}</Text>
+                    {!notification.is_read && <View style={styles.newIndicator} />}
+                </View>
+                <Text style={styles.notificationDescription}>{notification.description}</Text>
+                <Text style={[
+                    styles.notificationTime,
+                    notification.displayType === 'insight' && styles.notificationTimeInsight,
+                ]}>
+                    {formatRelativeTime(notification.created_at)}
+                </Text>
+            </View>
+        </TouchableOpacity>
+    );
+});
+
 export function NotificationsScreen({ navigation }: any) {
     const [activeFilter, setActiveFilter] = React.useState<FilterType>('all');
     const { notifications, isLoading, fetchNotifications, markAsRead } = useNotificationStore();
@@ -108,20 +164,7 @@ export function NotificationsScreen({ navigation }: any) {
         }
     };
 
-    const getNotificationIcon = (type: DisplayType) => {
-        switch (type) {
-            case 'insight':
-                return <BrainFlashIcon size={24} color="#00D4FF" />;
-            case 'workout':
-                return <SyncIcon size={24} color="rgba(235, 235, 245, 0.6)" />;
-            case 'achievement':
-                return <TrophyIcon size={24} color="rgba(235, 235, 245, 0.6)" />;
-            case 'reminder':
-                return <RunnerIcon size={24} color="rgba(235, 235, 245, 0.6)" />;
-        }
-    };
-
-    const handleNotificationPress = (notification: AppNotification & { displayType: DisplayType }) => {
+    const handleNotificationPress = useCallback((notification: DisplayNotification) => {
         if (!notification.is_read) {
             markAsRead(notification.id);
         }
@@ -137,7 +180,14 @@ export function NotificationsScreen({ navigation }: any) {
                 });
             }
         }
-    };
+    }, [markAsRead, navigation]);
+
+    const renderItem = useCallback(
+        ({ item }: { item: DisplayNotification }) => (
+            <NotificationCard notification={item} onPress={handleNotificationPress} />
+        ),
+        [handleNotificationPress],
+    );
 
     const filteredNotifications = getFilteredNotifications();
 
@@ -202,52 +252,18 @@ export function NotificationsScreen({ navigation }: any) {
 
             {/* Notifications List */}
             {!isLoading && filteredNotifications.length > 0 && (
-                <ScrollView
+                <FlatList
+                    data={filteredNotifications}
+                    renderItem={renderItem}
+                    keyExtractor={(item) => item.id}
                     style={styles.notificationsList}
                     contentContainerStyle={styles.notificationsContent}
                     showsVerticalScrollIndicator={false}
-                >
-                    {filteredNotifications.map((notification) => (
-                        <TouchableOpacity
-                            key={notification.id}
-                            style={[
-                                styles.notificationCard,
-                                notification.displayType === 'insight' && styles.notificationCardInsight
-                            ]}
-                            activeOpacity={notification.type === 'recovery_analysis' ? 1 : 0.7}
-                            onPress={() => handleNotificationPress(notification)}
-                        >
-                            <View style={[
-                                styles.iconContainer,
-                                notification.displayType === 'insight' && styles.iconContainerInsight
-                            ]}>
-                                {getNotificationIcon(notification.displayType)}
-                            </View>
-                            <View style={styles.notificationContent}>
-                                <View style={styles.notificationHeader}>
-                                    <Text style={styles.notificationTitle}>
-                                        {notification.title}
-                                    </Text>
-                                    {!notification.is_read && (
-                                        <View style={styles.newIndicator} />
-                                    )}
-                                </View>
-                                <Text style={styles.notificationDescription}>
-                                    {notification.description}
-                                </Text>
-                                <Text style={[
-                                    styles.notificationTime,
-                                    notification.displayType === 'insight' && styles.notificationTimeInsight
-                                ]}>
-                                    {formatRelativeTime(notification.created_at)}
-                                </Text>
-                            </View>
-                        </TouchableOpacity>
-                    ))}
-
-                    {/* Bottom padding for BottomBar clearance */}
-                    <View style={styles.bottomSpacer} />
-                </ScrollView>
+                    ListFooterComponent={<View style={styles.bottomSpacer} />}
+                    removeClippedSubviews
+                    initialNumToRender={10}
+                    windowSize={11}
+                />
             )}
         </ScreenContainer>
     );

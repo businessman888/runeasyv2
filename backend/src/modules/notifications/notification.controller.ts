@@ -4,12 +4,12 @@ import {
   Get,
   Patch,
   Body,
-  Headers,
   Param,
   Query,
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
+import { User } from '../../common/decorators';
 import { NotificationService } from './notification.service';
 
 @Controller('notifications')
@@ -21,7 +21,7 @@ export class NotificationController {
    */
   @Get()
   async getNotifications(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
@@ -42,7 +42,7 @@ export class NotificationController {
    * Get unread notification count
    */
   @Get('unread-count')
-  async getUnreadCount(@Headers('x-user-id') userId: string) {
+  async getUnreadCount(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
@@ -56,7 +56,7 @@ export class NotificationController {
    */
   @Patch(':id/read')
   async markAsRead(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Param('id') notificationId: string,
   ) {
     if (!userId) {
@@ -81,7 +81,7 @@ export class NotificationController {
    * Get user's notification preferences
    */
   @Get('preferences')
-  async getPreferences(@Headers('x-user-id') userId: string) {
+  async getPreferences(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
@@ -95,7 +95,7 @@ export class NotificationController {
    */
   @Patch('preferences')
   async updatePreferences(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Body()
     preferences: {
       readiness_enabled?: boolean;
@@ -121,7 +121,7 @@ export class NotificationController {
    */
   @Post('push-token')
   async savePushToken(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Body() dto: { pushToken: string },
   ) {
     if (!userId) {
@@ -142,7 +142,7 @@ export class NotificationController {
    */
   @Post('test-push')
   async testPushNotification(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Body() dto?: { title?: string; body?: string },
   ) {
     if (!userId) {
@@ -183,7 +183,7 @@ export class UserNotificationController {
    */
   @Post('push-token')
   async savePushToken(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Body() dto: { push_token: string },
   ) {
     if (!userId) {
@@ -203,7 +203,7 @@ export class UserNotificationController {
    * Test push notification (for development)
    */
   @Post('test-notification')
-  async testNotification(@Headers('x-user-id') userId: string) {
+  async testNotification(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }

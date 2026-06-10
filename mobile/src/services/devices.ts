@@ -1,4 +1,5 @@
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from './apiClient';
 import * as Storage from '../utils/storage';
 
 export interface ConnectedDevice {
@@ -38,7 +39,7 @@ async function getHeaders(): Promise<Record<string, string>> {
  */
 export async function listDevices(): Promise<ConnectedDevice[]> {
     const headers = await getHeaders();
-    const response = await fetch(`${BASE_API_URL}/devices`, { headers });
+    const response = await authedFetch(`${BASE_API_URL}/devices`, { headers });
 
     if (!response.ok) throw new Error('Failed to fetch devices');
 
@@ -51,7 +52,7 @@ export async function listDevices(): Promise<ConnectedDevice[]> {
  */
 export async function getSyncStatus(): Promise<SyncStatus> {
     const headers = await getHeaders();
-    const response = await fetch(`${BASE_API_URL}/devices/sync-status`, { headers });
+    const response = await authedFetch(`${BASE_API_URL}/devices/sync-status`, { headers });
 
     if (!response.ok) throw new Error('Failed to fetch sync status');
 
@@ -69,7 +70,7 @@ export async function connectDeviceManual(
     deviceName?: string,
 ): Promise<ConnectedDevice> {
     const headers = await getHeaders();
-    const response = await fetch(`${BASE_API_URL}/devices/connect`, {
+    const response = await authedFetch(`${BASE_API_URL}/devices/connect`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ provider, device_name: deviceName }),
@@ -89,7 +90,7 @@ export async function connectDeviceManual(
  */
 export async function disconnectDevice(provider: string): Promise<void> {
     const headers = await getHeaders();
-    const response = await fetch(`${BASE_API_URL}/devices/${provider}`, {
+    const response = await authedFetch(`${BASE_API_URL}/devices/${provider}`, {
         method: 'DELETE',
         headers,
     });
@@ -102,7 +103,7 @@ export async function disconnectDevice(provider: string): Promise<void> {
  */
 export async function checkProviderStatus(provider: string): Promise<boolean> {
     const headers = await getHeaders();
-    const response = await fetch(`${BASE_API_URL}/devices/status/${provider}`, { headers });
+    const response = await authedFetch(`${BASE_API_URL}/devices/status/${provider}`, { headers });
 
     if (!response.ok) return false;
 

@@ -7,7 +7,6 @@ import {
   Body,
   Param,
   Query,
-  Headers,
   HttpException,
   HttpStatus,
   Logger,
@@ -24,7 +23,8 @@ import {
 } from './retrospective.service';
 import { TrainingAIService } from './training-ai.service';
 import { SupabaseService } from '../../database';
-import { SupabaseAuthGuard } from '../../common/guards/supabase-auth.guard';
+import { User } from '../../common/decorators';
+import { ProGuard } from '../../common/guards/pro.guard';
 import { UsersService } from '../users/users.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { CreateManualWorkoutDto } from './dto/create-manual-workout.dto';
@@ -199,7 +199,7 @@ export class TrainingController {
    */
   @Post('onboarding')
   async completeOnboarding(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Body() dto: CreatePlanDto,
   ) {
     if (!userId) {
@@ -365,7 +365,7 @@ export class TrainingController {
    */
   @Post('onboarding/save')
   async saveOnboardingOnly(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Body() dto: CreatePlanDto,
   ) {
     if (!userId) {
@@ -481,7 +481,7 @@ export class TrainingController {
    * Idempotent: if a plan already exists, returns the existing plan_id.
    */
   @Post('onboarding/generate')
-  async generatePlanFromOnboarding(@Headers('x-user-id') userId: string) {
+  async generatePlanFromOnboarding(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
@@ -618,7 +618,7 @@ export class TrainingController {
    */
   @Get('plan/:id/status')
   async getPlanStatus(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Param('id') planId: string,
   ) {
     if (!userId) {
@@ -646,7 +646,7 @@ export class TrainingController {
    * Get active training plan
    */
   @Get('plan')
-  async getActivePlan(@Headers('x-user-id') userId: string) {
+  async getActivePlan(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
@@ -661,7 +661,7 @@ export class TrainingController {
    * 404 when the user has no active plan.
    */
   @Get('plan/overview')
-  async getPlanOverview(@Headers('x-user-id') userId: string) {
+  async getPlanOverview(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
@@ -687,7 +687,7 @@ export class TrainingController {
    */
   @Get('workouts')
   async getWorkouts(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Query('start_date') startDate: string,
     @Query('end_date') endDate: string,
   ) {
@@ -708,7 +708,7 @@ export class TrainingController {
    */
   @Get('workouts/upcoming')
   async getUpcomingWorkouts(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Query('limit') limit?: string,
   ) {
     if (!userId) {
@@ -727,7 +727,7 @@ export class TrainingController {
    */
   @Get('workouts/:id')
   async getWorkout(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Param('id') workoutId: string,
   ) {
     if (!userId) {
@@ -743,7 +743,7 @@ export class TrainingController {
    */
   @Put('workouts/:id/skip')
   async skipWorkout(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Param('id') workoutId: string,
     @Body() dto: SkipWorkoutDto,
   ) {
@@ -765,7 +765,7 @@ export class TrainingController {
    */
   @Post('workouts/manual')
   async createManualWorkout(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Body() dto: CreateManualWorkoutDto,
   ) {
     if (!userId) {
@@ -793,7 +793,7 @@ export class TrainingController {
    */
   @Post('workouts/free/complete')
   async completeFreeWorkout(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Body() dto: CompleteFreeWorkoutDto,
   ) {
     if (!userId) {
@@ -820,7 +820,7 @@ export class TrainingController {
    */
   @Post('workouts/:id/complete')
   async completeWorkout(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Param('id') workoutId: string,
     @Body() dto: import('./dto/workout-tracking.dto').CreateWorkoutTrackingDto,
   ) {
@@ -851,7 +851,7 @@ export class TrainingController {
    */
   @Get('schedule')
   async getSchedule(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Query('start_date') startDate: string,
     @Query('end_date') endDate: string,
   ) {
@@ -897,7 +897,7 @@ export class TrainingController {
    * Get the latest retrospective for the user
    */
   @Get('retrospective/latest')
-  async getLatestRetrospective(@Headers('x-user-id') userId: string) {
+  async getLatestRetrospective(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
@@ -938,7 +938,7 @@ export class TrainingController {
    * Returns isReady flag and retrospective ID if available
    */
   @Get('retrospective/ready')
-  async hasReadyRetrospective(@Headers('x-user-id') userId: string) {
+  async hasReadyRetrospective(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
@@ -974,7 +974,7 @@ export class TrainingController {
    */
   @Post('retrospective/:id/accept')
   async acceptRetrospectiveSuggestion(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Param('id') retrospectiveId: string,
   ) {
     if (!userId) {
@@ -1001,7 +1001,7 @@ export class TrainingController {
    */
   @Post('retrospective/:id/customize')
   async customizeRetrospectivePlan(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Param('id') retrospectiveId: string,
     @Body() params: CustomizePlanDto,
   ) {
@@ -1026,10 +1026,12 @@ export class TrainingController {
 
   /**
    * Manually trigger retrospective generation for a user
-   * Used for recovery when cron job fails, and for debugging
+   * Used for recovery when cron job fails, and for debugging.
+   * Pro-only: retrospective (Coach Analysis) is a paid AI feature.
    */
   @Post('retrospective/generate')
-  async manuallyGenerateRetrospective(@Headers('x-user-id') userId: string) {
+  @UseGuards(ProGuard)
+  async manuallyGenerateRetrospective(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
@@ -1107,7 +1109,7 @@ export class TrainingController {
    * Also reactivates the plan so generateRetrospective can be called again
    */
   @Delete('retrospective/reset')
-  async resetRetrospective(@Headers('x-user-id') userId: string) {
+  async resetRetrospective(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }

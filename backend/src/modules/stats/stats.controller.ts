@@ -2,10 +2,10 @@ import {
   Controller,
   Get,
   Query,
-  Headers,
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
+import { User } from '../../common/decorators';
 import { StatsService } from './stats.service';
 
 @Controller('stats')
@@ -17,7 +17,7 @@ export class StatsController {
    */
   @Get('weekly')
   async getWeeklyStats(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Query('weeks') weeks?: string,
   ) {
     if (!userId) {
@@ -37,7 +37,7 @@ export class StatsController {
    */
   @Get('monthly')
   async getMonthlyStats(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Query('months') months?: string,
   ) {
     if (!userId) {
@@ -57,7 +57,7 @@ export class StatsController {
    */
   @Get('pace-progression')
   async getPaceProgression(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Query('limit') limit?: string,
   ) {
     if (!userId) {
@@ -76,7 +76,7 @@ export class StatsController {
    * Get summary statistics
    */
   @Get('summary')
-  async getSummaryStats(@Headers('x-user-id') userId: string) {
+  async getSummaryStats(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }

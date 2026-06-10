@@ -5,12 +5,12 @@ import {
   Put,
   Param,
   Query,
-  Headers,
   Body,
   HttpException,
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { User } from '../../common/decorators';
 import { FeedbackAIService } from './feedback-ai.service';
 
 @Controller('feedback')
@@ -25,7 +25,7 @@ export class FeedbackController {
    */
   @Post('generate')
   async generateFeedback(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Body() dto: { workoutId: string; activityId: string },
   ) {
     if (!userId) {
@@ -57,7 +57,7 @@ export class FeedbackController {
    */
   @Get('history')
   async getFeedbackHistory(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Query('limit') limit?: string,
   ) {
     if (!userId) {
@@ -77,7 +77,7 @@ export class FeedbackController {
    */
   @Get(':id')
   async getFeedback(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Param('id') feedbackId: string,
   ) {
     if (!userId) {
@@ -101,7 +101,7 @@ export class FeedbackController {
    */
   @Put(':id/rate')
   async rateFeedback(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Param('id') feedbackId: string,
     @Body() dto: { rating: number },
   ) {
@@ -129,7 +129,7 @@ export class FeedbackController {
    * Get latest feedback for display in home screen
    */
   @Get('latest/summary')
-  async getLatestFeedback(@Headers('x-user-id') userId: string) {
+  async getLatestFeedback(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
@@ -159,7 +159,7 @@ export class FeedbackController {
    */
   @Get('latest/activity')
   async getLatestActivityWithFeedback(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Query('source') source?: string,
   ) {
     if (!userId) {
@@ -183,7 +183,7 @@ export class FeedbackController {
    */
   @Get('workouts/history')
   async getWorkoutHistory(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {

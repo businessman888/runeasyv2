@@ -3,3 +3,4 @@ export * from './ai.constants';
 export * from './ai.interfaces';
 export * from './ai-usage.service';
 export * from './ai-router.service';
+export * from './ai-quota.service';

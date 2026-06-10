@@ -14,6 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import { ScreenContainer } from '../components/ScreenContainer';
 
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from '../services/apiClient';
 import * as Storage from '../utils/storage';
 
 interface RetrospectiveData {
@@ -60,7 +61,7 @@ export function RetrospectiveScreen() {
             const userId = await Storage.getItemAsync('user_id');
             if (!userId) return;
 
-            const response = await fetch(`${BASE_API_URL}/training/retrospective/latest`, {
+            const response = await authedFetch(`${BASE_API_URL}/training/retrospective/latest`, {
                 headers: { 'x-user-id': userId },
             });
             const result = await response.json();
@@ -91,7 +92,7 @@ export function RetrospectiveScreen() {
         setAccepting(true);
         try {
             const userId = await Storage.getItemAsync('user_id');
-            await fetch(`${BASE_API_URL}/training/retrospective/${data.id}/accept`, {
+            await authedFetch(`${BASE_API_URL}/training/retrospective/${data.id}/accept`, {
                 method: 'POST',
                 headers: { 'x-user-id': userId || '' },
             });

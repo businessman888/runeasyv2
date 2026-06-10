@@ -3,11 +3,11 @@ import {
   Post,
   Get,
   Body,
-  Headers,
   Logger,
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
+import { User } from '../../common/decorators';
 import { ReadinessService } from './readiness.service';
 import { ReadinessCheckInDto } from './dto/readiness.dto';
 import { QuestionSetsParserService } from './question-sets-parser.service';
@@ -77,7 +77,7 @@ export class ReadinessController {
   }
 
   @Get('status')
-  async getReadinessStatus(@Headers('x-user-id') userId: string) {
+  async getReadinessStatus(@User('id') userId: string) {
     this.logger.log(`GET /api/readiness/status - userId: ${userId}`);
 
     if (!userId) {
@@ -99,7 +99,7 @@ export class ReadinessController {
   }
 
   @Get('questions')
-  async getQuestions(@Headers('x-user-id') userId: string) {
+  async getQuestions(@User('id') userId: string) {
     this.logger.log(
       `GET /api/readiness/questions - userId: ${userId || 'anonymous'}`,
     );

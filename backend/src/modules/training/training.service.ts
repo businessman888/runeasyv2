@@ -10,6 +10,7 @@ import {
 } from './training-ai.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { SubscriptionService } from '../subscription/subscription.service';
+import { AiQuotaService } from '../../common/ai';
 import {
   PlanOverviewResponseDto,
   PlanWeekDto,
@@ -55,6 +56,7 @@ export class TrainingService {
     private readonly subscriptionService: SubscriptionService,
     @InjectQueue('feedback-queue') private feedbackQueue: Queue,
     @InjectQueue('elevation-queue') private elevationQueue: Queue,
+    private readonly aiQuotaService: AiQuotaService,
   ) {}
 
   /**
@@ -93,6 +95,9 @@ export class TrainingService {
     userId: string,
     onboardingData: TrainingPlanRequest,
   ): Promise<QuickPlanResponse> {
+    // Daily AI cost ceiling (Pro is exempt). Throws 429 when exceeded.
+    await this.aiQuotaService.assertWithinLimit(userId, 'plan');
+
     try {
       this.logger.log(
         `[Plan] Starting single-prompt plan generation for user ${userId}`,
@@ -1103,14 +1108,26 @@ export class TrainingService {
     // (and skip when the activity row failed to insert, since the feedback
     // service has nothing to read from).
     if (activityId && workout.source === 'plan') {
-      this.logger.log(
-        `Enqueueing AI Feedback for Workout ${workoutId} / Activity ${activityId}`,
+      // Daily AI cost ceiling (Pro is exempt). Skip the feedback enqueue — but
+      // never fail the workout completion — when the user is over quota.
+      const withinQuota = await this.aiQuotaService.isWithinLimit(
+        userId,
+        'feedback',
       );
-      await this.feedbackQueue.add(
-        'generate',
-        { userId, workoutId, activityId },
-        { delay: 1000 },
-      );
+      if (withinQuota) {
+        this.logger.log(
+          `Enqueueing AI Feedback for Workout ${workoutId} / Activity ${activityId}`,
+        );
+        await this.feedbackQueue.add(
+          'generate',
+          { userId, workoutId, activityId },
+          { delay: 1000 },
+        );
+      } else {
+        this.logger.log(
+          `Skipping AI feedback for workout ${workoutId}: user ${userId} reached daily free quota`,
+        );
+      }
     } else if (!activityId) {
       this.logger.warn(
         `Skipping AI feedback enqueue for workout ${workoutId}: activity row was not created`,

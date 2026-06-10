@@ -1,6 +1,7 @@
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from './apiClient';
 import * as Storage from '../utils/storage';
 
 /**
@@ -42,7 +43,7 @@ export async function connectWearable(provider: WearableProvider): Promise<Weara
         const headers = await getHeaders();
 
         // 1. Get the authorization URL from backend
-        const response = await fetch(`${BASE_API_URL}/devices/${provider}/auth`, { headers });
+        const response = await authedFetch(`${BASE_API_URL}/devices/${provider}/auth`, { headers });
 
         if (!response.ok) {
             throw new Error(`Failed to get auth URL: ${response.status}`);

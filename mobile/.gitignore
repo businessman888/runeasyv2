@@ -30,8 +30,13 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# Environment files — never commit real secrets.
+# Exceptions: .env.example (template) and .env.staging (public anon key + URLs,
+# intentionally tracked for local staging runs).
+.env
+.env.*
+!.env.example
+!.env.staging
 
 # typescript
 *.tsbuildinfo

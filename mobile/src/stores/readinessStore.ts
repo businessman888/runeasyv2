@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Platform } from 'react-native';
 import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from '../services/apiClient';
 import { useWellnessStore } from './wellnessStore';
 
 // Types matching backend response
@@ -153,7 +154,7 @@ export const useReadinessStore = create<ReadinessState>((set, get) => ({
                 setNumber
             });
 
-            const response = await fetch(`${API_URL}/readiness/analyze`, {
+            const response = await authedFetch(`${API_URL}/readiness/analyze`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -215,7 +216,7 @@ export const useReadinessStore = create<ReadinessState>((set, get) => ({
 
             console.log('Fetching readiness status for user:', userId);
 
-            const response = await fetch(`${API_URL}/readiness/status`, {
+            const response = await authedFetch(`${API_URL}/readiness/status`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',

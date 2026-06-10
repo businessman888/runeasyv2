@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from '../services/apiClient';
 
 interface MetricsComparison {
     distance: { planned: number; executed: number; diff_percent: number };
@@ -207,7 +208,7 @@ export const useFeedbackStore = create<FeedbackState>((set, get) => ({
 
             if (!userId) return;
 
-            const response = await fetch(`${API_URL}/feedback/history?limit=${limit}`, {
+            const response = await authedFetch(`${API_URL}/feedback/history?limit=${limit}`, {
                 headers: { 'x-user-id': userId },
             });
 
@@ -229,7 +230,7 @@ export const useFeedbackStore = create<FeedbackState>((set, get) => ({
 
             if (!userId) return;
 
-            const response = await fetch(`${API_URL}/feedback/${feedbackId}`, {
+            const response = await authedFetch(`${API_URL}/feedback/${feedbackId}`, {
                 headers: { 'x-user-id': userId },
             });
 
@@ -250,7 +251,7 @@ export const useFeedbackStore = create<FeedbackState>((set, get) => ({
 
             if (!userId) return;
 
-            const response = await fetch(`${API_URL}/feedback/latest/summary`, {
+            const response = await authedFetch(`${API_URL}/feedback/latest/summary`, {
                 headers: { 'x-user-id': userId },
             });
 
@@ -292,7 +293,7 @@ export const useFeedbackStore = create<FeedbackState>((set, get) => ({
             }
 
             const query = scope ? `?source=${scope}` : '';
-            const response = await fetch(`${API_URL}/feedback/latest/activity${query}`, {
+            const response = await authedFetch(`${API_URL}/feedback/latest/activity${query}`, {
                 headers: { 'x-user-id': userId },
             });
 
@@ -313,7 +314,7 @@ export const useFeedbackStore = create<FeedbackState>((set, get) => ({
 
             if (!userId) return;
 
-            const response = await fetch(`${API_URL}/feedback/${feedbackId}/rate`, {
+            const response = await authedFetch(`${API_URL}/feedback/${feedbackId}/rate`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -343,7 +344,7 @@ export const useFeedbackStore = create<FeedbackState>((set, get) => ({
                 return;
             }
 
-            const response = await fetch(
+            const response = await authedFetch(
                 `${API_URL}/feedback/workouts/history?limit=${limit}&offset=${offset}`,
                 { headers: { 'x-user-id': userId } }
             );

@@ -1,5 +1,8 @@
 import { Controller, Get } from '@nestjs/common';
+import { Public } from '../../common/decorators';
 
+// Public: liveness/readiness probe for Railway — no authentication required.
+@Public()
 @Controller('health')
 export class HealthController {
   @Get()

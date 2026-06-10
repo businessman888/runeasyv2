@@ -1,6 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
+import helmet from 'helmet';
+import compression from 'compression';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 async function bootstrap() {
   console.log('[Bootstrap] ========================================');
@@ -20,13 +24,25 @@ async function bootstrap() {
     });
     console.log('[Bootstrap] Aplicação NestJS criada com sucesso!');
 
-    // Enable CORS for frontend, mobile apps, and tunnels
+    // Security headers + response compression.
+    app.use(helmet());
+    app.use(compression());
+
+    // CORS. The mobile app sends requests with no Origin header (native), which
+    // must always be allowed. Browsers are restricted to the production web
+    // domain in production; staging/development stay permissive for tooling.
     console.log('[Bootstrap] Configurando CORS...');
+    const isProduction = process.env.NODE_ENV === 'production';
+    const allowedOrigins = ['https://app.runeasy.com.br'];
     app.enableCors({
       origin: (origin, callback) => {
-        // Allow requests with no origin (mobile apps, Postman, etc.)
-        // and all Cloudflare tunnel URLs
-        callback(null, true);
+        // No origin = native mobile app / server-to-server / curl — always allow.
+        if (!origin) return callback(null, true);
+        // Outside production, allow any origin (local dev, tunnels, staging tools).
+        if (!isProduction) return callback(null, true);
+        // Production browsers: only the official web domain.
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        return callback(new Error(`Origin not allowed by CORS: ${origin}`));
       },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
@@ -60,6 +76,11 @@ async function bootstrap() {
         forbidNonWhitelisted: true,
       }),
     );
+
+    // Standardized error responses (no stack traces in production) + slow
+    // request logging.
+    app.useGlobalFilters(new AllExceptionsFilter());
+    app.useGlobalInterceptors(new LoggingInterceptor());
 
     // API prefix
     app.setGlobalPrefix('api');

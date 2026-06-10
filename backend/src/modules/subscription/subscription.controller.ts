@@ -4,14 +4,13 @@ import {
   Get,
   Headers,
   HttpCode,
-  HttpException,
-  HttpStatus,
   Logger,
   Post,
 } from '@nestjs/common';
 import { SubscriptionService } from './subscription.service';
 import { RevenueCatWebhookService } from './revenuecat-webhook.service';
 import { RevenueCatWebhookBody } from './dto/revenuecat-event.dto';
+import { Public, User } from '../../common/decorators';
 
 @Controller()
 export class SubscriptionController {
@@ -23,13 +22,13 @@ export class SubscriptionController {
   ) {}
 
   @Get('users/me/subscription')
-  async getMySubscription(@Headers('x-user-id') userId: string) {
-    if (!userId) {
-      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
-    }
+  async getMySubscription(@User('id') userId: string) {
     return this.subscriptionService.getState(userId);
   }
 
+  // Public: authenticated by RevenueCat's own shared-secret Authorization
+  // header (verified in webhookService.verifyAuth), not by a user token.
+  @Public()
   @Post('webhooks/revenuecat')
   @HttpCode(200)
   async revenueCatWebhook(

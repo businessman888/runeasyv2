@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { SupabaseAuthGuard } from './common/guards/supabase-auth.guard';
 
 // Database
 import { DatabaseModule } from './database';
@@ -48,6 +51,16 @@ import { RacesModule } from './modules/races';
       useFactory: (configService: ConfigService) => {
         const redisUrl = configService.get<string>('REDIS_URL');
 
+        // Resilience defaults applied to every queue: retry transient failures
+        // with exponential backoff so one failed job never gets silently lost,
+        // and cap retained jobs so Redis memory stays bounded over time.
+        const defaultJobOptions = {
+          attempts: 3,
+          backoff: { type: 'exponential' as const, delay: 5000 },
+          removeOnComplete: 1000,
+          removeOnFail: 5000,
+        };
+
         if (redisUrl) {
           try {
             const url = new URL(redisUrl);
@@ -61,6 +74,7 @@ import { RacesModule } from './modules/races';
                   ? { rejectUnauthorized: false }
                   : undefined,
               },
+              defaultJobOptions,
             };
           } catch (error) {
             console.error('[BullMQ] Failed to parse REDIS_URL:', error);
@@ -73,10 +87,16 @@ import { RacesModule } from './modules/races';
             host: '127.0.0.1',
             port: 6379,
           },
+          defaultJobOptions,
         };
       },
       inject: [ConfigService],
     }),
+
+    // Global rate limiting: 100 requests / minute per IP (or per user where a
+    // custom tracker overrides it). Auth and AI-generation endpoints apply
+    // stricter @Throttle() limits on top of this.
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
 
     // Database
     DatabaseModule,
@@ -109,6 +129,21 @@ import { RacesModule } from './modules/races';
     RacesModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // Rate limiting runs first so abusive traffic is rejected before auth.
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+    // Global authentication: every route requires a valid Supabase Bearer
+    // token unless explicitly marked @Public(). Derives request.user from the
+    // validated token — controllers must read the user via @User('id'), never
+    // from the client-supplied x-user-id header.
+    {
+      provide: APP_GUARD,
+      useClass: SupabaseAuthGuard,
+    },
+  ],
 })
 export class AppModule {}

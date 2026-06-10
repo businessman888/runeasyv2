@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createMMKV } from 'react-native-mmkv';
 import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from '../services/apiClient';
 import type { PlanOverviewResponse } from '../types/plan-overview.types';
 import { useWellnessStore } from './wellnessStore';
 
@@ -472,7 +473,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
                 return;
             }
 
-            const response = await fetch(`${API_URL}/training/plan/overview`, {
+            const response = await authedFetch(`${API_URL}/training/plan/overview`, {
                 headers: { 'x-user-id': userId },
             });
 
@@ -500,7 +501,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         try {
             const userId = await getUserId();
             if (!userId) return null;
-            const response = await fetch(`${API_URL}/training/workouts/${workoutId}`, {
+            const response = await authedFetch(`${API_URL}/training/workouts/${workoutId}`, {
                 headers: { 'x-user-id': userId },
             });
             if (!response.ok) return null;
@@ -519,7 +520,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
 
             if (!userId) return;
 
-            const response = await fetch(`${API_URL}/training/plan`, {
+            const response = await authedFetch(`${API_URL}/training/plan`, {
                 headers: { 'x-user-id': userId },
             });
 
@@ -544,7 +545,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
 
             if (!userId) return;
 
-            const response = await fetch(
+            const response = await authedFetch(
                 `${API_URL}/training/workouts?start_date=${startDate}&end_date=${endDate}`,
                 { headers: { 'x-user-id': userId } }
             );
@@ -567,7 +568,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
 
             if (!userId) return;
 
-            const response = await fetch(
+            const response = await authedFetch(
                 `${API_URL}/training/schedule?start_date=${startDate}&end_date=${endDate}`,
                 { headers: { 'x-user-id': userId } }
             );
@@ -594,7 +595,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
 
             if (!userId) return;
 
-            const response = await fetch(`${API_URL}/training/workouts/upcoming`, {
+            const response = await authedFetch(`${API_URL}/training/workouts/upcoming`, {
                 headers: { 'x-user-id': userId },
             });
 
@@ -614,7 +615,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
             const userId = await getUserId();
             if (!userId) return false;
 
-            const response = await fetch(`${API_URL}/training/plan/${planId}/status`, {
+            const response = await authedFetch(`${API_URL}/training/plan/${planId}/status`, {
                 headers: { 'x-user-id': userId },
             });
 
@@ -677,7 +678,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         console.log(`[completeWorkout] userId=${userId}, URL=${API_URL}/training/workouts/${payload.workoutId}/complete`);
 
         try {
-            const response = await fetch(
+            const response = await authedFetch(
                 `${API_URL}/training/workouts/${payload.workoutId}/complete`,
                 {
                     method: 'POST',
@@ -752,7 +753,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         }
 
         try {
-            const response = await fetch(`${API_URL}/training/workouts/free/complete`, {
+            const response = await authedFetch(`${API_URL}/training/workouts/free/complete`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -802,7 +803,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         const userId = await getUserId();
         if (!userId) throw new Error('Usuário não autenticado');
 
-        const response = await fetch(`${API_URL}/training/workouts/manual`, {
+        const response = await authedFetch(`${API_URL}/training/workouts/manual`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -842,7 +843,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
 
         for (const payload of pending) {
             try {
-                const response = await fetch(`${API_URL}/training/workouts/free/complete`, {
+                const response = await authedFetch(`${API_URL}/training/workouts/free/complete`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -888,7 +889,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         for (const payload of pending) {
             try {
                 console.log(`[retryPendingWorkouts] Reenviando workoutId=${payload.workoutId}, dist=${payload.total_distance_meters}m`);
-                const response = await fetch(
+                const response = await authedFetch(
                     `${API_URL}/training/workouts/${payload.workoutId}/complete`,
                     {
                         method: 'POST',
@@ -923,7 +924,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
 
             if (!userId) return;
 
-            const response = await fetch(`${API_URL}/training/workouts/${workoutId}/skip`, {
+            const response = await authedFetch(`${API_URL}/training/workouts/${workoutId}/skip`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',

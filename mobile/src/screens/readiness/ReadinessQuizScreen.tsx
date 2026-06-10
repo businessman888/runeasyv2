@@ -13,6 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../../theme';
 import { BASE_API_URL, API_URL, API_ENDPOINTS } from '../../config/api.config';
+import { authedFetch } from '../../services/apiClient';
 import * as Storage from '../../utils/storage';
 import { useReadinessStore } from '../../stores/readinessStore';
 
@@ -67,7 +68,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
                 console.log('[ReadinessQuiz] 🌐 URL:', url);
 
                 try {
-                    const response = await fetch(url, {
+                    const response = await authedFetch(url, {
                         method: 'GET',
                         headers,
                     });
@@ -127,7 +128,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
                     // 2. Verificar Status (Solicitado: Sequence Check)
                     console.log('[ReadinessQuiz] 🔍 Step 1: Checking readiness status...');
                     const statusUrl = `${API_URL}${API_ENDPOINTS.READINESS_STATUS}`;
-                    const statusRes = await fetch(statusUrl, { method: 'GET', headers });
+                    const statusRes = await authedFetch(statusUrl, { method: 'GET', headers });
 
                     if (statusRes.ok) {
                         const statusData = await statusRes.json();

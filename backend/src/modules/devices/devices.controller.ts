@@ -5,11 +5,11 @@ import {
   Delete,
   Body,
   Param,
-  Headers,
   HttpException,
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { User } from '../../common/decorators';
 import { DevicesService } from './devices.service';
 import { ActivitySyncService } from './activity-sync.service';
 import { ConnectDeviceDto } from './dto/connect-device.dto';
@@ -34,7 +34,7 @@ export class DevicesController {
    * GET /api/devices
    */
   @Get()
-  async listDevices(@Headers('x-user-id') userId: string) {
+  async listDevices(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException(
         'x-user-id header required',
@@ -52,7 +52,7 @@ export class DevicesController {
    */
   @Post('connect')
   async connectDevice(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Body() dto: ConnectDeviceDto,
   ) {
     if (!userId) {
@@ -72,7 +72,7 @@ export class DevicesController {
    */
   @Delete(':provider')
   async disconnectDevice(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Param('provider') provider: string,
   ) {
     if (!userId) {
@@ -92,7 +92,7 @@ export class DevicesController {
    */
   @Get('status/:provider')
   async checkStatus(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Param('provider') provider: string,
   ) {
     if (!userId) {
@@ -112,7 +112,7 @@ export class DevicesController {
    * GET /api/devices/sync-status
    */
   @Get('sync-status')
-  async getSyncStatus(@Headers('x-user-id') userId: string) {
+  async getSyncStatus(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException(
         'x-user-id header required',
@@ -133,7 +133,7 @@ export class DevicesController {
    */
   @Post('apple-health/sync')
   async syncAppleHealth(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Body() dto: AppleHealthSyncDto,
   ) {
     if (!userId) {
@@ -206,7 +206,7 @@ export class DevicesController {
    */
   @Post('health-connect/sync')
   async syncHealthConnect(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Body() dto: HealthConnectSyncDto,
   ) {
     if (!userId) {

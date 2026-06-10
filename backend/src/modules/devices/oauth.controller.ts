@@ -3,7 +3,6 @@ import {
   Get,
   Post,
   Query,
-  Headers,
   Req,
   Res,
   HttpException,
@@ -12,6 +11,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { Public, User } from '../../common/decorators';
 import { DevicesService } from './devices.service';
 import { ActivitySyncService, WearableActivity } from './activity-sync.service';
 import { FitbitOAuthService } from './providers/fitbit-oauth.service';
@@ -40,7 +40,7 @@ export class OAuthController {
    * GET /api/devices/fitbit/auth
    */
   @Get('fitbit/auth')
-  async fitbitAuth(@Headers('x-user-id') userId: string) {
+  async fitbitAuth(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException(
         'x-user-id header required',
@@ -56,6 +56,9 @@ export class OAuthController {
    * Fitbit OAuth callback — exchanges code for tokens, stores device.
    * GET /api/devices/fitbit/callback
    */
+  // Public: OAuth redirect from Fitbit's browser flow — no user token; the
+  // user is resolved from the signed `state` param.
+  @Public()
   @Get('fitbit/callback')
   async fitbitCallback(
     @Query('code') code: string,
@@ -109,7 +112,7 @@ export class OAuthController {
    * GET /api/devices/polar/auth
    */
   @Get('polar/auth')
-  async polarAuth(@Headers('x-user-id') userId: string) {
+  async polarAuth(@User('id') userId: string) {
     if (!userId) {
       throw new HttpException(
         'x-user-id header required',
@@ -125,6 +128,9 @@ export class OAuthController {
    * Polar OAuth callback — exchanges code for tokens, registers user, stores device.
    * GET /api/devices/polar/callback
    */
+  // Public: OAuth redirect from Polar's browser flow — no user token; the
+  // user is resolved from the signed `state` param.
+  @Public()
   @Get('polar/callback')
   async polarCallback(
     @Query('code') code: string,
@@ -178,6 +184,8 @@ export class OAuthController {
    * GET /api/devices/webhooks/fitbit
    * Fitbit sends a verification request with ?verify=<code>
    */
+  // Public: called by Fitbit servers; verified via verification code.
+  @Public()
   @Get('webhooks/fitbit')
   async fitbitWebhookVerify(
     @Query('verify') verify: string,
@@ -199,6 +207,8 @@ export class OAuthController {
    * Fitbit sends an array of notification objects.
    * Each contains: collectionType, date, ownerId, ownerType, subscriptionId
    */
+  // Public: called by Fitbit servers; verified via x-fitbit-signature.
+  @Public()
   @Post('webhooks/fitbit')
   async fitbitWebhook(
     @Req() req: RawBodyRequest<Request>,
@@ -251,6 +261,8 @@ export class OAuthController {
    *
    * Polar sends notifications when new data is available.
    */
+  // Public: called by Polar servers; verified via polar-webhook-signature.
+  @Public()
   @Post('webhooks/polar')
   async polarWebhook(
     @Req() req: RawBodyRequest<Request>,

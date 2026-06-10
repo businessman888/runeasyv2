@@ -14,6 +14,7 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { BASE_API_URL } from '../config/api.config';
+import { authedFetch } from '../services/apiClient';
 import * as Storage from '../utils/storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
@@ -81,7 +82,7 @@ export function CustomizeGoalScreen() {
                 target_pace: targetPace,
             };
 
-            const response = await fetch(`${BASE_API_URL}/training/retrospective/${retrospectiveId}/customize`, {
+            const response = await authedFetch(`${BASE_API_URL}/training/retrospective/${retrospectiveId}/customize`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

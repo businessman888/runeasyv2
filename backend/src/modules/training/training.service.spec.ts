@@ -5,6 +5,7 @@ import { SupabaseService } from '../../database';
 import { TrainingAIService } from './training-ai.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { SubscriptionService } from '../subscription/subscription.service';
+import { AiQuotaService } from '../../common/ai';
 
 describe('TrainingService', () => {
   let service: TrainingService;
@@ -94,6 +95,14 @@ describe('TrainingService', () => {
         {
           provide: getQueueToken('elevation-queue'),
           useValue: { add: jest.fn() },
+        },
+        // AI quota: allow by default; tests don't exercise the limit path.
+        {
+          provide: AiQuotaService,
+          useValue: {
+            assertWithinLimit: jest.fn().mockResolvedValue(undefined),
+            isWithinLimit: jest.fn().mockResolvedValue(true),
+          },
         },
       ],
     }).compile();

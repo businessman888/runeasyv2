@@ -6,12 +6,12 @@ import {
   Delete,
   Param,
   Body,
-  Headers,
   HttpException,
   HttpStatus,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
+import { User } from '../../common/decorators';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
 
@@ -34,7 +34,7 @@ export class UsersController {
   @Get(':userId')
   async getUser(
     @Param('userId') userId: string,
-    @Headers('x-user-id') requestingUserId: string,
+    @User('id') requestingUserId: string,
   ) {
     // Verify requesting user is the same as the user being fetched
     if (requestingUserId !== userId) {
@@ -51,7 +51,7 @@ export class UsersController {
   @Put(':userId/profile')
   async updateProfile(
     @Param('userId') userId: string,
-    @Headers('x-user-id') requestingUserId: string,
+    @User('id') requestingUserId: string,
     @Body() body: { profile: Record<string, any> },
   ) {
     if (requestingUserId !== userId) {
@@ -71,7 +71,7 @@ export class UsersController {
   )
   async uploadAvatar(
     @Param('userId') userId: string,
-    @Headers('x-user-id') requestingUserId: string,
+    @User('id') requestingUserId: string,
     @UploadedFile() file: UploadedAvatarFile,
   ) {
     if (requestingUserId !== userId) {
@@ -109,7 +109,7 @@ export class UsersController {
   @Delete(':userId')
   async deleteUser(
     @Param('userId') userId: string,
-    @Headers('x-user-id') requestingUserId: string,
+    @User('id') requestingUserId: string,
   ) {
     if (requestingUserId !== userId) {
       throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);

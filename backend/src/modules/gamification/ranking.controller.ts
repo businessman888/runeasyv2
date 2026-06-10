@@ -1,11 +1,11 @@
 import {
   Controller,
   Get,
-  Headers,
   HttpException,
   HttpStatus,
   Query,
 } from '@nestjs/common';
+import { User } from '../../common/decorators';
 import { GamificationService } from './gamification.service';
 
 @Controller('ranking')
@@ -14,7 +14,7 @@ export class RankingController {
 
   @Get('global')
   async getGlobalRanking(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Query('limit') limit?: string,
   ) {
     if (!userId) {
@@ -29,7 +29,7 @@ export class RankingController {
 
   @Get('cohort')
   async getCohortRanking(
-    @Headers('x-user-id') userId: string,
+    @User('id') userId: string,
     @Query('limit') limit?: string,
   ) {
     if (!userId) {
