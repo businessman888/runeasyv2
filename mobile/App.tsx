@@ -343,6 +343,9 @@ export default function App() {
     return unsub;
   }, []);
 
+  // Chave do app Superwall da plataforma atual (iOS e Android são apps
+  // separados no Superwall). getSuperwallApiKey() já resolve via Platform.OS,
+  // então só o slot correspondente do apiKeys abaixo é efetivamente consumido.
   const superwallApiKey = getSuperwallApiKey();
 
   // Mantém o splash enquanto a fonte carrega (padrão Expo). Se falhar, segue.

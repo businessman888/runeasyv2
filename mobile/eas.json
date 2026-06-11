@@ -7,16 +7,29 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "environment": "development",
       "ios": {
         "simulator": true
       },
       "env": {
-        "EXPO_PUBLIC_APP_VARIANT": "development"
+        "EXPO_PUBLIC_APP_VARIANT": "development",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://gcaozgnevvmnlxnkfthh.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_c11B_LhCkB2c-F5GtAhcog_zA4GnZYr",
+        "EXPO_PUBLIC_API_URL": "https://runeasyv2-staging.up.railway.app",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "911159721571-3t3nmmu8kvi3lpr1s5dqg8lt7p275bdt.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID": "911159721571-0lltl662iqpiesnhi67akdffhbastnp5.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS": "911159721571-ltiean858pjt83qsbnmvim5o3slf5aph.apps.googleusercontent.com",
+        "EXPO_PUBLIC_REVENUECAT_API_KEY_IOS": "test_BSCJmkrLNRmsEjyAFPmcnblYqzf",
+        "EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID": "test_BSCJmkrLNRmsEjyAFPmcnblYqzf",
+        "EXPO_PUBLIC_SUPERWALL_API_KEY_ANDROID": "pk_VhV-_Mt-Em2eqa0gTo6n6",
+        "EXPO_PUBLIC_SUPERWALL_API_KEY_IOS": "pk_LxD8KQWFHHDthkJYRhbFe",
+        "EXPO_PUBLIC_MAPBOX_STYLE_URL": "mapbox://styles/oytotec/cmmo2ioyj007g01qt69109vfw"
       }
     },
     "staging": {
       "distribution": "internal",
       "autoIncrement": true,
+      "environment": "preview",
       "android": {
         "buildType": "apk"
       },
@@ -25,7 +38,14 @@
         "EXPO_PUBLIC_SUPABASE_URL": "https://gcaozgnevvmnlxnkfthh.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_c11B_LhCkB2c-F5GtAhcog_zA4GnZYr",
         "EXPO_PUBLIC_API_URL": "https://runeasyv2-staging.up.railway.app",
-        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "911159721571-3t3nmmu8kvi3lpr1s5dqg8lt7p275bdt.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "911159721571-3t3nmmu8kvi3lpr1s5dqg8lt7p275bdt.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID": "911159721571-0lltl662iqpiesnhi67akdffhbastnp5.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS": "911159721571-ltiean858pjt83qsbnmvim5o3slf5aph.apps.googleusercontent.com",
+        "EXPO_PUBLIC_REVENUECAT_API_KEY_IOS": "test_BSCJmkrLNRmsEjyAFPmcnblYqzf",
+        "EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID": "test_BSCJmkrLNRmsEjyAFPmcnblYqzf",
+        "EXPO_PUBLIC_SUPERWALL_API_KEY_ANDROID": "pk_VhV-_Mt-Em2eqa0gTo6n6",
+        "EXPO_PUBLIC_SUPERWALL_API_KEY_IOS": "pk_LxD8KQWFHHDthkJYRhbFe",
+        "EXPO_PUBLIC_MAPBOX_STYLE_URL": "mapbox://styles/oytotec/cmmo2ioyj007g01qt69109vfw"
       }
     },
     "staging:simulator": {
@@ -45,6 +65,7 @@
     },
     "production": {
       "autoIncrement": true,
+      "environment": "production",
       "android": {
         "buildType": "app-bundle"
       },
@@ -57,13 +78,13 @@
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kbHN4Z3NjY3lqc3BiaHpjY3lwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMTIyNzksImV4cCI6MjA4ODY4ODI3OX0.3mJ9p_Ex3OxNv_SzV7PQSCuPfZ_wxEQq-K_HaX9i9RI",
         "EXPO_PUBLIC_API_URL": "https://app.runeasy.com.br",
         "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "911159721571-707rgl0s1m5a7irp7at70qmvhp4bd58o.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID": "[SUBSTITUIR_ANTES_DO_BUILD]",
-        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS": "[SUBSTITUIR_ANTES_DO_BUILD]",
-        "EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN": "[SUBSTITUIR_ANTES_DO_BUILD]",
-        "EXPO_PUBLIC_MAPBOX_STYLE_URL": "[SUBSTITUIR_ANTES_DO_BUILD]",
-        "EXPO_PUBLIC_SUPERWALL_API_KEY": "[SUBSTITUIR_ANTES_DO_BUILD]",
-        "EXPO_PUBLIC_REVENUECAT_API_KEY_IOS": "[SUBSTITUIR_PELA_CHAVE_PROD_appl_]",
-        "EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID": "[SUBSTITUIR_PELA_CHAVE_PROD_goog_]"
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID": "911159721571-0lltl662iqpiesnhi67akdffhbastnp5.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS": "911159721571-ltiean858pjt83qsbnmvim5o3slf5aph.apps.googleusercontent.com",
+        "EXPO_PUBLIC_REVENUECAT_API_KEY_IOS": "appl_duUJLsjWhzPfiGQteCruDvVbAve",
+        "EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID": "goog_FNfQqviDNeYLIyDjoEiqFQIWBaE",
+        "EXPO_PUBLIC_SUPERWALL_API_KEY_ANDROID": "pk_VhV-_Mt-Em2eqa0gTo6n6",
+        "EXPO_PUBLIC_SUPERWALL_API_KEY_IOS": "pk_LxD8KQWFHHDthkJYRhbFe",
+        "EXPO_PUBLIC_MAPBOX_STYLE_URL": "mapbox://styles/oytotec/cmmo2ioyj007g01qt69109vfw"
       }
     }
   },

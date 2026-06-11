@@ -19,7 +19,13 @@ import Purchases, {
 // Constants
 // ─────────────────────────────────────────────
 
-const SUPERWALL_API_KEY = process.env.EXPO_PUBLIC_SUPERWALL_API_KEY ?? '';
+/**
+ * Chaves públicas do Superwall, uma por plataforma — cada uma identifica um app
+ * distinto no dashboard do Superwall (campanhas/paywalls próprios por loja).
+ * Espelha o split por plataforma do RevenueCat abaixo.
+ */
+const SUPERWALL_API_KEY_IOS = process.env.EXPO_PUBLIC_SUPERWALL_API_KEY_IOS ?? '';
+const SUPERWALL_API_KEY_ANDROID = process.env.EXPO_PUBLIC_SUPERWALL_API_KEY_ANDROID ?? '';
 
 /**
  * Chaves públicas do RevenueCat.
@@ -258,14 +264,19 @@ export function addSubscriptionListener(
 // ─────────────────────────────────────────────
 
 /**
- * Retorna a chave de API do Superwall.
- * Usada no SuperwallProvider no _layout.tsx.
+ * Retorna a chave de API do Superwall da plataforma atual. Cada plataforma usa
+ * um app separado no Superwall (chaves distintas), seguindo o mesmo padrão de
+ * seleção por `Platform.OS` usado para o RevenueCat acima.
+ * Usada no SuperwallProvider no App.tsx.
  */
 export function getSuperwallApiKey(): string {
-  if (!SUPERWALL_API_KEY) {
-    console.warn('[Paywall] EXPO_PUBLIC_SUPERWALL_API_KEY não definida');
+  const apiKey = Platform.OS === 'ios'
+    ? SUPERWALL_API_KEY_IOS
+    : SUPERWALL_API_KEY_ANDROID;
+  if (!apiKey) {
+    console.warn('[Paywall] Chave Superwall não definida para', Platform.OS);
   }
-  return SUPERWALL_API_KEY;
+  return apiKey;
 }
 
 /**
