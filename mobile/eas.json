@@ -89,7 +89,17 @@
     }
   },
   "submit": {
-    "production": {},
+    "production": {
+      "ios": {
+        "ascApiKeyPath": "./credentials/AuthKey_69M4TFACBU.p8",
+        "ascApiKeyId": "69M4TFACBU",
+        "ascApiKeyIssuerId": "fd06d0e2-2027-409d-9e0d-0d43534f7746"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./credentials/google-play-service-account.json",
+        "track": "internal"
+      }
+    },
     "staging": {
       "android": {
         "track": "internal"
