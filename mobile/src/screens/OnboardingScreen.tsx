@@ -145,6 +145,10 @@ interface QuizStep {
     extraPropsKey?: string;
 }
 
+// Depoimentos ocultos do onboarding (não renderizados). Manter false até reabilitar.
+// A construção da TestimonialsScreen é preservada; apenas removemos a step do array ativo.
+const SHOW_TESTIMONIALS = false;
+
 // Full step catalogue. The active subset is computed per-render from the user's
 // goal_type / use_manual_race_date (see activeSteps below). Everything up to and
 // including 'goal_type' is common to both paths, so currentStep stays valid when
@@ -199,6 +203,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             if (step.key === 'racePicker' && !isRaceGoal) return false;    // race picker
             if (step.key === 'manualRaceDate' && !(isRaceGoal && data.use_manual_race_date)) return false;
             if (step.key === 'goalTimeframe' && isRaceGoal) return false;  // horizon = race date
+            if (step.key === '__i_testimonials' && !SHOW_TESTIMONIALS) return false; // depoimentos ocultos
             return true;
         });
     }, [isRaceGoal, data.use_manual_race_date]);

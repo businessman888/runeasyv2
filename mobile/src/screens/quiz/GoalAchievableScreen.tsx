@@ -1,5 +1,6 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, AccessibilityInfo } from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { getGoalAchievableCopy } from '../../utils/onboardingCopyMatrix';
 
@@ -11,6 +12,14 @@ const DS = {
 
 export function GoalAchievableScreen() {
     const { data } = useOnboardingStore();
+    const [reduceMotion, setReduceMotion] = useState(false);
+
+    useEffect(() => {
+        AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+        const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+        return () => sub.remove();
+    }, []);
+
     const { goalLabel, levelLabel, difficulty, realistic } = getGoalAchievableCopy(
         data.goal,
         data.experience_level,
@@ -21,9 +30,15 @@ export function GoalAchievableScreen() {
         },
     );
 
+    // Smooth staggered fade-in. Reduce motion → short fade, no translate.
+    const mainEntering = reduceMotion ? FadeIn.duration(150) : FadeIn.duration(500);
+    const secondaryEntering = reduceMotion
+        ? FadeIn.duration(150)
+        : FadeInDown.delay(220).duration(550);
+
     return (
         <View style={styles.container}>
-            <Text style={styles.mainText}>
+            <Animated.Text entering={mainEntering} style={styles.mainText}>
                 Alcançar a meta de{' '}
                 <Text style={styles.highlight}>{goalLabel}</Text>{' '}
                 com o nível{' '}
@@ -31,13 +46,12 @@ export function GoalAchievableScreen() {
                 é uma tarefa{' '}
                 <Text style={styles.highlight}>{difficulty}</Text>.{' '}
                 É uma meta considerada {realistic}.
-            </Text>
+            </Animated.Text>
 
-            <Text style={styles.secondaryText}>
-                90% dos usuários dizem que as suas metas são batidas em menos tempo
-                e com extrema tranquilidade após usarem a RunEasy. Alcançando cada
-                vez mais níveis mais altos de distância, com menos tempo e com 0 lesões.
-            </Text>
+            <Animated.Text entering={secondaryEntering} style={styles.secondaryText}>
+                Na RunEasy você recebe um plano partindo de onde você está hoje até a
+                conclusão da sua meta, tudo personalizado de acordo com seu objetivo.
+            </Animated.Text>
         </View>
     );
 }

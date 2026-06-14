@@ -121,7 +121,7 @@ export function WelcomeScreen({ navigation }: any) {
                         ao clube {firstName}
                     </Text>
                     <Text style={styles.subtitle}>
-                        Nós estamos muito felizes em ter você como parte a nossa imensa comunidade de
+                        Nós estamos muito felizes em ter você como parte da nossa comunidade de
                         corredores!
                     </Text>
                 </View>

@@ -1,17 +1,19 @@
-import React, { useEffect, useRef } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    Dimensions,
-    Animated,
-} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Dimensions, AccessibilityInfo } from 'react-native';
 import Svg, {
     Path,
     Line as SvgLine,
     Circle as SvgCircle,
     G,
 } from 'react-native-svg';
+import Animated, {
+    FadeIn,
+    useSharedValue,
+    useAnimatedProps,
+    withTiming,
+    withDelay,
+    Easing,
+} from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -32,6 +34,12 @@ const CHART_PADDING_X = 16;
 const CHART_W = CARD_WIDTH - 2 * CHART_PADDING_X;
 const CHART_H = 138;
 
+// Estimated path lengths for the draw animation. Overestimated slightly so the
+// stroke is never clipped (getTotalLength() is unreliable on RN-SVG). The
+// rising cyan curve travels farther than the near-flat gray one.
+const GRAY_LEN = CHART_W * 1.1;
+const CYAN_LEN = CHART_W * 1.6;
+
 // Build a Catmull-Rom smoothed path through points
 function buildPath(points: { x: number; y: number }[]): string {
     if (points.length === 0) return '';
@@ -47,57 +55,88 @@ function buildPath(points: { x: number; y: number }[]): string {
 }
 
 export function AssessoriaCompareScreen() {
-    const animVal = useRef(new Animated.Value(0)).current;
+    const [reduceMotion, setReduceMotion] = useState(false);
+
+    // 1 = fully offset (hidden), 0 = fully drawn.
+    const grayProgress = useSharedValue(1);
+    const cyanProgress = useSharedValue(1);
 
     useEffect(() => {
-        Animated.timing(animVal, {
-            toValue: 1,
-            duration: 1500,
-            useNativeDriver: false,
-        }).start();
-    }, [animVal]);
+        let mounted = true;
+        AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+            if (!mounted) return;
+            setReduceMotion(enabled);
+            if (enabled) {
+                // Show both curves immediately, no draw animation.
+                grayProgress.value = 0;
+                cyanProgress.value = 0;
+                return;
+            }
+            // Draw the gray "stagnation" line first, then the cyan "progress" line
+            // rising — reads as a clear before → after.
+            grayProgress.value = withTiming(0, { duration: 1100, easing: Easing.out(Easing.cubic) });
+            cyanProgress.value = withDelay(
+                250,
+                withTiming(0, { duration: 1100, easing: Easing.out(Easing.cubic) }),
+            );
+        });
+        return () => {
+            mounted = false;
+        };
+    }, [grayProgress, cyanProgress]);
 
-    // Without RunEasy: injuries INCREASE over 6 months (gray dashed-feel ascending curve)
-    const tradicionalPoints = [
-        { x: CHART_W * 0.0, y: CHART_H * 0.78 },
-        { x: CHART_W * 0.2, y: CHART_H * 0.65 },
-        { x: CHART_W * 0.4, y: CHART_H * 0.5 },
-        { x: CHART_W * 0.6, y: CHART_H * 0.36 },
-        { x: CHART_W * 0.8, y: CHART_H * 0.22 },
-        { x: CHART_W * 1.0, y: CHART_H * 0.1 },
+    // "Treino sem estrutura" — starts low and stagnates near the bottom.
+    const semEstruturaPoints = [
+        { x: CHART_W * 0.0, y: CHART_H * 0.72 },
+        { x: CHART_W * 0.2, y: CHART_H * 0.70 },
+        { x: CHART_W * 0.4, y: CHART_H * 0.69 },
+        { x: CHART_W * 0.6, y: CHART_H * 0.70 },
+        { x: CHART_W * 0.8, y: CHART_H * 0.69 },
+        { x: CHART_W * 1.0, y: CHART_H * 0.70 },
     ];
 
-    // With RunEasy: injuries DECREASE over 6 months (cyan glowing descending curve)
-    const runEasyPoints = [
-        { x: CHART_W * 0.0, y: CHART_H * 0.18 },
-        { x: CHART_W * 0.2, y: CHART_H * 0.32 },
-        { x: CHART_W * 0.4, y: CHART_H * 0.5 },
-        { x: CHART_W * 0.6, y: CHART_H * 0.66 },
-        { x: CHART_W * 0.8, y: CHART_H * 0.8 },
-        { x: CHART_W * 1.0, y: CHART_H * 0.92 },
+    // "Com um plano progressivo" — rises gradually, week after week.
+    const planoPoints = [
+        { x: CHART_W * 0.0, y: CHART_H * 0.80 },
+        { x: CHART_W * 0.2, y: CHART_H * 0.66 },
+        { x: CHART_W * 0.4, y: CHART_H * 0.52 },
+        { x: CHART_W * 0.6, y: CHART_H * 0.38 },
+        { x: CHART_W * 0.8, y: CHART_H * 0.24 },
+        { x: CHART_W * 1.0, y: CHART_H * 0.12 },
     ];
 
-    const tradicionalPath = buildPath(tradicionalPoints);
-    const runEasyPath = buildPath(runEasyPoints);
+    const semEstruturaPath = buildPath(semEstruturaPoints);
+    const planoPath = buildPath(planoPoints);
 
-    const strokeOpacity = animVal.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
-    const lastTrad = tradicionalPoints[tradicionalPoints.length - 1];
-    const lastCyan = runEasyPoints[runEasyPoints.length - 1];
+    const lastGray = semEstruturaPoints[semEstruturaPoints.length - 1];
+    const lastCyan = planoPoints[planoPoints.length - 1];
+
+    const grayPathProps = useAnimatedProps(() => ({
+        strokeDashoffset: grayProgress.value * GRAY_LEN,
+    }));
+    const cyanPathProps = useAnimatedProps(() => ({
+        strokeDashoffset: cyanProgress.value * CYAN_LEN,
+    }));
+    const grayDotProps = useAnimatedProps(() => ({ opacity: 1 - grayProgress.value }));
+    const cyanDotProps = useAnimatedProps(() => ({ opacity: 1 - cyanProgress.value }));
+
+    const cardEntering = reduceMotion ? FadeIn.duration(150) : FadeIn.duration(400);
 
     return (
         <>
             <View style={styles.titleContainer}>
                 <Text style={styles.title}>
-                    RunEasy cria resultados{'\n'}no longo prazo
+                    Treino com propósito{'\n'}vs treino no escuro
                 </Text>
             </View>
 
-            <View style={styles.card}>
-                <View style={styles.cardHeader}>
-                    <Text style={styles.cardHeaderText}>Suas lesões</Text>
-                </View>
-
+            <Animated.View entering={cardEntering} style={styles.card}>
                 <View style={styles.chartWrap}>
+                    {/* Y axis label — rotated, dim */}
+                    <View style={styles.yAxisWrap} pointerEvents="none">
+                        <Text style={styles.yAxisLabel}>Sua evolução</Text>
+                    </View>
+
                     <Svg width={CHART_W} height={CHART_H + 8}>
                         {/* gridlines (top + middle dashed) */}
                         <SvgLine
@@ -129,40 +168,44 @@ export function AssessoriaCompareScreen() {
                             strokeOpacity={0.4}
                         />
 
-                        {/* gray traditional line (ascending) */}
+                        {/* gray "sem estrutura" line (stagnating) — drawn first */}
                         <AnimatedPath
-                            d={tradicionalPath}
+                            d={semEstruturaPath}
                             stroke={DS.textSecondary}
                             strokeWidth={1.3}
                             fill="none"
                             strokeLinecap="round"
-                            strokeOpacity={strokeOpacity}
+                            strokeDasharray={GRAY_LEN}
+                            animatedProps={grayPathProps}
                         />
                         <AnimatedCircle
-                            cx={lastTrad.x}
-                            cy={lastTrad.y}
+                            cx={lastGray.x}
+                            cy={lastGray.y}
                             r={4}
                             fill={DS.textSecondary}
-                            opacity={strokeOpacity}
+                            animatedProps={grayDotProps}
                         />
 
-                        {/* cyan RunEasy line (descending) — glow via stroke */}
+                        {/* cyan "plano progressivo" line (rising) — glow + main, drawn second */}
                         <G>
                             <AnimatedPath
-                                d={runEasyPath}
+                                d={planoPath}
                                 stroke={DS.cyan}
                                 strokeWidth={4}
                                 strokeOpacity={0.25}
                                 fill="none"
                                 strokeLinecap="round"
+                                strokeDasharray={CYAN_LEN}
+                                animatedProps={cyanPathProps}
                             />
                             <AnimatedPath
-                                d={runEasyPath}
+                                d={planoPath}
                                 stroke={DS.cyan}
                                 strokeWidth={1.6}
                                 fill="none"
                                 strokeLinecap="round"
-                                strokeOpacity={strokeOpacity}
+                                strokeDasharray={CYAN_LEN}
+                                animatedProps={cyanPathProps}
                             />
                         </G>
                         <AnimatedCircle
@@ -170,32 +213,32 @@ export function AssessoriaCompareScreen() {
                             cy={lastCyan.y}
                             r={4}
                             fill={DS.cyan}
-                            opacity={strokeOpacity}
+                            animatedProps={cyanDotProps}
                         />
                     </Svg>
 
                     {/* Inline labels for the 2 lines */}
-                    <Text style={[styles.lineLabel, styles.lineLabelTrad]}>
-                        Assessoria de corrida{'\n'}tradicional
+                    <Text style={[styles.lineLabel, styles.lineLabelGray]}>
+                        Treino sem{'\n'}estrutura
                     </Text>
                     <Text style={[styles.lineLabel, styles.lineLabelCyan]}>
-                        Como assessor de Corrida
+                        Com um plano{'\n'}progressivo
                     </Text>
                 </View>
 
-                <View style={styles.axisLabels}>
-                    <Text style={styles.axisText}>Mês 1</Text>
-                    <Text style={[styles.axisText, styles.axisTextCyan]}>Mês 6</Text>
+                {/* X axis label — no numbers */}
+                <View style={styles.xAxisWrap}>
+                    <Text style={styles.xAxisLabel}>Semanas</Text>
                 </View>
 
                 <View style={styles.footer}>
                     <Text style={styles.footerText}>
-                        80% dos usuários que utilizam ou migram para{'\n'}
-                        a RunEasy, diminuem suas lesões, aumentando a{'\n'}
-                        performance em 90% em 6 meses.
+                        Treinos repetidos e sem progressão tendem a estagnar. Um plano que
+                        evolui de forma gradual mantém você avançando, semana após semana —
+                        e é isso que o RunEasy monta pra você.
                     </Text>
                 </View>
-            </View>
+            </Animated.View>
         </>
     );
 }
@@ -215,23 +258,33 @@ const styles = StyleSheet.create({
         width: CARD_WIDTH,
         backgroundColor: DS.card,
         borderRadius: 20,
-        paddingTop: 16,
+        paddingTop: 18,
         paddingBottom: 18,
         paddingHorizontal: CHART_PADDING_X,
         alignSelf: 'center',
     },
-    cardHeader: {
-        marginBottom: 14,
-    },
-    cardHeaderText: {
-        fontFamily: 'Poppins-Bold',
-        fontSize: 16,
-        fontWeight: '700',
-        color: DS.text,
-    },
     chartWrap: {
         position: 'relative',
         height: CHART_H + 12,
+    },
+    yAxisWrap: {
+        position: 'absolute',
+        left: -2,
+        top: 0,
+        bottom: 12,
+        width: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1,
+    },
+    yAxisLabel: {
+        fontFamily: 'Inter-Medium',
+        fontSize: 9,
+        fontWeight: '500',
+        color: DS.textSecondary,
+        transform: [{ rotate: '-90deg' }],
+        width: CHART_H,
+        textAlign: 'center',
     },
     lineLabel: {
         position: 'absolute',
@@ -240,31 +293,27 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         lineHeight: 11,
     },
-    lineLabelTrad: {
-        top: 12,
+    lineLabelGray: {
+        bottom: 18,
         right: 4,
         color: DS.textSecondary,
         textAlign: 'right',
     },
     lineLabelCyan: {
-        bottom: 18,
-        left: CHART_W * 0.18,
+        top: 8,
+        right: 4,
         color: DS.cyan,
+        textAlign: 'right',
     },
-    axisLabels: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
+    xAxisWrap: {
         marginTop: 6,
-        paddingHorizontal: 4,
+        alignItems: 'center',
     },
-    axisText: {
+    xAxisLabel: {
         fontFamily: 'Inter-SemiBold',
         fontSize: 11,
         fontWeight: '600',
-        color: DS.cyan,
-    },
-    axisTextCyan: {
-        color: DS.cyan,
+        color: DS.textSecondary,
     },
     footer: {
         marginTop: 16,
@@ -276,7 +325,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: DS.text,
         textAlign: 'center',
-        lineHeight: 14,
+        lineHeight: 15,
     },
 });
 
