@@ -36,9 +36,14 @@ import { useGarminSync } from './src/hooks/useGarmin';
 import { initGarmin, onCompletedRun } from './src/services/garminConnect';
 import { useTrainingStore } from './src/stores/trainingStore';
 import { useNetworkRetry } from './src/hooks/useNetworkRetry';
+import { applyDeviceOrientationLock } from './src/utils/orientation';
 
 // Registra Task de Rastreamento (Background GPS)
 import './src/tasks/locationTask';
+
+// Lock de orientação por device, disparado o quanto antes (módulo) para o phone
+// nunca renderizar deitado. Phone → portrait; tablet/iPad → rotação liberada.
+void applyDeviceOrientationLock();
 
 // Inicializa o token de acesso runtime do Mapbox.
 // Deve ser chamado antes de qualquer componente MapView ser renderizado.

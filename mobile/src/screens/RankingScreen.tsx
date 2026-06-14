@@ -13,6 +13,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme';
 import { useGamificationStore, RankingUser } from '../stores/gamificationStore';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { useResponsiveTheme } from '../theme/responsive';
 import { Patent } from '../components/patents/Patent';
 import { getCurrentPatent } from '../utils/patents';
 
@@ -292,11 +293,14 @@ export function RankingScreen({ navigation }: any) {
         ? `${MONTH_NAMES_PT[currentRanking.cohortInfo.month]} ${currentRanking.cohortInfo.year} - ${currentRanking.cohortInfo.totalCompetitors} competidores`
         : `${currentRanking?.totalParticipants || 0} competidores`;
 
+    // Responsividade: phone idêntico. Tablet centraliza a coluna; leaderboard 2-col.
+    const r = useResponsiveTheme();
+
     return (
         <ScreenContainer>
             <ScrollView
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.scrollContent}
+                contentContainerStyle={[styles.scrollContent, r.isTablet && styles.tabletScrollContent]}
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
@@ -305,6 +309,7 @@ export function RankingScreen({ navigation }: any) {
                     />
                 }
             >
+                <View style={r.isTablet ? styles.tabletInner : undefined}>
                 {/* Header */}
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
@@ -354,10 +359,20 @@ export function RankingScreen({ navigation }: any) {
                         {/* Podium */}
                         <PodiumSection rankings={topThree} />
 
-                        {/* Rest of Rankings */}
-                        {visibleRest.map((user) => (
-                            <RankingRow key={user.id} user={user} />
-                        ))}
+                        {/* Rest of Rankings — 2 colunas em tablet, lista em phone */}
+                        {r.isTablet ? (
+                            <View style={styles.rowsGrid}>
+                                {visibleRest.map((user) => (
+                                    <View key={user.id} style={styles.rowsGridItem}>
+                                        <RankingRow user={user} />
+                                    </View>
+                                ))}
+                            </View>
+                        ) : (
+                            visibleRest.map((user) => (
+                                <RankingRow key={user.id} user={user} />
+                            ))
+                        )}
 
                         {/* Ver mais button */}
                         {restRankings.length > 4 && !showAll && (
@@ -396,6 +411,7 @@ export function RankingScreen({ navigation }: any) {
 
                 {/* Bottom padding for tab bar */}
                 <View style={{ height: 100 }} />
+                </View>{/* fim tabletInner */}
             </ScrollView>
         </ScreenContainer>
     );
@@ -406,6 +422,23 @@ export function RankingScreen({ navigation }: any) {
 const styles = StyleSheet.create({
     scrollContent: {
         paddingHorizontal: spacing.base,
+    },
+    // ── Tablet (aditivo; phone nunca usa) ──────────────────────────────────────
+    tabletScrollContent: {
+        alignItems: 'center',
+    },
+    tabletInner: {
+        width: '100%',
+        maxWidth: 820,
+    },
+    rowsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        columnGap: spacing.base,
+    },
+    rowsGridItem: {
+        width: '48.5%',
     },
 
     // Header

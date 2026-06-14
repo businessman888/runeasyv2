@@ -6,6 +6,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { TabBarIcon } from './TabBarIcon';
 import { colors } from '../theme';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import { useAuthStore, getAvatarUrl, getDisplayName } from '../stores';
 
 // Real frosted blur on Android needs expo-blur's experimental RenderEffect method
@@ -25,6 +26,20 @@ const SHEEN_COLORS = [
 const SHEEN_LOCATIONS = [0, 0.5, 1] as const;
 
 const PILL_RADIUS = 40;
+const RAIL_WIDTH = 84;
+
+type IconName = 'home' | 'calendar' | 'trophy' | 'brain' | 'profile';
+
+function getIconName(routeName: string): IconName {
+    switch (routeName) {
+        case 'Home': return 'home';
+        case 'Calendar': return 'calendar';
+        case 'Ranking': return 'trophy';
+        case 'Wellness': return 'brain';
+        case 'Settings': return 'profile';
+        default: return 'home';
+    }
+}
 
 /** Circular profile photo for the "Settings" tab. Renders the user's avatar (or
  *  their initials as a fallback) inside a ring that lights up cyan with a neon
@@ -58,15 +73,88 @@ function ProfileTabAvatar({ isFocused }: { isFocused: boolean }) {
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     const insets = useSafeAreaInsets();
+    const { isTablet, isLandscape } = useBreakpoint();
 
     // Bottom position respects safe area (gesture bar on Android, home indicator on iOS)
     // Adding extra spacing for "respiro" as requested
     const bottomPosition = Math.max(insets.bottom + 10, 25);
 
+    // Fábrica de handlers de tab — compartilhada entre a pill e o rail.
+    const makeHandlers = (route: BottomTabBarProps['state']['routes'][number], isFocused: boolean) => ({
+        onPress: () => {
+            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+            if (!isFocused && !event.defaultPrevented) {
+                navigation.navigate(route.name);
+            }
+        },
+        onLongPress: () => {
+            navigation.emit({ type: 'tabLongPress', target: route.key });
+        },
+    });
+
+    // ── Tablet landscape: side rail vertical à esquerda ────────────────────────
+    // Ocupa largura real no layout (tabBarPosition='left' no Navigator posiciona a
+    // cena ao lado, sem sobreposição). Mantém a identidade de vidro fosco da pill.
+    if (isTablet && isLandscape) {
+        return (
+            <View style={[styles.railContainer, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
+                <BlurView
+                    intensity={40}
+                    tint="dark"
+                    experimentalBlurMethod={ANDROID_BLUR_METHOD}
+                    pointerEvents="none"
+                    style={StyleSheet.absoluteFill}
+                />
+                <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: colors.tabBarGlassFill }]} />
+                <LinearGradient colors={SHEEN_COLORS} locations={SHEEN_LOCATIONS} pointerEvents="none" style={StyleSheet.absoluteFill} />
+
+                {state.routes.map((route, index) => {
+                    const { options } = descriptors[route.key];
+                    const isFocused = state.index === index;
+                    const isCenterTab = route.name === 'Ranking';
+                    const isProfileTab = route.name === 'Settings';
+                    const { onPress, onLongPress } = makeHandlers(route, isFocused);
+
+                    return (
+                        <TouchableOpacity
+                            key={route.key}
+                            accessibilityRole="button"
+                            accessibilityState={isFocused ? { selected: true } : {}}
+                            accessibilityLabel={options.tabBarAccessibilityLabel}
+                            onPress={onPress}
+                            onLongPress={onLongPress}
+                            style={styles.railItem}
+                        >
+                            {/* Indicador ativo — barra de glow vertical na borda esquerda do rail */}
+                            {isFocused && !isCenterTab && <View style={styles.railActiveIndicator} />}
+                            <View style={[styles.iconContainer, isCenterTab && styles.centerIconContainer]}>
+                                {isProfileTab ? (
+                                    <ProfileTabAvatar isFocused={isFocused} />
+                                ) : (
+                                    <TabBarIcon
+                                        name={getIconName(route.name)}
+                                        color={isCenterTab ? '#FFFFFF' : isFocused ? '#00D4FF' : '#6B6B8D'}
+                                        size={isCenterTab ? 27 : 26}
+                                    />
+                                )}
+                            </View>
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+        );
+    }
+
+    // ── Phone / tablet portrait: pill flutuante inferior ───────────────────────
+    // Phone idêntico ao original; tablet portrait apenas alarga o teto da pill
+    // (de 360 → 520) para os ícones respirarem numa tela maior.
     return (
         // Outer wrapper carries positioning + shadow (kept off the inner glass
         // container, whose overflow:hidden would otherwise clip the iOS glow).
-        <View style={[styles.shadowWrap, { bottom: bottomPosition }]} pointerEvents="box-none">
+        <View
+            style={[styles.shadowWrap, { bottom: bottomPosition }, isTablet && styles.shadowWrapTablet]}
+            pointerEvents="box-none"
+        >
             <View style={styles.glassPill}>
                 {/* Frosted blur of the scroll content behind the floating pill. */}
                 <BlurView
@@ -180,6 +268,45 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.18,
         shadowRadius: 10,
         elevation: 6,
+    },
+    // Tablet portrait: pill mais larga (ícones com mais respiro). Phone usa o
+    // maxWidth: 360 acima.
+    shadowWrapTablet: {
+        maxWidth: 520,
+    },
+    // ── Side rail (tablet landscape) ───────────────────────────────────────────
+    railContainer: {
+        width: RAIL_WIDTH,
+        height: '100%',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        overflow: 'hidden',
+        // Hairline cyan na borda direita (espelha o contorno da pill).
+        borderRightWidth: 1,
+        borderRightColor: colors.proGlassBorderCyan,
+    },
+    railItem: {
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+        height: 64,
+        marginVertical: 6,
+    },
+    railActiveIndicator: {
+        position: 'absolute',
+        left: 0,
+        width: 4,
+        height: 24,
+        backgroundColor: '#00D4FF',
+        borderTopRightRadius: 4,
+        borderBottomRightRadius: 4,
+        shadowColor: '#00D4FF',
+        shadowOffset: { width: 2, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: 6,
+        elevation: 5,
     },
     glassPill: {
         flexDirection: 'row',

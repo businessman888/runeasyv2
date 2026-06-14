@@ -17,6 +17,7 @@ import { LineChart } from 'react-native-gifted-charts';
 import * as Location from 'expo-location';
 import { useAuthStore, getDisplayName, getAvatarUrl } from '../../stores/authStore';
 import { useTrainingStore } from '../../stores';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { SharingModal } from '../sharing/SharingModal';
 import {
   calculateSplits,
@@ -155,6 +156,11 @@ export function RunSummaryScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RunSummaryRouteParams, 'RunSummary'>>();
   const insets = useSafeAreaInsets();
+  // Tablet landscape: master-detail — mídia (mapa/esteira) à esquerda e o sheet
+  // de resultado vira uma coluna à direita. Phone (sideLayout=false) mantém o
+  // mapa fullscreen + bottom sheet original.
+  const { isTablet, isLandscape } = useBreakpoint();
+  const sideLayout = isTablet && isLandscape;
   const sheetRef = useRef<BottomSheet>(null);
   const [sharingVisible, setSharingVisible] = useState(false);
   // Stat Maps: coloração da rota. 'default' = polyline cyan original (estado inicial).
@@ -544,8 +550,9 @@ export function RunSummaryScreen() {
     setSharingVisible(true);
   };
 
-  // Snap points: 35% (vê mapa), 92% (full)
-  const snapPoints = useMemo(() => ['35%', '92%'], []);
+  // Snap points: phone 35% (vê mapa) / 92% (full). Em tablet landscape o sheet
+  // vive numa coluna à direita, então abre praticamente cheio.
+  const snapPoints = useMemo(() => (sideLayout ? ['100%'] : ['35%', '92%']), [sideLayout]);
 
   // ── Planejado vs Executado (apenas modo manual) ────────────────────────
   const showPlannedVsExecuted = mode === 'manual' && targetPaceSeconds && targetDistanceKm;
@@ -658,7 +665,7 @@ export function RunSummaryScreen() {
     <View style={styles.container}>
       {/* ── Mapa fullscreen atrás OU placeholder de esteira ───────────────── */}
       {isTreadmill ? (
-        <View style={[StyleSheet.absoluteFillObject, styles.treadmillBackdrop]}>
+        <View style={[sideLayout ? styles.mediaHalf : StyleSheet.absoluteFillObject, styles.treadmillBackdrop]}>
           <View style={styles.treadmillBackdropContent}>
             <Ionicons name="walk" size={56} color={T.cyan} />
             <Text style={styles.treadmillBackdropTitle}>Esteira</Text>
@@ -672,7 +679,7 @@ export function RunSummaryScreen() {
           </View>
         </View>
       ) : (
-      <View style={StyleSheet.absoluteFillObject}>
+      <View style={sideLayout ? styles.mediaHalf : StyleSheet.absoluteFillObject}>
         <Mapbox.MapView
           style={StyleSheet.absoluteFillObject}
           styleURL={process.env.EXPO_PUBLIC_MAPBOX_STYLE_URL || 'mapbox://styles/mapbox/dark-v11'}
@@ -801,7 +808,14 @@ export function RunSummaryScreen() {
         </Pressable>
       </SafeAreaView>
 
-      {/* ── Bottom Sheet (modal de resultado) ──────────────────────────── */}
+      {/* ── Bottom Sheet (modal de resultado) ────────────────────────────
+          Tablet landscape: contido numa coluna à direita (master-detail).
+          gorhom mede a altura do container pai, então o wrapper absoluto à
+          direita transforma o "bottom sheet" num painel lateral. */}
+      <View
+        style={sideLayout ? styles.sheetSideWrap : StyleSheet.absoluteFill}
+        pointerEvents="box-none"
+      >
       <BottomSheet
         ref={sheetRef}
         index={0}
@@ -1183,6 +1197,7 @@ export function RunSummaryScreen() {
           )}
         </BottomSheetScrollView>
       </BottomSheet>
+      </View>
 
       {workoutId && (
         <SharingModal
@@ -1466,6 +1481,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: T.bgPrimary,
+  },
+  // ── Tablet landscape (master-detail; phone nunca usa) ──────────────────────
+  // Mídia (mapa/esteira) ocupa ~60% à esquerda.
+  mediaHalf: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: '60%',
+  },
+  // Coluna direita que contém o BottomSheet (vira painel lateral de ~40%).
+  sheetSideWrap: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: '40%',
   },
 
   // Toggle de Terreno 3D — chip flutuante sobre o mapa

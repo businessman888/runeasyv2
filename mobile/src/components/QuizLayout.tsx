@@ -10,6 +10,7 @@ import {
     Platform,
 } from 'react-native';
 import { colors, typography, spacing, borderRadius } from '../theme';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 
 
 
@@ -39,6 +40,8 @@ export function QuizLayout({
     isLoading = false,
 }: QuizLayoutProps) {
     const progress = currentStep / totalSteps;
+    // Tablet: centraliza a coluna de leitura (quiz não estica a tela inteira).
+    const { isTablet } = useBreakpoint();
 
 
 
@@ -60,19 +63,21 @@ export function QuizLayout({
             {/* Content */}
             <ScrollView
                 style={styles.content}
-                contentContainerStyle={styles.contentContainer}
+                contentContainerStyle={[styles.contentContainer, isTablet && styles.contentContainerTablet]}
                 showsVerticalScrollIndicator={false}
             >
-                <Text style={styles.title}>{title}</Text>
-                <Text style={styles.subtitle}>{subtitle}</Text>
+                <View style={isTablet ? styles.tabletInner : undefined}>
+                    <Text style={styles.title}>{title}</Text>
+                    <Text style={styles.subtitle}>{subtitle}</Text>
 
-                <View style={styles.optionsContainer}>
-                    {children}
+                    <View style={styles.optionsContainer}>
+                        {children}
+                    </View>
                 </View>
             </ScrollView>
 
             {/* Footer with Buttons */}
-            <View style={styles.footer}>
+            <View style={[styles.footer, isTablet && styles.footerTablet]}>
                 {onBack && currentStep > 1 && (
                     <TouchableOpacity style={styles.backButton} onPress={onBack}>
                         <Text style={styles.backButtonText}>Voltar</Text>
@@ -229,6 +234,20 @@ const styles = StyleSheet.create({
     contentContainer: {
         padding: spacing.lg,
         paddingTop: spacing['2xl'],
+    },
+    // Tablet: centraliza horizontalmente o conteúdo do scroll.
+    contentContainerTablet: {
+        alignItems: 'center',
+    },
+    tabletInner: {
+        width: '100%',
+        maxWidth: 560,
+    },
+    // Tablet: centraliza a barra de botões na mesma largura do conteúdo.
+    footerTablet: {
+        width: '100%',
+        maxWidth: 560,
+        alignSelf: 'center',
     },
     title: {
         fontSize: typography.fontSizes['2xl'],

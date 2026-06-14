@@ -25,6 +25,7 @@ import type { PlanWeek } from '../../types/plan-overview.types';
 import { WeekRow } from './components/WeekRow';
 import { UpgradeProCard } from '../../components/upgrade/UpgradeProCard';
 import { useProFeature } from '../../hooks/useProFeature';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 // ─── Figma tokens ────────────────────────────────────────────────────────────
 const BG = '#0E0E1F';
@@ -46,6 +47,8 @@ function formatEndDate(iso: string): string {
 
 export function PlanGoalsScreen() {
     const navigation = useNavigation<any>();
+    // Tablet: semanas em 2 colunas (FlatList numColumns). Phone: 1 coluna (idêntico).
+    const { isTablet } = useBreakpoint();
     const planOverview = useTrainingStore((s) => s.planOverview);
     const loading = useTrainingStore((s) => s.planOverviewLoading);
     const error = useTrainingStore((s) => s.planOverviewError);
@@ -90,6 +93,7 @@ export function PlanGoalsScreen() {
         ({ item, index }: { item: PlanWeek; index: number }) => (
             <Animated.View
                 entering={FadeInUp.delay(80 + index * 50).duration(380)}
+                style={isTablet ? styles.gridItem : undefined}
             >
                 <WeekRow
                     week={item}
@@ -160,6 +164,9 @@ export function PlanGoalsScreen() {
                     data={planOverview.weeks}
                     renderItem={renderItem}
                     keyExtractor={keyExtractor}
+                    key={isTablet ? 'cols-2' : 'cols-1'}
+                    numColumns={isTablet ? 2 : 1}
+                    columnWrapperStyle={isTablet ? styles.columnWrapper : undefined}
                     contentContainerStyle={styles.listContent}
                     ItemSeparatorComponent={ItemSeparator}
                     ListHeaderComponent={
@@ -357,6 +364,13 @@ const styles = StyleSheet.create({
     listContent: {
         paddingHorizontal: 14,
         paddingBottom: 120,
+    },
+    // Tablet: 2 colunas de semanas com respiro horizontal (phone nunca usa).
+    columnWrapper: {
+        gap: 14,
+    },
+    gridItem: {
+        flex: 1,
     },
 
     // ─── Summary card ────────────────────────────────────────────────────

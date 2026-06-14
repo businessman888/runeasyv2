@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, type DimensionValue } from 'react-native';
 import { colors, typography, spacing } from '../../theme';
 import { PerformanceCard } from './PerformanceCard';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import type { PerformanceBlock } from '../../types/wellness.types';
 
 interface PerformanceGridProps {
@@ -17,6 +18,14 @@ function formatPace(seconds: number): string {
 }
 
 export function PerformanceGrid({ performance, frequencyPlanned }: PerformanceGridProps) {
+    // Colunas responsivas: phone 2 (default '48%' do card), tablet 3, largeTablet 4.
+    const { isTablet, isLargeTablet } = useBreakpoint();
+    const cardWidth: DimensionValue | undefined = isLargeTablet
+        ? '23.5%'
+        : isTablet
+            ? '31.8%'
+            : undefined;
+
     return (
         <View style={styles.section}>
             <View style={styles.header}>
@@ -32,6 +41,7 @@ export function PerformanceGrid({ performance, frequencyPlanned }: PerformanceGr
                     deltaPct={performance.distance.deltaPct}
                     sparkline={performance.distance.sparkline}
                     accentColor={colors.primary}
+                    widthPercent={cardWidth}
                 />
                 <PerformanceCard
                     label="Treinos"
@@ -39,6 +49,7 @@ export function PerformanceGrid({ performance, frequencyPlanned }: PerformanceGr
                     deltaPct={performance.frequency.deltaPct}
                     sparkline={performance.frequency.sparkline}
                     accentColor={colors.success}
+                    widthPercent={cardWidth}
                 />
                 <PerformanceCard
                     label="Pace médio"
@@ -48,6 +59,7 @@ export function PerformanceGrid({ performance, frequencyPlanned }: PerformanceGr
                     sparkline={performance.pace.sparkline}
                     invertDelta
                     accentColor={colors.warning}
+                    widthPercent={cardWidth}
                 />
                 <PerformanceCard
                     label="Volume"
@@ -56,6 +68,7 @@ export function PerformanceGrid({ performance, frequencyPlanned }: PerformanceGr
                     deltaPct={performance.duration.deltaPct}
                     sparkline={performance.duration.sparkline}
                     accentColor={colors.primaryLight}
+                    widthPercent={cardWidth}
                 />
                 <PerformanceCard
                     label="Calorias"
@@ -64,6 +77,7 @@ export function PerformanceGrid({ performance, frequencyPlanned }: PerformanceGr
                     deltaPct={performance.calories.deltaPct}
                     sparkline={performance.calories.sparkline}
                     accentColor={colors.accent}
+                    widthPercent={cardWidth}
                 />
                 <PerformanceCard
                     label="Elevação"
@@ -72,6 +86,7 @@ export function PerformanceGrid({ performance, frequencyPlanned }: PerformanceGr
                     deltaPct={performance.elevation.deltaPct}
                     sparkline={performance.elevation.sparkline}
                     accentColor={colors.recovery}
+                    widthPercent={cardWidth}
                 />
             </View>
         </View>

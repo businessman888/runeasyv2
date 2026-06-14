@@ -12,6 +12,7 @@ import {
 import * as Storage from '../utils/storage';
 import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows, fonts } from '../theme';
+import { useResponsiveTheme } from '../theme/responsive';
 import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore, useStatsStore, useNotificationStore, useWorkoutScopeStore, getDisplayName, getAvatarUrl } from '../stores';
 import type { LatestActivityData } from '../stores/feedbackStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
@@ -106,6 +107,10 @@ function BedIcon({ size = 24, color = '#A78BFA' }: { size?: number; color?: stri
 
 export function HomeScreen({ navigation }: any) {
     const { user } = useAuthStore();
+    // Responsividade tablet: layout aditivo. Phone (isTablet=false) renderiza o
+    // caminho original idêntico — sem wrappers extras nem mudança de ordem.
+    const r = useResponsiveTheme();
+    const twoCol = r.isTablet && r.isLandscape;
     const { isProUser } = useProFeature();
     const { stats, badges, fetchStats, fetchBadges, isLoading: gamificationLoading } = useGamificationStore();
     const { upcomingWorkouts, fetchUpcomingWorkouts, isLoading: trainingLoading, today, nextWorkout: storeNextWorkout, fetchSchedule, clearScheduleData, schedule, retryPendingWorkouts, workouts: rawWorkouts, fetchWorkouts } = useTrainingStore();
@@ -627,25 +632,10 @@ export function HomeScreen({ navigation }: any) {
     const isTodayWorkoutPending = hasTodayWorkout && todayData?.status === 'pending';
     const isButtonEnabled = isTodayWorkoutPending;
 
-    return (
-        <ScreenContainer style={{ paddingTop: 0 }}>
-            <HomeFixedHeader
-                currentStreak={currentStreak}
-                schedule={schedule}
-                unreadCount={unreadCount}
-                profilePic={profilePic}
-                userName={userName}
-                isProUser={isProUser}
-                onPressProfile={() => navigation.navigate('Settings')}
-                onPressNotifications={() => navigation.navigate('Notifications')}
-            />
-
-            <ScrollView
-                style={styles.scrollView}
-                contentContainerStyle={styles.content}
-                showsVerticalScrollIndicator={false}
-            >
-
+    // ── Blocos de conteúdo (extraídos p/ reuso entre phone-flat e tablet 2-col) ──
+    // Banners do topo (sempre full-width, acima de tudo).
+    const bannersBlock = (
+        <>
                 {/* Apple Health sync banner — shown for 4s after a successful sync */}
                 {healthKitLastSyncedCount > 0 && (
                     <View style={styles.healthKitBanner}>
@@ -676,7 +666,12 @@ export function HomeScreen({ navigation }: any) {
                         </View>
                     </TouchableOpacity>
                 )}
+        </>
+    );
 
+    // Hero: Level + Overview semanal (coluna esquerda no tablet landscape).
+    const heroBlock = (
+        <>
                 {/* Level Card */}
                 <LevelCard
                     stats={stats as any}
@@ -687,7 +682,12 @@ export function HomeScreen({ navigation }: any) {
 
                 {/* ── Overview semanal ──────────────────────────────────────────── */}
                 <OverviewSection />
+        </>
+    );
 
+    // Principal: tabs Treinos|Atividades + conteúdo do escopo (coluna direita).
+    const mainBlock = (
+        <>
                 {/* ── Treinos | Atividades ─────────────────────────────────────── */}
                 <SegmentedTabs
                     tabs={SCOPE_TABS}
@@ -923,6 +923,51 @@ export function HomeScreen({ navigation }: any) {
                 )}
                 </>
                 )}
+        </>
+    );
+
+    return (
+        <ScreenContainer style={{ paddingTop: 0 }}>
+            <HomeFixedHeader
+                currentStreak={currentStreak}
+                schedule={schedule}
+                unreadCount={unreadCount}
+                profilePic={profilePic}
+                userName={userName}
+                isProUser={isProUser}
+                onPressProfile={() => navigation.navigate('Settings')}
+                onPressNotifications={() => navigation.navigate('Notifications')}
+            />
+
+            <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Phone: ordem plana original (idêntico). Tablet: coluna de leitura
+                    centralizada; landscape divide hero/principal em 2 colunas. */}
+                {r.isTablet ? (
+                    <View style={[styles.tabletInner, twoCol && styles.tabletInnerWide]}>
+                        {bannersBlock}
+                        {twoCol ? (
+                            <View style={styles.twoColRow}>
+                                <View style={styles.colLeft}>{heroBlock}</View>
+                                <View style={styles.colRight}>{mainBlock}</View>
+                            </View>
+                        ) : (
+                            <>
+                                {heroBlock}
+                                {mainBlock}
+                            </>
+                        )}
+                    </View>
+                ) : (
+                    <>
+                        {bannersBlock}
+                        {heroBlock}
+                        {mainBlock}
+                    </>
+                )}
             </ScrollView>
 
 
@@ -955,6 +1000,32 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.lg,
         paddingTop: spacing.lg,
         paddingBottom: 120,
+        gap: spacing.lg,
+    },
+
+    // ── Tablet (aditivo; phone nunca usa estes estilos) ────────────────────────
+    // Coluna de leitura centralizada (portrait) — evita conteúdo esticado.
+    tabletInner: {
+        width: '100%',
+        maxWidth: 720,
+        alignSelf: 'center',
+        gap: spacing.lg,
+    },
+    // Landscape: usa mais largura para acomodar as 2 colunas.
+    tabletInnerWide: {
+        maxWidth: 1100,
+    },
+    twoColRow: {
+        flexDirection: 'row',
+        gap: spacing.xl,
+        alignItems: 'flex-start',
+    },
+    colLeft: {
+        flex: 1,
+        gap: spacing.lg,
+    },
+    colRight: {
+        flex: 1.25,
         gap: spacing.lg,
     },
 

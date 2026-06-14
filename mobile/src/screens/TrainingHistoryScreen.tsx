@@ -130,7 +130,7 @@ export function TrainingHistoryScreen({ navigation }: any) {
     };
 
     return (
-        <ScreenContainer>
+        <ScreenContainer centered>
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity

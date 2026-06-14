@@ -32,11 +32,19 @@ import {
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+// Base de escala CAPADA a dimensões de phone. Em tablet a tela é muito maior
+// que o design 375x812 e a escala crua estourava o conteúdo (a imagem "bleed"
+// virava um quadrado do tamanho da tela). Capar em ~440x950 mantém o phone
+// idêntico (largura/altura de phone < cap) e impede o blow-up em tablet — o
+// conteúdo fica em tamanho de phone, centralizado na tela maior.
+const BASE_W = Math.min(SCREEN_WIDTH, 440);
+const BASE_H = Math.min(SCREEN_HEIGHT, 950);
+
 // Responsive scaling based on Figma 375x812 design
-const scaleX = (size: number) => (SCREEN_WIDTH / 375) * size;
-const scaleY = (size: number) => (SCREEN_HEIGHT / 812) * size;
+const scaleX = (size: number) => (BASE_W / 375) * size;
+const scaleY = (size: number) => (BASE_H / 812) * size;
 const scaleFont = (size: number) => {
-    const scale = Math.min(SCREEN_WIDTH / 375, SCREEN_HEIGHT / 812);
+    const scale = Math.min(BASE_W / 375, BASE_H / 812);
     return Math.round(size * scale);
 };
 
@@ -296,8 +304,8 @@ const styles = StyleSheet.create({
         marginTop: scaleY(12),
     },
     bleedImage: {
-        width: SCREEN_WIDTH,
-        height: SCREEN_WIDTH,
+        width: BASE_W,
+        height: BASE_W,
     },
     containedImage: {
         width: '86%',

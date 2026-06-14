@@ -99,7 +99,7 @@ export function SettingsScreen({ navigation }: any) {
     const initials = getInitials(userName);
 
     return (
-        <ScreenContainer>
+        <ScreenContainer centered>
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 {/* Header */}
                 <Pressable onPress={handleHeaderTap} style={styles.header} hitSlop={4}>

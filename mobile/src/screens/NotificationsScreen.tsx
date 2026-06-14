@@ -12,6 +12,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
 import { useNotificationStore, AppNotification, NotificationType } from '../stores/notificationStore';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 
 // Icon components using @expo/vector-icons
 function BackIcon({ size = 24, color = '#EBEBF5' }: { size?: number; color?: string }) {
@@ -132,6 +133,8 @@ const NotificationCard = memo(function NotificationCard({
 });
 
 export function NotificationsScreen({ navigation }: any) {
+    // Tablet: lista em 2 colunas (FlatList numColumns). Phone: 1 coluna (idêntico).
+    const { isTablet } = useBreakpoint();
     const [activeFilter, setActiveFilter] = React.useState<FilterType>('all');
     const { notifications, isLoading, fetchNotifications, markAsRead } = useNotificationStore();
 
@@ -184,9 +187,13 @@ export function NotificationsScreen({ navigation }: any) {
 
     const renderItem = useCallback(
         ({ item }: { item: DisplayNotification }) => (
-            <NotificationCard notification={item} onPress={handleNotificationPress} />
+            // Em 2 colunas (tablet) cada item ocupa metade; em 1 coluna o wrapper
+            // é full-width (idêntico ao phone original).
+            <View style={isTablet ? styles.gridItem : undefined}>
+                <NotificationCard notification={item} onPress={handleNotificationPress} />
+            </View>
         ),
-        [handleNotificationPress],
+        [handleNotificationPress, isTablet],
     );
 
     const filteredNotifications = getFilteredNotifications();
@@ -256,6 +263,9 @@ export function NotificationsScreen({ navigation }: any) {
                     data={filteredNotifications}
                     renderItem={renderItem}
                     keyExtractor={(item) => item.id}
+                    key={isTablet ? 'cols-2' : 'cols-1'}
+                    numColumns={isTablet ? 2 : 1}
+                    columnWrapperStyle={isTablet ? styles.columnWrapper : undefined}
                     style={styles.notificationsList}
                     contentContainerStyle={styles.notificationsContent}
                     showsVerticalScrollIndicator={false}
@@ -331,6 +341,13 @@ const styles = StyleSheet.create({
     notificationsContent: {
         paddingHorizontal: spacing.lg,
         gap: spacing.md,
+    },
+    // Tablet: 2 colunas com respiro horizontal (phone nunca usa).
+    columnWrapper: {
+        gap: spacing.md,
+    },
+    gridItem: {
+        flex: 1,
     },
 
     // Notification Card

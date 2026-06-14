@@ -23,11 +23,14 @@ import { EvolutionChart } from '../components/wellness/EvolutionChart';
 import { WellnessSkeleton } from '../components/wellness/WellnessSkeleton';
 import { UpgradeProCard } from '../components/upgrade/UpgradeProCard';
 import { useProFeature } from '../hooks/useProFeature';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 
 type Nav = NativeStackNavigationProp<Record<string, object | undefined>>;
 
 export function WellnessScreen() {
     const navigation = useNavigation<Nav>();
+    // Tablet: coluna centralizada (a grade de performance já expande p/ 3-4 col).
+    const { isTablet } = useBreakpoint();
     const summary = useWellnessStore((s) => s.summary);
     const loading = useWellnessStore((s) => s.loading);
     const error = useWellnessStore((s) => s.error);
@@ -98,7 +101,7 @@ export function WellnessScreen() {
                         </Text>
                     </View>
                 ) : (
-                    <View style={styles.sections}>
+                    <View style={[styles.sections, isTablet && styles.tabletSections]}>
                         {isProUser ? (
                             <ReadinessCard
                                 readiness={summary.readiness}
@@ -185,6 +188,12 @@ const styles = StyleSheet.create({
     },
     sections: {
         gap: spacing.xl,
+    },
+    // Tablet: limita a largura e centraliza (phone nunca usa).
+    tabletSections: {
+        width: '100%',
+        maxWidth: 900,
+        alignSelf: 'center',
     },
     errorBox: {
         marginTop: spacing.xl,

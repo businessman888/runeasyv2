@@ -20,6 +20,7 @@ import { GpsSignalBars } from '../../components/map/GpsSignalBars';
 import { LowPowerBanner } from '../../components/map/LowPowerBanner';
 import { OSMOverlayLayers } from '../../components/map/OSMOverlayLayers';
 import { useLowPowerMode } from '../../hooks/useLowPowerMode';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { trackingStorage } from '../../tasks/locationTask';
 import { TreadmillRunningView } from './TreadmillRunningView';
 import type { WorkoutBlockAPI } from '../../types/workoutGoals';
@@ -93,6 +94,11 @@ function OutdoorRunningView() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RunningRouteParams, 'Running'>>();
   const insets = useSafeAreaInsets();
+  // Tablet landscape: mapa ocupa a esquerda e o painel de telemetria vira uma
+  // coluna lateral à direita (controles do mapa migram p/ a esquerda). Phone
+  // (sideLayout=false) mantém o painel inferior flutuante original.
+  const { isTablet, isLandscape } = useBreakpoint();
+  const sideLayout = isTablet && isLandscape;
   const [hasGPSFix, setHasGPSFix] = useState(false);
   const [goalsModalVisible, setGoalsModalVisible] = useState(false);
   const [isFollowingUser, setIsFollowingUser] = useState(true);
@@ -324,9 +330,9 @@ function OutdoorRunningView() {
   return (
     <View style={styles.container}>
 
-      {/* ── MAP FULL SCREEN ─────────────────────────────────────────────── */}
+      {/* ── MAP (full screen no phone; ~65% à esquerda em tablet landscape) ── */}
       <Mapbox.MapView
-        style={StyleSheet.absoluteFillObject}
+        style={sideLayout ? styles.mapSide : StyleSheet.absoluteFillObject}
         styleURL={process.env.EXPO_PUBLIC_MAPBOX_STYLE_URL || 'mapbox://styles/mapbox/dark-v11'}
         logoEnabled={false}
         compassEnabled={false}
@@ -437,7 +443,10 @@ function OutdoorRunningView() {
       {/* ── COLUNA DE CONTROLES (lateral direita) ───────────────────────────
           Empilha automaticamente: Metas (topo) → Trilhas → Recentralizar.
           O recenter fica por último, então aparecer/sumir não desloca os outros. */}
-      <View style={[styles.rightControls, { top: insets.top + 70 }]} pointerEvents="box-none">
+      <View
+        style={[sideLayout ? styles.rightControlsLeft : styles.rightControls, { top: insets.top + 70 }]}
+        pointerEvents="box-none"
+      >
         {/* Metas — primeiro no topo da coluna */}
         {hasGoals && !isFreeMode && (
           <Pressable
@@ -482,8 +491,8 @@ function OutdoorRunningView() {
         )}
       </View>
 
-      {/* ── BOTTOM PANEL ────────────────────────────────────────────────── */}
-      <View style={styles.bottomPanel}>
+      {/* ── BOTTOM PANEL (phone) / SIDE PANEL (tablet landscape) ──────────── */}
+      <View style={sideLayout ? styles.sidePanel : styles.bottomPanel}>
 
         {/* Card de telemetria flutuante */}
         <View style={styles.telemetryCard}>
@@ -705,6 +714,14 @@ const styles = StyleSheet.create({
     gap: 12,
     zIndex: 20,
   },
+  // Tablet landscape: controles migram p/ a esquerda (o painel ocupa a direita).
+  rightControlsLeft: {
+    position: 'absolute',
+    left: 16,
+    alignItems: 'center',
+    gap: 12,
+    zIndex: 20,
+  },
   mapCircleBtn: {
     width: 46,
     height: 46,
@@ -735,6 +752,28 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+  },
+  // Tablet landscape: mapa ocupa ~65% à esquerda.
+  mapSide: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: '65%',
+  },
+  // Tablet landscape: painel sólido à direita (~35%), telemetria + botões
+  // ancorados embaixo (coeso, não flutua solto sobre o mapa).
+  sidePanel: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: '35%',
+    backgroundColor: '#0A0A18',
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(235, 235, 245, 0.08)',
+    justifyContent: 'flex-end',
+    zIndex: 20,
   },
 
   // ── Telemetry card

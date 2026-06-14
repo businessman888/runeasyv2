@@ -15,7 +15,10 @@ export default {
   name: "RunEasy",
   slug: "runeasy",
   version: "1.0.0",
-  orientation: "portrait",
+  // "default" libera rotação no nível nativo; o lock por device (phone trava em
+  // portrait, tablet/iPad rotaciona) é feito em runtime no App.tsx via
+  // expo-screen-orientation. Ver TABLET_RESPONSIVENESS_PLAN.md.
+  orientation: "default",
   icon: "./assets/icon.png",
   userInterfaceStyle: "dark",
   scheme: "runeasy",
@@ -25,7 +28,10 @@ export default {
     backgroundColor: "#0E0E1F"
   },
   ios: {
-    supportsTablet: false,
+    // Habilita iPad. PRÉ-REQUISITO DE SUBMIT (Fase 7): com supportsTablet=true,
+    // o App Store Connect passa a EXIGIR screenshots de iPad 12.9" (2048×2732px).
+    // Ver TABLET_RESPONSIVENESS_PLAN.md §7.
+    supportsTablet: true,
     bundleIdentifier: "com.oytotec.runeasy",
     newArchEnabled: true,
     usesAppleSignIn: true,

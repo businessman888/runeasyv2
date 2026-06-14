@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows, fonts } from '../theme';
+import { useResponsiveTheme } from '../theme/responsive';
 import { ZONE_COLORS, ZONE_LABELS, PHASE_LABELS, getZoneColor } from '../theme/zoneColors';
 import { useTrainingStore, useStatsStore, useWorkoutScopeStore, useTrialModalStore, ScheduleDay } from '../stores';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
@@ -724,9 +725,19 @@ export function CalendarScreen({ navigation }: any) {
         </>
     );
 
+    // Responsividade: phone (isTablet=false) usa o caminho original. Tablet
+    // landscape divide o grid (esquerda) e o detalhe do dia (direita).
+    const r = useResponsiveTheme();
+    const masterDetail = r.isTablet && r.isLandscape;
+
     return (
         <ScreenContainer>
-            <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+            <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={r.isTablet ? styles.tabletScrollContent : undefined}
+                showsVerticalScrollIndicator={false}
+            >
+                <View style={r.isTablet ? styles.tabletInner : undefined}>
                 {/* Header */}
                 <View style={styles.header}>
                     <TouchableOpacity
@@ -780,6 +791,10 @@ export function CalendarScreen({ navigation }: any) {
                     style={styles.scopeTabs}
                 />
 
+                {/* Master-detail (tablet landscape): mês+grid à esquerda, detalhe
+                    do dia à direita. Phone/portrait: empilhado (idêntico). */}
+                <View style={masterDetail ? styles.mdRow : undefined}>
+                <View style={masterDetail ? styles.mdLeft : undefined}>
                 {/* Month Selector */}
                 <View style={styles.monthSelector}>
                     <Text style={styles.monthTitle}>
@@ -830,11 +845,12 @@ export function CalendarScreen({ navigation }: any) {
                         {renderGridContent(scope === 'plan' ? getPlanStatusForDay : getActivityStatusForDay)}
                     </View>
                 )}
+                </View>{/* fim coluna esquerda (master-detail) */}
 
                 {/* Selected Date Section - Reactive to calendar selection */}
                 <View
                     key={`selected-date-section-${getSelectedDateStr()}`}
-                    style={[styles.todaySection, { minHeight: 200 }]}
+                    style={[styles.todaySection, { minHeight: 200 }, masterDetail && styles.mdRight]}
                 >
                     <View style={styles.todaySectionHeader}>
                         <View>
@@ -1018,6 +1034,8 @@ export function CalendarScreen({ navigation }: any) {
                         </View>
                     )}
                 </View>
+                </View>{/* fim mdRow (master-detail) */}
+                </View>{/* fim tabletInner */}
             </ScrollView>
 
             {/* Workout Details Modal */}
@@ -1268,6 +1286,26 @@ const styles = StyleSheet.create({
         backgroundColor: '#0A0A18',
     },
     scrollView: {
+        flex: 1,
+    },
+    // ── Tablet (aditivo; phone nunca usa) ──────────────────────────────────────
+    tabletScrollContent: {
+        alignItems: 'center',
+    },
+    tabletInner: {
+        width: '100%',
+        maxWidth: 1100,
+    },
+    // Master-detail (landscape): grid à esquerda, detalhe do dia à direita.
+    mdRow: {
+        flexDirection: 'row',
+        gap: spacing.xl,
+        alignItems: 'flex-start',
+    },
+    mdLeft: {
+        flex: 1,
+    },
+    mdRight: {
         flex: 1,
     },
     header: {

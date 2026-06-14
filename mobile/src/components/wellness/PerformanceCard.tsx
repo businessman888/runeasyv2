@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, type DimensionValue } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 import { Sparkline } from './Sparkline';
@@ -14,6 +14,8 @@ export interface PerformanceCardProps {
     invertDelta?: boolean;
     /** Accent color used for the sparkline and delta arrow. */
     accentColor?: string;
+    /** Largura do card (responsivo). Default '48%' (2 colunas, layout phone). */
+    widthPercent?: DimensionValue;
 }
 
 /**
@@ -32,6 +34,7 @@ export const PerformanceCard = memo(function PerformanceCard({
     sparkline,
     invertDelta,
     accentColor = colors.primary,
+    widthPercent,
 }: PerformanceCardProps) {
     let deltaColor = colors.textMuted;
     let deltaArrow: 'arrow-up' | 'arrow-down' | null = null;
@@ -45,7 +48,7 @@ export const PerformanceCard = memo(function PerformanceCard({
     }
 
     return (
-        <View style={styles.card}>
+        <View style={[styles.card, widthPercent ? { width: widthPercent } : null]}>
             <View style={styles.topRow}>
                 <Text style={styles.label} numberOfLines={1}>
                     {label}

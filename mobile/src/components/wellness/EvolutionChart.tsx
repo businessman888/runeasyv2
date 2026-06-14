@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 import type { EvolutionBlock, EvolutionMetric, WeekPoint } from '../../types/wellness.types';
@@ -30,7 +30,10 @@ function formatPace(seconds: number): string {
 }
 
 export function EvolutionChart({ evolution, activeTab, onChangeTab }: EvolutionChartProps) {
-    const screenWidth = Dimensions.get('window').width;
+    // Reativo a rotação; capado em 900 p/ não estourar a coluna centralizada do
+    // Wellness em tablet (em phone a largura é < 900, então fica idêntico).
+    const { width: windowWidth } = useWindowDimensions();
+    const screenWidth = Math.min(windowWidth, 900);
     const chartWidth = screenWidth - spacing.base * 2 - spacing.lg * 2 - 40;
 
     const series: WeekPoint[] = evolution[activeTab];

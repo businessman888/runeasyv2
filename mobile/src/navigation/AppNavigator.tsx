@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, View, StyleSheet, Linking } from 'react-native';
 import { CustomTabBar } from '../components/CustomTabBar';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import { SplashScreen } from '../components/SplashScreen';
 import { navigationRef, setNavigationReady } from './navigationRef';
 
@@ -95,6 +96,12 @@ function WorkoutDetailScreen({ route }: any) {
 function MainTabs({ route, navigation }: any) {
     const { initialTab } = route.params || {};
 
+    // Tablet landscape: a tab bar vira side rail à esquerda (tabBarPosition
+    // 'left' faz o react-navigation posicionar a barra na lateral e a cena ao
+    // lado, sem sobreposição). Phone e tablet portrait mantêm a pill inferior.
+    const { isTablet, isLandscape } = useBreakpoint();
+    const useSideRail = isTablet && isLandscape;
+
     // One-time "Iniciar Teste Grátis" promo sheet — mounted once here (over the
     // tabs) and driven by the store; triggered from Calendar/Settings on focus.
     const trialVisible = useTrialModalStore((s) => s.visible);
@@ -118,6 +125,7 @@ function MainTabs({ route, navigation }: any) {
             initialRouteName="Home"
             tabBar={(props) => <CustomTabBar {...props} />}
             screenOptions={{
+                tabBarPosition: useSideRail ? 'left' : 'bottom',
                 headerStyle: {
                     backgroundColor: colors.background,
                 },

@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { OptionCard } from './OptionCard';
 import { QUIZ } from '../../screens/quiz/_tokens';
 import type { IoniconName } from '../../screens/quiz/_icons';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 const Radio = ({ selected }: { selected: boolean }) => (
     <View style={[styles.radioOuter, selected && styles.radioOuterSelected]}>
@@ -38,13 +39,15 @@ export function SelectableOption({
     icon,
     disabled,
 }: SelectableOptionProps) {
+    // Tablet: opção vira coluna centralizada e capada (não estica a tela).
+    const { isTablet } = useBreakpoint();
     return (
         <OptionCard
             selected={selected}
             onPress={onPress}
             disabled={disabled}
             accessibilityLabel={subtitle ? `${title}, ${subtitle}` : title}
-            style={styles.card}
+            style={[styles.card, isTablet && styles.cardTablet]}
             selectedStyle={styles.cardSelected}
         >
             {icon ? (
@@ -81,6 +84,12 @@ const styles = StyleSheet.create({
     cardSelected: {
         borderColor: QUIZ.color.cyan,
         backgroundColor: QUIZ.color.selectedFill,
+    },
+    // Tablet: centraliza e limita a largura da opção.
+    cardTablet: {
+        width: '100%',
+        maxWidth: 560,
+        alignSelf: 'center',
     },
     iconBox: {
         width: QUIZ.iconBox.size,
