@@ -165,6 +165,18 @@ export default {
       {
         "android": {
           "minSdkVersion": 26
+        },
+        // iOS: o Google Sign-In puxa o Swift pod `AppCheckCore`, que depende de
+        // `GoogleUtilities` e `RecaptchaInterop` (ObjC, sem module map). Em
+        // linkagem estática o CocoaPods exige modular headers nesses dois para
+        // o AppCheckCore conseguir importá-los do Swift. Declará-los aqui com
+        // `modular_headers: true` resolve o `pod install` (mesmo tratamento que
+        // o Expo já dá a dezenas de outros pods). NÃO relacionado a tablet.
+        "ios": {
+          "extraPods": [
+            { "name": "GoogleUtilities", "modular_headers": true },
+            { "name": "RecaptchaInterop", "modular_headers": true }
+          ]
         }
       }
     ]
