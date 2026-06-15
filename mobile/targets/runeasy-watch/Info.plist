@@ -26,7 +26,7 @@
 	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.oytotec.runeasy</string>
-	<key>UIBackgroundModes</key>
+	<key>WKBackgroundModes</key>
 	<array>
 		<string>workout-processing</string>
 		<string>location</string>
