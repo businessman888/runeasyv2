@@ -11,6 +11,7 @@ import { navigationRef, setNavigationReady } from './navigationRef';
 import {
     LandingScreen,
     LoginScreen,
+    RegisterScreen,
     WelcomeScreen,
     OnboardingScreen,
     HomeScreen,
@@ -279,6 +280,11 @@ export function AppNavigator() {
                         <Stack.Screen
                             name="Login"
                             component={LoginScreen}
+                            options={{ headerShown: false }}
+                        />
+                        <Stack.Screen
+                            name="Register"
+                            component={RegisterScreen}
                             options={{ headerShown: false }}
                         />
                     </>

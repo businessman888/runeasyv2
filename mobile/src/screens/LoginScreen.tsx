@@ -8,9 +8,12 @@ import {
     Platform,
     ActivityIndicator,
     Dimensions,
+    TextInput,
+    KeyboardAvoidingView,
+    ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, typography, spacing } from '../theme';
+import { colors, typography, spacing, fonts } from '../theme';
 import { useAuthStore } from '../stores';
 import { supabase } from '../services/supabase';
 import { BASE_API_URL } from '../config/api.config';
@@ -49,11 +52,45 @@ const GoogleIcon = () => (
     </Svg>
 );
 
-export function LoginScreen({ navigation }: { navigation: unknown }) {
+// Eye / eye-off icon for the password visibility toggle
+const EyeIcon = ({ visible }: { visible: boolean }) => (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+        <Path
+            d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"
+            stroke={colors.textSecondary}
+            strokeWidth={1.6}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        />
+        <Path
+            d="M12 15a3 3 0 100-6 3 3 0 000 6z"
+            stroke={colors.textSecondary}
+            strokeWidth={1.6}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        />
+        {!visible && (
+            <Path
+                d="M4 4l16 16"
+                stroke={colors.textSecondary}
+                strokeWidth={1.6}
+                strokeLinecap="round"
+            />
+        )}
+    </Svg>
+);
+
+export function LoginScreen({ navigation }: { navigation: { navigate: (screen: string) => void } }) {
     const [isLoading, setIsLoading] = React.useState(false);
     const [isAppleLoading, setIsAppleLoading] = React.useState(false);
+    const [isEmailLoading, setIsEmailLoading] = React.useState(false);
+    const [email, setEmail] = React.useState('');
+    const [password, setPassword] = React.useState('');
+    const [showPassword, setShowPassword] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
     const { login } = useAuthStore();
+
+    const anyLoading = isLoading || isAppleLoading || isEmailLoading;
 
     const getErrorMessage = (errorCode: string): string => {
         const messages: Record<string, string> = {
@@ -63,6 +100,64 @@ export function LoginScreen({ navigation }: { navigation: unknown }) {
             'play_services': 'Google Play Services indisponível.',
         };
         return messages[errorCode] || 'Erro desconhecido. Tente novamente.';
+    };
+
+    // Maps Supabase Auth (GoTrue) messages to friendly Portuguese copy.
+    const mapAuthError = (message: string): string => {
+        const m = message.toLowerCase();
+        if (m.includes('invalid login credentials')) return 'E-mail ou senha incorretos.';
+        if (m.includes('email not confirmed')) return 'Confirme seu e-mail antes de entrar.';
+        if (m.includes('user not found')) return 'Conta não encontrada. Verifique o e-mail ou crie uma conta.';
+        if (m.includes('network') || m.includes('unreachable') || m.includes('failed to fetch')) {
+            return 'Sem conexão com o servidor. Tente novamente.';
+        }
+        return message || getErrorMessage('auth_failed');
+    };
+
+    const handleEmailLogin = async () => {
+        setError(null);
+
+        const trimmedEmail = email.trim();
+        if (!trimmedEmail || !password) {
+            setError('Preencha e-mail e senha.');
+            return;
+        }
+
+        setIsEmailLoading(true);
+        try {
+            console.log('[LOGIN] Starting email/password sign-in...');
+            const { data, error: signInError } = await supabase.auth.signInWithPassword({
+                email: trimmedEmail,
+                password,
+            });
+
+            if (signInError) {
+                // Expected user-facing auth failures (wrong password, unconfirmed
+                // email, etc.) — warn, not error, so dev builds don't throw a red
+                // LogBox over a handled, already-displayed message.
+                console.warn('[LOGIN] Email sign-in failed:', signInError.message);
+                setError(mapAuthError(signInError.message));
+                return;
+            }
+
+            if (!data.session || !data.user) {
+                setError('Não foi possível iniciar a sessão. Tente novamente.');
+                return;
+            }
+
+            // signInWithPassword already persisted the session in the Supabase
+            // client, so authedFetch picks up the Bearer token. Reuse the exact
+            // same backend login flow as social sign-in — AppNavigator then routes
+            // a fresh user to onboarding automatically.
+            console.log('[LOGIN] Email auth successful, userId:', data.user.id);
+            await login(data.user.id);
+            console.log('[LOGIN] Backend login complete — AppNavigator will auto-navigate');
+        } catch (err: unknown) {
+            console.error('[LOGIN] Email error:', err);
+            setError(err instanceof Error ? mapAuthError(err.message) : getErrorMessage('auth_failed'));
+        } finally {
+            setIsEmailLoading(false);
+        }
     };
 
     const handleGoogleLogin = async () => {
@@ -256,16 +351,24 @@ export function LoginScreen({ navigation }: { navigation: unknown }) {
     const insets = useSafeAreaInsets();
 
     return (
-        <View style={styles.container}>
+        <KeyboardAvoidingView
+            style={styles.container}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-            <View style={[
-                styles.content,
-                {
-                    paddingTop: insets.top + scaleY(25),
-                    paddingBottom: insets.bottom + scaleY(80),
-                }
-            ]}>
+            <ScrollView
+                contentContainerStyle={[
+                    styles.scrollContent,
+                    {
+                        paddingTop: insets.top + scaleY(25),
+                        paddingBottom: insets.bottom + scaleY(40),
+                    },
+                ]}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+            >
                 {/* Title Section */}
                 <View style={styles.titleSection}>
                     <Text style={styles.title}>
@@ -306,7 +409,7 @@ export function LoginScreen({ navigation }: { navigation: unknown }) {
                     {/* Google Sign-In Button */}
                     <TouchableOpacity
                         onPress={handleGoogleLogin}
-                        disabled={isLoading || isAppleLoading}
+                        disabled={anyLoading}
                         activeOpacity={0.8}
                         style={styles.googleButton}
                         accessibilityRole="button"
@@ -324,9 +427,100 @@ export function LoginScreen({ navigation }: { navigation: unknown }) {
                             </View>
                         )}
                     </TouchableOpacity>
+
+                    {/* ─────────────────────────────────────────────────────────
+                        Email / password — added for the App Store review test
+                        account (the reviewer can't use social login behind 2FA).
+                        Sits BELOW the social buttons; the social flow is untouched.
+                        ───────────────────────────────────────────────────────── */}
+                    <View style={styles.dividerRow}>
+                        <View style={styles.dividerLine} />
+                        <Text style={styles.dividerText}>ou</Text>
+                        <View style={styles.dividerLine} />
+                    </View>
+
+                    <View style={styles.emailBlock}>
+                        <View style={styles.fieldGroup}>
+                            <Text style={styles.fieldLabel}>Email</Text>
+                            <View style={styles.inputWrapper}>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="seu@email.com"
+                                    placeholderTextColor={colors.textMuted}
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                    keyboardType="email-address"
+                                    textContentType="emailAddress"
+                                    editable={!anyLoading}
+                                    returnKeyType="next"
+                                    accessibilityLabel="Campo de e-mail"
+                                />
+                            </View>
+                        </View>
+
+                        <View style={styles.fieldGroup}>
+                            <Text style={styles.fieldLabel}>Senha</Text>
+                            <View style={styles.inputWrapper}>
+                                <TextInput
+                                    style={[styles.input, styles.inputWithIcon]}
+                                    placeholder="Mínimo de 6 caracteres"
+                                    placeholderTextColor={colors.textMuted}
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    secureTextEntry={!showPassword}
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                    textContentType="password"
+                                    editable={!anyLoading}
+                                    returnKeyType="go"
+                                    onSubmitEditing={handleEmailLogin}
+                                    accessibilityLabel="Campo de senha"
+                                />
+                                <TouchableOpacity
+                                    onPress={() => setShowPassword((v) => !v)}
+                                    style={styles.eyeButton}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                                >
+                                    <EyeIcon visible={showPassword} />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <TouchableOpacity
+                            onPress={handleEmailLogin}
+                            disabled={anyLoading}
+                            activeOpacity={0.8}
+                            style={[styles.emailButton, anyLoading && styles.emailButtonDisabled]}
+                            accessibilityRole="button"
+                            accessibilityLabel="Entrar com e-mail"
+                            accessibilityState={{ disabled: anyLoading, busy: isEmailLoading }}
+                        >
+                            {isEmailLoading ? (
+                                <ActivityIndicator size="small" color="#0A0A18" />
+                            ) : (
+                                <Text style={styles.emailButtonText}>Entrar com e-mail</Text>
+                            )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            onPress={() => navigation.navigate('Register')}
+                            disabled={anyLoading}
+                            style={styles.registerLink}
+                            accessibilityRole="button"
+                            accessibilityLabel="Criar conta"
+                        >
+                            <Text style={styles.registerLinkText}>
+                                Não tem conta? <Text style={styles.registerLinkAccent}>Criar conta</Text>
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
-            </View>
-        </View>
+            </ScrollView>
+        </KeyboardAvoidingView>
     );
 }
 
@@ -335,8 +529,8 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#0E0E1F',
     },
-    content: {
-        flex: 1,
+    scrollContent: {
+        flexGrow: 1,
         paddingHorizontal: scaleX(16),
         justifyContent: 'space-between',
     },
@@ -432,5 +626,97 @@ const styles = StyleSheet.create({
         color: '#00D4FF',
         fontSize: 16,
         fontWeight: '600',
+    },
+
+    // ── Email / password block (App Store review test account) ──
+    dividerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        width: '100%',
+        maxWidth: scaleX(303),
+        alignSelf: 'center',
+        gap: scaleX(12),
+    },
+    dividerLine: {
+        flex: 1,
+        height: StyleSheet.hairlineWidth,
+        backgroundColor: colors.border,
+    },
+    dividerText: {
+        color: colors.textSecondary,
+        fontSize: scaleFont(13),
+        fontFamily: fonts.medium,
+    },
+    emailBlock: {
+        width: '100%',
+        maxWidth: scaleX(303),
+        alignSelf: 'center',
+        gap: scaleY(16),
+    },
+    fieldGroup: {
+        gap: scaleY(8),
+    },
+    fieldLabel: {
+        color: colors.textSecondary,
+        fontSize: scaleFont(13),
+        fontFamily: fonts.medium,
+    },
+    inputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.card,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: colors.border,
+        paddingHorizontal: scaleX(16),
+        minHeight: scaleY(52),
+    },
+    input: {
+        flex: 1,
+        color: colors.text,
+        fontSize: scaleFont(15),
+        fontFamily: fonts.regular,
+        paddingVertical: scaleY(14),
+    },
+    inputWithIcon: {
+        paddingRight: scaleX(8),
+    },
+    eyeButton: {
+        padding: scaleX(4),
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    emailButton: {
+        width: '100%',
+        minHeight: scaleY(52),
+        borderRadius: 16,
+        backgroundColor: colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: scaleY(4),
+    },
+    emailButtonDisabled: {
+        opacity: 0.5,
+    },
+    emailButtonText: {
+        color: '#0A0A18',
+        fontSize: scaleFont(16),
+        fontFamily: fonts.bold,
+        fontWeight: '700',
+    },
+    registerLink: {
+        alignItems: 'center',
+        paddingVertical: scaleY(8),
+        minHeight: 44,
+        justifyContent: 'center',
+    },
+    registerLinkText: {
+        color: colors.textSecondary,
+        fontSize: scaleFont(14),
+        fontFamily: fonts.regular,
+    },
+    registerLinkAccent: {
+        color: colors.primary,
+        fontFamily: fonts.semibold,
     },
 });
