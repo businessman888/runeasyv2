@@ -26,11 +26,6 @@
 	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.oytotec.runeasy</string>
-	<key>WKBackgroundModes</key>
-	<array>
-		<string>workout-processing</string>
-		<string>location</string>
-	</array>
 	<key>NSHealthShareUsageDescription</key>
 	<string>RunEasy precisa ler dados de saúde no Apple Watch para mostrar frequência cardíaca durante a corrida.</string>
 	<key>NSHealthUpdateUsageDescription</key>
