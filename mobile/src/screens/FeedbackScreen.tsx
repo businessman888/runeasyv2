@@ -6,11 +6,11 @@ import {
     SafeAreaView,
     ScrollView,
     TouchableOpacity,
-    ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
 import { useFeedbackStore, Feedback } from '../stores/feedbackStore';
+import { FeedbackSkeleton } from '../components/skeletons/ScreenSkeletons';
 import { SharingModal } from './sharing/SharingModal';
 
 interface Props {
@@ -64,12 +64,7 @@ export function FeedbackScreen({ route, navigation }: Props) {
     };
 
     if (isLoading) {
-        return (
-            <SafeAreaView style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={styles.loadingText}>Carregando feedback...</Text>
-            </SafeAreaView>
-        );
+        return <FeedbackSkeleton />;
     }
 
     if (!currentFeedback) {

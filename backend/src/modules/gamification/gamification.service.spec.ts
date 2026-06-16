@@ -128,9 +128,10 @@ describe('GamificationService', () => {
             eq: jest.fn().mockResolvedValue({ data: [], error: null }),
           });
         if (table === 'badges')
+          // Service does `.from('badges').select('*')` (terminal), so select
+          // itself must resolve — not a chained `.order()`.
           return makeChain({
-            select: jest.fn().mockReturnThis(),
-            order: jest.fn().mockResolvedValue({ data: [badge], error: null }),
+            select: jest.fn().mockResolvedValue({ data: [badge], error: null }),
           });
         return makeChain();
       });
@@ -158,9 +159,9 @@ describe('GamificationService', () => {
           return chain;
         }
         if (table === 'badges') {
+          // Service does `.from('badges').select('*')` (terminal): select resolves.
           const chain = makeChain();
-          chain.select = jest.fn().mockReturnThis();
-          chain.order = jest
+          chain.select = jest
             .fn()
             .mockResolvedValue({ data: [badge], error: null });
           return chain;

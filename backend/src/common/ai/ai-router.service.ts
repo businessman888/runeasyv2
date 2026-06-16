@@ -114,7 +114,7 @@ export class AIRouterService {
       const cost = this.usageService.calculateCost(model, usage);
 
       // Fire-and-forget logging
-      this.usageService.log({
+      this.fireUsageLog({
         userId: options.userId,
         featureName: options.featureName,
         modelName: model,
@@ -137,7 +137,7 @@ export class AIRouterService {
       const latencyMs = Date.now() - startTime;
 
       // Log failure (fire-and-forget)
-      this.usageService.log({
+      this.fireUsageLog({
         userId: options.userId,
         featureName: options.featureName,
         modelName: model,
@@ -153,6 +153,20 @@ export class AIRouterService {
 
       throw error;
     }
+  }
+
+  /**
+   * Fire-and-forget usage logging: never blocks the AI response and never raises
+   * an unhandled promise rejection if the write fails — logs a warning instead.
+   */
+  private fireUsageLog(entry: Parameters<AIUsageService['log']>[0]): void {
+    void this.usageService.log(entry).catch((err: unknown) => {
+      this.logger.warn(
+        `[AIRouter] usage log failed: ${
+          err instanceof Error ? err.message : 'unknown error'
+        }`,
+      );
+    });
   }
 
   private buildParams(

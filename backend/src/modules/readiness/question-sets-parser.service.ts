@@ -44,29 +44,35 @@ export class QuestionSetsParserService implements OnModuleInit {
 
     // CRITICAL: Don't block the event loop during startup
     // Use setImmediate to allow the server to start accepting requests first
-    setImmediate(async () => {
-      try {
-        this.logger.log('[QuestionSetsParser] Background loading starting...');
+    setImmediate(() => {
+      // void-ed IIFE: keeps the callback synchronous so the async background
+      // load can't surface as an unhandled rejection (no-misused-promises).
+      void (async () => {
+        try {
+          this.logger.log(
+            '[QuestionSetsParser] Background loading starting...',
+          );
 
-        // Skip file loading on boot to save memory (SIGTERM causes on Railway)
-        // -> await this.loadQuestionSets();
+          // Skip file loading on boot to save memory (SIGTERM causes on Railway)
+          // -> await this.loadQuestionSets();
 
-        // Load from database directly
-        await this.preloadFromDatabase();
+          // Load from database directly
+          await this.preloadFromDatabase();
 
-        // If DB preload got nothing, set fallbacks natively
-        if (this.questionSets.length === 0) {
+          // If DB preload got nothing, set fallbacks natively
+          if (this.questionSets.length === 0) {
+            this.questionSets = this.getFallbackSets();
+          }
+
+          this.logger.log('[QuestionSetsParser] Background loading complete!');
+        } catch (error: any) {
+          this.logger.error(
+            `[QuestionSetsParser] Background loading failed: ${error?.message}`,
+          );
+          // Use fallback sets
           this.questionSets = this.getFallbackSets();
         }
-
-        this.logger.log('[QuestionSetsParser] Background loading complete!');
-      } catch (error: any) {
-        this.logger.error(
-          `[QuestionSetsParser] Background loading failed: ${error?.message}`,
-        );
-        // Use fallback sets
-        this.questionSets = this.getFallbackSets();
-      }
+      })();
     });
   }
 

@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     Image,
     Pressable,
+    Linking,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
@@ -15,6 +16,7 @@ import { useAuthStore, useTrialModalStore, getDisplayName, getAvatarUrl } from '
 import { useSubscriptionStore } from '../stores/subscriptionStore';
 import { useProFeature } from '../hooks/useProFeature';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { Skeleton } from '../components/Skeleton';
 import { DeviceRow } from '../components/devices/DeviceRow';
 import { WEARABLE_ORDER } from '../config/wearables.config';
 
@@ -132,8 +134,11 @@ export function SettingsScreen({ navigation }: any) {
                     </View>
                     <Text style={styles.userName}>{userName}</Text>
 
-                    {/* Pro/Free tag — lógica real via subscriptionStore (useProFeature) */}
-                    {isProUser ? (
+                    {/* Pro/Free tag — lógica real via subscriptionStore (useProFeature).
+                        Skeleton enquanto a assinatura resolve, evitando o flash Free→Pro. */}
+                    {trialIsLoading ? (
+                        <Skeleton width={120} height={26} borderRadius={13} style={{ marginTop: spacing.sm }} />
+                    ) : isProUser ? (
                         <View style={styles.badgePro}>
                             <Ionicons name="shield-checkmark" size={13} color={colors.primary} />
                             <Text style={styles.badgeProText}>MEMBRO PRO</Text>
@@ -227,6 +232,26 @@ export function SettingsScreen({ navigation }: any) {
                                     <HelpIcon size={20} />
                                 </View>
                                 <Text style={styles.menuItemText}>Ajuda / FAQ</Text>
+                            </View>
+                            <ChevronIcon size={20} />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* Excluir Conta — card isolado (requisito de loja), antes do logout */}
+                <View style={styles.section}>
+                    <View style={styles.menuCard}>
+                        <TouchableOpacity
+                            style={styles.menuItem}
+                            onPress={() => Linking.openURL('https://runeasy.com.br/excluir-conta')}
+                            accessibilityRole="button"
+                            accessibilityLabel="Excluir conta"
+                        >
+                            <View style={styles.menuItemLeft}>
+                                <View style={styles.menuIconContainer}>
+                                    <Ionicons name="trash-outline" size={20} color={colors.error} />
+                                </View>
+                                <Text style={[styles.menuItemText, { color: colors.error }]}>Excluir Conta</Text>
                             </View>
                             <ChevronIcon size={20} />
                         </TouchableOpacity>

@@ -56,17 +56,22 @@ describe('StatsService', () => {
 
   describe('getSummaryStats', () => {
     it('should calculate total distance correctly', async () => {
-      const mockFrom = jest.fn().mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue({ data: mockActivities, error: null }),
-        not: jest.fn().mockReturnThis(),
-        order: jest.fn().mockReturnThis(),
-        limit: jest
-          .fn()
-          .mockResolvedValue({ data: [{ average_pace: 5.5 }], error: null }),
+      // getSummaryStats fires 3 queries (totals, best pace, longest run). The
+      // builder must be awaitable at any chain depth, so model it as a chainable
+      // thenable that resolves the activities at whatever point it's awaited.
+      const result = { data: mockActivities, error: null };
+      const chain: Record<string, unknown> = {};
+      Object.assign(chain, {
+        select: jest.fn(() => chain),
+        eq: jest.fn(() => chain),
+        not: jest.fn(() => chain),
+        order: jest.fn(() => chain),
+        limit: jest.fn(() => Promise.resolve(result)),
+        then: (onF: (v: typeof result) => unknown, onR?: (e: unknown) => unknown) =>
+          Promise.resolve(result).then(onF, onR),
       });
 
-      (mockSupabaseService.from as jest.Mock) = mockFrom;
+      (mockSupabaseService.from as jest.Mock) = jest.fn(() => chain);
 
       const summary = await service.getSummaryStats('user-123');
 

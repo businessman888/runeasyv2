@@ -550,41 +550,45 @@ export class NotificationService implements OnModuleInit {
       `Scheduling recovery analysis notification for user ${userId} in 10 minutes`,
     );
 
-    setTimeout(async () => {
-      try {
-        // Create a brief summary from the AI analysis
-        const description = `${aiAnalysis.headline}. Score: ${aiAnalysis.readiness_score}% - ${aiAnalysis.status_label}`;
+    setTimeout(() => {
+      // void-ed IIFE: keeps the timer callback synchronous so the async work
+      // can't surface as an unhandled rejection (no-misused-promises).
+      void (async () => {
+        try {
+          // Create a brief summary from the AI analysis
+          const description = `${aiAnalysis.headline}. Score: ${aiAnalysis.readiness_score}% - ${aiAnalysis.status_label}`;
 
-        await this.createNotification(
-          userId,
-          'recovery_analysis',
-          'Análise de Recuperação',
-          description,
-          {
-            readiness_score: aiAnalysis.readiness_score,
-            status_label: aiAnalysis.status_label,
-            headline: aiAnalysis.headline,
-          },
-        );
+          await this.createNotification(
+            userId,
+            'recovery_analysis',
+            'Análise de Recuperação',
+            description,
+            {
+              readiness_score: aiAnalysis.readiness_score,
+              status_label: aiAnalysis.status_label,
+              headline: aiAnalysis.headline,
+            },
+          );
 
-        // Also send push notification
-        await this.sendPushNotification(
-          userId,
-          '🧠 Análise de Recuperação',
-          description,
-          { type: 'recovery_analysis' },
-          { channelId: 'insights' },
-        );
+          // Also send push notification
+          await this.sendPushNotification(
+            userId,
+            '🧠 Análise de Recuperação',
+            description,
+            { type: 'recovery_analysis' },
+            { channelId: 'insights' },
+          );
 
-        this.logger.log(
-          `Recovery analysis notification created for user ${userId}`,
-        );
-      } catch (error) {
-        this.logger.error(
-          'Failed to create scheduled recovery notification',
-          error,
-        );
-      }
+          this.logger.log(
+            `Recovery analysis notification created for user ${userId}`,
+          );
+        } catch (error) {
+          this.logger.error(
+            'Failed to create scheduled recovery notification',
+            error,
+          );
+        }
+      })();
     }, DELAY_MS);
   }
 

@@ -41,6 +41,7 @@ import { Terrain3DLayers } from '../components/map/Terrain3DLayers';
 import { StatMapRoute } from '../components/map/StatMapRoute';
 import { StatMapSelector, type StatMapMode } from '../components/map/StatMapSelector';
 import { FinishFlagMarker } from '../components/map/FinishFlagMarker';
+import { CoachAnalysisSkeleton } from '../components/skeletons/ScreenSkeletons';
 import { SharingModal } from './sharing/SharingModal';
 
 // ─── Design Tokens (alinhados ao RunSummary/Figma) ────────────────────────────
@@ -602,10 +603,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                     </View>
                     <View style={styles.iconBtn} />
                 </SafeAreaView>
-                <View style={styles.coldStartCenter}>
-                    <ActivityIndicator size="large" color={T.cyan} />
-                    <Text style={styles.coldStartText}>Carregando análise...</Text>
-                </View>
+                <CoachAnalysisSkeleton />
             </View>
         );
     }

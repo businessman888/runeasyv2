@@ -22,6 +22,7 @@ import { SegmentedTabs } from '../components/ui/SegmentedTabs';
 import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
 import { CircularProgress } from '../components/CircularProgress';
 import { Skeleton } from '../components/Skeleton';
+import { WorkoutCardSkeleton } from '../components/skeletons/ScreenSkeletons';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { HomeFixedHeader } from '../components/HomeFixedHeader';
 import { WorkoutCard } from '../components/WorkoutCard';
@@ -801,8 +802,14 @@ export function HomeScreen({ navigation }: any) {
                             />
                         )}
 
-                        {/* No Workout Card - Only show if no recovery and no workout */}
-                        {!mainWorkout && !isRecoveryDay && (
+                        {/* Skeleton enquanto o treino carrega no cold start — evita o
+                            flash de "Nenhum treino agendado" antes dos dados chegarem. */}
+                        {!mainWorkout && !isRecoveryDay && (isInitialLoading || trainingLoading) && (
+                            <WorkoutCardSkeleton />
+                        )}
+
+                        {/* No Workout Card - Only show if no recovery and no workout (após carregar) */}
+                        {!mainWorkout && !isRecoveryDay && !isInitialLoading && !trainingLoading && (
                             <View style={styles.workoutCard}>
                                 <View style={styles.lockedContent}>
                                     <RunningIcon size={48} color="#6B7280" />
@@ -935,6 +942,7 @@ export function HomeScreen({ navigation }: any) {
                 profilePic={profilePic}
                 userName={userName}
                 isProUser={isProUser}
+                isLoading={isInitialLoading}
                 onPressProfile={() => navigation.navigate('Settings')}
                 onPressNotifications={() => navigation.navigate('Notifications')}
             />

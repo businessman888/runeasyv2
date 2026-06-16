@@ -19,6 +19,24 @@ export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
   private readonly isProduction = process.env.NODE_ENV === 'production';
 
+  /**
+   * Safe string for logging an unknown thrown value. Errors keep their stack;
+   * objects are JSON-serialized (avoids "[object Object]" in logs); primitives
+   * are coerced directly.
+   */
+  private describe(exception: unknown): string {
+    if (exception instanceof Error) return exception.stack ?? exception.message;
+    if (typeof exception === 'object' && exception !== null) {
+      try {
+        return JSON.stringify(exception);
+      } catch {
+        return Object.prototype.toString.call(exception);
+      }
+    }
+    if (typeof exception === 'symbol') return exception.toString();
+    return String(exception as string | number | bigint | boolean | null | undefined);
+  }
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -29,7 +47,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (response.headersSent) {
       this.logger.error(
         `Exception after response sent on ${request.method} ${request.url}`,
-        exception instanceof Error ? exception.stack : String(exception),
+        this.describe(exception),
       );
       return;
     }
@@ -56,10 +74,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     // Server-side logging: 5xx at error (with stack), 4xx at warn.
     const logContext = `${request.method} ${request.url}`;
     if (status >= 500) {
-      this.logger.error(
-        `${status} ${logContext}`,
-        exception instanceof Error ? exception.stack : String(exception),
-      );
+      this.logger.error(`${status} ${logContext}`, this.describe(exception));
     } else {
       this.logger.warn(`${status} ${logContext} — ${JSON.stringify(message)}`);
     }

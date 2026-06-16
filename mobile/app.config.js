@@ -33,6 +33,7 @@ export default {
     // Ver TABLET_RESPONSIVENESS_PLAN.md §7.
     supportsTablet: true,
     bundleIdentifier: "com.oytotec.runeasy",
+    appleTeamId: "Z6NSSC9399",
     newArchEnabled: true,
     usesAppleSignIn: true,
     googleServicesFile: "./GoogleService-Info.plist",

@@ -9,6 +9,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
 import { colors, typography } from '../theme';
+import { Skeleton, SkeletonCircle } from './Skeleton';
 import { ScheduleDay } from '../stores/trainingStore';
 
 // Free users have no streak/plan counters — the header center shows the brand
@@ -23,6 +24,8 @@ interface HomeFixedHeaderProps {
     userName: string;
     /** Free users have no plan — hide the week grid and plan-derived counters. */
     isProUser: boolean;
+    /** Cold start: swap avatar/stats/day-icons for skeletons (layout preserved). */
+    isLoading?: boolean;
     onPressProfile: () => void;
     onPressNotifications: () => void;
 }
@@ -47,6 +50,7 @@ export function HomeFixedHeader({
     profilePic,
     userName,
     isProUser,
+    isLoading = false,
     onPressProfile,
     onPressNotifications,
 }: HomeFixedHeaderProps) {
@@ -142,19 +146,27 @@ export function HomeFixedHeader({
         <View style={[styles.container, { paddingTop: insets.top }]}>
             {/* Section 1: Profile + Stats + Bell */}
             <View style={styles.topRow}>
-                <TouchableOpacity onPress={onPressProfile} activeOpacity={0.7}>
-                    {profilePic && profilePic.startsWith('http') ? (
-                        <Image source={{ uri: profilePic }} style={styles.profileImage} />
-                    ) : (
-                        <View style={styles.profileInitials}>
-                            <Text style={styles.profileInitialsText}>{initials}</Text>
-                        </View>
-                    )}
-                </TouchableOpacity>
+                {isLoading ? (
+                    <SkeletonCircle size={40} />
+                ) : (
+                    <TouchableOpacity onPress={onPressProfile} activeOpacity={0.7}>
+                        {profilePic && profilePic.startsWith('http') ? (
+                            <Image source={{ uri: profilePic }} style={styles.profileImage} />
+                        ) : (
+                            <View style={styles.profileInitials}>
+                                <Text style={styles.profileInitialsText}>{initials}</Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                )}
 
-                {/* Pro: streak + plan-derived counters. Free: brand wordmark
-                    centered where the streak would be. */}
-                {isProUser ? (
+                {/* Cold start: barra de skeleton no centro (mantém a altura do header).
+                    Pro: streak + counters. Free: wordmark da marca. */}
+                {isLoading ? (
+                    <View style={styles.logoWrap}>
+                        <Skeleton width={150} height={18} borderRadius={9} />
+                    </View>
+                ) : isProUser ? (
                     <View style={styles.statsRow}>
                         <View style={styles.statItem}>
                             <MaterialCommunityIcons name="fire" size={18} color="#FFFFFF" />
@@ -218,9 +230,11 @@ export function HomeFixedHeader({
                         >
                             <Text style={styles.dayLabel}>{day.label}</Text>
                             <View style={styles.dayIconContainer}>
-                                {/* Pro: real plan workout/rest icon. Free: a clean
-                                    lock where the plan icon would be (teaser). */}
-                                {isProUser ? (
+                                {/* Loading: dot skeleton. Pro: real plan icon.
+                                    Free: a clean lock where the plan icon would be. */}
+                                {isLoading ? (
+                                    <SkeletonCircle size={14} />
+                                ) : isProUser ? (
                                     renderDayIcon(day)
                                 ) : (
                                     <Feather name="lock" size={12} color="rgba(235, 235, 245, 0.35)" />

@@ -16,7 +16,8 @@ import { useWorkoutGoals } from '../../hooks/useWorkoutGoals';
 import { useTrainingStore } from '../../stores';
 import { GoalsModal } from '../../components/GoalsModal';
 import { MapLocationPuck } from '../../components/map/MapLocationPuck';
-import { GpsSignalBars } from '../../components/map/GpsSignalBars';
+import { getGpsQuality } from '../../components/map/GpsSignalBars';
+import { ExpandedMetricsOverlay } from './ExpandedMetricsOverlay';
 import { LowPowerBanner } from '../../components/map/LowPowerBanner';
 import { OSMOverlayLayers } from '../../components/map/OSMOverlayLayers';
 import { useLowPowerMode } from '../../hooks/useLowPowerMode';
@@ -100,6 +101,7 @@ function OutdoorRunningView() {
   const { isTablet, isLandscape } = useBreakpoint();
   const sideLayout = isTablet && isLandscape;
   const [hasGPSFix, setHasGPSFix] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [goalsModalVisible, setGoalsModalVisible] = useState(false);
   const [isFollowingUser, setIsFollowingUser] = useState(true);
   const [isFinishing, setIsFinishing] = useState(false);
@@ -305,8 +307,13 @@ function OutdoorRunningView() {
     isPaused    ? T.warning :
     T.cardSurface;
 
+  // GPS "pronto" exige fix do puck E precisão decente (good/excellent) — antes do
+  // treino o banner reflete o sinal real em vez de só a presença de um fix grosseiro.
+  const gpsQuality = getGpsQuality(gpsAccuracy);
+  const gpsReady = hasGPSFix && (gpsQuality === 'excellent' || gpsQuality === 'good');
+
   const statusText =
-    isCalculating ? (hasGPSFix ? 'GPS Pronto' : 'Calculando GPS') :
+    isCalculating ? (gpsReady ? 'GPS Pronto' : 'Calculando GPS') :
     isTraining    ? 'Treinando' :
     'Parado';
 
@@ -426,12 +433,10 @@ function OutdoorRunningView() {
             </View>
           )}
 
-          {/* Spacer: empurra o indicador GPS para a direita quando não há card central
-              (o botão de Metas agora vive na coluna de controles da lateral direita) */}
+          {/* Spacer: mantém o botão voltar à esquerda quando não há card central.
+              O status do GPS agora vive no header do card de telemetria (banner
+              "Calculando GPS" → "GPS Pronto"), tornando o indicador do topo redundante. */}
           {isFreeMode && <View style={{ flex: 1 }} />}
-
-          {/* Indicador de qualidade do sinal GPS — canto superior direito (estilo Runna) */}
-          <GpsSignalBars accuracy={gpsAccuracy} />
 
         </View>
 
@@ -510,8 +515,14 @@ function OutdoorRunningView() {
             <Text style={[styles.statusText, { color: statusTextColor }]}>
               {statusText}
             </Text>
-            {/* Ícone de expandir */}
-            <Pressable style={styles.expandBtn} accessibilityLabel="Expandir">
+            {/* Ícone de expandir — abre a visão em tela cheia (estilo Strava) */}
+            <Pressable
+              style={styles.expandBtn}
+              onPress={() => setExpanded(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Expandir métricas"
+              hitSlop={10}
+            >
               <Ionicons
                 name="expand-outline"
                 size={16}
@@ -602,6 +613,28 @@ function OutdoorRunningView() {
 
         </View>
       </View>
+
+      {/* ── EXPANDED METRICS (tela cheia, estilo Strava) ──────────────────
+          Slide-in por cima de tudo; oculta o mapa e reaproveita o visual da
+          esteira (hero "Tempo" + grid de métricas). Puramente apresentacional. */}
+      {expanded && (
+        <ExpandedMetricsOverlay
+          onClose={() => setExpanded(false)}
+          timeText={formattedTime}
+          paceText={currentPace}
+          distanceText={distanceFormatted}
+          isCalculating={isCalculating}
+          isTraining={isTraining}
+          isPaused={isPaused}
+          isFinishing={isFinishing}
+          gpsStatusText={statusText}
+          onStart={startResumeTracking}
+          onPause={pauseTracking}
+          onFinish={handleFinish}
+          dayLabel={isFreeMode ? undefined : dayLabel}
+          workoutTitle={isFreeMode ? undefined : workoutTitle}
+        />
+      )}
 
       {/* ── GOALS MODAL ──────────────────────────────────────────────── */}
       <GoalsModal

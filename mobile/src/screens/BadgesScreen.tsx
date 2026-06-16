@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme';
 import { useGamificationStore } from '../stores';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { BadgesGridSkeleton } from '../components/skeletons/ScreenSkeletons';
 import { BadgeShield } from '../components/BadgeShield';
 import { LevelCard } from '../components/level/LevelCard';
 import { Patent } from '../components/patents/Patent';
@@ -177,6 +178,7 @@ export function BadgesScreen({ navigation }: any) {
                 </View>
 
                 {/* Badges grouped by type */}
+                {isLoading && badges.length === 0 && <BadgesGridSkeleton />}
                 {BADGE_TYPE_ORDER.map(type => {
                     const group = badgesByType[type];
                     if (!group || group.length === 0) return null;

@@ -6,13 +6,13 @@ import {
     ScrollView,
     TouchableOpacity,
     Image,
-    ActivityIndicator,
     RefreshControl,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme';
 import { useGamificationStore, RankingUser } from '../stores/gamificationStore';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { RankingSkeleton } from '../components/skeletons/ScreenSkeletons';
 import { useResponsiveTheme } from '../theme/responsive';
 import { Patent } from '../components/patents/Patent';
 import { getCurrentPatent } from '../utils/patents';
@@ -345,9 +345,7 @@ export function RankingScreen({ navigation }: any) {
                 <Text style={styles.periodText}>{periodText}</Text>
 
                 {isRankingLoading && rankings.length === 0 ? (
-                    <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color={colors.primary} />
-                    </View>
+                    <RankingSkeleton />
                 ) : rankings.length === 0 ? (
                     <View style={styles.emptyContainer}>
                         <Ionicons name="trophy-outline" size={64} color={colors.textMuted} />

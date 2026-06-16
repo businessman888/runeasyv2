@@ -21,6 +21,7 @@ import { useTrainingStore, useStatsStore, useWorkoutScopeStore, useTrialModalSto
 import { useSubscriptionStore } from '../stores/subscriptionStore';
 import type { TrainingZone, WorkoutPhase } from '../stores/trainingStore';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { CalendarBodySkeleton } from '../components/skeletons/ScreenSkeletons';
 import { UpgradeProCard } from '../components/upgrade/UpgradeProCard';
 import { GlassTeaseOverlay } from '../components/upgrade/GlassTeaseOverlay';
 import { ProTeaseBadge } from '../components/upgrade/ProTeaseBadge';
@@ -176,7 +177,7 @@ interface WorkoutData {
 }
 
 export function CalendarScreen({ navigation }: any) {
-    const { workouts: rawWorkouts, fetchWorkouts, fetchUpcomingWorkouts, plan, fetchPlan, generationStatus, checkPlanStatus, schedule: rawSchedule, fetchSchedule } = useTrainingStore();
+    const { workouts: rawWorkouts, fetchWorkouts, fetchUpcomingWorkouts, plan, fetchPlan, generationStatus, checkPlanStatus, schedule: rawSchedule, fetchSchedule, isLoading: isTrainingLoading } = useTrainingStore();
     const { summary, fetchSummary } = useStatsStore();
     const { isProUser } = useProFeature();
     const { scope, setScope } = useWorkoutScopeStore();
@@ -790,6 +791,15 @@ export function CalendarScreen({ navigation }: any) {
                     onChange={setScope}
                     style={styles.scopeTabs}
                 />
+
+                {/* Cold-load skeleton — só no primeiro carregamento sem dados em cache.
+                    A grade do calendário é baseada em datas (renderiza na hora), então o
+                    skeleton cobre apenas o bloco dependente de dados do plano/treinos. */}
+                {isTrainingLoading && rawWorkouts.length === 0 && !plan ? (
+                    <View style={{ paddingHorizontal: spacing.lg }}>
+                        <CalendarBodySkeleton />
+                    </View>
+                ) : null}
 
                 {/* Master-detail (tablet landscape): mês+grid à esquerda, detalhe
                     do dia à direita. Phone/portrait: empilhado (idêntico). */}

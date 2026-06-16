@@ -1,6 +1,19 @@
-import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, Platform, ViewStyle, DimensionValue } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, AccessibilityInfo, ViewStyle, DimensionValue, LayoutChangeEvent } from 'react-native';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withRepeat,
+    withTiming,
+    withSequence,
+    Easing,
+    cancelAnimation,
+    interpolate,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme';
+
+const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
 interface SkeletonProps {
     width: DimensionValue;
@@ -10,48 +23,101 @@ interface SkeletonProps {
 }
 
 /**
- * Skeleton loading component with shimmer animation
+ * Premium skeleton loading component.
+ *
+ * Renders a sliding shimmer band (LinearGradient) across the base surface using
+ * react-native-reanimated. Honors the OS "Reduce Motion" setting: when enabled it
+ * falls back to a static opacity pulse instead of the sweeping highlight.
+ *
+ * API kept identical to the previous version so existing consumers keep working.
  */
 export function Skeleton({ width, height, borderRadius = 8, style }: SkeletonProps) {
-    const shimmerAnim = useRef(new Animated.Value(0)).current;
+    const [reduceMotion, setReduceMotion] = useState(false);
+    const [boxWidth, setBoxWidth] = useState(0);
+    const progress = useSharedValue(0);
 
     useEffect(() => {
-        const shimmer = Animated.loop(
-            Animated.sequence([
-                Animated.timing(shimmerAnim, {
-                    toValue: 1,
-                    duration: 1000,
-                    useNativeDriver: Platform.OS !== 'web',
-                }),
-                Animated.timing(shimmerAnim, {
-                    toValue: 0,
-                    duration: 1000,
-                    useNativeDriver: Platform.OS !== 'web',
-                }),
-            ])
-        );
-        shimmer.start();
-        return () => shimmer.stop();
-    }, [shimmerAnim]);
+        let mounted = true;
+        AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+            if (mounted) setReduceMotion(enabled);
+        });
+        const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+            if (mounted) setReduceMotion(enabled);
+        });
+        return () => {
+            mounted = false;
+            sub?.remove?.();
+        };
+    }, []);
 
-    const opacity = shimmerAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0.3, 0.7],
+    useEffect(() => {
+        if (reduceMotion) {
+            cancelAnimation(progress);
+            // Gentle static pulse for reduced-motion users.
+            progress.value = withRepeat(
+                withSequence(
+                    withTiming(1, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+                    withTiming(0, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+                ),
+                -1,
+                false,
+            );
+        } else {
+            progress.value = 0;
+            progress.value = withRepeat(
+                withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+                -1,
+                false,
+            );
+        }
+        return () => cancelAnimation(progress);
+    }, [reduceMotion, progress]);
+
+    const onLayout = (e: LayoutChangeEvent) => {
+        const w = e.nativeEvent.layout.width;
+        if (w && w !== boxWidth) setBoxWidth(w);
+    };
+
+    // Reduced motion: animate the base opacity (no sweeping band).
+    const pulseStyle = useAnimatedStyle(() => ({
+        opacity: interpolate(progress.value, [0, 1], [0.35, 0.7]),
+    }));
+
+    // Sliding shimmer band: translate a highlight gradient across the surface.
+    const shimmerStyle = useAnimatedStyle(() => {
+        const travel = boxWidth > 0 ? boxWidth : 200;
+        return {
+            transform: [
+                { translateX: interpolate(progress.value, [0, 1], [-travel, travel]) },
+            ],
+        };
     });
 
     return (
-        <Animated.View
+        <View
+            onLayout={onLayout}
             style={[
                 styles.skeleton,
-                {
-                    width,
-                    height,
-                    borderRadius,
-                    opacity,
-                },
+                { width, height, borderRadius, overflow: 'hidden' },
                 style,
             ]}
-        />
+        >
+            {reduceMotion ? (
+                <Animated.View style={[StyleSheet.absoluteFill, styles.base, pulseStyle]} />
+            ) : (
+                <>
+                    <View style={[StyleSheet.absoluteFill, styles.base]} />
+                    <Animated.View style={[StyleSheet.absoluteFill, shimmerStyle]}>
+                        <AnimatedLinearGradient
+                            colors={['transparent', colors.glassWhite, 'transparent']}
+                            start={{ x: 0, y: 0.5 }}
+                            end={{ x: 1, y: 0.5 }}
+                            style={StyleSheet.absoluteFill}
+                        />
+                    </Animated.View>
+                </>
+            )}
+        </View>
     );
 }
 
@@ -102,7 +168,10 @@ export function SkeletonCard({
 
 const styles = StyleSheet.create({
     skeleton: {
-        backgroundColor: colors.border || '#2A2A3C',
+        backgroundColor: colors.border || '#2A2A3E',
+    },
+    base: {
+        backgroundColor: colors.border || '#2A2A3E',
     },
     cardContainer: {
         width: '100%',

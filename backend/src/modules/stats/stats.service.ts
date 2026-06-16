@@ -199,10 +199,10 @@ export class StatsService {
     if (error) throw error;
 
     return (data || []).reverse().map((activity) => ({
-      date: activity.start_date.split('T')[0],
+      date: (activity.start_date ?? '').split('T')[0],
       workout_type: this.inferWorkoutType(activity.name, activity.distance),
       pace: activity.average_pace,
-      distance_km: Math.round((activity.distance / 1000) * 100) / 100,
+      distance_km: Math.round(((activity.distance ?? 0) / 1000) * 100) / 100,
     }));
   }
 
@@ -254,15 +254,20 @@ export class StatsService {
     };
   }
 
-  private inferWorkoutType(name: string, distance: number): string {
-    const nameLower = name.toLowerCase();
+  private inferWorkoutType(
+    name: string | null | undefined,
+    distance: number | null | undefined,
+  ): string {
+    // Atividades manuais/livres ou importadas podem vir sem nome — evita crash
+    // em name.toLowerCase() (era um 500 latente em getPaceProgression).
+    const nameLower = (name ?? '').toLowerCase();
     if (nameLower.includes('interval') || nameLower.includes('fartlek'))
       return 'intervals';
     if (nameLower.includes('tempo') || nameLower.includes('threshold'))
       return 'tempo';
     if (nameLower.includes('recovery') || nameLower.includes('recuperação'))
       return 'recovery';
-    if (distance > 15000) return 'long_run';
+    if ((distance ?? 0) > 15000) return 'long_run';
     return 'easy_run';
   }
 }

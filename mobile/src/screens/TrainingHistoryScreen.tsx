@@ -12,6 +12,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
 import { useFeedbackStore } from '../stores/feedbackStore';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { WorkoutHistorySkeleton } from '../components/skeletons/ScreenSkeletons';
 
 // Icon components using @expo/vector-icons
 function BackIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
@@ -206,9 +207,7 @@ export function TrainingHistoryScreen({ navigation }: any) {
 
                 {/* Loading State */}
                 {workoutHistoryLoading && workoutHistory.length === 0 && (
-                    <View style={styles.stateContainer}>
-                        <Text style={styles.stateText}>Carregando treinos...</Text>
-                    </View>
+                    <WorkoutHistorySkeleton />
                 )}
 
                 {/* Error State */}
