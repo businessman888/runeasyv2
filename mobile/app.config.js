@@ -47,7 +47,7 @@ export default {
       NSHealthUpdateUsageDescription: "Precisamos salvar informações dos seus treinos realizados no RunEasy.",
       NSBluetoothAlwaysUsageDescription: "O RunEasy usa o Bluetooth para conectar à sua esteira e receber dados de treino em tempo real (velocidade, distância, inclinação).",
       NSBluetoothPeripheralUsageDescription: "O RunEasy usa o Bluetooth para conectar à sua esteira e receber dados de treino em tempo real.",
-      UIBackgroundModes: ["fetch", "processing", "location", "remote-notification", "bluetooth-central"],
+      UIBackgroundModes: ["fetch", "location", "remote-notification", "bluetooth-central"],
       LSApplicationQueriesSchemes: [
         "instagram",
         "instagram-stories"
