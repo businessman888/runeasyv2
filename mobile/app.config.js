@@ -51,7 +51,12 @@ export default {
       LSApplicationQueriesSchemes: [
         "instagram",
         "instagram-stories"
-      ]
+      ],
+      // Export compliance: app declares it uses non-exempt encryption, paired with
+      // the approved annual compliance code from App Store Connect. This skips the
+      // per-build "export compliance" question on every TestFlight/App Store upload.
+      ITSAppUsesNonExemptEncryption: true,
+      ITSEncryptionExportComplianceCode: "eff161a3-6baf-4032-accd-f27a7a9d1a35"
     }
   },
   android: {
