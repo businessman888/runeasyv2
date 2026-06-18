@@ -43,6 +43,7 @@ export default {
       NSLocationAlwaysAndWhenInUseUsageDescription: "RunEasy rastreia sua corrida mesmo com a tela desligada.",
       NSLocationAlwaysUsageDescription: "RunEasy rastreia sua corrida mesmo em background.",
       NSPhotoLibraryAddUsageDescription: "RunEasy precisa de acesso para salvar imagens dos seus treinos na galeria.",
+      NSPhotoLibraryUsageDescription: "Usado para selecionar uma foto de perfil personalizada exibida no seu perfil de corredor dentro do RunEasy.",
       NSHealthShareUsageDescription: "Precisamos acessar seus dados de treino para sincronizar suas corridas do Apple Watch e personalizar seu plano de treino com IA.",
       NSHealthUpdateUsageDescription: "Precisamos salvar informações dos seus treinos realizados no RunEasy.",
       NSBluetoothAlwaysUsageDescription: "O RunEasy usa o Bluetooth para conectar à sua esteira e receber dados de treino em tempo real (velocidade, distância, inclinação).",
