@@ -19,6 +19,7 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "ai:stress-test": "ts-node scripts/ai-audit-stress-test.ts",
+    "qa:ai-cost-audit": "ts-node scripts/ai-cost-audit.ts",
     "qa:sim-revenuecat": "ts-node scripts/sim-revenuecat.ts",
     "qa:sim-revenuecat:staging": "ts-node scripts/sim-revenuecat.ts --env staging",
     "qa:sim-revenuecat:prod": "ts-node scripts/sim-revenuecat.ts --env production"
