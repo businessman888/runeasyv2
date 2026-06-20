@@ -57,7 +57,10 @@ export async function copyImageToClipboard(uri: string): Promise<void> {
 
 export async function downloadImageToGallery(uri: string): Promise<void> {
   try {
-    const { status } = await MediaLibrary.requestPermissionsAsync();
+    // writeOnly: saving to the gallery only needs write access. This avoids
+    // requesting the broad media-READ permissions (READ_MEDIA_IMAGES/VIDEO),
+    // which we strip from the manifest (Google Play Photo Picker policy).
+    const { status } = await MediaLibrary.requestPermissionsAsync(true);
     if (status !== 'granted') {
       Alert.alert('Permissão necessária', 'Permita o acesso à galeria para salvar a imagem.');
       return;

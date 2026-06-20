@@ -186,7 +186,24 @@ export default {
           ]
         }
       }
-    ]
+    ],
+    // Configure expo-media-library explicitly so it does NOT declare the broad
+    // media-READ permissions. Default `granularPermissions` is [photo,video,audio]
+    // → READ_MEDIA_IMAGES/VIDEO/AUDIO, which Google Play rejects for occasional
+    // photo access. We only WRITE (saveToLibraryAsync) and pick via the system
+    // Photo Picker (no permission), so we need none of them → granularPermissions: [].
+    // Listing it here (vs the auto-applied default) makes createRunOncePlugin use
+    // these options and skip the default injection.
+    [
+      "expo-media-library",
+      {
+        "granularPermissions": []
+      }
+    ],
+    // Must run AFTER expo-media-library: bounds the legacy READ/WRITE_EXTERNAL_STORAGE
+    // permissions with android:maxSdkVersion (they have no effect on modern Android
+    // and otherwise sit unbounded in the manifest).
+    "./plugins/withScopedLegacyStoragePermissions"
   ],
   notification: {
     icon: "./assets/notification-icon.png",

@@ -144,13 +144,10 @@ export function PersonalInfoScreen({ navigation }: any) {
         if (isUploadingPhoto) return;
 
         try {
-            const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-            if (permissionResult.granted === false) {
-                Alert.alert('Permissão necessária', 'É necessário permitir acesso à galeria de fotos.');
-                return;
-            }
-
+            // No permission request: launchImageLibraryAsync uses the system Photo
+            // Picker (Android 13+) / PHPicker (iOS), which run out-of-process and
+            // need NO media-library permission. Requesting READ_MEDIA_* here would
+            // both be unnecessary and violate Google Play's Photo Picker policy.
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: true,
