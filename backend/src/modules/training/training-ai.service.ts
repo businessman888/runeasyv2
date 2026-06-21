@@ -114,6 +114,7 @@ export interface GeneratedSegment {
   pace_max: number;
   zone?: TrainingZone;
   description?: string;
+  coach_note?: string;
 }
 
 export interface GeneratedWorkout {
@@ -637,11 +638,14 @@ ESFORÇO PERCEBIDO (RPE) por zona
       "distance_km": N,
       "segments": [
         { "type": "warmup",   "distance_km": N, "pace_min": N, "pace_max": N,
-          "zone": "Z1", "description": "Trote leve para ativar musculatura" },
+          "zone": "Z1", "description": "Trote leve para ativar musculatura",
+          "coach_note": "Não acelera aqui — é só pra soltar o corpo, guarde energia pro principal." },
         { "type": "main",     "distance_km": N, "pace_min": N, "pace_max": N,
-          "zone": "Z3", "description": "Ritmo confortavelmente difícil, controlado" },
+          "zone": "Z3", "description": "Ritmo confortavelmente difícil, controlado",
+          "coach_note": "Esse é o coração do treino. Mantenha firme, respiração no limite do confortável." },
         { "type": "cooldown", "distance_km": N, "pace_min": N, "pace_max": N,
-          "zone": "Z1", "description": "Trote leve, baixar FC gradualmente" }
+          "zone": "Z1", "description": "Trote leve, baixar FC gradualmente",
+          "coach_note": "Não corta o desaquecimento. É ele que acelera sua recuperação pro próximo treino." }
       ],
       "zone": "Z3",
       "perceived_effort": "7/10",
@@ -654,7 +658,11 @@ ESFORÇO PERCEBIDO (RPE) por zona
 
 REGRAS DE GERAÇÃO
   1. Cada workout DEVE incluir os campos: zone, perceived_effort, objective, scientific_note, tips.
-  2. Cada segment DEVE ter zone e description (curta, ≤ 12 palavras, PT-BR).
+  2. Cada segment DEVE ter zone, description e coach_note.
+     - description: técnica, o QUE fazer (curta, ≤ 12 palavras, PT-BR).
+     - coach_note: voz de treinador experiente falando direto com o atleta (2ª pessoa,
+       "você"), curta (≤ 20 palavras), prática e motivadora, sem jargão não explicado.
+       É orientação/incentivo de execução — NÃO repita a description nem defina conceitos.
   3. USE os paces do user prompt — não invente outros valores. Cole-os em pace_min/pace_max do segmento adequado à zona.
   4. tips: máximo 2 por treino, ≤ 10 palavras cada.
   5. scientific_note: 1 frase, ≤ 18 palavras, PT-BR, foco fisiológico.
