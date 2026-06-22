@@ -24,6 +24,8 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
 import { PHASE_LABELS, getZoneColor } from '../theme/zoneColors';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { PremiumBackground } from '../components/ui/PremiumBackground';
+import { DashedDivider } from '../components/ui/DashedDivider';
 import { CoachDeepDiveSection } from '../components/training/CoachDeepDiveSection';
 import { useStartWorkoutFlow } from '../hooks/useStartWorkoutFlow';
 import { useTrainingStore } from '../stores';
@@ -56,8 +58,17 @@ function buildDayLabel(dateStr?: string | null): string {
 function StatItem({ label, value }: { label: string; value: string }) {
     return (
         <View style={styles.statItem}>
-            <Text style={styles.statLabel}>{label}</Text>
-            <Text style={styles.statValue}>{value}</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>
+                {label}
+            </Text>
+            <Text
+                style={styles.statValue}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+            >
+                {value}
+            </Text>
         </View>
     );
 }
@@ -99,6 +110,7 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
     if (isFetching) {
         return (
             <ScreenContainer>
+                <PremiumBackground />
                 <View style={styles.header}>
                     <TouchableOpacity
                         style={styles.backButton}
@@ -106,7 +118,7 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
                         accessibilityRole="button"
                         accessibilityLabel="Voltar"
                     >
-                        <Ionicons name="chevron-back" size={26} color={colors.primary} />
+                        <Ionicons name="chevron-back" size={26} color="rgba(235,235,245,0.85)" />
                     </TouchableOpacity>
                 </View>
                 <View style={styles.emptyState}>
@@ -119,6 +131,7 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
     if (!data) {
         return (
             <ScreenContainer>
+                <PremiumBackground />
                 <View style={styles.header}>
                     <TouchableOpacity
                         style={styles.backButton}
@@ -126,7 +139,7 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
                         accessibilityRole="button"
                         accessibilityLabel="Voltar"
                     >
-                        <Ionicons name="chevron-back" size={26} color={colors.primary} />
+                        <Ionicons name="chevron-back" size={26} color="rgba(235,235,245,0.85)" />
                     </TouchableOpacity>
                 </View>
                 <View style={styles.emptyState}>
@@ -157,6 +170,7 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
 
     return (
         <ScreenContainer>
+            <PremiumBackground />
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity
@@ -195,69 +209,69 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
 
                 {/* Phase */}
                 {data.phase && (
-                    <Text style={styles.phaseText}>
-                        Fase: {PHASE_LABELS[data.phase]}
-                        {data.weekNumber ? ` - Semana ${data.weekNumber}` : ''}
-                    </Text>
+                    <>
+                        <Text style={styles.phaseText}>
+                            Fase: {PHASE_LABELS[data.phase]}
+                            {data.weekNumber ? ` - Semana ${data.weekNumber}` : ''}
+                        </Text>
+                        <DashedDivider dash={[5, 5]} style={styles.phaseDivider} />
+                    </>
                 )}
 
                 {/* Blocks */}
-                {data.blocks.map((block) => (
-                    <View
-                        key={block.id}
-                        style={[styles.block, block.type === 'main' && styles.blockMain]}
-                    >
-                        {block.zone && getZoneColor(block.zone) && (
-                            <View
-                                style={[styles.blockZoneStrip, { backgroundColor: getZoneColor(block.zone)! }]}
-                            />
-                        )}
+                {data.blocks.map((block) => {
+                    const accent = getZoneColor(block.zone) ?? colors.primary;
+                    return (
+                        <View key={block.id} style={styles.block}>
+                            {/* Left zone accent bar (clips to the card radius via overflow) */}
+                            <View style={[styles.blockAccent, { backgroundColor: accent }]} />
 
-                        <View style={styles.blockHeader}>
-                            <View style={styles.flex}>
-                                <Text
-                                    style={[styles.blockSubtitle, block.type === 'main' && styles.blockSubtitleMain]}
-                                >
-                                    {block.subtitle}
-                                </Text>
-                                <Text style={styles.blockTitle}>{block.title}</Text>
-                            </View>
-                            {block.type === 'warmup' && (
-                                <MaterialCommunityIcons name="walk" size={28} color={colors.primary} />
-                            )}
-                            {block.type === 'main' && (
-                                <MaterialCommunityIcons name="run-fast" size={28} color={colors.primary} />
-                            )}
-                            {block.type === 'cooldown' && (
-                                <MaterialCommunityIcons name="yoga" size={28} color={colors.primary} />
-                            )}
-                        </View>
+                            {/* Header */}
+                            <View style={styles.blockBody}>
+                                <View style={styles.blockHeaderRow}>
+                                    <View style={styles.flex}>
+                                        <Text style={styles.blockSubtitle}>{block.subtitle}</Text>
+                                        <Text style={styles.blockTitle}>{block.title}</Text>
+                                    </View>
+                                    {block.type === 'warmup' && (
+                                        <Ionicons name="walk-outline" size={26} color={colors.primary} />
+                                    )}
+                                    {block.type === 'main' && (
+                                        <MaterialCommunityIcons name="run" size={26} color={colors.primary} />
+                                    )}
+                                    {block.type === 'cooldown' && (
+                                        <Ionicons name="walk-outline" size={26} color={colors.primary} />
+                                    )}
+                                </View>
 
-                        <View style={styles.blockContent}>
-                            <View style={styles.blockMetaRow}>
-                                <View style={styles.blockDurationWithIcon}>
+                                <DashedDivider style={styles.blockDivider} />
+
+                                {/* Distance + description */}
+                                <View style={styles.blockMetaRow}>
                                     <Ionicons name="time-outline" size={18} color="rgba(235,235,245,0.6)" />
                                     <Text style={styles.blockDuration}>{block.duration}</Text>
                                 </View>
-                                {block.type === 'main' && block.pace ? (
-                                    <Text style={styles.blockPace}>{block.pace}</Text>
-                                ) : null}
-                            </View>
-                            <Text style={styles.blockDescription}>{block.description}</Text>
+                                <Text style={styles.blockDescription}>{block.description}</Text>
 
-                            {/* Per-block coach note (only on enriched plans) */}
-                            {!!block.coachNote && (
-                                <View style={styles.coachNote}>
-                                    <View style={styles.coachNoteHeader}>
-                                        <Ionicons name="chatbubble-ellipses-outline" size={14} color={colors.primary} />
-                                        <Text style={styles.coachNoteLabel}>Nota do coach</Text>
-                                    </View>
-                                    <Text style={styles.coachNoteText}>{block.coachNote}</Text>
-                                </View>
-                            )}
+                                {/* Per-block coach note (only on enriched plans) */}
+                                {!!block.coachNote && (
+                                    <>
+                                        <DashedDivider style={styles.blockDivider} />
+                                        <View style={styles.coachNoteHeader}>
+                                            <MaterialCommunityIcons
+                                                name="note-text-outline"
+                                                size={16}
+                                                color="rgba(235,235,245,0.6)"
+                                            />
+                                            <Text style={styles.coachNoteLabel}>Nota do coach</Text>
+                                        </View>
+                                        <Text style={styles.coachNoteText}>{block.coachNote}</Text>
+                                    </>
+                                )}
+                            </View>
                         </View>
-                    </View>
-                ))}
+                    );
+                })}
 
                 {/* Training Insight (unchanged) */}
                 <View style={styles.insightCard}>
@@ -325,10 +339,11 @@ const styles = StyleSheet.create({
     },
     scroll: {
         flex: 1,
-        paddingHorizontal: spacing.lg,
+        paddingHorizontal: spacing.md,
     },
     scrollContent: {
         paddingTop: spacing.md,
+        paddingBottom: spacing.md,
     },
     emptyState: {
         flex: 1,
@@ -339,129 +354,113 @@ const styles = StyleSheet.create({
         color: 'rgba(235, 235, 245, 0.6)',
         fontSize: typography.fontSizes.md,
     },
-    // Stats
+    // Stats — centered group with tight, responsive gaps so the 4 stats fit
+    // every device (values shrink-to-fit on the smallest screens).
     statsRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        columnGap: 20,
         marginBottom: spacing.md,
     },
     statItem: {
-        flex: 1,
+        alignItems: 'flex-start',
     },
     statLabel: {
-        fontSize: typography.fontSizes.sm,
-        color: 'rgba(235, 235, 245, 0.5)',
-        marginBottom: 4,
+        fontSize: 13,
+        fontWeight: typography.fontWeights.bold as any,
+        color: 'rgba(235, 235, 245, 0.6)',
+        marginBottom: 6,
     },
     statValue: {
-        fontSize: typography.fontSizes.xl,
+        fontSize: 22,
         fontWeight: typography.fontWeights.bold as any,
         color: '#EBEBF5',
     },
     divider: {
         height: 1,
-        backgroundColor: 'rgba(235, 235, 245, 0.08)',
+        backgroundColor: 'rgba(235, 235, 245, 0.1)',
         marginBottom: spacing.lg,
     },
     phaseText: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.semibold as any,
+        fontSize: 18,
+        fontWeight: typography.fontWeights.bold as any,
         color: '#EBEBF5',
         textAlign: 'center',
+        marginBottom: spacing.md,
+    },
+    phaseDivider: {
         marginBottom: spacing.lg,
     },
-    // Blocks
+    // Blocks — clean card, left zone accent, no full neon border
     block: {
         backgroundColor: '#15152A',
-        borderRadius: 16,
+        borderRadius: 20,
         marginBottom: spacing.md,
         overflow: 'hidden',
     },
-    blockMain: {
-        borderWidth: 1,
-        borderColor: 'rgba(0, 212, 255, 0.3)',
-    },
-    blockZoneStrip: {
+    blockAccent: {
         position: 'absolute',
         left: 0,
         top: 0,
         bottom: 0,
-        width: 3,
+        width: 4,
     },
-    blockHeader: {
+    blockBody: {
+        padding: spacing.md,
+    },
+    blockHeaderRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255, 255, 255, 0.05)',
     },
     flex: { flex: 1 },
     blockSubtitle: {
-        fontSize: typography.fontSizes.xs,
-        color: 'rgba(235, 235, 245, 0.5)',
+        fontSize: 12,
+        fontWeight: typography.fontWeights.medium as any,
+        color: 'rgba(235, 235, 245, 0.6)',
         marginBottom: 4,
     },
-    blockSubtitleMain: {
-        color: colors.primary,
-        fontWeight: typography.fontWeights.bold as any,
-    },
     blockTitle: {
-        fontSize: typography.fontSizes.lg,
+        fontSize: 15,
         fontWeight: typography.fontWeights.bold as any,
         color: '#EBEBF5',
     },
-    blockContent: {
-        padding: spacing.md,
+    blockDivider: {
+        marginVertical: spacing.md,
     },
     blockMetaRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: spacing.xs,
-    },
-    blockDurationWithIcon: {
-        flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.sm,
+        marginBottom: 6,
     },
     blockDuration: {
-        fontSize: typography.fontSizes.base,
+        fontSize: 15,
         fontWeight: typography.fontWeights.bold as any,
         color: '#EBEBF5',
     },
-    blockPace: {
-        fontSize: typography.fontSizes.base,
-        fontWeight: typography.fontWeights.bold as any,
-        color: colors.primary,
-    },
     blockDescription: {
-        fontSize: typography.fontSizes.sm,
+        fontSize: 13,
         color: 'rgba(235, 235, 245, 0.6)',
+        lineHeight: 18,
     },
-    // Per-block coach note
-    coachNote: {
-        marginTop: spacing.md,
-        paddingTop: spacing.md,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(0, 212, 255, 0.12)',
-    },
+    // Per-block coach note — neutral (white label + gray icon), Figma-faithful
     coachNoteHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        marginBottom: 4,
+        gap: 8,
+        marginBottom: 6,
     },
     coachNoteLabel: {
-        fontSize: typography.fontSizes.xs,
+        fontSize: 15,
         fontWeight: typography.fontWeights.bold as any,
-        color: colors.primary,
-        letterSpacing: 0.3,
+        color: '#EBEBF5',
     },
     coachNoteText: {
-        fontSize: typography.fontSizes.sm,
-        color: 'rgba(235, 235, 245, 0.8)',
-        lineHeight: 20,
+        fontSize: 13,
+        color: 'rgba(235, 235, 245, 0.6)',
+        lineHeight: 18,
     },
     // Insight
     insightCard: {
@@ -493,7 +492,7 @@ const styles = StyleSheet.create({
     startContainer: {
         paddingHorizontal: spacing.lg,
         paddingTop: spacing.lg,
-        backgroundColor: '#0A0A18',
+        backgroundColor: 'transparent',
     },
     startButton: {
         flexDirection: 'row',

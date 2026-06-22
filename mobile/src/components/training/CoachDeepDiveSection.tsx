@@ -133,13 +133,13 @@ export function CoachDeepDiveSection({ workoutId }: { workoutId: string | undefi
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: '#15152A',
-        borderRadius: 16,
-        padding: spacing.lg,
+        backgroundColor: 'rgba(235, 235, 245, 0.1)',
+        borderRadius: 15,
+        padding: spacing.md,
         marginTop: spacing.md,
         marginBottom: spacing.lg,
         borderWidth: 1,
-        borderColor: 'rgba(235, 235, 245, 0.08)',
+        borderColor: 'rgba(235, 235, 245, 0.1)',
     },
     row: {
         flexDirection: 'row',
@@ -149,13 +149,13 @@ const styles = StyleSheet.create({
     },
     flex: { flex: 1 },
     title: {
-        fontSize: typography.fontSizes.lg,
+        fontSize: 14,
         fontWeight: typography.fontWeights.bold as any,
         color: '#EBEBF5',
         marginBottom: 4,
     },
     subtitle: {
-        fontSize: typography.fontSizes.sm,
+        fontSize: 11,
         color: 'rgba(235, 235, 245, 0.6)',
     },
     plusButton: {
@@ -164,9 +164,9 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(0, 212, 255, 0.15)',
+        backgroundColor: 'rgba(0, 127, 153, 0.3)',
         borderWidth: 1,
-        borderColor: 'rgba(0, 212, 255, 0.4)',
+        borderColor: colors.primary,
     },
     loadingRow: {
         flexDirection: 'row',
