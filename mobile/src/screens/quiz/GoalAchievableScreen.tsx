@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, AccessibilityInfo } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { getGoalAchievableCopy } from '../../utils/onboardingCopyMatrix';
+import { fonts } from '../../theme';
 
 const DS = {
     text: '#EBEBF5',
@@ -66,21 +67,19 @@ const styles = StyleSheet.create({
         gap: 60,
     },
     mainText: {
-        fontFamily: 'Poppins-Medium',
+        fontFamily: fonts.medium,
         fontSize: 20,
-        fontWeight: '500',
         color: DS.text,
         lineHeight: 30,
         textAlign: 'center',
     },
     highlight: {
+        fontFamily: fonts.semibold,
         color: DS.cyan,
-        fontWeight: '600',
     },
     secondaryText: {
-        fontFamily: 'Poppins-Regular',
+        fontFamily: fonts.regular,
         fontSize: 15,
-        fontWeight: '400',
         color: DS.textSecondary,
         lineHeight: 22.5,
         textAlign: 'center',

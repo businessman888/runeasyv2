@@ -6,6 +6,7 @@ import {
     TouchableOpacity,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { fonts } from '../../theme';
 
 // Design System Colors (Figma)
 const DS = {
@@ -120,18 +121,19 @@ const styles = StyleSheet.create({
         marginBottom: 24,
     },
     title: {
+        fontFamily: fonts.bold,
         fontSize: 24,
-        fontWeight: '700',
         color: DS.text,
         lineHeight: 32,
         marginBottom: 12,
     },
     titleHighlight: {
+        fontFamily: fonts.bold,
         color: DS.cyan,
     },
     subtitle: {
+        fontFamily: fonts.regular,
         fontSize: 15,
-        fontWeight: '400',
         color: DS.textSecondary,
         lineHeight: 22,
     },
@@ -149,8 +151,8 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     iconLabel: {
+        fontFamily: fonts.semibold,
         fontSize: 16,
-        fontWeight: '600',
         color: DS.cyan,
     },
     daysContainer: {
@@ -175,8 +177,8 @@ const styles = StyleSheet.create({
         backgroundColor: DS.cyanSelected,
     },
     dayText: {
+        fontFamily: fonts.bold,
         fontSize: 16,
-        fontWeight: '700',
         color: DS.textSecondary,
     },
     dayTextSelected: {
@@ -188,8 +190,8 @@ const styles = StyleSheet.create({
         padding: 16,
     },
     tipText: {
+        fontFamily: fonts.regular,
         fontSize: 14,
-        fontWeight: '400',
         color: DS.textSecondary,
         lineHeight: 20,
     },
@@ -200,8 +202,8 @@ const styles = StyleSheet.create({
         padding: 32,
     },
     emptyText: {
+        fontFamily: fonts.regular,
         fontSize: 16,
-        fontWeight: '400',
         color: DS.textSecondary,
         textAlign: 'center',
     },

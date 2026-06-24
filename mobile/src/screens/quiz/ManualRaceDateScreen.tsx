@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, typography, borderRadius } from '../../theme';
+import { colors, typography, borderRadius, fonts } from '../../theme';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 
 const MONTHS = [
@@ -168,20 +168,21 @@ const styles = StyleSheet.create({
     wrapper: { flex: 1, paddingTop: 8 },
     titleContainer: { marginBottom: 20 },
     title: {
+        fontFamily: fonts.bold,
         fontSize: typography.fontSizes['3xl'],
-        fontWeight: typography.fontWeights.bold,
         color: colors.text,
         lineHeight: 36,
         marginBottom: 8,
     },
     subtitle: {
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.lg,
         color: colors.textSecondary,
         lineHeight: 22,
     },
     label: {
+        fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.md,
-        fontWeight: typography.fontWeights.semibold,
         color: colors.textLight,
         marginBottom: 8,
         marginTop: 16,
@@ -191,6 +192,7 @@ const styles = StyleSheet.create({
         borderRadius: borderRadius.lg,
         paddingHorizontal: 16,
         height: 52,
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.lg,
         color: colors.text,
     },
@@ -205,8 +207,8 @@ const styles = StyleSheet.create({
     },
     pillSelected: { borderColor: colors.primary, backgroundColor: 'rgba(0, 212, 255, 0.08)' },
     pillText: {
+        fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.semibold,
         color: colors.textSecondary,
     },
     pillTextSelected: { color: colors.primary },
@@ -226,19 +228,19 @@ const styles = StyleSheet.create({
     },
     navButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
     monthYear: {
+        fontFamily: fonts.medium,
         fontSize: typography.fontSizes.md,
-        fontWeight: typography.fontWeights.medium,
         color: colors.textSecondary,
     },
     weekdaysRow: { flexDirection: 'row', marginBottom: 6 },
     weekdayCell: { flex: 1, height: 36, alignItems: 'center', justifyContent: 'center' },
-    weekdayText: { fontSize: 12, fontWeight: '500', color: colors.primary, letterSpacing: 0.3 },
+    weekdayText: { fontFamily: fonts.medium, fontSize: 12, color: colors.primary, letterSpacing: 0.3 },
     weekRow: { flexDirection: 'row' },
     dayCell: { flex: 1, height: 40, alignItems: 'center', justifyContent: 'center' },
     dayCellSelected: { borderWidth: 1, borderColor: colors.primary, borderRadius: 14 },
-    dayText: { fontSize: 13, fontWeight: '500', color: colors.text },
+    dayText: { fontFamily: fonts.medium, fontSize: 13, color: colors.text },
     dayTextPast: { color: 'rgba(235, 235, 245, 0.15)' },
-    dayTextSelected: { color: colors.primary, fontWeight: '600' },
+    dayTextSelected: { fontFamily: fonts.semibold, color: colors.primary },
 });
 
 export default ManualRaceDateScreen;

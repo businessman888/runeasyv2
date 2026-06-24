@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { CustomKeypad } from '../../components/CustomKeypad';
+import { fonts } from '../../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -264,8 +265,8 @@ const styles = StyleSheet.create({
 
     // — Title: "Ritmo Médio" —
     cardTitle: {
+        fontFamily: fonts.semibold,
         fontSize: 15,
-        fontWeight: '600',
         color: DS.textSecondary,
         marginBottom: 16,
         letterSpacing: 0.3,
@@ -300,8 +301,8 @@ const styles = StyleSheet.create({
 
     // — Number Text (Figma: 32px SemiBold) —
     inputValue: {
+        fontFamily: fonts.semibold,
         fontSize: 32,
-        fontWeight: '600',
         color: DS.textSecondary,
     },
     inputValueDim: {
@@ -313,8 +314,8 @@ const styles = StyleSheet.create({
 
     // — Separator ":" —
     separator: {
+        fontFamily: fonts.semibold,
         fontSize: 32,
-        fontWeight: '600',
         color: DS.textSecondary,
         marginHorizontal: 6,
     },
@@ -324,8 +325,8 @@ const styles = StyleSheet.create({
 
     // — Unit "min/km" —
     unitLabel: {
+        fontFamily: fonts.regular,
         fontSize: 12,
-        fontWeight: '400',
         color: DS.textSecondary,
         marginLeft: 14,
     },
@@ -354,8 +355,8 @@ const styles = StyleSheet.create({
         borderColor: DS.cyan,
     },
     checkboxText: {
+        fontFamily: fonts.regular,
         fontSize: 12,
-        fontWeight: '400',
         color: DS.textSecondary,
     },
     checkboxTextActive: {

@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { View, Text, StyleSheet, ImageBackground, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, borderRadius } from '../../theme';
+import { colors, typography, borderRadius, fonts } from '../../theme';
 import type { Race } from '../../types/races.types';
 import { formatRaceDateShort, formatDistances, raceLevelLabel } from '../../utils/raceFormat';
 
@@ -82,20 +82,20 @@ const styles = StyleSheet.create({
     },
     textBlock: { flex: 1 },
     metaLine: {
+        fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.md,
-        fontWeight: typography.fontWeights.semibold,
         color: colors.primary,
         marginBottom: 4,
     },
     name: {
+        fontFamily: fonts.bold,
         fontSize: typography.fontSizes.xl,
-        fontWeight: typography.fontWeights.bold,
         color: colors.white,
         marginBottom: 2,
     },
     location: {
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.md,
-        fontWeight: typography.fontWeights.normal,
         color: colors.textSecondary,
     },
 });

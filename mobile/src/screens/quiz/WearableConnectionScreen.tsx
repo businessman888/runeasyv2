@@ -9,6 +9,7 @@ import {
     type WearableProvider,
 } from '../../config/wearables.config';
 import type { RootStackParamList } from '../../navigation/navigationRef';
+import { fonts } from '../../theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -117,17 +118,15 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     title: {
-        fontFamily: 'Poppins-Bold',
+        fontFamily: fonts.bold,
         fontSize: 24,
-        fontWeight: '700',
         color: DS.text,
         lineHeight: 36,
         marginBottom: 12,
     },
     subtitle: {
-        fontFamily: 'Poppins-Regular',
+        fontFamily: fonts.regular,
         fontSize: 15,
-        fontWeight: '400',
         color: DS.textSecondary,
         lineHeight: 22.5,
     },

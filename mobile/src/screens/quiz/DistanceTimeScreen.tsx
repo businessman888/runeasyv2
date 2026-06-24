@@ -9,6 +9,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CustomKeypad } from '../../components/CustomKeypad';
+import { fonts } from '../../theme';
 
 // Design System
 const DS = {
@@ -223,13 +224,13 @@ const styles = StyleSheet.create({
         paddingHorizontal: 0,
     },
     title: {
+        fontFamily: fonts.bold,
         fontSize: 28,
-        fontWeight: '700',
         color: DS.text,
         lineHeight: 36,
-        fontFamily: 'Inter-Bold',
     },
     titleHighlight: {
+        fontFamily: fonts.bold,
         color: DS.cyan,
     },
     inputsContainer: {
@@ -259,23 +260,22 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(28, 28, 46, 0.9)',
     },
     inputValue: {
+        fontFamily: fonts.bold,
         fontSize: 32,
-        fontWeight: '700',
         color: DS.text,
-        fontFamily: 'Inter-Bold',
         marginBottom: 4,
     },
     inputValuePlaceholder: {
         color: DS.textSecondary,
     },
     inputLabel: {
+        fontFamily: fonts.medium,
         fontSize: 16,
-        fontWeight: '500',
         color: DS.textSecondary,
     },
     inputLabelActive: {
+        fontFamily: fonts.semibold,
         color: DS.cyan,
-        fontWeight: '600',
     },
 });
 

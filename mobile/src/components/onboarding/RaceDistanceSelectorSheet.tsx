@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, typography, borderRadius } from '../../theme';
+import { colors, typography, borderRadius, fonts } from '../../theme';
 
 interface RaceDistanceSelectorSheetProps {
     visible: boolean;
@@ -91,8 +91,8 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     title: {
+        fontFamily: fonts.bold,
         fontSize: typography.fontSizes.xl,
-        fontWeight: typography.fontWeights.bold,
         color: colors.text,
         marginBottom: 20,
     },
@@ -110,8 +110,8 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0, 212, 255, 0.08)',
     },
     pillText: {
+        fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.semibold,
         color: colors.textSecondary,
     },
     pillTextSelected: { color: colors.primary },
@@ -124,8 +124,8 @@ const styles = StyleSheet.create({
     },
     ctaDisabled: { backgroundColor: colors.card },
     ctaText: {
+        fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.xl,
-        fontWeight: typography.fontWeights.semibold,
         color: '#0F0F1E',
     },
     ctaTextDisabled: { color: colors.textSecondary },

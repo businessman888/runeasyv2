@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { formatRaceDateLong, weeksUntilRace } from '../../utils/raceFormat';
+import { fonts } from '../../theme';
 
 const GOLD = '#FFB800';
 
@@ -51,14 +52,14 @@ const styles = StyleSheet.create({
     },
     row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     name: {
+        fontFamily: fonts.bold,
         fontSize: 16,
-        fontWeight: '700',
         color: '#EBEBF5',
         flex: 1,
     },
     detail: {
+        fontFamily: fonts.medium,
         fontSize: 14,
-        fontWeight: '500',
         color: 'rgba(235, 235, 245, 0.85)',
         flex: 1,
     },

@@ -14,6 +14,7 @@ import Animated, {
     withDelay,
     Easing,
 } from 'react-native-reanimated';
+import { fonts } from '../../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -248,9 +249,8 @@ const styles = StyleSheet.create({
         marginBottom: 24,
     },
     title: {
-        fontFamily: 'Poppins-Bold',
+        fontFamily: fonts.bold,
         fontSize: 24,
-        fontWeight: '700',
         color: DS.text,
         lineHeight: 36,
     },
@@ -278,9 +278,8 @@ const styles = StyleSheet.create({
         zIndex: 1,
     },
     yAxisLabel: {
-        fontFamily: 'Inter-Medium',
+        fontFamily: fonts.medium,
         fontSize: 9,
-        fontWeight: '500',
         color: DS.textSecondary,
         transform: [{ rotate: '-90deg' }],
         width: CHART_H,
@@ -288,9 +287,8 @@ const styles = StyleSheet.create({
     },
     lineLabel: {
         position: 'absolute',
-        fontFamily: 'Inter-Medium',
+        fontFamily: fonts.medium,
         fontSize: 9,
-        fontWeight: '500',
         lineHeight: 11,
     },
     lineLabelGray: {
@@ -310,9 +308,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     xAxisLabel: {
-        fontFamily: 'Inter-SemiBold',
+        fontFamily: fonts.semibold,
         fontSize: 11,
-        fontWeight: '600',
         color: DS.textSecondary,
     },
     footer: {
@@ -320,9 +317,8 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
     },
     footerText: {
-        fontFamily: 'Inter-SemiBold',
+        fontFamily: fonts.semibold,
         fontSize: 11,
-        fontWeight: '600',
         color: DS.text,
         textAlign: 'center',
         lineHeight: 15,

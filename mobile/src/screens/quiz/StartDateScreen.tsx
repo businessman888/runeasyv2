@@ -7,6 +7,7 @@ import {
     Dimensions,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { fonts } from '../../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -250,18 +251,19 @@ const styles = StyleSheet.create({
         marginBottom: 24,
     },
     title: {
+        fontFamily: fonts.bold,
         fontSize: 26,
-        fontWeight: '700',
         color: DS.text,
         lineHeight: 34,
         marginBottom: 8,
     },
     titleHighlight: {
+        fontFamily: fonts.bold,
         color: DS.cyan,
     },
     subtitle: {
+        fontFamily: fonts.regular,
         fontSize: 15,
-        fontWeight: '400',
         color: DS.textSecondary,
         lineHeight: 22,
     },
@@ -296,8 +298,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     monthYear: {
+        fontFamily: fonts.medium,
         fontSize: 14,
-        fontWeight: '500',
         color: DS.textSecondary,
         textAlign: 'center',
     },
@@ -314,8 +316,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     weekdayText: {
+        fontFamily: fonts.medium,
         fontSize: 13,
-        fontWeight: '500',
         color: DS.cyan,
         letterSpacing: 0.3,
     },
@@ -344,8 +346,8 @@ const styles = StyleSheet.create({
 
     // — Day Text —
     dayText: {
+        fontFamily: fonts.medium,
         fontSize: 13,
-        fontWeight: '500',
         color: DS.text,
     },
     dayTextPast: {
@@ -353,12 +355,12 @@ const styles = StyleSheet.create({
         color: DS.pastDay,
     },
     dayTextToday: {
+        fontFamily: fonts.bold,
         color: DS.cyan,
-        fontWeight: '700',
     },
     dayTextSelected: {
+        fontFamily: fonts.semibold,
         color: DS.cyan,
-        fontWeight: '600',
     },
 });
 

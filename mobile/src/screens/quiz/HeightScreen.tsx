@@ -11,6 +11,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Line } from 'react-native-svg';
 import { QuizHeader, Hl } from '../../components/onboarding/QuizHeader';
 import { ValueInputSheet } from '../../components/onboarding/ValueInputSheet';
+import { fonts } from '../../theme';
 
 // Design System Colors (Figma)
 const DS = {
@@ -243,18 +244,19 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     title: {
+        fontFamily: fonts.bold,
         fontSize: 24,
-        fontWeight: '700',
         color: DS.text,
         lineHeight: 32,
         marginBottom: 8,
     },
     titleHighlight: {
+        fontFamily: fonts.bold,
         color: DS.cyan,
     },
     subtitle: {
+        fontFamily: fonts.regular,
         fontSize: 15,
-        fontWeight: '400',
         color: DS.textSecondary,
         lineHeight: 22,
     },
@@ -290,13 +292,13 @@ const styles = StyleSheet.create({
         backgroundColor: DS.cyanSelected,
     },
     markerText: {
+        fontFamily: fonts.medium,
         fontSize: 14,
-        fontWeight: '500',
         color: DS.textSecondary,
     },
     markerTextSelected: {
+        fontFamily: fonts.bold,
         color: DS.cyan,
-        fontWeight: '700',
     },
     indicator: {
         position: 'absolute',
@@ -318,8 +320,8 @@ const styles = StyleSheet.create({
         marginLeft: 4,
     },
     indicatorText: {
+        fontFamily: fonts.bold,
         fontSize: 14,
-        fontWeight: '700',
         color: DS.bg,
     },
     figureContainer: {
@@ -337,13 +339,13 @@ const styles = StyleSheet.create({
         marginTop: 12,
     },
     heightValue: {
+        fontFamily: fonts.bold,
         fontSize: 48,
-        fontWeight: '700',
         color: DS.cyan,
     },
     heightUnit: {
+        fontFamily: fonts.medium,
         fontSize: 20,
-        fontWeight: '500',
         color: DS.textSecondary,
         marginLeft: 4,
     },
@@ -353,8 +355,8 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
     },
     customToggleText: {
+        fontFamily: fonts.medium,
         fontSize: 14,
-        fontWeight: '500',
         color: DS.cyan,
         textDecorationLine: 'underline',
     },
@@ -370,8 +372,8 @@ const styles = StyleSheet.create({
     },
     customInput: {
         flex: 1,
+        fontFamily: fonts.bold,
         fontSize: 20,
-        fontWeight: '700',
         color: DS.text,
         paddingVertical: 12,
     },
@@ -382,8 +384,8 @@ const styles = StyleSheet.create({
         borderRadius: 8,
     },
     customSubmitText: {
+        fontFamily: fonts.bold,
         fontSize: 14,
-        fontWeight: '700',
         color: DS.bg,
     },
 });
