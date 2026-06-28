@@ -792,6 +792,11 @@ export class TrainingService {
     userId: string,
     workoutId: string,
     payload: import('./dto/workout-tracking.dto').CreateWorkoutTrackingDto,
+    // When true, the caller is completeFreeWorkout — the workout row is ALREADY
+    // a free run, so the free-user degrade branch below MUST be skipped.
+    // Otherwise completeWorkout ⇄ completeFreeWorkout call each other forever
+    // (infinite recursion → one INSERT per cycle → millions of orphan rows).
+    isAlreadyFreeRun = false,
   ) {
     const turf = await import('@turf/turf'); // Dynamic import to prevent initial load overhead
 
@@ -822,7 +827,7 @@ export class TrainingService {
       );
     }
 
-    if (!isPro) {
+    if (!isPro && !isAlreadyFreeRun) {
       this.logger.log(
         `[completeWorkout] User ${userId} is FREE — degrading workout ${workoutId} to free run (no plan link, no AI feedback)`,
       );
@@ -1228,6 +1233,39 @@ export class TrainingService {
     const environment: 'outdoor' | 'treadmill' =
       payload.environment === 'treadmill' ? 'treadmill' : 'outdoor';
 
+    // Idempotency: a retried submission (offline-queue replay, network glitch,
+    // device re-sync) must not create a second free-run row. Dedup on the
+    // activity `external_id` when present, otherwise a stable key derived from
+    // the run's start time — the same physical run always maps to the same key.
+    const effectiveExternalId =
+      payload.external_id ||
+      (payload.started_at
+        ? `free_${userId}_${new Date(payload.started_at).getTime()}`
+        : undefined);
+
+    if (effectiveExternalId) {
+      const { data: existingActivity } = await this.supabaseService
+        .from('activities')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('external_id', effectiveExternalId)
+        .maybeSingle();
+      if (existingActivity?.id) {
+        const { data: existingWorkout } = await this.supabaseService
+          .from('workouts')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('activity_id', existingActivity.id)
+          .maybeSingle();
+        if (existingWorkout) {
+          this.logger.log(
+            `[completeFreeWorkout] idempotent hit for ${effectiveExternalId} — reusing workout ${existingWorkout.id}`,
+          );
+          return existingWorkout;
+        }
+      }
+    }
+
     const { data: workout, error: insertError } = await this.supabaseService
       .from('workouts')
       .insert({
@@ -1258,20 +1296,25 @@ export class TrainingService {
 
     // Reuse the full completion pipeline (activity insert, route, gamification).
     // AI feedback is automatically skipped because workout.source !== 'plan'.
-    return this.completeWorkout(userId, workout.id, {
-      route_points: payload.route_points,
-      total_distance_meters: payload.total_distance_meters,
-      duration_seconds: payload.duration_seconds,
-      source: payload.source,
-      external_id: payload.external_id,
-      average_heartrate: payload.average_heartrate,
-      max_heartrate: payload.max_heartrate,
-      calories: payload.calories,
-      avg_pace_seconds_per_km: payload.avg_pace_seconds_per_km,
-      started_at: payload.started_at,
-      environment,
-      treadmill_data: payload.treadmill_data,
-    });
+    return this.completeWorkout(
+      userId,
+      workout.id,
+      {
+        route_points: payload.route_points,
+        total_distance_meters: payload.total_distance_meters,
+        duration_seconds: payload.duration_seconds,
+        source: payload.source,
+        external_id: effectiveExternalId,
+        average_heartrate: payload.average_heartrate,
+        max_heartrate: payload.max_heartrate,
+        calories: payload.calories,
+        avg_pace_seconds_per_km: payload.avg_pace_seconds_per_km,
+        started_at: payload.started_at,
+        environment,
+        treadmill_data: payload.treadmill_data,
+      },
+      true, // isAlreadyFreeRun → breaks the completeWorkout⇄completeFreeWorkout recursion
+    );
   }
 
   /**

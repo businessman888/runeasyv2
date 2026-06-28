@@ -855,6 +855,18 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
                         duration_seconds: payload.duration_seconds,
                         started_at: payload.started_at,
                         city: payload.city,
+                        // Forward the SAME optional metadata completeFreeRun sends, so a
+                        // retried run keeps its source/external_id (server-side dedup) and
+                        // wearable stats (HR, calories, pace, treadmill) instead of losing them.
+                        ...(payload.source            && { source: payload.source }),
+                        ...(payload.external_id       && { external_id: payload.external_id }),
+                        ...(payload.average_heartrate != null && { average_heartrate: payload.average_heartrate }),
+                        ...(payload.max_heartrate     != null && { max_heartrate: payload.max_heartrate }),
+                        ...(payload.calories          != null && { calories: payload.calories }),
+                        ...(payload.avg_pace_seconds_per_km != null && { avg_pace_seconds_per_km: payload.avg_pace_seconds_per_km }),
+                        ...(payload.garmin_device_name && { garmin_device_name: payload.garmin_device_name }),
+                        ...(payload.environment       && { environment: payload.environment }),
+                        ...(payload.treadmill_data    && { treadmill_data: payload.treadmill_data }),
                     }),
                 });
 
