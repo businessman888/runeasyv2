@@ -13,7 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, borderRadius } from '../../theme';
+import { colors, typography, borderRadius, fonts } from '../../theme';
 import type { Race } from '../../types/races.types';
 import { formatRaceDateLong, raceLevelLabel } from '../../utils/raceFormat';
 import { RaceDistanceSelectorSheet } from './RaceDistanceSelectorSheet';
@@ -186,8 +186,8 @@ const styles = StyleSheet.create({
     },
     body: { paddingHorizontal: 20, paddingTop: 16 },
     name: {
+        fontFamily: fonts.bold,
         fontSize: typography.fontSizes['2xl'],
-        fontWeight: typography.fontWeights.bold,
         color: colors.text,
         marginBottom: 14,
     },
@@ -199,17 +199,19 @@ const styles = StyleSheet.create({
         backgroundColor: colors.card,
     },
     pillText: {
+        fontFamily: fonts.medium,
         fontSize: typography.fontSizes.md,
-        fontWeight: typography.fontWeights.medium,
         color: colors.textLight,
     },
     infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
     infoText: {
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.lg,
         color: colors.textLight,
         flex: 1,
     },
     description: {
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.md,
         lineHeight: 20,
         color: colors.textSecondary,
@@ -218,8 +220,8 @@ const styles = StyleSheet.create({
     },
     linkRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
     linkText: {
+        fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.md,
-        fontWeight: typography.fontWeights.semibold,
         color: colors.textLight,
     },
     footer: {
@@ -236,8 +238,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     ctaText: {
+        fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.xl,
-        fontWeight: typography.fontWeights.semibold,
         color: '#0F0F1E',
     },
 });

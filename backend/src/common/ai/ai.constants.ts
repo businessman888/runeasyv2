@@ -13,6 +13,7 @@ export const AI_FEATURES = {
   FEEDBACK: 'feedback',
   READINESS: 'readiness',
   RETROSPECTIVE: 'retrospective',
+  WORKOUT_BRIEFING_DEEP_DIVE: 'workout_briefing_deep_dive',
 } as const;
 
 // Tier definitions
@@ -30,6 +31,7 @@ export const FEATURE_TIER_MAP: Record<string, AITier> = {
   [AI_FEATURES.RETROSPECTIVE]: AITier.HIGH_PERFORMANCE,
   [AI_FEATURES.FEEDBACK]: AITier.EFFICIENCY,
   [AI_FEATURES.READINESS]: AITier.EFFICIENCY,
+  [AI_FEATURES.WORKOUT_BRIEFING_DEEP_DIVE]: AITier.EFFICIENCY,
 };
 
 // Tier-to-model mapping

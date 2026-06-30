@@ -15,6 +15,7 @@ import { useTracking } from '../../hooks/useTracking';
 import { useWorkoutGoals } from '../../hooks/useWorkoutGoals';
 import { useTrainingStore } from '../../stores';
 import { GoalsModal } from '../../components/GoalsModal';
+import { LocationDisclosureModal } from '../../components/LocationDisclosureModal';
 import { MapLocationPuck } from '../../components/map/MapLocationPuck';
 import { getGpsQuality } from '../../components/map/GpsSignalBars';
 import { ExpandedMetricsOverlay } from './ExpandedMetricsOverlay';
@@ -133,6 +134,9 @@ function OutdoorRunningView() {
     pauseTracking,
     finishTracking,
     clearTracking,
+    locationDisclosureVisible,
+    requestLocationPermission,
+    dismissLocationDisclosure,
   } = useTracking(route.params?.workoutId);
 
   const completeWorkout = useTrainingStore((s) => s.completeWorkout);
@@ -140,6 +144,20 @@ function OutdoorRunningView() {
 
   const mode: RunMode = route.params?.mode ?? (route.params?.workoutId ? 'planned' : 'free');
   const isFreeMode = mode === 'free';
+
+  // ── Prominent Disclosure de localização (Google Play) ──────────────────
+  // "Permitir" dispara o pedido nativo; "Agora não" fecha sem consentir. Em
+  // ambos, se a corrida não pode prosseguir (sem permissão de foreground), saímos
+  // da tela em vez de ficar preso no loader "Localizando você...".
+  const handleAllowLocation = useCallback(async () => {
+    const canProceed = await requestLocationPermission();
+    if (!canProceed) navigation.goBack();
+  }, [requestLocationPermission, navigation]);
+
+  const handleDismissLocation = useCallback(async () => {
+    const canProceed = await dismissLocationDisclosure();
+    if (!canProceed) navigation.goBack();
+  }, [dismissLocationDisclosure, navigation]);
 
   // ── Finalização segura do treino ──────────────────────────────────────
   const handleFinish = useCallback(async () => {
@@ -277,6 +295,17 @@ function OutdoorRunningView() {
         <Text style={[styles.loadingText, { marginTop: 12 }]}>
           {!isReady ? 'Carregando módulo GPS...' : 'Localizando você...'}
         </Text>
+
+        {/* ── PROMINENT DISCLOSURE de localização (Google Play) ────────────
+            Renderizada AQUI (não só na árvore principal) porque o pedido de
+            permissão acontece enquanto initialPosition ainda é null — ou seja,
+            durante este estado de loading. Aparece ANTES de qualquer popup
+            nativo; só "Permitir localização" dispara o pedido real. */}
+        <LocationDisclosureModal
+          visible={locationDisclosureVisible}
+          onAllow={handleAllowLocation}
+          onDismiss={handleDismissLocation}
+        />
       </View>
     );
   }

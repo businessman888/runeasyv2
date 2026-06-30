@@ -22,6 +22,7 @@ import {
     WellnessScreen,
     SettingsScreen,
     CoachAnalysisScreen,
+    WorkoutDetailScreen,
     NotificationsScreen,
     ObjectiveScreen,
     LevelScreen,
@@ -81,17 +82,6 @@ const linking: LinkingOptions<any> = {
         },
     },
 };
-
-// Placeholder screens
-function WorkoutDetailScreen({ route }: any) {
-    return (
-        <View style={styles.placeholder}>
-            <Text style={styles.placeholderText}>🏃 Detalhes do Treino</Text>
-            <Text style={styles.placeholderSubtext}>ID: {route.params?.workoutId}</Text>
-        </View>
-    );
-}
-
 
 // Tab Navigator
 function MainTabs({ route, navigation }: any) {
@@ -375,14 +365,6 @@ export function AppNavigator() {
                             }}
                         />
                         <Stack.Screen
-                            name="WorkoutDetail"
-                            component={WorkoutDetailScreen}
-                            options={{
-                                title: 'Treino',
-                                presentation: 'card',
-                            }}
-                        />
-                        <Stack.Screen
                             name="Feedback"
                             component={FeedbackScreen}
                             options={{
@@ -393,6 +375,14 @@ export function AppNavigator() {
                         <Stack.Screen
                             name="CoachAnalysis"
                             component={CoachAnalysisScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'card',
+                            }}
+                        />
+                        <Stack.Screen
+                            name="WorkoutDetail"
+                            component={WorkoutDetailScreen}
                             options={{
                                 headerShown: false,
                                 presentation: 'card',

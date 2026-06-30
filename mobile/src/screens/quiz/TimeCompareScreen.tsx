@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Dimensions, AccessibilityInfo } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { fonts } from '../../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -124,15 +125,14 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     title: {
-        fontFamily: 'Poppins-Medium',
+        fontFamily: fonts.medium,
         fontSize: 20,
-        fontWeight: '500',
         color: DS.text,
         lineHeight: 30,
     },
     titleHighlight: {
+        fontFamily: fonts.semibold,
         color: DS.cyan,
-        fontWeight: '600',
     },
     card: {
         width: CARD_WIDTH,
@@ -155,9 +155,8 @@ const styles = StyleSheet.create({
         marginBottom: 14,
     },
     cardHeaderText: {
-        fontFamily: 'Poppins-Bold',
+        fontFamily: fonts.bold,
         fontSize: 13,
-        fontWeight: '700',
         letterSpacing: 1,
     },
     bulletRow: {
@@ -168,9 +167,8 @@ const styles = StyleSheet.create({
     },
     bulletText: {
         flex: 1,
-        fontFamily: 'Poppins-Medium',
+        fontFamily: fonts.medium,
         fontSize: 14,
-        fontWeight: '500',
         lineHeight: 20,
     },
 });

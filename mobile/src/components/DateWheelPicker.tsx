@@ -8,6 +8,7 @@ import {
     NativeScrollEvent,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { fonts } from '../theme';
 
 // Design System
 const DS = {
@@ -131,7 +132,7 @@ function WheelColumn({ data, selectedValue, onValueChange, label }: WheelColumnP
                     {
                         color: isActive ? DS.cyan : '#666',
                         fontSize: isActive ? 22 : 18,
-                        fontWeight: isActive ? '700' : '400',
+                        fontFamily: isActive ? fonts.bold : fonts.regular,
                         opacity,
                     },
                 ]}>
@@ -269,8 +270,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     columnLabel: {
+        fontFamily: fonts.semibold,
         fontSize: 12,
-        fontWeight: '600',
         color: DS.textSecondary,
         marginBottom: 8,
         letterSpacing: 1,
@@ -301,9 +302,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     itemText: {
+        fontFamily: fonts.regular,
         fontSize: 18,
-        fontWeight: '500',
-        fontFamily: 'Inter-Bold',
     },
 });
 

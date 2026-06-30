@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { fonts } from '../theme';
 
 // Design System Colors matching Figma
 const DS = {
@@ -102,10 +103,9 @@ const styles = StyleSheet.create({
         opacity: 0.5,
     },
     keyText: {
+        fontFamily: fonts.semibold,
         fontSize: 28,
-        fontWeight: '600',
         color: DS.text,
-        fontFamily: 'Inter-Bold', // Ensure font consistency
     },
     disabledText: {
         color: DS.textSecondary,

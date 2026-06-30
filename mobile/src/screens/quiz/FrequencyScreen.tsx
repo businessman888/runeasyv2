@@ -1,29 +1,9 @@
-import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    TouchableOpacity,
-    Dimensions,
-    Platform,
-    Pressable,
-} from 'react-native';
-import { colors, typography, borderRadius, shadows } from '../../theme';
-import Svg, { Path } from 'react-native-svg';
-
-const { width } = Dimensions.get('window');
-const SLIDER_PADDING = 30;
-const SLIDER_WIDTH = width - 40 - SLIDER_PADDING;
-
-// Lightbulb Icon using theme colors
-const IdeaIcon = () => (
-    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-        <Path
-            d="M12 2C8.13 2 5 5.13 5 9C5 11.38 6.19 13.47 8 14.74V17C8 17.55 8.45 18 9 18H15C15.55 18 16 17.55 16 17V14.74C17.81 13.47 19 11.38 19 9C19 5.13 15.87 2 12 2ZM14.85 13.1L14 13.7V16H10V13.7L9.15 13.1C7.8 12.16 7 10.63 7 9C7 6.24 9.24 4 12 4C14.76 4 17 6.24 17 9C17 10.63 16.2 12.16 14.85 13.1ZM9 21C9 21.55 9.45 22 10 22H14C14.55 22 15 21.55 15 21V20H9V21Z"
-            fill={colors.primary}
-        />
-    </Svg>
-);
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { QuizHeader, Hl } from '../../components/onboarding/QuizHeader';
+import { StepSlider } from '../../components/onboarding/StepSlider';
+import { QUIZ } from './_tokens';
 
 // ── Smart recommendation logic ──────────────────────────────────────────
 interface FrequencyRecommendation {
@@ -88,15 +68,24 @@ interface FrequencyScreenProps {
     onChange?: (value: number) => void;
     goal?: string;
     experience_level?: string;
+    onLockScroll?: () => void;
+    onUnlockScroll?: () => void;
 }
 
-export function FrequencyScreen({ value, onChange, goal, experience_level }: FrequencyScreenProps) {
+export function FrequencyScreen({
+    value,
+    onChange,
+    goal,
+    experience_level,
+    onLockScroll,
+    onUnlockScroll,
+}: FrequencyScreenProps) {
     const recommendation = useMemo(
         () => getRecommendation(goal, experience_level),
         [goal, experience_level],
     );
 
-    // Build the available days array based on the hard cap
+    // Available days based on the hard cap (2 .. maxAllowed)
     const daysList = useMemo(() => {
         const arr: number[] = [];
         for (let d = 2; d <= recommendation.maxAllowed; d++) arr.push(d);
@@ -106,183 +95,62 @@ export function FrequencyScreen({ value, onChange, goal, experience_level }: Fre
     // Clamp initial/restored value to the allowed range
     const clampedValue = useMemo(() => {
         const v = value ?? recommendation.min;
-        if (v > recommendation.maxAllowed) return recommendation.maxAllowed;
-        if (v < 2) return 2;
-        return v;
+        return Math.max(2, Math.min(v, recommendation.maxAllowed));
     }, [value, recommendation]);
 
     const [selectedDays, setSelectedDays] = useState<number>(clampedValue);
-    const [isDragging, setIsDragging] = useState(false);
-    const trackRef = useRef<View>(null);
-    const trackLayoutRef = useRef<{ x: number; width: number }>({ x: 0, width: SLIDER_WIDTH });
 
-    // Sync from parent value or clamp when recommendation changes
+    // Sync from parent value or re-clamp when the recommendation changes
     useEffect(() => {
         const next = value ?? recommendation.min;
         const clamped = Math.max(2, Math.min(next, recommendation.maxAllowed));
         if (clamped !== selectedDays) {
             setSelectedDays(clamped);
-            if (clamped !== value && onChange) {
-                onChange(clamped);
-            }
+            if (clamped !== value && onChange) onChange(clamped);
         }
     }, [value, recommendation.maxAllowed]);
 
     const handleSelectDay = useCallback((day: number) => {
         setSelectedDays(day);
-        if (onChange) {
-            onChange(day);
-        }
+        onChange?.(day);
     }, [onChange]);
-
-    // Calculate slider position — dynamic based on daysList length
-    const stepWidth = daysList.length > 1 ? SLIDER_WIDTH / (daysList.length - 1) : SLIDER_WIDTH;
-    const getSliderPosition = () => {
-        const index = daysList.indexOf(selectedDays);
-        return Math.max(0, index) * stepWidth;
-    };
-
-    // Convert x position to day value
-    const positionToDay = useCallback((x: number): number => {
-        const sw = daysList.length > 1 ? SLIDER_WIDTH / (daysList.length - 1) : SLIDER_WIDTH;
-        const index = Math.round(x / sw);
-        const clampedIndex = Math.max(0, Math.min(index, daysList.length - 1));
-        return daysList[clampedIndex];
-    }, [daysList]);
-
-    // Handle track press to jump to position
-    const handleTrackPress = useCallback((event: any) => {
-        const { locationX } = event.nativeEvent;
-        const newDay = positionToDay(locationX);
-        handleSelectDay(newDay);
-    }, [positionToDay, handleSelectDay]);
-
-    // Web-specific drag handlers
-    const handleWebMouseDown = useCallback((e: any) => {
-        if (Platform.OS !== 'web') return;
-        setIsDragging(true);
-
-        const handleMouseMove = (moveEvent: MouseEvent) => {
-            if (!trackLayoutRef.current) return;
-            const rect = (trackRef.current as any)?._nativeTag
-                ? trackLayoutRef.current
-                : (e.target as HTMLElement).parentElement?.getBoundingClientRect();
-
-            if (rect) {
-                const x = moveEvent.clientX - rect.x - 15;
-                const clampedX = Math.max(0, Math.min(x, SLIDER_WIDTH));
-                const newDay = positionToDay(clampedX);
-                handleSelectDay(newDay);
-            }
-        };
-
-        const handleMouseUp = () => {
-            setIsDragging(false);
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
-        };
-
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
-    }, [positionToDay, handleSelectDay]);
-
-    // Touch handlers for native
-    const handleTouchMove = useCallback((event: any) => {
-        const touch = event.nativeEvent.touches[0];
-        if (!touch) return;
-
-        trackRef.current?.measure((x, y, measureWidth, height, pageX, pageY) => {
-            const relativeX = touch.pageX - pageX;
-            const clampedX = Math.max(0, Math.min(relativeX, SLIDER_WIDTH));
-            const newDay = positionToDay(clampedX);
-            handleSelectDay(newDay);
-        });
-    }, [positionToDay, handleSelectDay]);
-
-    const handleTrackLayout = useCallback((event: any) => {
-        const { x, width } = event.nativeEvent.layout;
-        trackLayoutRef.current = { x, width };
-    }, []);
 
     return (
         <>
-            {/* Title Section */}
-            <View style={styles.titleContainer}>
-                <Text style={styles.title}>
-                    Quantos dias por semana{'\n'}você pode se comprometer{'\n'}a treinar?
-                </Text>
+            <QuizHeader
+                title={<>Quantos dias por semana você pode <Hl>treinar</Hl>?</>}
+                subtitle="Escolha a frequência que cabe na sua rotina. Ajustamos o volume do plano a partir dela."
+            />
+
+            {/* Compact value readout */}
+            <View style={styles.readout}>
+                <Text style={styles.value}>{selectedDays}</Text>
+                <Text style={styles.unit}>dias / semana</Text>
             </View>
 
-            {/* Big Number Display */}
-            <View style={styles.numberDisplayContainer}>
-                <Text style={styles.bigNumber}>{selectedDays}</Text>
-                <Text style={styles.daysLabel}>dias / semana</Text>
+            <View style={styles.sliderWrap}>
+                <StepSlider
+                    values={daysList}
+                    value={selectedDays}
+                    onChange={handleSelectDay}
+                    onLockScroll={onLockScroll}
+                    onUnlockScroll={onUnlockScroll}
+                />
             </View>
 
-            {/* Slider */}
-            <View style={styles.sliderContainer}>
-                {/* Clickable Track Area */}
-                <Pressable
-                    ref={trackRef}
-                    style={styles.sliderTrackArea}
-                    onPress={handleTrackPress}
-                    onLayout={handleTrackLayout}
-                    onTouchMove={handleTouchMove}
-                >
-                    {/* Track */}
-                    <View style={styles.sliderTrack}>
-                        <View style={[styles.sliderFill, { width: getSliderPosition() + 15 }]} />
-                    </View>
-
-                    {/* Draggable Thumb */}
-                    <View
-                        style={[
-                            styles.sliderThumbContainer,
-                            { left: getSliderPosition() },
-                            isDragging && styles.sliderThumbDragging
-                        ]}
-                        onTouchStart={() => setIsDragging(true)}
-                        onTouchEnd={() => setIsDragging(false)}
-                        // @ts-ignore - Web specific
-                        onMouseDown={handleWebMouseDown}
-                    >
-                        <View style={styles.sliderThumb}>
-                            <View style={styles.sliderThumbInner} />
-                        </View>
-                    </View>
-                </Pressable>
-
-                {/* Day Numbers */}
-                <View style={styles.daysRow}>
-                    {daysList.map((day) => (
-                        <TouchableOpacity
-                            key={day}
-                            onPress={() => handleSelectDay(day)}
-                            style={styles.dayButton}
-                        >
-                            <Text style={[
-                                styles.dayNumber,
-                                selectedDays === day && styles.dayNumberActive
-                            ]}>
-                                {day}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            </View>
-
-            {/* Smart Recommendation Card */}
+            {/* Smart recommendation card */}
             <View style={styles.tipCard}>
-                <View style={styles.tipIconContainer}>
-                    <IdeaIcon />
-                </View>
-                <View style={styles.tipTextContainer}>
+                <Ionicons
+                    name="bulb-outline"
+                    size={20}
+                    color={QUIZ.color.cyan}
+                    style={styles.tipIcon}
+                />
+                <View style={styles.tipTextWrap}>
                     <Text style={styles.tipHighlight}>
                         Recomendado: {recommendation.min}-{recommendation.max} dias
                     </Text>
-                    <Text style={styles.tipText}>
-                        {recommendation.text}
-                    </Text>
+                    <Text style={styles.tipText}>{recommendation.text}</Text>
                 </View>
             </View>
         </>
@@ -290,115 +158,53 @@ export function FrequencyScreen({ value, onChange, goal, experience_level }: Fre
 }
 
 const styles = StyleSheet.create({
-    titleContainer: {
-        marginBottom: 40,
-    },
-    title: {
-        fontSize: typography.fontSizes['3xl'],
-        fontWeight: typography.fontWeights.bold,
-        color: colors.text,
-        lineHeight: 36,
-        textAlign: 'center',
-    },
-    numberDisplayContainer: {
-        alignItems: 'center',
-        marginBottom: 40,
-    },
-    bigNumber: {
-        fontSize: 96,
-        fontWeight: typography.fontWeights.bold,
-        color: colors.primary,
-        lineHeight: 110,
-    },
-    daysLabel: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.textSecondary,
-        marginTop: -10,
-    },
-    sliderContainer: {
-        marginBottom: 40,
-        paddingHorizontal: 10,
-    },
-    sliderTrackArea: {
-        height: 40,
-        justifyContent: 'center',
-        marginBottom: 20,
-        cursor: Platform.OS === 'web' ? 'pointer' : undefined,
-    } as any,
-    sliderTrack: {
-        height: 4,
-        backgroundColor: colors.glassWhite,
-        borderRadius: borderRadius.full,
-    },
-    sliderFill: {
-        height: 4,
-        backgroundColor: colors.primary,
-        borderRadius: borderRadius.full,
-    },
-    sliderThumbContainer: {
-        position: 'absolute',
-        top: 5,
-        cursor: Platform.OS === 'web' ? 'grab' : undefined,
-    } as any,
-    sliderThumbDragging: {
-        cursor: Platform.OS === 'web' ? 'grabbing' : undefined,
-    } as any,
-    sliderThumb: {
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        backgroundColor: colors.primary,
-        alignItems: 'center',
-        justifyContent: 'center',
-        ...shadows.neon,
-    },
-    sliderThumbInner: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-        backgroundColor: colors.backgroundLight,
-    },
-    daysRow: {
+    readout: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        alignItems: 'baseline',
+        justifyContent: 'center',
+        gap: 8,
+        marginBottom: 20,
     },
-    dayButton: {
-        width: 27,
-        alignItems: 'center',
+    value: {
+        fontFamily: QUIZ.title.fontFamily,
+        fontSize: 40,
+        color: QUIZ.color.cyan,
+        lineHeight: 46,
     },
-    dayNumber: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.bold,
-        color: colors.textSecondary,
+    unit: {
+        fontFamily: QUIZ.subtitle.fontFamily,
+        fontSize: QUIZ.subtitle.fontSize,
+        color: QUIZ.color.textDim,
     },
-    dayNumberActive: {
-        color: colors.primary,
+    sliderWrap: {
+        marginBottom: 28,
     },
     tipCard: {
         flexDirection: 'row',
-        backgroundColor: colors.card,
-        borderRadius: borderRadius.xl,
-        padding: 16,
+        backgroundColor: QUIZ.color.card,
+        borderRadius: QUIZ.card.radius,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: QUIZ.color.stroke,
+        padding: 14,
         alignItems: 'flex-start',
     },
-    tipIconContainer: {
-        marginRight: 12,
+    tipIcon: {
+        marginRight: 10,
+        marginTop: 1,
     },
-    tipTextContainer: {
+    tipTextWrap: {
         flex: 1,
     },
     tipHighlight: {
-        fontSize: typography.fontSizes.sm,
-        fontWeight: typography.fontWeights.semibold,
-        color: colors.primary,
-        lineHeight: 18,
-        marginBottom: 4,
+        fontFamily: QUIZ.optionTitle.fontFamily,
+        fontSize: 14,
+        color: QUIZ.color.cyan,
+        marginBottom: 3,
     },
     tipText: {
-        fontSize: typography.fontSizes.sm,
-        fontWeight: typography.fontWeights.normal,
-        color: colors.textSecondary,
+        fontFamily: QUIZ.optionSubtitle.fontFamily,
+        fontSize: 13,
+        color: QUIZ.color.textDim,
         lineHeight: 18,
     },
 });

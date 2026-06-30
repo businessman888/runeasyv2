@@ -13,6 +13,7 @@ export * from './WellnessScreen';
 export * from './SettingsScreen';
 export * from './StatsScreen';
 export * from './CoachAnalysisScreen';
+export * from './WorkoutDetailScreen';
 export * from './NotificationsScreen';
 export * from './PersonalInfoScreen';
 export * from './TrainingHistoryScreen';

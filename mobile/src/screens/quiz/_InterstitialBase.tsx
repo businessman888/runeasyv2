@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { fonts } from '../../theme';
 
 const DS = {
     text: '#EBEBF5',
@@ -43,9 +44,8 @@ const styles = StyleSheet.create({
         marginBottom: 24,
     },
     title: {
-        fontFamily: 'Poppins-Bold',
+        fontFamily: fonts.bold,
         fontSize: 24,
-        fontWeight: '700',
         color: DS.text,
         lineHeight: 36,
     },
@@ -56,9 +56,8 @@ const styles = StyleSheet.create({
         color: DS.cyan,
     },
     subtitle: {
-        fontFamily: 'Poppins-Regular',
+        fontFamily: fonts.regular,
         fontSize: 15,
-        fontWeight: '400',
         color: DS.textSecondary,
         lineHeight: 22.5,
         marginTop: 8,

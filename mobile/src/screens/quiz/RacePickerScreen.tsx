@@ -12,7 +12,7 @@ import {
     Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, borderRadius } from '../../theme';
+import { colors, typography, borderRadius, fonts } from '../../theme';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useRaces } from '../../hooks/useRaces';
 import { RaceCard } from '../../components/onboarding/RaceCard';
@@ -335,11 +335,12 @@ const styles = StyleSheet.create({
     flag: { fontSize: 24 },
     manualText: { flex: 1 },
     manualTitle: {
+        fontFamily: fonts.bold,
         fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.bold,
         color: colors.text,
     },
     manualSubtitle: {
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.md,
         color: colors.textSecondary,
         marginTop: 2,
@@ -355,8 +356,8 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
     },
     optionTitle: {
+        fontFamily: fonts.bold,
         fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.bold,
         color: colors.text,
         paddingHorizontal: 20,
         paddingVertical: 12,

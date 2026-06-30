@@ -261,6 +261,7 @@ export interface WorkoutMetadata {
         type: 'warmup' | 'main' | 'cooldown';
         zone?: TrainingZone | null;
         description?: string | null;
+        coach_note?: string | null;          // voz do coach por bloco (≤20 palavras)
     }> | null;
 }
 

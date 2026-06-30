@@ -10,6 +10,7 @@ import {
 import LottieView from 'lottie-react-native';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { determineArchetype } from '../../utils/archetypes';
+import { fonts } from '../../theme';
 
 const { width } = Dimensions.get('window');
 
@@ -176,15 +177,15 @@ const styles = StyleSheet.create({
         paddingHorizontal: 10,
     },
     loadingMessage: {
+        fontFamily: fonts.bold,
         fontSize: 20,
-        fontWeight: 'bold',
         color: '#EBEBF5',
         textAlign: 'center',
         marginBottom: 20,
     },
     subtitleText: {
+        fontFamily: fonts.regular,
         fontSize: 15,
-        fontWeight: '400',
         color: 'rgba(235, 235, 245, 0.6)',
         textAlign: 'center',
     },

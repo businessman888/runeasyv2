@@ -9,6 +9,7 @@ import {
     Platform,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { fonts } from '../../theme';
 import {
     referralService,
     ReferralApiError,
@@ -234,14 +235,13 @@ const styles = StyleSheet.create({
         marginTop: 12,
     },
     title: {
-        fontFamily: 'Poppins-Bold',
+        fontFamily: fonts.bold,
         fontSize: 32,
         lineHeight: 38,
         color: DS.text,
-        fontWeight: '700',
     },
     subtitle: {
-        fontFamily: 'Poppins-Regular',
+        fontFamily: fonts.regular,
         fontSize: 16,
         lineHeight: 22,
         color: DS.textSecondary,
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
     },
     input: {
         flex: 1,
-        fontFamily: 'Poppins-Medium',
+        fontFamily: fonts.medium,
         fontSize: 16,
         color: DS.text,
         letterSpacing: 1,
@@ -294,9 +294,8 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(28, 28, 46, 0.8)',
     },
     sendButtonText: {
-        fontFamily: 'Poppins-Medium',
+        fontFamily: fonts.semibold,
         fontSize: 15,
-        fontWeight: '600',
         color: '#0F0F1E',
     },
     sendButtonTextDisabled: {
@@ -322,8 +321,7 @@ const styles = StyleSheet.create({
     },
     badgeText: {
         flex: 1,
-        fontFamily: 'Poppins-Medium',
+        fontFamily: fonts.medium,
         fontSize: 13,
-        fontWeight: '500',
     },
 });

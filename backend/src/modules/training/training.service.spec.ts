@@ -5,7 +5,7 @@ import { SupabaseService } from '../../database';
 import { TrainingAIService } from './training-ai.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { SubscriptionService } from '../subscription/subscription.service';
-import { AiQuotaService } from '../../common/ai';
+import { AiQuotaService, AIRouterService } from '../../common/ai';
 
 describe('TrainingService', () => {
   let service: TrainingService;
@@ -102,6 +102,13 @@ describe('TrainingService', () => {
           useValue: {
             assertWithinLimit: jest.fn().mockResolvedValue(undefined),
             isWithinLimit: jest.fn().mockResolvedValue(true),
+          },
+        },
+        {
+          provide: AIRouterService,
+          useValue: {
+            isAvailable: true,
+            call: jest.fn(),
           },
         },
       ],

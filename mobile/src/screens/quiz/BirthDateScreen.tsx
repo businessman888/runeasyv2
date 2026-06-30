@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { DateWheelPicker } from '../../components/DateWheelPicker';
+import { fonts } from '../../theme';
 
 // Design System
 const DS = {
@@ -196,18 +197,19 @@ const styles = StyleSheet.create({
         marginBottom: 32,
     },
     title: {
+        fontFamily: fonts.bold,
         fontSize: 24,
-        fontWeight: '700',
         color: DS.text,
         lineHeight: 32,
         marginBottom: 12,
     },
     titleHighlight: {
+        fontFamily: fonts.bold,
         color: DS.cyan,
     },
     subtitle: {
+        fontFamily: fonts.regular,
         fontSize: 15,
-        fontWeight: '400',
         color: DS.textSecondary,
         lineHeight: 22,
     },
@@ -239,9 +241,8 @@ const styles = StyleSheet.create({
     },
     cardLabel: {
         fontSize: 16,
-        fontFamily: 'Inter-Bold',
+        fontFamily: fonts.semibold,
         color: DS.text,
-        fontWeight: '600',
     },
     tipCard: {
         backgroundColor: 'rgba(255, 255, 255, 0.03)',
@@ -251,8 +252,8 @@ const styles = StyleSheet.create({
         borderColor: DS.glassBorder,
     },
     tipText: {
+        fontFamily: fonts.regular,
         fontSize: 13,
-        fontWeight: '400',
         color: DS.textSecondary,
         lineHeight: 18,
     },
@@ -282,15 +283,14 @@ const styles = StyleSheet.create({
         borderBottomColor: DS.glassBorder,
     },
     cancelText: {
+        fontFamily: fonts.medium,
         fontSize: 16,
         color: DS.textSecondary,
-        fontWeight: '500',
     },
     confirmText: {
+        fontFamily: fonts.bold,
         fontSize: 16,
         color: DS.cyan,
-        fontWeight: '700',
-        fontFamily: 'Inter-Bold',
     },
     liveAgeContainer: {
         alignItems: 'center',
@@ -298,9 +298,8 @@ const styles = StyleSheet.create({
         paddingBottom: 4,
     },
     liveAgeText: {
+        fontFamily: fonts.bold,
         fontSize: 20,
-        fontWeight: '700',
-        fontFamily: 'Inter-Bold',
         color: DS.cyan,
     },
     pickerWrapper: {

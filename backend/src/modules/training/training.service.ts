@@ -10,7 +10,7 @@ import {
 } from './training-ai.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { SubscriptionService } from '../subscription/subscription.service';
-import { AiQuotaService } from '../../common/ai';
+import { AiQuotaService, AIRouterService, AI_FEATURES } from '../../common/ai';
 import {
   PlanOverviewResponseDto,
   PlanWeekDto,
@@ -57,6 +57,7 @@ export class TrainingService {
     @InjectQueue('feedback-queue') private feedbackQueue: Queue,
     @InjectQueue('elevation-queue') private elevationQueue: Queue,
     private readonly aiQuotaService: AiQuotaService,
+    private readonly aiRouter: AIRouterService,
   ) {}
 
   /**
@@ -473,7 +474,10 @@ export class TrainingService {
         workout.perceived_effort !== undefined ||
         workout.scientific_note !== undefined ||
         workout.segments.some(
-          (s) => s.zone !== undefined || s.description !== undefined,
+          (s) =>
+            s.zone !== undefined ||
+            s.description !== undefined ||
+            s.coach_note !== undefined,
         );
 
       const metadata = hasEnrichedFields
@@ -486,6 +490,7 @@ export class TrainingService {
               type: s.type,
               zone: s.zone ?? null,
               description: s.description ?? null,
+              coach_note: s.coach_note ?? null,
             })),
           }
         : null;
@@ -1466,6 +1471,192 @@ export class TrainingService {
     }
 
     return { ...data, activity };
+  }
+
+  /**
+   * Generate (or return the existing) deep-dive coach briefing for a workout.
+   *
+   * Pro-only (the controller applies ProGuard). Idempotent: at most one briefing
+   * per workout — if one already exists we return it without calling the AI, so
+   * revisiting the workout detail never re-bills generation. The briefing is
+   * calibrated to the athlete's level (beginner/intermediate/advanced) and uses
+   * the EFFICIENCY tier (Haiku 4.5, Sonnet fallback) via AIRouterService, which
+   * logs usage automatically into ai_usage_logs.
+   */
+  /**
+   * Read the existing deep-dive briefing for a workout WITHOUT generating one.
+   * Used on workout-detail load to decide between the "+" prompt (none yet) and
+   * showing the persisted briefing directly. Returns null when none exists.
+   */
+  async getWorkoutBriefing(
+    userId: string,
+    workoutId: string,
+  ): Promise<{
+    content: string;
+    athlete_level: string | null;
+    created_at: string;
+  } | null> {
+    const { data } = await this.supabaseService
+      .from('workout_briefings')
+      .select('content, athlete_level, created_at')
+      .eq('workout_id', workoutId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!data) return null;
+    return {
+      content: data.content,
+      athlete_level: data.athlete_level ?? null,
+      created_at: data.created_at,
+    };
+  }
+
+  async generateWorkoutBriefing(
+    userId: string,
+    workoutId: string,
+  ): Promise<{ content: string; athlete_level: string | null; created_at: string }> {
+    // 1. Idempotency — return the persisted briefing if it already exists.
+    const { data: existing } = await this.supabaseService
+      .from('workout_briefings')
+      .select('content, athlete_level, created_at')
+      .eq('workout_id', workoutId)
+      .maybeSingle();
+
+    if (existing) {
+      return {
+        content: existing.content,
+        athlete_level: existing.athlete_level ?? null,
+        created_at: existing.created_at,
+      };
+    }
+
+    if (!this.aiRouter.isAvailable) {
+      throw new Error('AI service is not configured');
+    }
+
+    // 2. Load the workout (validates ownership via user_id) + athlete level.
+    const workout = await this.getWorkout(userId, workoutId);
+
+    const { data: onboarding } = await this.supabaseService
+      .from('user_onboarding')
+      .select('goal, level')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const level = (onboarding?.level ?? 'beginner') as string;
+    const goal = onboarding?.goal ?? 'general_fitness';
+
+    // 3. Build the level-calibrated prompt.
+    const metadata = workout?.metadata ?? {};
+    const segments = Array.isArray(workout?.instructions_json)
+      ? workout.instructions_json
+      : [];
+    const segmentLines = segments
+      .map((s: any, i: number) => {
+        const md = metadata?.segment_descriptions?.[i] ?? {};
+        const paceLabel =
+          s.pace_min != null && s.pace_max != null
+            ? ` (${s.pace_min}-${s.pace_max} min/km)`
+            : '';
+        return `- ${s.type}: ${s.distance_km}km${paceLabel}${
+          md?.zone ? ` · ${md.zone}` : ''
+        }${md?.description ? ` — ${md.description}` : ''}`;
+      })
+      .join('\n');
+
+    const levelGuidance: Record<string, string> = {
+      beginner:
+        'O atleta é INICIANTE. Explique cada termo técnico que usar (zona, pace, RPE) com analogias simples. Contextualize o "porquê" deste treino na jornada dele. Tom acolhedor e encorajador.',
+      intermediate:
+        'O atleta é INTERMEDIÁRIO. Assuma vocabulário básico já conhecido. Foque no contexto fisiológico e na estratégia de execução, com dados concretos e menos analogias.',
+      advanced:
+        'O atleta é AVANÇADO. Seja direto: números e racional fisiológico, sem redundância. NÃO explique conceitos que um corredor avançado já domina (evite o expertise reversal effect).',
+    };
+
+    const systemPrompt = `Você é um treinador de corrida de elite da RunEasy, falando diretamente com o seu atleta (2ª pessoa, "você"). Gere um briefing aprofundado e motivador deste treino específico.
+
+${levelGuidance[level] ?? levelGuidance.beginner}
+
+REGRAS:
+- Português do Brasil, tom de treinador experiente e próximo.
+- Poucos parágrafos (${level === 'beginner' ? '~200-250' : '~150-200'} palavras no total). NÃO é um ensaio.
+- Explique o objetivo do treino, como executá-lo bem e o que ele constrói no corpo.
+- Responda APENAS com JSON válido neste formato exato (o texto do briefing fica no campo "briefing", sem markdown):
+  { "briefing": "<texto corrido do briefing>" }`;
+
+    const zone = metadata?.zone ?? workout?.zone ?? 'N/D';
+    const userPrompt = `TREINO:
+- Tipo: ${workout?.type}
+- Distância: ${workout?.distance_km}km
+- Zona principal: ${zone}
+- Esforço percebido: ${metadata?.perceived_effort ?? 'N/D'}
+- Objetivo: ${workout?.objective ?? 'N/D'}
+- Nota científica: ${metadata?.scientific_note ?? 'N/D'}
+
+BLOCOS:
+${segmentLines || '- (sem blocos detalhados)'}
+
+CONTEXTO DO ATLETA:
+- Objetivo geral: ${goal}
+- Nível: ${level}
+
+Gere o briefing aprofundado agora.`;
+
+    const result = await this.aiRouter.call<{ briefing: string }>({
+      featureName: AI_FEATURES.WORKOUT_BRIEFING_DEEP_DIVE,
+      userId,
+      systemPrompt: [
+        {
+          type: 'text' as const,
+          text: systemPrompt,
+          cache_control: { type: 'ephemeral' as const },
+        },
+      ],
+      userMessage: userPrompt,
+      maxTokens: 700,
+    });
+
+    // The router always JSON-parses the model output; the briefing text lives in
+    // the "briefing" field. Keep it plain text for the front-end typing reveal.
+    const content = String(result.data?.briefing ?? '').trim();
+    if (!content) {
+      throw new Error('AI returned an empty briefing');
+    }
+
+    // 4. Persist (workout_id UNIQUE guarantees one row per workout).
+    const { data: saved, error: saveError } = await this.supabaseService
+      .from('workout_briefings')
+      .insert({
+        workout_id: workoutId,
+        user_id: userId,
+        content,
+        athlete_level: level,
+      })
+      .select('content, athlete_level, created_at')
+      .single();
+
+    if (saveError) {
+      // Lost a race against a concurrent generate — fetch and return the winner.
+      const { data: winner } = await this.supabaseService
+        .from('workout_briefings')
+        .select('content, athlete_level, created_at')
+        .eq('workout_id', workoutId)
+        .maybeSingle();
+      if (winner) {
+        return {
+          content: winner.content,
+          athlete_level: winner.athlete_level ?? null,
+          created_at: winner.created_at,
+        };
+      }
+      throw saveError;
+    }
+
+    return {
+      content: saved.content,
+      athlete_level: saved.athlete_level ?? null,
+      created_at: saved.created_at,
+    };
   }
 
   /**

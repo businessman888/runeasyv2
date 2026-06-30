@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { OptionCard } from '../../components/onboarding/OptionCard';
+import { fonts } from '../../theme';
 
 // Design System Colors (Figma)
 const DS = {
@@ -131,18 +132,19 @@ const styles = StyleSheet.create({
         marginBottom: 32,
     },
     title: {
+        fontFamily: fonts.bold,
         fontSize: 24,
-        fontWeight: '700',
         color: DS.text,
         lineHeight: 32,
         marginBottom: 12,
     },
     titleHighlight: {
+        fontFamily: fonts.bold,
         color: DS.cyan,
     },
     subtitle: {
+        fontFamily: fonts.regular,
         fontSize: 15,
-        fontWeight: '400',
         color: DS.textSecondary,
         lineHeight: 22,
     },
@@ -187,8 +189,8 @@ const styles = StyleSheet.create({
         marginBottom: 2,
     },
     optionTitle: {
+        fontFamily: fonts.semibold,
         fontSize: 17,
-        fontWeight: '600',
         color: DS.text,
     },
     optionTitleSelected: {
@@ -201,13 +203,13 @@ const styles = StyleSheet.create({
         paddingVertical: 2,
     },
     recommendedText: {
+        fontFamily: fonts.bold,
         fontSize: 10,
-        fontWeight: '700',
         color: DS.bg,
     },
     optionDescription: {
+        fontFamily: fonts.regular,
         fontSize: 13,
-        fontWeight: '400',
         color: DS.textSecondary,
     },
     tipCard: {
@@ -216,8 +218,8 @@ const styles = StyleSheet.create({
         padding: 16,
     },
     tipText: {
+        fontFamily: fonts.regular,
         fontSize: 13,
-        fontWeight: '400',
         color: DS.textSecondary,
         lineHeight: 18,
     },

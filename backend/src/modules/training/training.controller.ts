@@ -739,6 +739,49 @@ export class TrainingController {
   }
 
   /**
+   * Read the existing deep-dive briefing for a workout (no generation).
+   * Returns { briefing: null } when none exists yet. Not Pro-gated: reading is
+   * harmless and lets the client decide between the "+" prompt and the saved
+   * content on screen load.
+   */
+  @Get('workouts/:id/briefing')
+  async getWorkoutBriefing(
+    @User('id') userId: string,
+    @Param('id') workoutId: string,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+
+    const briefing = await this.trainingService.getWorkoutBriefing(
+      userId,
+      workoutId,
+    );
+    return { briefing };
+  }
+
+  /**
+   * Generate (or return the existing) deep-dive coach briefing for a workout.
+   * Pro-only feature — generated once per workout, on demand, then persisted.
+   */
+  @Post('workouts/:id/briefing')
+  @UseGuards(ProGuard)
+  async generateWorkoutBriefing(
+    @User('id') userId: string,
+    @Param('id') workoutId: string,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+
+    const briefing = await this.trainingService.generateWorkoutBriefing(
+      userId,
+      workoutId,
+    );
+    return { briefing };
+  }
+
+  /**
    * Mark workout as skipped
    */
   @Put('workouts/:id/skip')
