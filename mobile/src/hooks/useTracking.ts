@@ -15,6 +15,9 @@ export function useTracking(workoutId?: string) {
   const [currentPace, setCurrentPace] = useState(0); // minutos por km
   const [isReady, setIsReady] = useState(false);
   const [initialPosition, setInitialPosition] = useState<[number, number] | null>(null);
+  // Controla a tela de Prominent Disclosure de localização (Google Play). True
+  // quando há permissão a pedir e ainda não exibimos/resolvemos a divulgação.
+  const [locationDisclosureVisible, setLocationDisclosureVisible] = useState(false);
   // Precisão crua do último update de GPS, em metros (-1 = desconhecida).
   // Alimenta o indicador de qualidade de sinal. Escrita pela locationTask antes
   // dos filtros, lida aqui no sync de 500ms enquanto está treinando.
@@ -28,42 +31,35 @@ export function useTracking(workoutId?: string) {
   // só re-parseamos route_points quando a locationTask escreveu um ponto novo.
   const lastRouteVersionRef = useRef<number>(0);
 
-  // Carrega estado anterior se houver (recuperação de crash)
+  // Helper: posição inicial rápida para o mapa abrir em nível de rua (UX Uber-like).
+  // Usa cache do sistema (instantâneo) com fallback para posição atual (low accuracy
+  // = rápido). Requer FG concedida; chamado após as permissões serem resolvidas.
+  const fetchInitialPosition = useCallback(async () => {
+    try {
+      const lastKnown = await Location.getLastKnownPositionAsync();
+      if (lastKnown) {
+        setInitialPosition([lastKnown.coords.longitude, lastKnown.coords.latitude]);
+      } else {
+        const current = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Low,
+        });
+        setInitialPosition([current.coords.longitude, current.coords.latitude]);
+      }
+    } catch (e) {
+      console.warn('[useTracking] Não foi possível obter posição inicial');
+    }
+  }, []);
+
+  // Carrega estado anterior se houver (recuperação de crash) e resolve permissões.
+  // IMPORTANTE: o pedido nativo de permissão de localização NÃO é mais disparado
+  // aqui. No mount apenas LEMOS o status; se houver permissão a pedir, exibimos a
+  // tela de Prominent Disclosure (LocationDisclosureModal) e só o toque do usuário
+  // em "Permitir localização" dispara o pedido real (requestLocationPermission).
+  // Exigência da política "Prominent Disclosure & Consent" do Google Play.
   useEffect(() => {
     const initializeTracker = async () => {
       try {
-        let { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
-        if (fgStatus !== 'granted') {
-          console.warn('Permissão foreground negada');
-          // setIsReady(true) ainda é chamado — a tela não pode ficar bloqueada
-          setIsReady(true);
-          return;
-        }
-
-        // No Android 14+, requestBackgroundPermissionsAsync abre as Configurações do sistema
-        // e pode retornar 'denied' sem nenhum diálogo. Não bloquear o isReady por isso.
-        let { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
-        if (bgStatus !== 'granted') {
-          console.warn('Permissão background negada — tracking só funcionará em foreground');
-        }
-
-        // Obtém posição inicial rápida para o mapa abrir em nível de rua (UX Uber-like)
-        // Usa cache do sistema (instantâneo) com fallback para posição atual (low accuracy = rápido)
-        try {
-          const lastKnown = await Location.getLastKnownPositionAsync();
-          if (lastKnown) {
-            setInitialPosition([lastKnown.coords.longitude, lastKnown.coords.latitude]);
-          } else {
-            const current = await Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.Low,
-            });
-            setInitialPosition([current.coords.longitude, current.coords.latitude]);
-          }
-        } catch (e) {
-          console.warn('[useTracking] Não foi possível obter posição inicial');
-        }
-
-        // ── Crash-recovery com identificação de sessão ───────────────────────
+        // ── Crash-recovery com identificação de sessão (independe de permissão) ──
         // Identifica a sessão atual: workoutId real ou chave sentinela para corridas livres
         const currentSessionKey = workoutId || FREE_RUN_SESSION_KEY;
         const storedSessionKey = trackingStorage.getString('tracking_workout_id') || '';
@@ -104,6 +100,23 @@ export function useTracking(workoutId?: string) {
           // Dados de outra sessão / expirados / finalizados → apenas loga.
           // A limpeza acontece em startResumeTracking quando o usuário iniciar.
           console.log(`[useTracking] Dados de sessão diferente ou expirada ignorados. stored="${storedSessionKey}", current="${currentSessionKey}", finished=${wasFinished}, expired=${isExpired}`);
+        }
+
+        // ── Permissões: apenas LÊ o status (não dispara popup nativo aqui) ──────
+        const fg = await Location.getForegroundPermissionsAsync();
+        const bg = await Location.getBackgroundPermissionsAsync();
+
+        if (fg.status === 'granted' && bg.status === 'granted') {
+          // Tudo já concedido → segue direto, sem incomodar o usuário.
+          await fetchInitialPosition();
+        } else if (fg.status !== 'granted' || (bg.status !== 'granted' && bg.canAskAgain)) {
+          // Há permissão a pedir → exibe a Prominent Disclosure ANTES de qualquer
+          // popup nativo. O pedido real só ocorre em requestLocationPermission.
+          setLocationDisclosureVisible(true);
+        } else {
+          // FG concedida, BG negada permanentemente (canAskAgain=false) → não insiste
+          // (o SO não vai mais perguntar); segue em modo foreground-only.
+          await fetchInitialPosition();
         }
       } catch (e) {
         console.error('[useTracking] Erro na inicialização:', e);
@@ -356,6 +369,52 @@ export function useTracking(workoutId?: string) {
       return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  // Handler do botão "Permitir localização" da Prominent Disclosure. ESTE é o
+  // ÚNICO ponto que dispara os popups nativos de permissão de localização —
+  // sempre precedido pela tela de divulgação do RunEasy (exigência do Google Play).
+  // Retorna `true` se a corrida pode prosseguir (foreground concedido), `false`
+  // caso o usuário negue o foreground no popup nativo — aí a screen sai da tela.
+  const requestLocationPermission = useCallback(async (): Promise<boolean> => {
+    setLocationDisclosureVisible(false);
+    try {
+      const fg = await Location.requestForegroundPermissionsAsync();
+      if (fg.status !== 'granted') {
+        console.warn('[useTracking] Permissão foreground negada');
+        return false;
+      }
+      // Android 14+: requestBackgroundPermissionsAsync pode abrir as Configurações
+      // do sistema e retornar 'denied' sem diálogo. Não bloqueia o fluxo.
+      const bg = await Location.requestBackgroundPermissionsAsync();
+      if (bg.status !== 'granted') {
+        console.warn('[useTracking] Permissão background negada — tracking só funcionará em foreground');
+      }
+      await fetchInitialPosition();
+      return true;
+    } catch (e) {
+      console.error('[useTracking] Erro ao solicitar permissão de localização:', e);
+      return false;
+    }
+  }, [fetchInitialPosition]);
+
+  // Handler do botão "Agora não": fecha a divulgação SEM consentir e SEM disparar
+  // qualquer popup nativo. Se o foreground JÁ estiver concedido, a corrida segue
+  // em modo foreground-only (carrega o mapa) → retorna `true`. Sem nenhuma
+  // permissão de localização não há o que rastrear → retorna `false` e a screen
+  // sai da tela (evita ficar preso em "Localizando você...").
+  const dismissLocationDisclosure = useCallback(async (): Promise<boolean> => {
+    setLocationDisclosureVisible(false);
+    try {
+      const fg = await Location.getForegroundPermissionsAsync();
+      if (fg.status === 'granted') {
+        await fetchInitialPosition();
+        return true;
+      }
+    } catch (e) {
+      console.warn('[useTracking] Erro ao verificar permissão de foreground:', e);
+    }
+    return false;
+  }, [fetchInitialPosition]);
+
   return {
     isReady,
     sessionState,
@@ -370,5 +429,8 @@ export function useTracking(workoutId?: string) {
     pauseTracking,
     finishTracking,
     clearTracking,
+    locationDisclosureVisible,
+    requestLocationPermission,
+    dismissLocationDisclosure,
   };
 }
