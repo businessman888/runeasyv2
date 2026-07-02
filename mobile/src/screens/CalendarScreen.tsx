@@ -28,6 +28,9 @@ import { ProTeaseBadge } from '../components/upgrade/ProTeaseBadge';
 import { PlanGeneratingOverlay } from '../components/loading/PlanGeneratingOverlay';
 import { usePlanGenerationGate } from '../hooks/usePlanGenerationGate';
 import { SegmentedTabs } from '../components/ui/SegmentedTabs';
+import { AgendaCalendar, type CalendarViewMode } from '../components/calendar/AgendaCalendar';
+import type { CalendarDayStatus } from '../components/calendar/StatusDot';
+import { startOfDay, toLocalDateStr } from '../components/calendar/useCalendarGrid';
 import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
 import { WorkoutDayCard, type DayWorkout } from '../components/training/WorkoutDayCard';
 import { useProFeature } from '../hooks/useProFeature';
@@ -57,14 +60,6 @@ function BellIcon({ size = 24, color = '#EBEBF5' }: { size?: number; color?: str
 
 function GoalsIcon({ size = 24, color = '#EBEBF5' }: { size?: number; color?: string }) {
     return <MaterialCommunityIcons name="clipboard-list-outline" size={size} color={color} />;
-}
-
-function CheckIcon({ size = 16, color = '#32CD32' }: { size?: number; color?: string }) {
-    return <Ionicons name="checkmark" size={size} color={color} />;
-}
-
-function XIcon({ size = 14, color = '#FF4444' }: { size?: number; color?: string }) {
-    return <Ionicons name="close" size={size} color={color} />;
 }
 
 function BoltIcon({ size = 14, color = '#A78BFA' }: { size?: number; color?: string }) {
@@ -191,8 +186,11 @@ export function CalendarScreen({ navigation }: any) {
     // Free users on the Treinos tab get the conversion teaser: a blurred mock
     // calendar + locked day card with the upgrade card floating on top.
     const isPlanTease = !isProUser && scope === 'plan';
-    const [selectedDate, setSelectedDate] = React.useState(new Date().getDate());
+    // Full Date (not day-of-month) so the Week view can select days that spill
+    // into the previous/next month. `currentMonth` stays the fetch anchor.
+    const [selectedDay, setSelectedDay] = React.useState<Date>(() => startOfDay(new Date()));
     const [currentMonth, setCurrentMonth] = React.useState(new Date());
+    const [viewMode, setViewMode] = React.useState<CalendarViewMode>('week');
     // Plan-generation lock — shared gate hook (reads trainingStore.generationStatus
     // + polls while focused, independent of the Pro flag).
     const { isGenerating: isScheduleLocked } = usePlanGenerationGate({
@@ -395,21 +393,63 @@ export function CalendarScreen({ navigation }: any) {
             .sort((a, b) => rank(a.source) - rank(b.source));
     };
 
-    // Calendar marker for the Atividades tab — no recovery concept here.
-    const getActivityStatusForDay = (day: number | null): 'completed' | 'planned' | null => {
-        if (!day) return null;
-        const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const dayWorkouts = activityWorkouts.filter(w => w.scheduled_date === dateStr);
-        if (dayWorkouts.length === 0) return null;
-        if (dayWorkouts.some(w => w.status === 'completed')) return 'completed';
-        return 'planned';
+    // Day press from the calendar → select that day (full Date).
+    const handleDayPress = (day: Date) => {
+        setSelectedDay(day);
     };
 
-    // Day press: just select the day. The previous double-click-opens-modal
-    // shortcut was removed — modal entry is now exclusively via the
-    // "Ver detalhes do treino" button on a pending workout card.
-    const handleDayPress = (day: number) => {
-        setSelectedDate(day);
+    // Calendar navigation: month mode steps by month, week mode by week.
+    // Keeps `currentMonth` (the fetch anchor) in sync when a week crosses months.
+    const handleCalendarNavigate = (direction: -1 | 1) => {
+        if (viewMode === 'month') {
+            setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + direction, 1));
+            return;
+        }
+        const next = startOfDay(selectedDay);
+        next.setDate(next.getDate() + direction * 7);
+        setSelectedDay(next);
+        if (next.getMonth() !== currentMonth.getMonth() || next.getFullYear() !== currentMonth.getFullYear()) {
+            setCurrentMonth(new Date(next.getFullYear(), next.getMonth(), 1));
+        }
+    };
+
+    // "Hoje": return to the current period and select today.
+    const handleToday = () => {
+        const now = startOfDay(new Date());
+        setSelectedDay(now);
+        setCurrentMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+    };
+
+    // Per-date status for the calendar dots, keyed by YYYY-MM-DD so the week
+    // view can span months (old day-number lookups assumed the visible month).
+    // Consolidates the former plan / activity / Free-mock markers. Only the
+    // visual representation changed (dots), not this status derivation.
+    const getCalendarStatus = (dateStr: string): CalendarDayStatus | null => {
+        if (isPlanTease) {
+            // Decorative mock behind the glass: rest Sun/Thu, past done, future planned.
+            const d = new Date(`${dateStr}T00:00:00`);
+            const dow = d.getDay();
+            if (dow === 0 || dow === 4) return 'recovery';
+            const today = startOfDay(new Date());
+            return d.getTime() < today.getTime() ? 'completed' : 'planned';
+        }
+        if (scope === 'activity') {
+            const dayWorkouts = activityWorkouts.filter(w => w.scheduled_date === dateStr);
+            if (dayWorkouts.length === 0) return null;
+            if (dayWorkouts.some(w => w.status === 'completed')) return 'completed';
+            return 'planned';
+        }
+        // Treinos tab: a plan rest day where a manual/free run was logged stays a
+        // rest day here (that run shows on the Atividades tab instead).
+        const scheduleDay = schedule.find(s => s.date === dateStr) || null;
+        if (!scheduleDay || scheduleDay.type === null) return null;
+        if (scheduleDay.type === 'recovery') return 'recovery';
+        const src = scheduleDay.workout?.source;
+        if (src === 'manual' || src === 'free') return 'recovery';
+        if (scheduleDay.status === 'completed') return 'completed';
+        if (scheduleDay.status === 'missed') return 'missed';
+        if (scheduleDay.status === 'pending') return 'planned';
+        return null;
     };
 
     // Close modal
@@ -507,81 +547,8 @@ export function CalendarScreen({ navigation }: any) {
         if (fullWorkout) handleWorkoutCardPress(fullWorkout);
     };
 
-    const getDaysInMonth = () => {
-        const year = currentMonth.getFullYear();
-        const month = currentMonth.getMonth();
-        const firstDay = new Date(year, month, 1).getDay();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-        const days = [];
-        for (let i = 0; i < firstDay; i++) {
-            days.push(null);
-        }
-        for (let i = 1; i <= daysInMonth; i++) {
-            days.push(i);
-        }
-        return days;
-    };
-
-    // Get workout status for a day based on API schedule data
-    const getScheduleForDay = (day: number): ScheduleDay | null => {
-        const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        return schedule.find(s => s.date === dateStr) || null;
-    };
-
-    // Get workout status for a day based on API data
-    // Returns null for days outside plan period (no icon rendered)
-    const getWorkoutStatus = (day: number | null): 'completed' | 'missed' | 'planned' | 'recovery' | null => {
-        if (!day) return null;
-        const scheduleDay = getScheduleForDay(day);
-        if (!scheduleDay) return null;
-
-        // Days outside plan period have type: null - don't render any icon
-        if (scheduleDay.type === null) return null;
-
-        if (scheduleDay.type === 'recovery') return 'recovery';
-        if (scheduleDay.status === 'completed') return 'completed';
-        if (scheduleDay.status === 'missed') return 'missed';
-        if (scheduleDay.status === 'pending') return 'planned';
-        return null;
-    };
-
-    // Plan-tab marker. The backend flips a plan rest day to type:'workout' when
-    // the user logs a manual/free run on it (workoutsByDate prefers plan, else
-    // falls back to the activity). For the Treinos tab a rest day must STAY a
-    // rest day (purple bolt) regardless of activities — those belong to the
-    // Atividades tab. So when the day's primary workout is manual/free, treat it
-    // as recovery here. Anything else (plan, or legacy null source) is a plan workout.
-    const getPlanStatusForDay = (day: number | null): 'completed' | 'missed' | 'planned' | 'recovery' | null => {
-        if (!day) return null;
-        const scheduleDay = getScheduleForDay(day);
-        if (!scheduleDay || scheduleDay.type === null) return null;
-        if (scheduleDay.type === 'recovery') return 'recovery';
-        const src = scheduleDay.workout?.source;
-        if (src === 'manual' || src === 'free') return 'recovery';
-        if (scheduleDay.status === 'completed') return 'completed';
-        if (scheduleDay.status === 'missed') return 'missed';
-        if (scheduleDay.status === 'pending') return 'planned';
-        return null;
-    };
-
-    // Deterministic mock status for the Free teaser grid — fills the calendar
-    // with a believable plan: rest on Sun/Thu, past days completed, future
-    // days planned. Purely decorative (rendered behind the glass blur).
-    const getMockStatusForDay = (day: number | null): 'completed' | 'missed' | 'planned' | 'recovery' | null => {
-        if (!day) return null;
-        const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-        const dow = date.getDay();
-        if (dow === 0 || dow === 4) return 'recovery';
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return date.getTime() < today.getTime() ? 'completed' : 'planned';
-    };
-
-    // Derived: Get schedule for selected date (reactive to selectedDate)
-    const getSelectedDateStr = () => {
-        return `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`;
-    };
+    // Derived: schedule key for the selected day (local YYYY-MM-DD).
+    const getSelectedDateStr = () => toLocalDateStr(selectedDay);
     const selectedDateSchedule = schedule.find(s => s.date === getSelectedDateStr()) || null;
     const isSelectedDateRecovery = selectedDateSchedule?.type === 'recovery';
     // Plan-tab recovery: a true recovery day, OR a plan rest day where the user
@@ -607,21 +574,16 @@ export function CalendarScreen({ navigation }: any) {
     const scopedSelectedWorkouts = scope === 'plan' ? planSelectedWorkouts : activitySelectedWorkouts;
     const scopedTotalKm = scopedSelectedWorkouts.reduce((sum, w) => sum + (w.distance_km || 0), 0);
 
-    // Check if selected date is today
+    // Check if selected day is today
     const isSelectedDateToday = () => {
-        const today = new Date();
-        const selected = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), selectedDate);
-        today.setHours(0, 0, 0, 0);
-        selected.setHours(0, 0, 0, 0);
-        return selected.getTime() === today.getTime();
+        const today = startOfDay(new Date());
+        return startOfDay(selectedDay).getTime() === today.getTime();
     };
 
     // Format selected date label (Hoje, Amanhã, or weekday)
     const formatSelectedDateLabel = () => {
-        const today = new Date();
-        const selected = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), selectedDate);
-        today.setHours(0, 0, 0, 0);
-        selected.setHours(0, 0, 0, 0);
+        const today = startOfDay(new Date());
+        const selected = startOfDay(selectedDay);
         if (selected.getTime() === today.getTime()) return 'Hoje';
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
@@ -632,7 +594,7 @@ export function CalendarScreen({ navigation }: any) {
 
     // Format selected date display (e.g., "7 de JAN")
     const formatSelectedDateDisplay = () => {
-        return `${selectedDate} de ${monthNames[currentMonth.getMonth()].slice(0, 3).toUpperCase()}`;
+        return `${selectedDay.getDate()} de ${monthNames[selectedDay.getMonth()].slice(0, 3).toUpperCase()}`;
     };
 
     // Get tomorrow's entry
@@ -640,87 +602,7 @@ export function CalendarScreen({ navigation }: any) {
 
     const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
         'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-    const weekDays = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
-
     const insets = useSafeAreaInsets();
-    const days = getDaysInMonth();
-
-    // Calendar grid body (week header + days + legend), parameterized by the
-    // status function so it can render real data OR the Free teaser mockup.
-    const renderGridContent = (
-        getStatus: (day: number | null) => 'completed' | 'missed' | 'planned' | 'recovery' | null,
-    ) => (
-        <>
-            {/* Week days header */}
-            <View style={styles.weekDaysRow}>
-                {weekDays.map((day, i) => (
-                    <Text key={i} style={styles.weekDayText}>{day}</Text>
-                ))}
-            </View>
-
-            {/* Days grid */}
-            <View style={styles.daysGrid}>
-                {days.map((day, index) => {
-                    const workoutStatus = getStatus(day);
-                    const isSelected = day === selectedDate;
-
-                    return (
-                        <TouchableOpacity
-                            key={index}
-                            style={styles.dayCell}
-                            onPress={() => day && handleDayPress(day)}
-                            disabled={!day}
-                        >
-                            {day ? (
-                                <View style={[
-                                    styles.dayContent,
-                                    isSelected && styles.daySelected,
-                                ]}>
-                                    <Text style={[
-                                        styles.dayNumber,
-                                        isSelected && styles.dayNumberSelected,
-                                    ]}>
-                                        {day}
-                                    </Text>
-                                    {/* Workout indicator based on API type/status */}
-                                    {workoutStatus === 'completed' && !isSelected && (
-                                        <View style={styles.completedIndicator}>
-                                            <CheckIcon size={14} color="#32CD32" />
-                                        </View>
-                                    )}
-                                    {workoutStatus === 'missed' && !isSelected && (
-                                        <View style={styles.missedIndicator}>
-                                            <XIcon size={12} color="#FF4444" />
-                                        </View>
-                                    )}
-                                    {workoutStatus === 'recovery' && !isSelected && (
-                                        <View style={styles.recoveryIndicator}>
-                                            <BoltIcon size={12} color="#A78BFA" />
-                                        </View>
-                                    )}
-                                    {workoutStatus === 'planned' && !isSelected && (
-                                        <View style={styles.plannedIndicator} />
-                                    )}
-                                </View>
-                            ) : null}
-                        </TouchableOpacity>
-                    );
-                })}
-            </View>
-
-            {/* Legend - inside calendar card */}
-            <View style={styles.legend}>
-                <View style={styles.legendItem}>
-                    <View style={styles.legendLine} />
-                    <Text style={styles.legendText}>Rodagem</Text>
-                </View>
-                <View style={styles.legendItem}>
-                    <View style={[styles.legendLine, styles.legendLineCyan]} />
-                    <Text style={styles.legendText}>Intervalado</Text>
-                </View>
-            </View>
-        </>
-    );
 
     // Responsividade: phone (isTablet=false) usa o caminho original. Tablet
     // landscape divide o grid (esquerda) e o detalhe do dia (direita).
@@ -757,6 +639,14 @@ export function CalendarScreen({ navigation }: any) {
                     </TouchableOpacity>
                 </View>
 
+                {/* ── Treinos | Atividades — acima do card de stats ─────────────── */}
+                <SegmentedTabs
+                    tabs={SCOPE_TABS}
+                    activeKey={scope}
+                    onChange={setScope}
+                    style={styles.scopeTabs}
+                />
+
                 {/* Stats Bar */}
                 <View style={styles.statsBar}>
                     {/* Stats Row */}
@@ -780,14 +670,6 @@ export function CalendarScreen({ navigation }: any) {
 
                 </View>
 
-                {/* ── Treinos | Atividades ─────────────────────────────────────── */}
-                <SegmentedTabs
-                    tabs={SCOPE_TABS}
-                    activeKey={scope}
-                    onChange={setScope}
-                    style={styles.scopeTabs}
-                />
-
                 {/* Cold-load skeleton — só no primeiro carregamento sem dados em cache.
                     A grade do calendário é baseada em datas (renderiza na hora), então o
                     skeleton cobre apenas o bloco dependente de dados do plano/treinos. */}
@@ -801,32 +683,12 @@ export function CalendarScreen({ navigation }: any) {
                     do dia à direita. Phone/portrait: empilhado (idêntico). */}
                 <View style={masterDetail ? styles.mdRow : undefined}>
                 <View style={masterDetail ? styles.mdLeft : undefined}>
-                {/* Month Selector */}
-                <View style={styles.monthSelector}>
-                    <Text style={styles.monthTitle}>
-                        {monthNames[currentMonth.getMonth()]} <Text style={styles.yearText}>{currentMonth.getFullYear()}</Text>
-                    </Text>
-                    <View style={styles.monthNav}>
-                        <TouchableOpacity
-                            style={styles.monthNavButton}
-                            onPress={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
-                        >
-                            <Ionicons name="chevron-back" size={20} color="rgba(235, 235, 245, 0.8)" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.monthNavButton}
-                            onPress={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
-                        >
-                            <Ionicons name="chevron-forward" size={20} color="rgba(235, 235, 245, 0.8)" />
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                {/* Calendar Grid — Free + Treinos shows a blurred mock plan with
-                    the upgrade card floating on top; everyone else sees real data. */}
+                {/* Calendar — Free + Treinos shows a blurred mock plan with the
+                    upgrade card floating on top; everyone else sees real data.
+                    The nav row / month label now lives inside AgendaCalendar. */}
                 {isPlanTease ? (
                     <GlassTeaseOverlay
-                        radius={24}
+                        radius={30}
                         premiumBorder={false}
                         style={styles.calendarTease}
                         overlay={
@@ -842,14 +704,30 @@ export function CalendarScreen({ navigation }: any) {
                             />
                         }
                     >
-                        <View style={[styles.calendarContainer, styles.calendarTeaseInner]}>
-                            {renderGridContent(getMockStatusForDay)}
-                        </View>
+                        <AgendaCalendar
+                            disableGlass
+                            viewMode={viewMode}
+                            onViewModeChange={setViewMode}
+                            selectedDay={selectedDay}
+                            onSelectDay={handleDayPress}
+                            currentMonth={currentMonth}
+                            onNavigate={handleCalendarNavigate}
+                            onToday={handleToday}
+                            getStatus={getCalendarStatus}
+                        />
                     </GlassTeaseOverlay>
                 ) : (
-                    <View style={styles.calendarContainer}>
-                        {renderGridContent(scope === 'plan' ? getPlanStatusForDay : getActivityStatusForDay)}
-                    </View>
+                    <AgendaCalendar
+                        viewMode={viewMode}
+                        onViewModeChange={setViewMode}
+                        selectedDay={selectedDay}
+                        onSelectDay={handleDayPress}
+                        currentMonth={currentMonth}
+                        onNavigate={handleCalendarNavigate}
+                        onToday={handleToday}
+                        getStatus={getCalendarStatus}
+                        style={styles.calendarWrap}
+                    />
                 )}
                 </View>{/* fim coluna esquerda (master-detail) */}
 
@@ -1163,57 +1041,15 @@ const styles = StyleSheet.create({
         marginHorizontal: spacing.lg,
         marginTop: spacing.md,
     },
-    monthSelector: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: spacing.lg,
-        marginBottom: spacing.lg,
-        marginTop: spacing.md,
-    },
-    monthTitle: {
-        fontSize: typography.fontSizes['2xl'],
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#FFFFFF',
-    },
-    yearText: {
-        fontWeight: typography.fontWeights.normal as any,
-        color: 'rgba(235, 235, 245, 0.4)',
-    },
-    monthNav: {
-        flexDirection: 'row',
-        gap: spacing.md,
-    },
-    monthNavButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.25)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    chevronIcon: {
-        fontSize: 18,
-        color: 'rgba(235, 235, 245, 0.6)',
-    },
-    calendarContainer: {
-        backgroundColor: '#1C1C2E',
+    // AgendaCalendar card outer margins (the glass card itself carries radius/blur).
+    calendarWrap: {
         marginHorizontal: spacing.md,
         marginBottom: spacing.lg,
-        borderRadius: 24,
-        paddingVertical: spacing.xl,
-        paddingHorizontal: spacing.md,
     },
-    // Free teaser: GlassTeaseOverlay carries the outer margin/radius; the inner
-    // calendar drops its own margin so it fills the overlay edge-to-edge.
+    // Free teaser: GlassTeaseOverlay carries the outer margin/radius/blur.
     calendarTease: {
         marginHorizontal: spacing.md,
         marginBottom: spacing.lg,
-    },
-    calendarTeaseInner: {
-        marginHorizontal: 0,
-        marginBottom: 0,
     },
     calendarTeaseCard: {
         width: '100%',
@@ -1235,93 +1071,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         lineHeight: 20,
         textAlign: 'center',
-    },
-    weekDaysRow: {
-        flexDirection: 'row',
-        marginBottom: spacing.lg,
-    },
-    weekDayText: {
-        flex: 1,
-        textAlign: 'center',
-        fontSize: typography.fontSizes.sm,
-        color: 'rgba(235, 235, 245, 0.4)',
-    },
-    daysGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-    },
-    dayCell: {
-        width: '14.28%',
-        height: 60,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: spacing.sm,
-    },
-    dayContent: {
-        width: 36,
-        height: 36,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: 18,
-        position: 'relative',
-    },
-    daySelected: {
-        backgroundColor: '#00D4FF',
-        width: 40,
-        height: 56,
-        borderRadius: 20,
-    },
-    dayNumber: {
-        fontSize: 16,
-        color: 'rgba(235, 235, 245, 0.8)',
-    },
-    dayNumberSelected: {
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#0A0A18',
-    },
-    completedIndicator: {
-        position: 'absolute',
-        bottom: -8,
-    },
-    plannedIndicator: {
-        position: 'absolute',
-        bottom: -8,
-        width: 20,
-        height: 3,
-        borderRadius: 1.5,
-        backgroundColor: '#00D4FF',
-    },
-    missedIndicator: {
-        position: 'absolute',
-        bottom: -8,
-    },
-    recoveryIndicator: {
-        position: 'absolute',
-        bottom: -8,
-    },
-    legend: {
-        flexDirection: 'row',
-        justifyContent: 'flex-start',
-        paddingHorizontal: spacing.md,
-        gap: spacing.xl,
-        marginTop: spacing.lg,
-    },
-    legendItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.sm,
-    },
-    legendLine: {
-        width: 24,
-        height: 2,
-        backgroundColor: 'rgba(235, 235, 245, 0.3)',
-    },
-    legendLineCyan: {
-        backgroundColor: '#00D4FF',
-    },
-    legendText: {
-        fontSize: 16,
-        color: 'rgba(235, 235, 245, 0.6)',
     },
     todaySection: {
         paddingHorizontal: spacing.lg,
