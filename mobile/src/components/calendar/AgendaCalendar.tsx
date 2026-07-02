@@ -2,16 +2,16 @@ import React, { memo, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
-    FadeIn,
+    Easing,
     useAnimatedStyle,
     useReducedMotion,
     useSharedValue,
-    withSpring,
+    withTiming,
 } from 'react-native-reanimated';
 import { colors, fonts } from '../../theme';
 import { GlassSurface } from '../ui/GlassSurface';
 import { CalendarDay, CELL_HEIGHT } from './CalendarDay';
-import { StatusDot, type CalendarDayStatus } from './StatusDot';
+import { DayIndicator, type CalendarDayStatus } from './DayIndicator';
 import { useCalendarGrid, toLocalDateStr, isSameDay, startOfDay } from './useCalendarGrid';
 
 export type CalendarViewMode = 'week' | 'month';
@@ -27,11 +27,12 @@ const STATUS_A11Y: Record<CalendarDayStatus, string> = {
 
 // Layout constants (px). Grid height is computed from these so the week↔month
 // transition can animate between two known heights (no measurement race).
-const HEADER_H = 20;
-const HEADER_MB = 8;
-const ROW_GAP = 6;
-// "Padrão equilibrado" da Apple HIG (references/motion.md): rápido e preciso.
-const SPRING = { damping: 18, stiffness: 190 } as const;
+const HEADER_H = 22;
+const HEADER_MB = 10;
+const ROW_GAP = 8;
+// Quick, precise ease — no spring overshoot → smoother collapse/expand,
+// especially over the glass blur on mid-range Android.
+const DURATION = 300;
 
 function monthHeight(numWeeks: number): number {
     return HEADER_H + HEADER_MB + numWeeks * CELL_HEIGHT + (numWeeks - 1) * ROW_GAP;
@@ -77,7 +78,9 @@ function AgendaCalendarInner({
         height.value = targetHeight;
     }, [targetHeight, height]);
     const gridAnimatedStyle = useAnimatedStyle(() => ({
-        height: reducedMotion ? height.value : withSpring(height.value, SPRING),
+        height: reducedMotion
+            ? height.value
+            : withTiming(height.value, { duration: DURATION, easing: Easing.out(Easing.cubic) }),
     }));
 
     // ── Period label ────────────────────────────────────────────────────────
@@ -114,7 +117,7 @@ function AgendaCalendarInner({
     );
 
     return (
-        <GlassSurface radius={30} disableBlur={disableGlass} bordered={!disableGlass} style={[styles.card, style]}>
+        <GlassSurface radius={30} disableBlur={disableGlass} bordered={false} style={[styles.card, style]}>
             {/* Navigation row */}
             <View style={styles.navRow}>
                 <View style={styles.navLeft}>
@@ -187,20 +190,16 @@ function AgendaCalendarInner({
                                 </Text>
                             ))}
                         </View>
-                        {monthWeeks.map((week, wi) => {
-                            const RowWrapper = reducedMotion ? View : Animated.View;
-                            return (
-                                <RowWrapper
-                                    key={`w-${week[0].getTime()}`}
-                                    entering={reducedMotion ? undefined : FadeIn.duration(200).delay(wi * 30)}
-                                    style={[styles.row, wi < monthWeeks.length - 1 && styles.rowGap]}
-                                >
-                                    {week.map((date) =>
-                                        renderDay(date, { inMonth: date.getMonth() === currentMonth.getMonth() }),
-                                    )}
-                                </RowWrapper>
-                            );
-                        })}
+                        {monthWeeks.map((week, wi) => (
+                            <View
+                                key={`w-${week[0].getTime()}`}
+                                style={[styles.row, wi < monthWeeks.length - 1 && styles.rowGap]}
+                            >
+                                {week.map((date) =>
+                                    renderDay(date, { inMonth: date.getMonth() === currentMonth.getMonth() }),
+                                )}
+                            </View>
+                        ))}
                     </View>
                 ) : (
                     <View style={styles.row}>
@@ -213,11 +212,11 @@ function AgendaCalendarInner({
             {viewMode === 'month' && (
                 <View style={styles.legend}>
                     <View style={styles.legendItem}>
-                        <StatusDot status="planned" />
+                        <DayIndicator status="planned" />
                         <Text style={styles.legendText}>Treino</Text>
                     </View>
                     <View style={styles.legendItem}>
-                        <StatusDot status="recovery" />
+                        <DayIndicator status="recovery" />
                         <Text style={styles.legendText}>Descanso</Text>
                     </View>
                 </View>

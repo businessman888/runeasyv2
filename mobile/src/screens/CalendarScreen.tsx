@@ -29,7 +29,7 @@ import { PlanGeneratingOverlay } from '../components/loading/PlanGeneratingOverl
 import { usePlanGenerationGate } from '../hooks/usePlanGenerationGate';
 import { SegmentedTabs } from '../components/ui/SegmentedTabs';
 import { AgendaCalendar, type CalendarViewMode } from '../components/calendar/AgendaCalendar';
-import type { CalendarDayStatus } from '../components/calendar/StatusDot';
+import type { CalendarDayStatus } from '../components/calendar/DayIndicator';
 import { startOfDay, toLocalDateStr } from '../components/calendar/useCalendarGrid';
 import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
 import { WorkoutDayCard, type DayWorkout } from '../components/training/WorkoutDayCard';
@@ -190,7 +190,7 @@ export function CalendarScreen({ navigation }: any) {
     // into the previous/next month. `currentMonth` stays the fetch anchor.
     const [selectedDay, setSelectedDay] = React.useState<Date>(() => startOfDay(new Date()));
     const [currentMonth, setCurrentMonth] = React.useState(new Date());
-    const [viewMode, setViewMode] = React.useState<CalendarViewMode>('week');
+    const [viewMode, setViewMode] = React.useState<CalendarViewMode>('month');
     // Plan-generation lock — shared gate hook (reads trainingStore.generationStatus
     // + polls while focused, independent of the Pro flag).
     const { isGenerating: isScheduleLocked } = usePlanGenerationGate({

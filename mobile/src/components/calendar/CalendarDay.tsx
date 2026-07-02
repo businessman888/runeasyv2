@@ -1,24 +1,25 @@
 import React, { memo, useCallback } from 'react';
 import { Pressable, Text, View, StyleSheet } from 'react-native';
 import { colors, fonts } from '../../theme';
-import { StatusDot, type CalendarDayStatus } from './StatusDot';
+import { DayIndicator, STATUS_COLORS, type CalendarDayStatus } from './DayIndicator';
 
 /**
- * A single calendar cell. Two visual jobs:
- *  - Non-selected day: number (+ status dot below it).
- *  - Selected day: a cyan "stadium" capsule that extends vertically beyond the
- *    cell, wrapping a dark inner circle with the number, plus (week mode only)
- *    the weekday label above it. The status dot sits at the bottom edge inside
- *    the circle.
+ * A single calendar cell. Vertical flex stack (no absolutely-positioned dots):
+ *   [weekday label — week mode only]
+ *   [circle with the day number]
+ *   [status indicator icon]
  *
- * `weekday` is passed only in week mode (month mode has a shared header row), so
- * the same capsule naturally wraps the label in week mode and just the number
- * in month mode. Extracted from Figma nodes 1537:1723 / 1537:1725.
+ * Selected day: a "stadium" capsule tinted by the day's status (green = done,
+ * red = missed, purple = rest, cyan = upcoming) sits behind the stack, with the
+ * number in a dark inner circle. The indicator is kept (color + icon, never
+ * color alone) but tinted dark for contrast on the colored capsule.
+ *
+ * `weekday` is passed only in week mode (month mode has a shared header row).
  */
 
-export const CELL_HEIGHT = 62;
-const CAPSULE_W = 44;
-const CIRCLE = 34;
+export const CELL_HEIGHT = 78;
+const CAPSULE_W = 48;
+const CIRCLE = 40;
 
 interface CalendarDayProps {
     date: Date;
@@ -49,17 +50,22 @@ function CalendarDayInner({
     if (!inMonth) return <View style={styles.cell} />;
 
     const hasLabel = weekday != null;
+    // Selected capsule takes the status color; default cyan when the day has no
+    // status (e.g. an upcoming plan day the user just tapped).
+    const capsuleColor = STATUS_COLORS[status ?? 'planned'];
 
     return (
         <Pressable
-            style={[styles.cell, hasLabel ? styles.cellWithLabel : styles.cellCentered]}
+            style={styles.cell}
             onPress={handlePress}
             accessibilityRole="button"
             accessibilityLabel={accessibilityLabel ?? String(date.getDate())}
             accessibilityState={{ selected: isSelected }}
         >
-            {/* Cyan stadium capsule — behind the content, extends past the cell. */}
-            {isSelected && <View style={styles.capsule} pointerEvents="none" />}
+            {/* Status-colored stadium capsule behind the content. */}
+            {isSelected && (
+                <View style={[styles.capsule, { backgroundColor: capsuleColor }]} pointerEvents="none" />
+            )}
 
             {hasLabel && (
                 <Text style={[styles.weekday, isSelected && styles.weekdaySelected]}>
@@ -76,10 +82,14 @@ function CalendarDayInner({
                 >
                     {date.getDate()}
                 </Text>
+            </View>
+
+            <View style={styles.indicatorSlot}>
                 {status && (
-                    <View style={styles.dotWrap} pointerEvents="none">
-                        <StatusDot status={status} />
-                    </View>
+                    <DayIndicator
+                        status={status}
+                        color={isSelected ? colors.backgroundLight : undefined}
+                    />
                 )}
             </View>
         </Pressable>
@@ -93,18 +103,12 @@ const styles = StyleSheet.create({
         flex: 1,
         height: CELL_HEIGHT,
         alignItems: 'center',
+        justifyContent: 'center',
         position: 'relative',
     },
-    cellCentered: {
-        justifyContent: 'center',
-    },
-    cellWithLabel: {
-        justifyContent: 'space-between',
-        paddingVertical: 5,
-    },
-    // Fills the full cell height (taller than the neighbours' number+dot
-    // content, so it reads as the raised "stadium" from Figma) without spilling
-    // past the cell — the animated grid clips overflow during the transition.
+    // Full-height stadium: taller than the neighbours' number+icon content, so
+    // it reads as a raised pill without spilling past the cell (the animated
+    // grid clips overflow during the week↔month transition).
     capsule: {
         position: 'absolute',
         top: 0,
@@ -113,42 +117,42 @@ const styles = StyleSheet.create({
         width: CAPSULE_W,
         transform: [{ translateX: -CAPSULE_W / 2 }],
         borderRadius: CAPSULE_W / 2,
-        backgroundColor: colors.primary,
     },
     weekday: {
         fontFamily: fonts.medium,
         fontSize: 12,
         color: colors.textLight,
+        marginBottom: 3,
     },
     weekdaySelected: {
-        color: colors.backgroundLight, // navy on cyan
+        color: colors.backgroundLight, // navy on the colored capsule
     },
     circle: {
         width: CIRCLE,
         height: CIRCLE,
+        aspectRatio: 1,
         borderRadius: CIRCLE / 2,
+        overflow: 'hidden',
         alignItems: 'center',
         justifyContent: 'center',
-        position: 'relative',
     },
     circleSelected: {
         backgroundColor: colors.backgroundLight, // #0E0E1F
     },
     number: {
         fontFamily: fonts.medium,
-        fontSize: 15,
+        fontSize: 16,
         color: colors.white,
     },
     numberToday: {
         color: colors.primary,
         fontFamily: fonts.bold,
     },
-    dotWrap: {
-        position: 'absolute',
-        bottom: 3,
-        left: 0,
-        right: 0,
+    indicatorSlot: {
+        height: 16,
+        marginTop: 2,
         alignItems: 'center',
+        justifyContent: 'center',
     },
 });
 
