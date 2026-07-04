@@ -36,18 +36,41 @@ interface SummaryStats {
     longest_run_km: number | null;
 }
 
+// Period-scoped summary powering the Calendar stats card. Mirrors the backend
+// PeriodSummaryResponse (stats/dto/period-summary-query.dto.ts).
+export type StatsScope = 'activities' | 'workouts';
+export type StatsPeriod = 'week' | 'month';
+export interface PeriodBreakdownItem {
+    label: string;
+    distance_km: number;
+}
+export interface PeriodSummary {
+    distance_km: number;
+    time_minutes: number;
+    frequency: { value: number; total: number };
+    breakdown: PeriodBreakdownItem[];
+}
+
 interface StatsState {
     weeklyStats: WeeklyStats[];
     monthlyStats: MonthlyStats[];
     paceProgression: PaceProgression[];
     summary: SummaryStats | null;
+    periodSummary: PeriodSummary | null;
     isLoading: boolean;
+    isPeriodLoading: boolean;
     error: string | null;
+    periodError: string | null;
 
     fetchWeeklyStats: (weeks?: number) => Promise<void>;
     fetchMonthlyStats: (months?: number) => Promise<void>;
     fetchPaceProgression: (limit?: number) => Promise<void>;
     fetchSummary: () => Promise<void>;
+    fetchPeriodSummary: (
+        scope: StatsScope,
+        period: StatsPeriod,
+        referenceDate?: string,
+    ) => Promise<void>;
     fetchAllStats: () => Promise<void>;
 }
 
@@ -63,8 +86,11 @@ export const useStatsStore = create<StatsState>((set) => ({
     monthlyStats: [],
     paceProgression: [],
     summary: null,
+    periodSummary: null,
     isLoading: false,
+    isPeriodLoading: false,
     error: null,
+    periodError: null,
 
     fetchWeeklyStats: async (weeks = 12) => {
         try {
@@ -138,6 +164,34 @@ export const useStatsStore = create<StatsState>((set) => ({
             }
         } catch (error) {
             console.error('Summary stats error:', error);
+        }
+    },
+
+    fetchPeriodSummary: async (scope, period, referenceDate) => {
+        try {
+            set({ isPeriodLoading: true, periodError: null });
+            const userId = await getUserId();
+            if (!userId) {
+                set({ isPeriodLoading: false });
+                return;
+            }
+
+            const params = new URLSearchParams({ scope, period });
+            if (referenceDate) params.set('reference_date', referenceDate);
+
+            const response = await authedFetch(
+                `${API_URL}/stats/period-summary?${params.toString()}`,
+                { headers: { 'x-user-id': userId } },
+            );
+
+            if (response.ok) {
+                const data: PeriodSummary = await response.json();
+                set({ periodSummary: data });
+            }
+        } catch (error) {
+            set({ periodError: 'Falha ao carregar estatísticas do período' });
+        } finally {
+            set({ isPeriodLoading: false });
         }
     },
 

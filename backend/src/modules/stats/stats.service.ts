@@ -1,5 +1,23 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../database';
+import {
+  PeriodSummaryQueryDto,
+  StatsScope,
+  StatsPeriod,
+  PeriodSummaryResponse,
+  PeriodBreakdownItem,
+} from './dto/period-summary-query.dto';
+import {
+  saoPauloTodayStr,
+  toSaoPauloDateStr,
+} from '../training/wellness/helpers/streak.helper';
+
+interface PeriodRecord {
+  dayStr: string; // local (São Paulo) YYYY-MM-DD
+  distanceKm: number;
+  seconds: number;
+}
+const WEEKDAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 
 export interface WeeklyStats {
   week_start: string;
@@ -252,6 +270,149 @@ export class StatsService {
         ? Math.round((longestRun[0].distance / 1000) * 10) / 10
         : null,
     };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Period summary — Distância/Tempo/Freq + per-bar breakdown, scoped by
+  // period (week/month) AND by scope (activities = executed, workouts =
+  // planned). Powers the Calendar stats card. Independent from
+  // getSummaryStats (all-time), which other screens still consume.
+  // ──────────────────────────────────────────────────────────────────────
+  async getPeriodSummary(
+    userId: string,
+    query: PeriodSummaryQueryDto,
+  ): Promise<PeriodSummaryResponse> {
+    const referenceDate = query.reference_date || saoPauloTodayStr();
+    const { startStr, endStr } = this.getPeriodBounds(
+      query.period,
+      referenceDate,
+    );
+    const periodDays = this.countDaysInclusive(startStr, endStr);
+
+    let records: PeriodRecord[];
+
+    if (query.scope === StatsScope.workouts) {
+      // Planned data — scheduled_date is a plain local date (no TZ).
+      const { data, error } = await this.supabaseService
+        .from('workouts')
+        .select(
+          'scheduled_date, distance_km, target_duration_seconds, target_pace_seconds',
+        )
+        .eq('user_id', userId)
+        .gte('scheduled_date', startStr)
+        .lte('scheduled_date', endStr);
+      if (error) throw error;
+      records = (data || []).map((w) => {
+        const km = Number(w.distance_km) || 0;
+        // Prefer stored planned duration; fall back to distance × target pace
+        // (AI plan workouts don't always persist target_duration_seconds).
+        const seconds =
+          Number(w.target_duration_seconds) ||
+          (w.target_pace_seconds ? km * Number(w.target_pace_seconds) : 0);
+        return { dayStr: w.scheduled_date as string, distanceKm: km, seconds };
+      });
+    } else {
+      // Executed data — start_date is a UTC timestamp. Query a São-Paulo-aware
+      // window, then bucket each row by its local (SP) day.
+      const { data, error } = await this.supabaseService
+        .from('activities')
+        .select('start_date, distance, moving_time')
+        .eq('user_id', userId)
+        .gte('start_date', `${startStr}T00:00:00-03:00`)
+        .lte('start_date', `${endStr}T23:59:59-03:00`);
+      if (error) throw error;
+      records = (data || []).map((a) => ({
+        dayStr: toSaoPauloDateStr(a.start_date as string),
+        distanceKm: (Number(a.distance) || 0) / 1000, // meters → km
+        seconds: Number(a.moving_time) || 0,
+      }));
+    }
+
+    // The activities window can bleed one edge day — keep only local days
+    // actually inside the period.
+    records = records.filter((r) => r.dayStr >= startStr && r.dayStr <= endStr);
+
+    const totalDistanceKm = records.reduce((s, r) => s + r.distanceKm, 0);
+    const totalSeconds = records.reduce((s, r) => s + r.seconds, 0);
+    // Freq = DISTINCT days with activity/workout (fixes the old "count of
+    // activities" bug where two runs on one day counted as 2).
+    const activeDays = new Set(records.map((r) => r.dayStr)).size;
+
+    return {
+      distance_km: Math.round(totalDistanceKm * 10) / 10,
+      time_minutes: Math.round(totalSeconds / 60),
+      frequency: { value: activeDays, total: periodDays },
+      breakdown: this.buildBreakdown(records, query.period, referenceDate),
+    };
+  }
+
+  /** Inclusive [start, end] date-string bounds for the period (São Paulo). */
+  private getPeriodBounds(
+    period: StatsPeriod,
+    referenceDate: string,
+  ): { startStr: string; endStr: string } {
+    const [y, m, d] = referenceDate.split('-').map(Number);
+    if (period === StatsPeriod.month) {
+      const mm = String(m).padStart(2, '0');
+      const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      return {
+        startStr: `${y}-${mm}-01`,
+        endStr: `${y}-${mm}-${String(lastDay).padStart(2, '0')}`,
+      };
+    }
+    // week: Sunday..Saturday containing referenceDate
+    const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = Sunday
+    const startStr = this.addDaysStr(referenceDate, -dow);
+    return { startStr, endStr: this.addDaysStr(startStr, 6) };
+  }
+
+  private addDaysStr(dateStr: string, days: number): string {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() + days);
+    return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+  }
+
+  private countDaysInclusive(startStr: string, endStr: string): number {
+    const [ys, ms, ds] = startStr.split('-').map(Number);
+    const [ye, me, de] = endStr.split('-').map(Number);
+    const diff = Date.UTC(ye, me - 1, de) - Date.UTC(ys, ms - 1, ds);
+    return Math.round(diff / 86400000) + 1;
+  }
+
+  /** week → 7 bars (Dom-Sab); month → 4-5 bars by calendar week ("Sem N"). */
+  private buildBreakdown(
+    records: PeriodRecord[],
+    period: StatsPeriod,
+    referenceDate: string,
+  ): PeriodBreakdownItem[] {
+    const round1 = (v: number) => Math.round(v * 10) / 10;
+
+    if (period === StatsPeriod.week) {
+      const sums = new Array<number>(7).fill(0);
+      for (const r of records) {
+        const [y, m, d] = r.dayStr.split('-').map(Number);
+        const idx = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0..6
+        sums[idx] += r.distanceKm;
+      }
+      return WEEKDAY_LABELS.map((label, i) => ({
+        label,
+        distance_km: round1(sums[i]),
+      }));
+    }
+
+    // month: bucket by calendar week-of-month (Dom-Sab weeks)
+    const [y, m] = referenceDate.split('-').map(Number);
+    const firstDow = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+    const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const numWeeks = Math.ceil((daysInMonth + firstDow) / 7);
+    const sums = new Array<number>(numWeeks).fill(0);
+    for (const r of records) {
+      const dayOfMonth = Number(r.dayStr.split('-')[2]);
+      const idx = Math.floor((dayOfMonth - 1 + firstDow) / 7);
+      if (idx >= 0 && idx < numWeeks) sums[idx] += r.distanceKm;
+    }
+    return sums.map((v, i) => ({ label: `Sem ${i + 1}`, distance_km: round1(v) }));
   }
 
   private inferWorkoutType(

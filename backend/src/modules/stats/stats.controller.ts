@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { User } from '../../common/decorators';
 import { StatsService } from './stats.service';
+import { PeriodSummaryQueryDto } from './dto/period-summary-query.dto';
 
 @Controller('stats')
 export class StatsController {
@@ -84,5 +85,22 @@ export class StatsController {
     const data = await this.statsService.getSummaryStats(userId);
 
     return { summary: data };
+  }
+
+  /**
+   * Period-scoped summary (Distância/Tempo/Freq + chart breakdown) for the
+   * Calendar stats card. Scoped by period (week/month) and scope
+   * (activities = executed, workouts = planned). Returns the payload directly.
+   */
+  @Get('period-summary')
+  async getPeriodSummary(
+    @User('id') userId: string,
+    @Query() query: PeriodSummaryQueryDto,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+
+    return this.statsService.getPeriodSummary(userId, query);
   }
 }

@@ -17,7 +17,7 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows, fonts } from '../theme';
 import { useResponsiveTheme } from '../theme/responsive';
 import { ZONE_COLORS, ZONE_LABELS, PHASE_LABELS, getZoneColor } from '../theme/zoneColors';
-import { useTrainingStore, useStatsStore, useWorkoutScopeStore, useTrialModalStore, ScheduleDay } from '../stores';
+import { useTrainingStore, useWorkoutScopeStore, useTrialModalStore, ScheduleDay } from '../stores';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
 import type { TrainingZone, WorkoutPhase } from '../stores/trainingStore';
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -29,6 +29,7 @@ import { PlanGeneratingOverlay } from '../components/loading/PlanGeneratingOverl
 import { usePlanGenerationGate } from '../hooks/usePlanGenerationGate';
 import { SegmentedTabs } from '../components/ui/SegmentedTabs';
 import { AgendaCalendar, type CalendarViewMode } from '../components/calendar/AgendaCalendar';
+import { StatsPeriodCard } from '../components/calendar/StatsPeriodCard';
 import type { CalendarDayStatus } from '../components/calendar/DayIndicator';
 import { startOfDay, toLocalDateStr } from '../components/calendar/useCalendarGrid';
 import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
@@ -173,7 +174,6 @@ interface WorkoutData {
 
 export function CalendarScreen({ navigation }: any) {
     const { workouts: rawWorkouts, fetchWorkouts, fetchUpcomingWorkouts, plan, fetchPlan, generationStatus, checkPlanStatus, schedule: rawSchedule, fetchSchedule, isLoading: isTrainingLoading } = useTrainingStore();
-    const { summary, fetchSummary } = useStatsStore();
     const { isProUser } = useProFeature();
     const { scope, setScope } = useWorkoutScopeStore();
     const { startRun } = useStartWorkoutFlow();
@@ -254,7 +254,6 @@ export function CalendarScreen({ navigation }: any) {
         fetchSchedule(start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
         fetchWorkouts(start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
         fetchUpcomingWorkouts();
-        fetchSummary();
     }, [currentMonth]);
 
     // Refetch data when screen gains focus for reactivity
@@ -265,7 +264,6 @@ export function CalendarScreen({ navigation }: any) {
             fetchSchedule(start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
             fetchWorkouts(start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
             fetchUpcomingWorkouts();
-            fetchSummary();
             fetchPlan();
         }, [currentMonth])
     );
@@ -647,28 +645,9 @@ export function CalendarScreen({ navigation }: any) {
                     style={styles.scopeTabs}
                 />
 
-                {/* Stats Bar */}
-                <View style={styles.statsBar}>
-                    {/* Stats Row */}
-                    <View style={styles.statsRow}>
-                        <View style={styles.statItem}>
-                            <Text style={styles.statLabel}>Volume</Text>
-                            <View style={styles.statValueRow}>
-                                <Text style={styles.statValue}>{Math.round(summary?.total_distance_km || 0)}</Text>
-                                <Text style={styles.statUnit}> km</Text>
-                            </View>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.statItem}>
-                            <Text style={styles.statLabel}>Frequência</Text>
-                            <View style={styles.statValueRow}>
-                                <Text style={styles.statValue}>{summary?.total_runs || 0}</Text>
-                                <Text style={styles.statUnitMuted}> dias</Text>
-                            </View>
-                        </View>
-                    </View>
-
-                </View>
+                {/* Stats card — Distância/Tempo/Freq + gráfico, escopado por período
+                    e pela aba ativa (reage a scope via useWorkoutScopeStore). */}
+                <StatsPeriodCard />
 
                 {/* Cold-load skeleton — só no primeiro carregamento sem dados em cache.
                     A grade do calendário é baseada em datas (renderiza na hora), então o
@@ -989,53 +968,6 @@ const styles = StyleSheet.create({
         height: 40,
         justifyContent: 'center',
         alignItems: 'center',
-    },
-    statsBar: {
-        flexDirection: 'column',
-        backgroundColor: '#15152A',
-        marginHorizontal: spacing.lg,
-        marginVertical: spacing.md,
-        borderRadius: borderRadius['2xl'],
-        borderWidth: 1,
-        borderColor: 'rgba(0, 212, 255, 0.3)',
-        padding: spacing.md,
-    },
-    statsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-
-    statItem: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    statDivider: {
-        width: 1,
-        alignSelf: 'stretch',
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        marginHorizontal: spacing.md,
-    },
-    statLabel: {
-        fontSize: typography.fontSizes.xs,
-        color: 'rgba(235, 235, 245, 0.6)',
-        marginBottom: 4,
-    },
-    statValueRow: {
-        flexDirection: 'row',
-        alignItems: 'baseline',
-    },
-    statValue: {
-        fontSize: typography.fontSizes['2xl'],
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#FFFFFF',
-    },
-    statUnit: {
-        fontSize: typography.fontSizes.sm,
-        color: '#00D4FF',
-    },
-    statUnitMuted: {
-        fontSize: typography.fontSizes.sm,
-        color: 'rgba(235, 235, 245, 0.4)',
     },
     scopeTabs: {
         marginHorizontal: spacing.lg,
