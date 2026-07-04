@@ -292,25 +292,27 @@ export class StatsService {
     let records: PeriodRecord[];
 
     if (query.scope === StatsScope.workouts) {
-      // Planned data — scheduled_date is a plain local date (no TZ).
+      // Plan tab = REAL executed plan workouts (not the schedule). Only
+      // completed rows count; executed metrics live in distance_run /
+      // time_run_seconds (set on completion — training.service.ts). A user who
+      // hasn't run anything therefore sees zeros. scheduled_date is a plain
+      // local date (no TZ). distance_km is the planned fallback for legacy
+      // completed rows that predate distance_run (mirrors plan-overview).
       const { data, error } = await this.supabaseService
         .from('workouts')
         .select(
-          'scheduled_date, distance_km, target_duration_seconds, target_pace_seconds',
+          'scheduled_date, distance_run, distance_km, time_run_seconds, status',
         )
         .eq('user_id', userId)
+        .eq('status', 'completed')
         .gte('scheduled_date', startStr)
         .lte('scheduled_date', endStr);
       if (error) throw error;
-      records = (data || []).map((w) => {
-        const km = Number(w.distance_km) || 0;
-        // Prefer stored planned duration; fall back to distance × target pace
-        // (AI plan workouts don't always persist target_duration_seconds).
-        const seconds =
-          Number(w.target_duration_seconds) ||
-          (w.target_pace_seconds ? km * Number(w.target_pace_seconds) : 0);
-        return { dayStr: w.scheduled_date as string, distanceKm: km, seconds };
-      });
+      records = (data || []).map((w) => ({
+        dayStr: w.scheduled_date as string,
+        distanceKm: Number(w.distance_run ?? w.distance_km) || 0,
+        seconds: Number(w.time_run_seconds) || 0,
+      }));
     } else {
       // Executed data — start_date is a UTC timestamp. Query a São-Paulo-aware
       // window, then bucket each row by its local (SP) day.

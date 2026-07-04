@@ -39,13 +39,22 @@ function niceScale(max: number): NiceScale {
 
 const fmt = (v: number) => (Number.isInteger(v) ? `${v}` : v.toFixed(1));
 
+// Taller bar (more km) → stronger cyan; shorter → fainter. Makes the chart read
+// as "alive"/interactive. Base is the app cyan (colors.primary = #00D4FF).
+function barColor(ratio: number): string {
+    const t = Math.max(0, Math.min(1, ratio));
+    const opacity = 0.32 + 0.68 * t;
+    return `rgba(0, 212, 255, ${opacity.toFixed(2)})`;
+}
+
 interface BarProps {
     value: number;
     niceMax: number;
     index: number;
+    color: string;
 }
 
-const Bar = memo(function Bar({ value, niceMax, index }: BarProps) {
+const Bar = memo(function Bar({ value, niceMax, index, color }: BarProps) {
     const reduced = useReducedMotion();
     const progress = useSharedValue(0);
     const heightPct = niceMax > 0 ? Math.min(value / niceMax, 1) : 0;
@@ -64,7 +73,7 @@ const Bar = memo(function Bar({ value, niceMax, index }: BarProps) {
 
     return (
         <View style={styles.barTrack}>
-            <Animated.View style={[styles.bar, animatedStyle]} />
+            <Animated.View style={[styles.bar, { backgroundColor: color }, animatedStyle]} />
         </View>
     );
 });
@@ -86,7 +95,13 @@ export const StatsBarChart = memo(function StatsBarChart({ data, animKey }: Stat
                 <View style={styles.barsArea}>
                     {data.map((d, i) => (
                         <View key={`${animKey}-col-${i}`} style={styles.column}>
-                            <Bar key={`${animKey}-bar-${i}`} value={d.distance_km} niceMax={niceMax} index={i} />
+                            <Bar
+                                key={`${animKey}-bar-${i}`}
+                                value={d.distance_km}
+                                niceMax={niceMax}
+                                index={i}
+                                color={barColor(max > 0 ? d.distance_km / max : 0)}
+                            />
                             <Text style={styles.dayLabel} numberOfLines={1}>
                                 {d.label}
                             </Text>
@@ -138,7 +153,6 @@ const styles = StyleSheet.create({
         width: '74%',
         maxWidth: 44,
         borderRadius: 10,
-        backgroundColor: colors.textLight,
     },
     dayLabel: {
         marginTop: 6,
