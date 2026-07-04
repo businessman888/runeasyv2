@@ -645,6 +645,7 @@ export function CalendarScreen({ navigation }: any) {
                     style={styles.scopeTabs}
                 />
 
+                <Text style={styles.sectionTitle}>Estatísticas</Text>
                 {/* Stats card — Distância/Tempo/Freq + gráfico, escopado por período
                     e pela aba ativa (reage a scope via useWorkoutScopeStore). */}
                 <StatsPeriodCard />
@@ -658,6 +659,7 @@ export function CalendarScreen({ navigation }: any) {
                     </View>
                 ) : null}
 
+                <Text style={styles.sectionTitle}>Calendário</Text>
                 {/* Master-detail (tablet landscape): mês+grid à esquerda, detalhe
                     do dia à direita. Phone/portrait: empilhado (idêntico). */}
                 <View style={masterDetail ? styles.mdRow : undefined}>
@@ -972,6 +974,16 @@ const styles = StyleSheet.create({
     scopeTabs: {
         marginHorizontal: spacing.lg,
         marginTop: spacing.md,
+    },
+    // Section title above each section ("Estatísticas", "Calendário") — mirrors
+    // the Home screen's section headers (15px semibold, light).
+    sectionTitle: {
+        fontFamily: fonts.semibold,
+        fontSize: 15,
+        color: colors.textLight,
+        marginLeft: spacing.lg,
+        marginTop: spacing.md,
+        marginBottom: spacing.sm,
     },
     // AgendaCalendar card outer margins (the glass card itself carries radius/blur).
     calendarWrap: {

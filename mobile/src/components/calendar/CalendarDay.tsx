@@ -18,8 +18,7 @@ import { DayIndicator, STATUS_COLORS, type CalendarDayStatus } from './DayIndica
  */
 
 export const CELL_HEIGHT = 78;
-const CAPSULE_W = 48;
-const CIRCLE = 40;
+const CIRCLE = 36;
 
 interface CalendarDayProps {
     date: Date;
@@ -106,17 +105,18 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         position: 'relative',
     },
-    // Full-height stadium: taller than the neighbours' number+icon content, so
-    // it reads as a raised pill without spilling past the cell (the animated
-    // grid clips overflow during the week↔month transition).
+    // Inset from the cell's left/right edges so its width ADAPTS to the column
+    // and never exceeds it. A fixed width wider than the column overflowed the
+    // cell and got clipped by the grid's overflow:hidden on the edge columns
+    // (Dom/Sab). Full cell height → taller than the neighbours' content, so it
+    // still reads as a raised stadium.
     capsule: {
         position: 'absolute',
         top: 0,
         bottom: 0,
-        left: '50%',
-        width: CAPSULE_W,
-        transform: [{ translateX: -CAPSULE_W / 2 }],
-        borderRadius: CAPSULE_W / 2,
+        left: 2,
+        right: 2,
+        borderRadius: 20,
     },
     weekday: {
         fontFamily: fonts.medium,
