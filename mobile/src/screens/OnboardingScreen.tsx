@@ -149,6 +149,14 @@ interface QuizStep {
 // A construção da TestimonialsScreen é preservada; apenas removemos a step do array ativo.
 const SHOW_TESTIMONIALS = false;
 
+// Step de código de indicação (referral) oculta para conformidade com a Guideline
+// 3.1.1 da Apple: a variante de paywall com desconto por código foi desativada, e
+// a tela promovia um benefício. Mesmo padrão dos depoimentos — o componente e o
+// endpoint de atribuição (POST /referral/apply) permanecem intactos no código;
+// apenas removemos a step do fluxo ativo. Reativar (Fase 2, via Offer Codes da
+// Apple) é só voltar para true.
+const SHOW_REFERRAL = false;
+
 // Full step catalogue. The active subset is computed per-render from the user's
 // goal_type / use_manual_race_date (see activeSteps below). Everything up to and
 // including 'goal_type' is common to both paths, so currentStep stays valid when
@@ -204,6 +212,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             if (step.key === 'manualRaceDate' && !(isRaceGoal && data.use_manual_race_date)) return false;
             if (step.key === 'goalTimeframe' && isRaceGoal) return false;  // horizon = race date
             if (step.key === '__i_testimonials' && !SHOW_TESTIMONIALS) return false; // depoimentos ocultos
+            if (step.key === 'referralCode' && !SHOW_REFERRAL) return false; // referral oculto (Apple 3.1.1)
             return true;
         });
     }, [isRaceGoal, data.use_manual_race_date]);
@@ -277,6 +286,23 @@ export function OnboardingScreen({ navigation, route }: any) {
     // Track XP credited per step index, so back-and-forth doesn't double-pay
     const xpCreditedRef = useRef<Set<number>>(new Set());
 
+    // Advance to the next step, or finish the quiz when this is the last active
+    // step. Centralizes the "am I the last step?" logic so it stays correct as
+    // the active list shrinks — hiding later steps (referral, testimonials) can
+    // make a non-Continue step (e.g. the wearable Yes/No step) the last one,
+    // which would otherwise run off the end and never reach Quiz_PlanLoading.
+    const advanceOrFinish = () => {
+        if (safeStep === TOTAL_INDICES - 1) {
+            if (!xpCreditedRef.current.has(-1)) {
+                addXP(XP_COMPLETION_BONUS);
+                xpCreditedRef.current.add(-1);
+            }
+            navigation.navigate('Quiz_PlanLoading', { userId });
+            return;
+        }
+        setCurrentStep(safeStep + 1);
+    };
+
     const handleContinue = () => {
         // Pace calculation when leaving DistanceTime (key-based — interstitials shifted indices)
         if (currentStepData.key === 'distanceTime' && data.distanceTime && data.recentDistance) {
@@ -308,17 +334,8 @@ export function OnboardingScreen({ navigation, route }: any) {
             xpCreditedRef.current.add(safeStep);
         }
 
-        // Last index → completion bonus + navigate
-        if (safeStep === TOTAL_INDICES - 1) {
-            if (!xpCreditedRef.current.has(-1)) {
-                addXP(XP_COMPLETION_BONUS);
-                xpCreditedRef.current.add(-1);
-            }
-            navigation.navigate('Quiz_PlanLoading', { userId });
-            return;
-        }
-
-        setCurrentStep(safeStep + 1);
+        // Advance, or finish the quiz if this is the last active step.
+        advanceOrFinish();
     };
 
     const handleBack = () => {
@@ -339,20 +356,21 @@ export function OnboardingScreen({ navigation, route }: any) {
             addXP(XP_PER_QUESTION);
             xpCreditedRef.current.add(safeStep);
         }
-        // Advance to the referral-code step (the new last index). Completion
-        // bonus is now awarded only when the user clicks Continue on that step.
-        setCurrentStep(safeStep + 1);
+        // Advance, or finish the quiz if the wearable step is the last active one
+        // (it can be now that referral/testimonials are hidden — this step uses
+        // its own Yes/No buttons, not the Continue button).
+        advanceOrFinish();
     };
 
     const handleWearableConnect = () => {
-        // User picked a provider in the modal → award per-question XP and
-        // advance to the referral-code step. Completion bonus + navigation to
-        // Quiz_PlanLoading happen from handleContinue at the final step.
+        // User picked a provider in the modal → award per-question XP and advance.
+        // If the wearable step is the last active one (referral hidden), finish
+        // the quiz here (this step uses Yes/No buttons, not the Continue button).
         if (!xpCreditedRef.current.has(safeStep)) {
             addXP(XP_PER_QUESTION);
             xpCreditedRef.current.add(safeStep);
         }
-        setCurrentStep(safeStep + 1);
+        advanceOrFinish();
     };
 
     const handleWearableModalClose = () => {

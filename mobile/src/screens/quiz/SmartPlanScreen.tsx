@@ -22,7 +22,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { usePlacement } from 'expo-superwall';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PAYWALL_PLACEMENTS } from '../../services/paywall';
-import { referralService } from '../../services/referralService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -137,22 +136,19 @@ export function SmartPlanScreen({ navigation, route }: any) {
     }, []);
 
     // ── Trigger: paywall placement ──
-    // Decide entre REFERRAL_ACTIVATED (com desconto) e ONBOARDING_COMPLETE
-    // consultando /referral/status. Buscar do servidor garante correção
-    // mesmo após cold-restart, já que o store de onboarding não persiste.
+    // Sempre o paywall padrão de onboarding. O placement de desconto por código
+    // de indicação (REFERRAL_ACTIVATED) foi desativado para conformidade com a
+    // Guideline 3.1.1 da Apple — um desconto não pode ser desbloqueado por código
+    // proprietário. A atribuição (POST /referral/apply) permanece intacta no
+    // backend; apenas o benefício deixou de ser disparado pela UI.
     useEffect(() => {
         if (!isPro) {
             (async () => {
                 try {
-                    const status = await referralService.getStatus();
-                    const placement = status.has_referral
-                        ? PAYWALL_PLACEMENTS.REFERRAL_ACTIVATED
-                        : PAYWALL_PLACEMENTS.ONBOARDING_COMPLETE;
-                    const params = status.has_referral
-                        ? { influencer_code: status.code }
-                        : undefined;
-                    console.log(`[Paywall] Registrando placement: ${placement}`);
-                    await registerPlacement({ placement, params });
+                    console.log('[Paywall] Registrando placement: onboarding_complete');
+                    await registerPlacement({
+                        placement: PAYWALL_PLACEMENTS.ONBOARDING_COMPLETE,
+                    });
                 } catch (err) {
                     console.warn('[Paywall] Erro ao registrar placement onboarding:', err);
                 }

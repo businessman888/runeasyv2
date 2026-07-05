@@ -40,7 +40,6 @@ export class ReferralService {
   async validate(code: string): Promise<{
     valid: boolean;
     influencer_name?: string;
-    discount_description?: string;
     message?: string;
   }> {
     const normalized = code.trim().toLowerCase();
@@ -65,7 +64,6 @@ export class ReferralService {
     return {
       valid: true,
       influencer_name: data.name,
-      discount_description: 'Desconto especial no seu primeiro mês',
     };
   }
 

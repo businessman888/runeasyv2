@@ -66,7 +66,7 @@ export function ReferralCodeScreen({
         if (referralCode && referralInfluencerId && status === 'idle') {
             setInput(referralCode);
             setStatus('success');
-            setStatusMessage('Código aplicado! Desconto desbloqueado');
+            setStatusMessage('Código aplicado!');
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -95,7 +95,7 @@ export function ReferralCodeScreen({
             setStatusMessage(
                 validation.influencer_name
                     ? `Código aplicado! Indicado por ${validation.influencer_name}`
-                    : 'Código aplicado! Desconto desbloqueado',
+                    : 'Código aplicado!',
             );
             onChangeRef.current?.({
                 referralCode: code.toUpperCase(),
@@ -151,13 +151,13 @@ export function ReferralCodeScreen({
             <View style={styles.titleContainer}>
                 <Text style={styles.title}>Tem um código de{'\n'}indicação?</Text>
                 <Text style={styles.subtitle}>
-                    Insira o código do seu criador favorito e ganhe um desconto especial
+                    Veio pela indicação de um criador? Insira o código dele aqui.
                 </Text>
             </View>
 
             <View style={styles.giftIconContainer}>
                 <View style={styles.giftIconCircle}>
-                    <MaterialCommunityIcons name="gift-outline" size={36} color={DS.cyan} />
+                    <MaterialCommunityIcons name="account-heart-outline" size={36} color={DS.cyan} />
                 </View>
             </View>
 

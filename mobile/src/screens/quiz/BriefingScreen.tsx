@@ -23,7 +23,6 @@ import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop, Circle as S
 import { usePlacement } from 'expo-superwall';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PAYWALL_PLACEMENTS } from '../../services/paywall';
-import { referralService } from '../../services/referralService';
 import {
     Archetype,
     getGoalLabel,
@@ -158,22 +157,17 @@ export function BriefingScreen({ navigation, route }: any) {
     };
 
     const handleConfirmAndStart = async () => {
-        // If not Pro, present the (single) paywall. Referral-aware: a valid
-        // influencer code routes to the discounted paywall, otherwise the
-        // standard onboarding paywall. Reading /referral/status from the server
-        // keeps this correct across cold restart (the onboarding store doesn't
-        // persist). If they close it (Free path), we still save onboarding and
-        // let them in — they'll see UpgradeProCard in gated sections.
+        // If not Pro, present the (single) onboarding paywall. The referral
+        // discount paywall (REFERRAL_ACTIVATED) was disabled for Apple Guideline
+        // 3.1.1 compliance — a discount can't be unlocked by a proprietary code.
+        // Backend attribution (POST /referral/apply) stays intact. If they close
+        // it (Free path), we still save onboarding and let them in — they'll see
+        // UpgradeProCard in gated sections.
         if (!isPro) {
             try {
-                const status = await referralService.getStatus();
-                const placement = status.has_referral
-                    ? PAYWALL_PLACEMENTS.REFERRAL_ACTIVATED
-                    : PAYWALL_PLACEMENTS.ONBOARDING_COMPLETE;
-                const params = status.has_referral
-                    ? { influencer_code: status.code }
-                    : undefined;
-                await registerPlacement({ placement, params });
+                await registerPlacement({
+                    placement: PAYWALL_PLACEMENTS.ONBOARDING_COMPLETE,
+                });
             } catch (err) {
                 console.warn('[Paywall] Erro ao registrar placement onboarding:', err);
             }
