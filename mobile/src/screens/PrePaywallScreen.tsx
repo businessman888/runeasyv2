@@ -74,13 +74,17 @@ export function PrePaywallScreen() {
   const { presentPaywall } = useProFeature();
 
   const handleClose = useCallback(() => {
-    navigation.goBack();
+    // Guard: the modal may already be dismissed (swipe-down gesture), leaving
+    // nothing to pop — an unguarded goBack throws "GO_BACK not handled".
+    if (navigation.canGoBack()) navigation.goBack();
   }, [navigation]);
 
   const handleStartTrial = useCallback(async () => {
     await presentPaywall();
     // Back to the origin screen; if the user converted it re-renders as Pro.
-    navigation.goBack();
+    // Guard: dismissing the Superwall paywall can already pop this modal, so a
+    // second goBack here would dispatch with no screen to go back to.
+    if (navigation.canGoBack()) navigation.goBack();
   }, [presentPaywall, navigation]);
 
   return (

@@ -20,7 +20,7 @@ import { useSubscriptionStore } from '../../stores/subscriptionStore';
 import { usePurchaseOutcomeStore } from '../../stores/purchaseOutcomeStore';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop, Circle as SvgCircle } from 'react-native-svg';
-import { usePlacement } from 'expo-superwall';
+import { usePlacement, useUser } from 'expo-superwall';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PAYWALL_PLACEMENTS } from '../../services/paywall';
 import {
@@ -112,7 +112,23 @@ export function BriefingScreen({ navigation, route }: any) {
     const isPro = useSubscriptionStore((s) => s.isProUser);
     const userId = route?.params?.userId;
     const archetype: Archetype = route?.params?.archetype;
-    const { registerPlacement } = usePlacement();
+    // Observabilidade do disparo (Superwall suporta esses callbacks nativamente).
+    // Em modo MANUAL, distinguir "apresentou" de "pulou por Holdout/status" é o
+    // que permite diagnosticar em runtime sem inferir pelo comportamento visual.
+    const { registerPlacement } = usePlacement({
+        onPresent: (info) =>
+            console.log('[Paywall onboarding_complete] onPresent:', info?.name),
+        onSkip: (reason) =>
+            console.log('[Paywall onboarding_complete] onSkip:', reason?.type),
+        onError: (error) =>
+            console.warn('[Paywall onboarding_complete] onError:', error),
+        onDismiss: (_info, result) =>
+            console.log('[Paywall onboarding_complete] onDismiss:', result?.type),
+    });
+    // Modo MANUAL de subscription status: precisamos resolver o status (não deixar
+    // UNKNOWN) antes do register, senão o Superwall segura o paywall. Espelha o
+    // fluxo que funciona (useProFeature.presentPaywall).
+    const { setSubscriptionStatus } = useUser();
     const insets = useSafeAreaInsets();
 
     // Disable Android hardware back
@@ -165,6 +181,12 @@ export function BriefingScreen({ navigation, route }: any) {
         // UpgradeProCard in gated sections.
         if (!isPro) {
             try {
+                // Resolve o subscription status ANTES do register. No modo MANUAL,
+                // um status UNKNOWN faz o Superwall segurar o paywall e liberar o
+                // usuário direto. Aqui estamos no ramo !isPro → INACTIVE (Free),
+                // que faz o paywall ser apresentado. Espelha useProFeature.ts.
+                await setSubscriptionStatus({ status: 'INACTIVE' });
+
                 await registerPlacement({
                     placement: PAYWALL_PLACEMENTS.ONBOARDING_COMPLETE,
                 });
