@@ -1,6 +1,7 @@
 export * from './LandingScreen';
-export * from './LoginScreen';
-export * from './RegisterScreen';
+export * from './auth/AuthScreen';
+// LoginScreen / RegisterScreen superseded by the single-card AuthScreen
+// (kept in the repo, unregistered from navigation, for easy revert).
 export * from './WelcomeScreen';
 export * from './OnboardingScreen';
 export * from './HomeScreen';

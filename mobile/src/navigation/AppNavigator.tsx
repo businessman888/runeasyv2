@@ -10,8 +10,7 @@ import { navigationRef, setNavigationReady } from './navigationRef';
 
 import {
     LandingScreen,
-    LoginScreen,
-    RegisterScreen,
+    AuthScreen,
     WelcomeScreen,
     OnboardingScreen,
     HomeScreen,
@@ -197,7 +196,7 @@ export function AppNavigator() {
                 console.log('[DeepLink] Path:', path);
 
                 // Google Auth callback is handled natively by GoogleSignin SDK
-                // No manual parsing needed — the LoginScreen handles the flow
+                // No manual parsing needed — the AuthScreen handles the flow
                 if (path.includes('google-auth')) {
                     console.log('[DeepLink] Google auth callback detected');
                 }
@@ -267,14 +266,13 @@ export function AppNavigator() {
                             component={LandingScreen}
                             options={{ headerShown: false }}
                         />
+                        {/* Single-card auth flow (method → email → signup). Keeps
+                            the "Login" route name so Landing + deep links are
+                            untouched. The old Register route is gone (its states
+                            now live inside AuthScreen). */}
                         <Stack.Screen
                             name="Login"
-                            component={LoginScreen}
-                            options={{ headerShown: false }}
-                        />
-                        <Stack.Screen
-                            name="Register"
-                            component={RegisterScreen}
+                            component={AuthScreen}
                             options={{ headerShown: false }}
                         />
                     </>
