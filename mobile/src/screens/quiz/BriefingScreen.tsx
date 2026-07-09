@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
@@ -12,6 +12,7 @@ import {
     Dimensions,
     Share,
     Alert,
+    ActivityIndicator,
 } from 'react-native';
 // CommonActions removed — AppNavigator handles transition via onboarding_completed state
 import { useOnboardingStore } from '../../stores/onboardingStore';
@@ -131,6 +132,13 @@ export function BriefingScreen({ navigation, route }: any) {
     const { setSubscriptionStatus } = useUser();
     const insets = useSafeAreaInsets();
 
+    // Guarda contra duplo disparo (double-tap). O ref é síncrono: bloqueia o
+    // segundo toque ANTES do re-render, coisa que só `setState` não garante
+    // (é assíncrono). O state espelhado (`isSubmitting`) existe só para o
+    // feedback visual do botão (loading/disabled). Ver [[project_freerun_flood_incident]].
+    const isSubmittingRef = useRef(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
     // Disable Android hardware back
     useEffect(() => {
         const backAction = () => true;
@@ -172,7 +180,24 @@ export function BriefingScreen({ navigation, route }: any) {
         } catch { }
     };
 
+    // Libera a guarda para permitir nova tentativa após uma falha real.
+    const releaseSubmitGuard = () => {
+        isSubmittingRef.current = false;
+        setIsSubmitting(false);
+    };
+
     const handleConfirmAndStart = async () => {
+        // Escopo 1 — Guarda de idempotência. Se já há um disparo em andamento,
+        // retorna cedo: cada toque repetido do usuário vira no-op. O ref é
+        // checado/setado de forma síncrona, então mesmo toques que aconteçam
+        // antes do próximo render são bloqueados.
+        if (isSubmittingRef.current) return;
+        isSubmittingRef.current = true;
+        // Escopo 3 — Feedback visual imediato: setado ANTES de qualquer await,
+        // para que o botão entre em loading/disabled instantaneamente e o
+        // usuário não tenha motivo pra tocar de novo.
+        setIsSubmitting(true);
+
         // If not Pro, present the (single) onboarding paywall. The referral
         // discount paywall (REFERRAL_ACTIVATED) was disabled for Apple Guideline
         // 3.1.1 compliance — a discount can't be unlocked by a proprietary code.
@@ -208,6 +233,7 @@ export function BriefingScreen({ navigation, route }: any) {
                     'Pagamento não concluído',
                     'Não conseguimos concluir sua assinatura. Você pode tentar novamente ou seguir no plano gratuito.',
                 );
+                releaseSubmitGuard();
                 return;
             }
         }
@@ -219,13 +245,19 @@ export function BriefingScreen({ navigation, route }: any) {
             const saved = await saveOnboardingOnly();
             if (!saved) {
                 Alert.alert('Erro', 'Não foi possível salvar seus dados. Tente novamente.');
+                releaseSubmitGuard();
                 return;
             }
         } catch (err) {
             console.error('[BriefingScreen] Failed to save onboarding:', err);
             Alert.alert('Erro', 'Não foi possível salvar seus dados. Tente novamente.');
+            releaseSubmitGuard();
             return;
         }
+
+        // Sucesso: NÃO liberamos a guarda. A tela sai de cena (AppNavigator
+        // troca a stack de onboarding pela principal ao ver onboarding_completed),
+        // então o botão deve permanecer em loading/disabled até a transição.
 
         // Update local user state — AppNavigator reacts to onboarding_completed
         // and automatically transitions from onboarding stack to main stack.
@@ -464,12 +496,25 @@ export function BriefingScreen({ navigation, route }: any) {
 
                         <View style={styles.paywallButtonArea}>
                             <TouchableOpacity
-                                style={[styles.unlockButton, { backgroundColor: accentColor }]}
+                                style={[styles.unlockButton, { backgroundColor: accentColor }, isSubmitting && styles.buttonDisabled]}
                                 onPress={handleConfirmAndStart}
+                                disabled={isSubmitting}
                                 activeOpacity={0.8}
+                                accessibilityRole="button"
+                                accessibilityLabel="Confirmar e iniciar"
+                                accessibilityState={{ disabled: isSubmitting, busy: isSubmitting }}
                             >
-                                <Text style={styles.unlockButtonText}>Confirmar e Iniciar</Text>
-                                <MaterialCommunityIcons name="arrow-right" size={22} color={DS.bg} />
+                                {isSubmitting ? (
+                                    <>
+                                        <ActivityIndicator size="small" color={DS.bg} />
+                                        <Text style={styles.unlockButtonText}>Preparando seu plano...</Text>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Text style={styles.unlockButtonText}>Confirmar e Iniciar</Text>
+                                        <MaterialCommunityIcons name="arrow-right" size={22} color={DS.bg} />
+                                    </>
+                                )}
                             </TouchableOpacity>
                             <Text style={styles.trialText}>
                                 7 dias grátis depois R$ 29,90/mês. Cancele quando{'\n'}quiser.
@@ -484,12 +529,25 @@ export function BriefingScreen({ navigation, route }: any) {
                 ============================================= */}
             <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
                 <TouchableOpacity
-                    style={[styles.ctaButton, { backgroundColor: accentColor }]}
+                    style={[styles.ctaButton, { backgroundColor: accentColor }, isSubmitting && styles.buttonDisabled]}
                     onPress={handleConfirmAndStart}
+                    disabled={isSubmitting}
                     activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel="Confirmar e iniciar"
+                    accessibilityState={{ disabled: isSubmitting, busy: isSubmitting }}
                 >
-                    <Text style={styles.ctaButtonText}>CONFIRMAR E INICIAR</Text>
-                    <Text style={styles.ctaButtonSub}>Acesso imediato ao seu melhor nível!</Text>
+                    {isSubmitting ? (
+                        <View style={styles.ctaLoadingRow}>
+                            <ActivityIndicator size="small" color={DS.bg} />
+                            <Text style={styles.ctaButtonText}>Preparando seu plano...</Text>
+                        </View>
+                    ) : (
+                        <>
+                            <Text style={styles.ctaButtonText}>CONFIRMAR E INICIAR</Text>
+                            <Text style={styles.ctaButtonSub}>Acesso imediato ao seu melhor nível!</Text>
+                        </>
+                    )}
                 </TouchableOpacity>
             </View>
         </View>
@@ -973,6 +1031,14 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: '700',
         color: DS.bg,
+    },
+    ctaLoadingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    buttonDisabled: {
+        opacity: 0.6,
     },
     ctaButtonSub: {
         fontSize: 11,
