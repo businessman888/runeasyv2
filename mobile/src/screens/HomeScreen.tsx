@@ -604,10 +604,16 @@ export function HomeScreen({ navigation }: any) {
 
     const getWorkoutPace = (workout: any): string => {
         if (workout.instructions_json && workout.instructions_json.length > 0) {
-            const mainBlock = workout.instructions_json.find((i: any) => i.type === 'main') || workout.instructions_json[0];
-            if (mainBlock && mainBlock.pace_min) {
-                const paceMin = Math.floor(mainBlock.pace_min);
-                const paceSec = Math.round((mainBlock.pace_min - paceMin) * 60);
+            const segs = workout.instructions_json;
+            // Prefere o bloco principal; num intervalado (repeat), o pace-alvo mora
+            // em work.pace_min. Cai para qualquer segmento com pace informado.
+            const mainBlock =
+                segs.find((i: any) => i.type === 'main' || i.type === 'repeat') || segs[0];
+            const paceMinRaw =
+                mainBlock?.pace_min ?? mainBlock?.work?.pace_min ?? undefined;
+            if (typeof paceMinRaw === 'number' && paceMinRaw > 0) {
+                const paceMin = Math.floor(paceMinRaw);
+                const paceSec = Math.round((paceMinRaw - paceMin) * 60);
                 return `${paceMin}:${paceSec.toString().padStart(2, '0')}`;
             }
         }

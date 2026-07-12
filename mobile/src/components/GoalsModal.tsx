@@ -35,8 +35,10 @@ interface GoalsModalProps {
 }
 
 // ─── Block Card ──────────────────────────────────────────────────────────────
-const GoalBlockCard = memo(({ step, blockDistance }: { step: GoalStep; blockDistance: number }) => {
-  const isMain = step.type === 'main';
+const GoalBlockCard = memo(({ step }: { step: GoalStep }) => {
+  // Intervalado (repeat) e principal contínuo compartilham o layout com pace +
+  // linha de recuperação.
+  const isMain = step.type === 'main' || step.type === 'repeat';
   const isCompleted = step.status === 'completed';
   const isActive = step.status === 'active';
 
@@ -47,16 +49,12 @@ const GoalBlockCard = memo(({ step, blockDistance }: { step: GoalStep; blockDist
     ? T.borderActive
     : T.borderDefault;
 
-  // Progress: currentValue já é relativo ao bloco (calculado no hook)
-  const progress = blockDistance > 0
-    ? Math.min(step.currentValue / blockDistance, 1)
-    : 0;
+  // Progresso 0..1 já calculado pelo hook (distância OU tempo, e por sub-etapa
+  // dentro de um intervalado).
+  const progress = Math.max(0, Math.min(step.progress01, 1));
 
-  // Formato de distância para exibição
-  const distKm = blockDistance / 1000;
-  const durationLabel = distKm >= 1
-    ? `${distKm.toFixed(1)} km`
-    : `${Math.round(blockDistance)}m`;
+  // Rótulo de quantidade pronto ("1.0 km" | "5:00 min" | "8× 400m").
+  const durationLabel = step.amountLabel;
 
   return (
     <View style={[styles.blockCard, { borderColor }]}>
@@ -108,11 +106,14 @@ const GoalBlockCard = memo(({ step, blockDistance }: { step: GoalStep; blockDist
         )}
 
         <View style={styles.blockDetailsText}>
-          <Text style={styles.detailTitle}>{durationLabel}</Text>
+          <Text style={styles.detailTitle}>
+            {durationLabel}
+            {isActive && step.liveLabel ? `  ·  ${step.liveLabel}` : ''}
+          </Text>
           <Text style={styles.detailDescription}>{step.description}</Text>
         </View>
 
-        {/* Pace (só para main) */}
+        {/* Pace (principal / intervalado) */}
         {isMain && step.pace && (
           <View style={styles.paceContainer}>
             <Text style={styles.paceText}>{step.pace}</Text>
@@ -120,12 +121,11 @@ const GoalBlockCard = memo(({ step, blockDistance }: { step: GoalStep; blockDist
         )}
       </View>
 
-      {/* ── Recovery section (só para main) ─────────────────────────────── */}
-      {isMain && step.recovery && (
+      {/* ── Recovery section — recuperação REAL do intervalado ──────────── */}
+      {!!step.recovery && (
         <View style={styles.blockRecovery}>
           <View style={styles.blockDetailsText}>
-            <Text style={styles.detailTitle}>Recuperação 1:30 min</Text>
-            <Text style={styles.detailDescription}>Trote ou caminhada leve</Text>
+            <Text style={styles.detailTitle}>{step.recovery}</Text>
           </View>
         </View>
       )}
@@ -176,13 +176,9 @@ export function GoalsModal({ visible, onClose, goalSteps }: GoalsModalProps) {
             showsVerticalScrollIndicator={false}
             bounces={false}
           >
-            {goalSteps.map((step, index) => {
-              const prevTarget = index > 0 ? goalSteps[index - 1].targetValue : 0;
-              const blockDistance = step.targetValue - prevTarget;
-              return (
-                <GoalBlockCard key={step.id} step={step} blockDistance={blockDistance} />
-              );
-            })}
+            {goalSteps.map((step) => (
+              <GoalBlockCard key={step.id} step={step} />
+            ))}
           </ScrollView>
         </Pressable>
       </Pressable>

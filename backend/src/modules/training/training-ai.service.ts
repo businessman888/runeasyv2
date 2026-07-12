@@ -107,15 +107,58 @@ export type GeneratedWorkoutType =
   | 'hill_repeats'
   | 'race_simulation';
 
-export interface GeneratedSegment {
+/**
+ * Sub-bloco de esforço dentro de um intervalado: o "tiro" (`work`) ou a
+ * "recuperação" (`recovery`). Definido por distância OU por tempo — nunca ambos,
+ * nunca nenhum. É o que permite ao coach de áudio saber o alvo de cada repetição
+ * em vez de ler prosa.
+ */
+export interface SegmentEffort {
+  distance_km?: number;
+  duration_seconds?: number;
+  pace_min: number;
+  pace_max: number;
+  zone?: TrainingZone;
+}
+
+/**
+ * Segmento simples e contínuo: aquecimento, bloco principal contínuo
+ * (easy_run / tempo / long_run / progressive) ou desaquecimento. Definido por
+ * distância OU por tempo.
+ */
+export interface SimpleSegment {
   type: 'warmup' | 'main' | 'cooldown';
-  distance_km: number;
+  distance_km?: number;
+  duration_seconds?: number;
   pace_min: number;
   pace_max: number;
   zone?: TrainingZone;
   description?: string;
   coach_note?: string;
 }
+
+/**
+ * Segmento de repetição (intervalados): `reps` blocos de `work` intercalados com
+ * `recovery`. Substitui o antigo bloco `main` achatado, que escondia a estrutura
+ * ("8×400m + 90s") apenas em prosa. Cada `repeat` conta como UM item no array de
+ * segmentos, mas expande para 2×`reps` sub-blocos na execução.
+ */
+export interface RepeatSegment {
+  type: 'repeat';
+  reps: number;
+  work: SegmentEffort;
+  recovery: SegmentEffort;
+  zone?: TrainingZone;
+  description?: string;
+  coach_note?: string;
+}
+
+/**
+ * Um segmento gerado pela IA. Treinos contínuos usam apenas `SimpleSegment`;
+ * intervalados (intervals/repetition/hill_repeats/fartlek) usam `RepeatSegment`
+ * para o miolo, ladeado por warmup/cooldown simples.
+ */
+export type GeneratedSegment = SimpleSegment | RepeatSegment;
 
 export interface GeneratedWorkout {
   day_of_week: number;
@@ -448,7 +491,15 @@ O JSON deve seguir este schema:
 }
 
 Tipos de treino válidos: easy_run, long_run, intervals, tempo, recovery
-Fases válidas: base, build, peak, taper`;
+Fases válidas: base, build, peak, taper
+
+Em treinos "intervals", o miolo DEVE usar um segmento de repetição estruturado
+(não achate as séries em prosa):
+{ "type": "repeat", "reps": N,
+  "work":     { "distance_km": N (ou "duration_seconds": N), "pace_min": N, "pace_max": N, "zone": "Z4" },
+  "recovery": { "duration_seconds": N (ou "distance_km": N), "pace_min": N, "pace_max": N, "zone": "Z1" } }
+Cada sub-bloco tem EXATAMENTE um entre distance_km e duration_seconds. Treinos
+contínuos (easy_run/tempo/long_run) mantêm warmup/main/cooldown simples.`;
 
     const userPrompt = `Continue o plano de treino. A Semana 1 já foi gerada:
 
@@ -636,17 +687,7 @@ ESFORÇO PERCEBIDO (RPE) por zona
       "day_of_week": 0-6,
       "type": "<um dos tipos válidos acima>",
       "distance_km": N,
-      "segments": [
-        { "type": "warmup",   "distance_km": N, "pace_min": N, "pace_max": N,
-          "zone": "Z1", "description": "Trote leve para ativar musculatura",
-          "coach_note": "Não acelera aqui — é só pra soltar o corpo, guarde energia pro principal." },
-        { "type": "main",     "distance_km": N, "pace_min": N, "pace_max": N,
-          "zone": "Z3", "description": "Ritmo confortavelmente difícil, controlado",
-          "coach_note": "Esse é o coração do treino. Mantenha firme, respiração no limite do confortável." },
-        { "type": "cooldown", "distance_km": N, "pace_min": N, "pace_max": N,
-          "zone": "Z1", "description": "Trote leve, baixar FC gradualmente",
-          "coach_note": "Não corta o desaquecimento. É ele que acelera sua recuperação pro próximo treino." }
-      ],
+      "segments": [ /* ver DOIS FORMATOS DE SEGMENTO abaixo */ ],
       "zone": "Z3",
       "perceived_effort": "7/10",
       "objective": "Elevar limiar de lactato",
@@ -656,14 +697,49 @@ ESFORÇO PERCEBIDO (RPE) por zona
   }]
 }
 
+═══ DOIS FORMATOS DE SEGMENTO (use o certo por tipo de treino) ═══
+
+A) SEGMENTO SIMPLES — aquecimento, principal CONTÍNUO e desaquecimento.
+   Use em easy_run, tempo, long_run, recovery, progressive, race_simulation.
+   Cada segmento é definido por distância (distance_km) OU por tempo
+   (duration_seconds) — escolha UM, nunca os dois.
+   { "type": "warmup",   "distance_km": 1.0, "pace_min": N, "pace_max": N,
+     "zone": "Z1", "description": "Trote leve para ativar musculatura",
+     "coach_note": "Não acelera aqui — guarde energia pro principal." }
+   { "type": "main",     "distance_km": 5.0, "pace_min": N, "pace_max": N,
+     "zone": "Z3", "description": "Ritmo confortavelmente difícil, controlado",
+     "coach_note": "Esse é o coração do treino. Mantenha firme." }
+   { "type": "cooldown", "duration_seconds": 300, "pace_min": N, "pace_max": N,
+     "zone": "Z1", "description": "Trote leve, baixar FC gradualmente",
+     "coach_note": "Não corta o desaquecimento — ele acelera sua recuperação." }
+
+B) SEGMENTO DE REPETIÇÃO — o miolo dos INTERVALADOS.
+   OBRIGATÓRIO em intervals, repetition, hill_repeats e fartlek estruturado.
+   NÃO achate "8×400m" num único bloco main com prosa: emita "type":"repeat".
+   work e recovery são cada um definidos por distância OU por tempo.
+   { "type": "repeat", "reps": 8,
+     "work":     { "distance_km": 0.4, "pace_min": N, "pace_max": N, "zone": "Z4" },
+     "recovery": { "duration_seconds": 90, "pace_min": N, "pace_max": N, "zone": "Z1" },
+     "zone": "Z4", "description": "8 tiros de 400m fortes, trote entre eles",
+     "coach_note": "Cada tiro é firme e igual. No trote, respira e recupera." }
+
+   Estrutura típica de um intervals: [ warmup simples, repeat, cooldown simples ].
+   hill_repeats: work = subida (por tempo, ex. 60-90s Z4/Z5); recovery = descida trote.
+
 REGRAS DE GERAÇÃO
   1. Cada workout DEVE incluir os campos: zone, perceived_effort, objective, scientific_note, tips.
-  2. Cada segment DEVE ter zone, description e coach_note.
+  2. Cada segmento DEVE ter zone, description e coach_note (no repeat, ficam no nível do repeat, NÃO dentro de work/recovery).
      - description: técnica, o QUE fazer (curta, ≤ 12 palavras, PT-BR).
      - coach_note: voz de treinador experiente falando direto com o atleta (2ª pessoa,
        "você"), curta (≤ 20 palavras), prática e motivadora, sem jargão não explicado.
        É orientação/incentivo de execução — NÃO repita a description nem defina conceitos.
-  3. USE os paces do user prompt — não invente outros valores. Cole-os em pace_min/pace_max do segmento adequado à zona.
+  2b. Todo sub-bloco (segmento simples, work e recovery) tem EXATAMENTE um entre
+      distance_km e duration_seconds — nunca ambos, nunca nenhum. pace_min/pace_max
+      sempre presentes. Recuperações e aquecimentos por tempo são preferíveis quando
+      o treino pede "90s de trote" ou "10 min de aquecimento".
+  2c. Intervalados (intervals/repetition/hill_repeats) DEVEM usar "type":"repeat" para
+      as séries. Treinos contínuos (easy_run/tempo/long_run/progressive) NÃO usam repeat.
+  3. USE os paces do user prompt — não invente outros valores. Cole-os em pace_min/pace_max do segmento/sub-bloco adequado à zona.
   4. tips: máximo 2 por treino, ≤ 10 palavras cada.
   5. scientific_note: 1 frase, ≤ 18 palavras, PT-BR, foco fisiológico.
   6. objective: 1 frase curta (≤ 8 palavras).

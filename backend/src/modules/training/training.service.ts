@@ -1551,16 +1551,34 @@ export class TrainingService {
     const segments = Array.isArray(workout?.instructions_json)
       ? workout.instructions_json
       : [];
+    // Sub-bloco (segmento simples, ou work/recovery de um repeat) → "400m @ 4:00-4:10"
+    // ou "90s @ 6:30-7:00". Aceita distância OU tempo; tolera o formato antigo.
+    const describeEffort = (e: any): string => {
+      if (!e) return '';
+      const amount =
+        e.distance_km != null
+          ? `${e.distance_km}km`
+          : e.duration_seconds != null
+            ? `${e.duration_seconds}s`
+            : '';
+      const pace =
+        e.pace_min != null && e.pace_max != null
+          ? ` @ ${e.pace_min}-${e.pace_max} min/km`
+          : '';
+      return `${amount}${pace}`;
+    };
+
     const segmentLines = segments
       .map((s: any, i: number) => {
         const md = metadata?.segment_descriptions?.[i] ?? {};
-        const paceLabel =
-          s.pace_min != null && s.pace_max != null
-            ? ` (${s.pace_min}-${s.pace_max} min/km)`
-            : '';
-        return `- ${s.type}: ${s.distance_km}km${paceLabel}${
-          md?.zone ? ` · ${md.zone}` : ''
-        }${md?.description ? ` — ${md.description}` : ''}`;
+        const zoneLabel = md?.zone ? ` · ${md.zone}` : '';
+        const descLabel = md?.description ? ` — ${md.description}` : '';
+        if (s.type === 'repeat') {
+          const work = describeEffort(s.work);
+          const rec = describeEffort(s.recovery);
+          return `- ${s.reps}× (${work} / recuperação ${rec})${zoneLabel}${descLabel}`;
+        }
+        return `- ${s.type}: ${describeEffort(s)}${zoneLabel}${descLabel}`;
       })
       .join('\n');
 

@@ -36,6 +36,12 @@ import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
 import { WorkoutDayCard, type DayWorkout } from '../components/training/WorkoutDayCard';
 import { useProFeature } from '../hooks/useProFeature';
 import { useStartWorkoutFlow } from '../hooks/useStartWorkoutFlow';
+import {
+    transformWorkoutToUI,
+    formatKm,
+    type WorkoutData,
+    type WorkoutBlock,
+} from '../utils/workoutTransform';
 
 // Decorative mock workout shown (blurred) under the Calendar day teaser for
 // Free users — looks like a real planned workout. Never interactive.
@@ -135,42 +141,13 @@ function CloseIcon({ size = 24, color = '#EBEBF5' }: { size?: number; color?: st
  * blows out the layout and reads as a bug to users — round to 2 decimals
  * and strip trailing zeros so the cards show "0.3", "8.5", "21.1".
  */
-const formatKm = (km: number | null | undefined): string => {
-    if (typeof km !== 'number' || !isFinite(km)) return '0';
-    return Number(km.toFixed(2)).toString();
-};
-
 // Stable reference so the memoized SegmentedTabs doesn't re-render needlessly.
 const SCOPE_TABS: { key: 'plan' | 'activity'; label: string }[] = [
     { key: 'plan', label: 'Treinos' },
     { key: 'activity', label: 'Atividades' },
 ];
 
-// Workout data interface
-interface WorkoutBlock {
-    id: string;
-    title: string;
-    subtitle: string;
-    type: 'warmup' | 'main' | 'cooldown';
-    duration?: string;
-    description?: string;
-    pace?: string;
-    recovery?: string;
-    zone?: TrainingZone | null;
-}
-
-interface WorkoutData {
-    id: string;
-    title: string;
-    distance: string;
-    duration: string;
-    rpe: string;
-    blocks: WorkoutBlock[];
-    insight: string;
-    zone?: TrainingZone | null;
-    phase?: WorkoutPhase | null;
-    weekNumber?: number | null;
-}
+// WorkoutData / WorkoutBlock agora vêm de utils/workoutTransform (fonte única).
 
 export function CalendarScreen({ navigation }: any) {
     const { workouts: rawWorkouts, fetchWorkouts, fetchUpcomingWorkouts, plan, fetchPlan, generationStatus, checkPlanStatus, schedule: rawSchedule, fetchSchedule, isLoading: isTrainingLoading } = useTrainingStore();
@@ -292,76 +269,8 @@ export function CalendarScreen({ navigation }: any) {
         return schedule.find(s => s.date === tomorrowStr) || null;
     };
 
-    // Helper: Transform API workout to UI WorkoutData format.
-    //
-    // When the backend ships the new `metadata` payload (Daniels enrichment),
-    // we surface its zone/effort/scientific note plus per-segment zones and
-    // descriptions. For workouts created before the refinement (`metadata`
-    // null), we fall back to the original hardcoded copy so nothing breaks.
-    const transformWorkoutToUI = (workout: any): WorkoutData => {
-        const metadata = workout?.metadata ?? null;
-        const segmentDescriptions: Array<{ zone?: string | null; description?: string | null }> =
-            metadata?.segment_descriptions ?? [];
-
-        const blocks: WorkoutBlock[] = (workout.instructions_json || []).map((segment: any, index: number) => {
-            const md = segmentDescriptions[index];
-            const fallbackDescription =
-                segment.type === 'warmup'
-                    ? 'Trote leve z1/z2 para ativar'
-                    : segment.type === 'cooldown'
-                        ? 'Trote muito leve + alongamento estático.'
-                        : 'Ritmo forte, focado na técnica';
-
-            return {
-                id: String(index + 1),
-                title: segment.type === 'warmup' ? 'Aquecimento' : segment.type === 'cooldown' ? 'Desaquecimento' : 'Principal',
-                subtitle: `Bloco ${String(index + 1).padStart(2, '0')}${segment.type === 'main' ? ' - PRINCIPAL' : ''}`,
-                type: segment.type,
-                duration: `${formatKm(segment.distance_km)} km`,
-                description: md?.description || fallbackDescription,
-                pace: segment.pace_min && segment.pace_max
-                    ? `${segment.pace_min.toFixed(0)}:${((segment.pace_min % 1) * 60).toFixed(0).padStart(2, '0')}/km`
-                    : undefined,
-                zone: (md?.zone as TrainingZone | undefined) ?? null,
-            };
-        });
-
-        const workoutTypeLabels: Record<string, string> = {
-            'easy_run': 'Rodagem Leve',
-            'long_run': 'Longão',
-            'intervals': 'Intervalados',
-            'tempo': 'Tempo Run',
-            'recovery': 'Recuperação',
-            'fartlek': 'Fartlek',
-            'progressive': 'Progressivo',
-            'repetition': 'Repetições',
-            'hill_repeats': 'Subidas',
-            'race_simulation': 'Simulado',
-            'free_run': 'Corrida Livre',
-        };
-
-        const distanceLabel = formatKm(workout.distance_km);
-        const rpeFromMetadata = metadata?.perceived_effort
-            ? `RPE ${metadata.perceived_effort}`
-            : 'RPE 6/10';
-        const insight =
-            metadata?.scientific_note ||
-            workout.objective ||
-            'Mantenha o foco e aproveite o treino!';
-
-        return {
-            id: workout.id,
-            title: `${workoutTypeLabels[workout.type] || workout.type} - ${distanceLabel}km`,
-            distance: `${distanceLabel} km`,
-            duration: `${Math.round((workout.distance_km || 0) * 6)} min`, // Estimate based on 6 min/km
-            rpe: rpeFromMetadata,
-            blocks,
-            insight,
-            zone: (metadata?.zone as TrainingZone | undefined) ?? null,
-            phase: (metadata?.week_phase as WorkoutPhase | undefined) ?? null,
-            weekNumber: workout.week_number ?? null,
-        };
-    };
+    // transformWorkoutToUI: fonte única em utils/workoutTransform (suporta repeat,
+    // segmentos por tempo, coachNote e degradação do formato antigo).
 
     // Helper: All workouts scheduled for a given day, deterministic order
     // (plan > manual > free). The same day can now legitimately hold more

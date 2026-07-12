@@ -233,25 +233,36 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
                                         <Text style={styles.blockSubtitle}>{block.subtitle}</Text>
                                         <Text style={styles.blockTitle}>{block.title}</Text>
                                     </View>
-                                    {block.type === 'warmup' && (
+                                    {(block.type === 'warmup' || block.type === 'cooldown') && (
                                         <Ionicons name="walk-outline" size={26} color={colors.primary} />
                                     )}
-                                    {block.type === 'main' && (
+                                    {(block.type === 'main' || block.type === 'repeat') && (
                                         <MaterialCommunityIcons name="run" size={26} color={colors.primary} />
-                                    )}
-                                    {block.type === 'cooldown' && (
-                                        <Ionicons name="walk-outline" size={26} color={colors.primary} />
                                     )}
                                 </View>
 
                                 <DashedDivider style={styles.blockDivider} />
 
-                                {/* Distance + description */}
+                                {/* Distance/time + pace + description */}
                                 <View style={styles.blockMetaRow}>
                                     <Ionicons name="time-outline" size={18} color="rgba(235,235,245,0.6)" />
                                     <Text style={styles.blockDuration}>{block.duration}</Text>
+                                    {!!block.pace && (
+                                        <>
+                                            <MaterialCommunityIcons name="speedometer" size={16} color={colors.primary} style={{ marginLeft: 12 }} />
+                                            <Text style={styles.blockPace}>{block.pace}</Text>
+                                        </>
+                                    )}
                                 </View>
                                 <Text style={styles.blockDescription}>{block.description}</Text>
+
+                                {/* Recuperação real (intervalados) */}
+                                {!!block.recovery && (
+                                    <View style={styles.blockRecoveryRow}>
+                                        <Ionicons name="refresh-outline" size={16} color="rgba(235,235,245,0.6)" />
+                                        <Text style={styles.blockRecoveryText}>{block.recovery}</Text>
+                                    </View>
+                                )}
 
                                 {/* Per-block coach note (only on enriched plans) */}
                                 {!!block.coachNote && (
@@ -440,10 +451,27 @@ const styles = StyleSheet.create({
         fontWeight: typography.fontWeights.bold as any,
         color: '#EBEBF5',
     },
+    blockPace: {
+        fontSize: 15,
+        fontWeight: typography.fontWeights.bold as any,
+        color: colors.primary,
+        marginLeft: 4,
+    },
     blockDescription: {
         fontSize: 13,
         color: 'rgba(235, 235, 245, 0.6)',
         lineHeight: 18,
+    },
+    blockRecoveryRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 8,
+    },
+    blockRecoveryText: {
+        fontSize: 13,
+        fontWeight: typography.fontWeights.medium as any,
+        color: 'rgba(235, 235, 245, 0.75)',
     },
     // Per-block coach note — neutral (white label + gray icon), Figma-faithful
     coachNoteHeader: {
