@@ -63,6 +63,14 @@ const T = {
 
 
 
+// Pace de split (segundos/km) → "M:SS". Exibição da unidade única de armazenamento.
+function formatSplit(secondsPerKm: number | null | undefined): string {
+  if (secondsPerKm == null || !isFinite(secondsPerKm) || secondsPerKm <= 0) return '--:--';
+  const m = Math.floor(secondsPerKm / 60);
+  const s = Math.round(secondsPerKm % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 /**
  * Top-level Running route. Switches between the outdoor GPS view and the
@@ -127,6 +135,8 @@ function OutdoorRunningView() {
     distance,
     timeMs,
     currentPace,
+    smoothedPace,
+    liveSplits,
     formattedTime,
     gpsAccuracy,
     initialPosition,
@@ -568,7 +578,11 @@ function OutdoorRunningView() {
             </View>
             <View style={styles.metricDivider} />
             <View style={styles.metricBox}>
-              <Text style={[styles.metricValue, { color: metricColor }]}>{currentPace}</Text>
+              {/* Pace SUAVIZADO (janela deslizante) — base estável p/ a Fase 4.
+                  Cai para o cumulativo enquanto a janela não tem amostra. */}
+              <Text style={[styles.metricValue, { color: metricColor }]}>
+                {smoothedPace !== '--:--' ? smoothedPace : currentPace}
+              </Text>
               <Text style={styles.metricLabel}>Pace</Text>
             </View>
             <View style={styles.metricDivider} />
@@ -577,6 +591,18 @@ function OutdoorRunningView() {
               <Text style={styles.metricLabel}>Distância</Text>
             </View>
           </View>
+
+          {/* Splits por km ao vivo (validação da Fase 2; UI colapsável completa é Fase 3) */}
+          {liveSplits.length > 0 && (
+            <View style={styles.splitsRow}>
+              {liveSplits.slice(-4).map((s) => (
+                <View key={s.km} style={styles.splitChip}>
+                  <Text style={styles.splitKm}>KM {s.km}</Text>
+                  <Text style={styles.splitPace}>{formatSplit(s.paceSecPerKm)}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Área de botões */}
@@ -650,7 +676,7 @@ function OutdoorRunningView() {
         <ExpandedMetricsOverlay
           onClose={() => setExpanded(false)}
           timeText={formattedTime}
-          paceText={currentPace}
+          paceText={smoothedPace !== '--:--' ? smoothedPace : currentPace}
           distanceText={distanceFormatted}
           isCalculating={isCalculating}
           isTraining={isTraining}
@@ -893,6 +919,35 @@ const styles = StyleSheet.create({
     color: 'rgba(235,235,245,0.60)',
     fontSize: 11,
     fontWeight: '400',
+  },
+
+  // ── Splits ao vivo (chips compactos; validação Fase 2)
+  splitsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingBottom: 10,
+  },
+  splitChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(0,212,255,0.10)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  splitKm: {
+    color: 'rgba(235,235,245,0.60)',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  splitPace: {
+    color: '#00D4FF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 
   // ── Buttons area

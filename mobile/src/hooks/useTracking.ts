@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as Location from 'expo-location';
 import { trackingStorage, LOCATION_TRACKING_TASK } from '../tasks/locationTask';
+import {
+  computeSmoothedPaceSeconds,
+  computeLiveSplits,
+  type LivePoint,
+  type LiveSplit,
+} from '../utils/livePace';
 
 export type SessionState = 'calculating' | 'training' | 'paused' | 'finished';
 
@@ -12,7 +18,12 @@ export function useTracking(workoutId?: string) {
   const [routeCoordinates, setRouteCoordinates] = useState<number[][]>([]); // Array [lng, lat] para o Mapbox
   const [distance, setDistance] = useState(0);
   const [timeMs, setTimeMs] = useState(0); // Tempo em milissegundos
-  const [currentPace, setCurrentPace] = useState(0); // minutos por km
+  const [currentPace, setCurrentPace] = useState(0); // minutos por km (cumulativo)
+  // Pace suavizado por janela deslizante, em SEGUNDOS/KM (fundação da Fase 4).
+  // null = ainda sem amostra suficiente / parado (a UI mostra "--:--").
+  const [smoothedPaceSeconds, setSmoothedPaceSeconds] = useState<number | null>(null);
+  // Splits de km já completados, em segundos/km (a Fase 3 anuncia por voz).
+  const [liveSplits, setLiveSplits] = useState<LiveSplit[]>([]);
   const [isReady, setIsReady] = useState(false);
   const [initialPosition, setInitialPosition] = useState<[number, number] | null>(null);
   // Controla a tela de Prominent Disclosure de localização (Google Play). True
@@ -153,8 +164,18 @@ export function useTracking(workoutId?: string) {
           const savedRouteStr = trackingStorage.getString('route_points');
           if (savedRouteStr) {
             try {
-              const parsed = JSON.parse(savedRouteStr);
+              const parsed: LivePoint[] = JSON.parse(savedRouteStr);
               setRouteCoordinates(parsed.map((p: any) => [p.longitude, p.latitude]));
+
+              // Pace suavizado (janela deslizante) + splits ao vivo — recomputados
+              // só quando chega ponto novo (pontos parados já são filtrados na
+              // ingestão, então quando parado nada recomputa e o valor congela).
+              const smoothed = computeSmoothedPaceSeconds(parsed);
+              if (smoothed !== null) setSmoothedPaceSeconds(smoothed);
+              const splits = computeLiveSplits(parsed);
+              setLiveSplits((prev) =>
+                prev.length === splits.completed.length ? prev : splits.completed,
+              );
             } catch(e) {}
           }
         }
@@ -234,6 +255,8 @@ export function useTracking(workoutId?: string) {
       setDistance(0);
       setTimeMs(0);
       setCurrentPace(0);
+      setSmoothedPaceSeconds(null);
+      setLiveSplits([]);
       accumulatedTimeRef.current = 0;
       startTimeRef.current = null;
     }
@@ -345,6 +368,8 @@ export function useTracking(workoutId?: string) {
     setDistance(0);
     setTimeMs(0);
     setCurrentPace(0);
+    setSmoothedPaceSeconds(null);
+    setLiveSplits([]);
     setGpsAccuracy(-1);
     accumulatedTimeRef.current = 0;
     startTimeRef.current = null;
@@ -366,6 +391,14 @@ export function useTracking(workoutId?: string) {
       const totalSeconds = Math.floor(timeMs / 1000);
       const m = Math.floor(totalSeconds / 60);
       const s = totalSeconds % 60;
+      return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  // Pace suavizado (segundos/km) → "M:SS". "--:--" enquanto não há janela válida.
+  const getFormattedSmoothedPace = () => {
+      if (smoothedPaceSeconds == null || smoothedPaceSeconds <= 0) return '--:--';
+      const m = Math.floor(smoothedPaceSeconds / 60);
+      const s = smoothedPaceSeconds % 60;
       return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
@@ -422,6 +455,9 @@ export function useTracking(workoutId?: string) {
     distance,
     timeMs,
     currentPace: getFormattedPace(),
+    smoothedPace: getFormattedSmoothedPace(),
+    smoothedPaceSeconds,
+    liveSplits,
     formattedTime: getFormattedTime(),
     gpsAccuracy,
     initialPosition,
