@@ -5,6 +5,7 @@ import { NotificationService } from '../notifications/notification.service';
 import { TrainingService } from './training.service';
 import { TrainingPlanRequest } from './training-ai.service';
 import { AIRouterService, AI_FEATURES } from '../../common/ai';
+import { paceValueToSecondsPerKm } from '../../common/pace-calculator';
 
 /**
  * Metrics calculated from comparing planned vs actual performance
@@ -373,11 +374,16 @@ export class RetrospectiveService {
     if (workouts && workouts.length > 0) {
       const pacesSum = workouts.reduce((sum, w) => {
         if (w.instructions_json && Array.isArray(w.instructions_json)) {
-          const mainSegment = w.instructions_json.find(
-            (s: any) => s.type === 'main',
+          // Bloco principal contínuo (main) ou, num intervalado, o work do repeat.
+          const seg = w.instructions_json.find((s: any) => s.type === 'main');
+          const repeat = w.instructions_json.find(
+            (s: any) => s.type === 'repeat',
           );
-          if (mainSegment && mainSegment.pace_min) {
-            return sum + mainSegment.pace_min * 60;
+          const paceRaw = seg?.pace_min ?? repeat?.work?.pace_min;
+          // pace_min pode estar em segundos/km (novo) ou decimal min/km (antigo).
+          const paceSec = paceValueToSecondsPerKm(paceRaw);
+          if (paceSec != null) {
+            return sum + paceSec;
           }
         }
         return sum + 360;

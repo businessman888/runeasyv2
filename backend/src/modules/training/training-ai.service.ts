@@ -116,6 +116,8 @@ export type GeneratedWorkoutType =
 export interface SegmentEffort {
   distance_km?: number;
   duration_seconds?: number;
+  // Faixa-alvo de pace em SEGUNDOS/KM inteiros (min = mais rápido, max = mais lento).
+  // Preenchidos deterministicamente pelo backend (applyDeterministicPaces), não pela IA.
   pace_min: number;
   pace_max: number;
   zone?: TrainingZone;
@@ -130,6 +132,8 @@ export interface SimpleSegment {
   type: 'warmup' | 'main' | 'cooldown';
   distance_km?: number;
   duration_seconds?: number;
+  // Faixa-alvo de pace em SEGUNDOS/KM inteiros (min = mais rápido, max = mais lento).
+  // Preenchidos deterministicamente pelo backend (applyDeterministicPaces), não pela IA.
   pace_min: number;
   pace_max: number;
   zone?: TrainingZone;
@@ -734,12 +738,16 @@ REGRAS DE GERAÇÃO
        "você"), curta (≤ 20 palavras), prática e motivadora, sem jargão não explicado.
        É orientação/incentivo de execução — NÃO repita a description nem defina conceitos.
   2b. Todo sub-bloco (segmento simples, work e recovery) tem EXATAMENTE um entre
-      distance_km e duration_seconds — nunca ambos, nunca nenhum. pace_min/pace_max
-      sempre presentes. Recuperações e aquecimentos por tempo são preferíveis quando
-      o treino pede "90s de trote" ou "10 min de aquecimento".
+      distance_km e duration_seconds — nunca ambos, nunca nenhum. Recuperações e
+      aquecimentos por tempo são preferíveis quando o treino pede "90s de trote"
+      ou "10 min de aquecimento". (pace_min/pace_max NÃO são sua responsabilidade —
+      ver regra 3.)
   2c. Intervalados (intervals/repetition/hill_repeats) DEVEM usar "type":"repeat" para
       as séries. Treinos contínuos (easy_run/tempo/long_run/progressive) NÃO usam repeat.
-  3. USE os paces do user prompt — não invente outros valores. Cole-os em pace_min/pace_max do segmento/sub-bloco adequado à zona.
+  3. NÃO calcule nem preencha pace_min/pace_max — o SISTEMA define esses números
+     automaticamente a partir da zona de cada segmento/sub-bloco. Sua única
+     responsabilidade quanto a ritmo é escolher a ZONA correta (Z1..Z5) de cada
+     esforço. Pode omitir pace_min/pace_max ou deixá-los como 0; serão sobrescritos.
   4. tips: máximo 2 por treino, ≤ 10 palavras cada.
   5. scientific_note: 1 frase, ≤ 18 palavras, PT-BR, foco fisiológico.
   6. objective: 1 frase curta (≤ 8 palavras).
@@ -759,7 +767,8 @@ PERFIL DO CORREDOR:
 - Limitações: ${request.limitations || 'Nenhuma'}${this.describePreferredDays(request.preferredDays)}
 
 VDOT ESTIMADO: ${vdot.toFixed(1)}
-PACES DE TREINO (USE estes valores em pace_min/pace_max — não invente outros):
+PACES DE TREINO (APENAS REFERÊNCIA para você dimensionar o treino e escrever os
+coach_note — NÃO transcreva estes números em pace_min/pace_max; o sistema os injeta):
 - Z1 Easy:        ${formattedPaces.easy} min/km
 - Z2 Marathon:    ${formattedPaces.marathon} min/km
 - Z3 Threshold:   ${formattedPaces.threshold} min/km
@@ -807,10 +816,49 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
       this.logger.log(
         `[FullPlan] Generated plan with ${result.data.weeks?.length || 0} weeks in ${result.latencyMs}ms`,
       );
+
+      // Pós-processamento determinístico: o backend — não a IA — define os paces
+      // finais, em segundos/km inteiros, a partir da zona de cada segmento. Isso
+      // elimina o bug do split "m:ss" (pace_min:5, pace_max:18) e garante faixa
+      // coerente [min=rápido, max=lento] para o motor de alertas (Fase 4).
+      this.applyDeterministicPaces(result.data, vdot);
+
       return result.data;
     } catch (error) {
       this.logger.error('[FullPlan] Failed to generate training plan', error);
       throw error;
+    }
+  }
+
+  /**
+   * Sobrescreve pace_min/pace_max de TODOS os esforços do plano (segmentos simples
+   * e work/recovery de repeats) com a faixa determinística da zona, em segundos/km.
+   * A IA fica responsável só pela estrutura e pela `zone`; os números de pace são
+   * do `PaceCalculatorService`. Zona ausente → cai para Z1 (mais lento, seguro).
+   */
+  private applyDeterministicPaces(plan: GeneratedPlan, vdot: number): void {
+    const ranges = this.paceCalculator.getZonePaceRangesSeconds(vdot);
+    const setEffort = (
+      effort: { pace_min?: number; pace_max?: number; zone?: TrainingZone },
+      zone?: TrainingZone,
+    ): void => {
+      if (!effort || typeof effort !== 'object') return;
+      const range = ranges[zone as TrainingZone] ?? ranges.Z1;
+      effort.pace_min = range.min; // segundos/km — mais rápido
+      effort.pace_max = range.max; // segundos/km — mais lento
+    };
+
+    for (const week of plan.weeks ?? []) {
+      for (const workout of week.workouts ?? []) {
+        for (const seg of workout.segments ?? []) {
+          if (seg.type === 'repeat') {
+            setEffort(seg.work, seg.work?.zone ?? seg.zone);
+            setEffort(seg.recovery, seg.recovery?.zone ?? seg.zone);
+          } else {
+            setEffort(seg, seg.zone);
+          }
+        }
+      }
     }
   }
 }

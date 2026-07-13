@@ -8,6 +8,7 @@
  * (`metadata` null) keep the original fallback copy so nothing breaks.
  */
 import type { TrainingZone, WorkoutPhase } from '../stores/trainingStore';
+import { formatPaceRangeLabel } from './pace';
 
 export interface WorkoutBlock {
     id: string;
@@ -59,12 +60,13 @@ const WORKOUT_TYPE_LABELS: Record<string, string> = {
     free_run: 'Corrida Livre',
 };
 
-/** Pace (min/km decimal, ex. 4.5 = 4:30) → "4:30/km". Undefined se ausente. */
-const formatPaceMin = (paceMin: number | null | undefined): string | undefined => {
-    if (typeof paceMin !== 'number' || !isFinite(paceMin) || paceMin <= 0) return undefined;
-    const m = Math.floor(paceMin);
-    const s = Math.round((paceMin - m) * 60);
-    return `${m}:${s.toString().padStart(2, '0')}/km`;
+/** Faixa-alvo de pace (segundos/km, tolera decimal legado) → "4:50–5:10/km". */
+const paceRange = (
+    min: number | null | undefined,
+    max: number | null | undefined,
+): string | undefined => {
+    const label = formatPaceRangeLabel(min, max);
+    return label ? `${label}/km` : undefined;
 };
 
 /** Rótulo de quantidade de um sub-bloco: "400m", "1 km", "90s" ou "10:00 min". */
@@ -123,15 +125,15 @@ export function transformWorkoutToUI(workout: any): WorkoutData {
             if (isRepeat) {
                 const reps = Math.max(1, Math.round(segment.reps || 1));
                 duration = `${reps}× ${amountLabel(segment.work ?? {})}`;
-                pace = formatPaceMin(segment.work?.pace_min);
+                pace = paceRange(segment.work?.pace_min, segment.work?.pace_max);
                 const recAmount = amountLabel(segment.recovery ?? {});
-                const recPace = formatPaceMin(segment.recovery?.pace_min);
+                const recPace = paceRange(segment.recovery?.pace_min, segment.recovery?.pace_max);
                 recovery = recAmount !== '—'
                     ? `Recuperação ${recAmount}${recPace ? ` · ${recPace}` : ''}`
                     : undefined;
             } else {
                 duration = amountLabel(segment ?? {});
-                pace = formatPaceMin(segment?.pace_min);
+                pace = paceRange(segment?.pace_min, segment?.pace_max);
             }
 
             return {

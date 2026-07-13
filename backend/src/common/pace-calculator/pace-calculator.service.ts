@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { VDOT_REFERENCE_TABLE, VDOTRow } from './vdot-table';
-import { FormattedTrainingPaces, TrainingPaces } from './pace-calculator.types';
+import {
+  FormattedTrainingPaces,
+  TrainingPaces,
+  TrainingZone,
+} from './pace-calculator.types';
 
 @Injectable()
 export class PaceCalculatorService {
@@ -83,6 +87,47 @@ export class PaceCalculatorService {
     const m = Math.floor(totalSeconds / 60);
     const s = totalSeconds % 60;
     return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  /**
+   * Tolerância (± segundos/km) usada para derivar uma FAIXA das zonas que o VDOT
+   * entrega como ponto único (M/T/I/R). A zona Easy já tem faixa nativa. Valores
+   * conservadores e ajustáveis — a Fase 4 (alertas) pode refiná-los. Zonas mais
+   * intensas usam banda mais estreita (execução exige precisão).
+   */
+  private readonly ZONE_TOLERANCE_SEC: Record<'Z2' | 'Z3' | 'Z4' | 'Z5', number> =
+    {
+      Z2: 10, // marathon
+      Z3: 8, // threshold
+      Z4: 8, // interval
+      Z5: 10, // repetition
+    };
+
+  /**
+   * Faixa-alvo de pace por zona, em SEGUNDOS/KM inteiros (min = mais rápido,
+   * max = mais lento). Fonte única de verdade para o pós-processamento que injeta
+   * os paces nos segmentos e para o motor de alertas (Fase 4). Easy usa a faixa
+   * nativa do VDOT; as zonas de ponto único derivam a faixa via ZONE_TOLERANCE_SEC.
+   */
+  getZonePaceRangesSeconds(
+    vdot: number,
+  ): Record<TrainingZone, { min: number; max: number }> {
+    const p = this.getTrainingPaces(vdot);
+    const toSec = (minPerKm: number) => Math.round(minPerKm * 60);
+    const band = (
+      valueMinPerKm: number,
+      tolSec: number,
+    ): { min: number; max: number } => {
+      const center = toSec(valueMinPerKm);
+      return { min: center - tolSec, max: center + tolSec };
+    };
+    return {
+      Z1: { min: toSec(p.easy.min), max: toSec(p.easy.max) },
+      Z2: band(p.marathon.value, this.ZONE_TOLERANCE_SEC.Z2),
+      Z3: band(p.threshold.value, this.ZONE_TOLERANCE_SEC.Z3),
+      Z4: band(p.interval.value, this.ZONE_TOLERANCE_SEC.Z4),
+      Z5: band(p.repetition.value, this.ZONE_TOLERANCE_SEC.Z5),
+    };
   }
 
   vdotForBeginner(): number {

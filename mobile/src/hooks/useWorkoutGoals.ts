@@ -7,6 +7,7 @@ import type {
   SimpleSegmentAPI,
 } from '../types/workoutGoals';
 import type { SessionState } from './useTracking';
+import { formatPaceRangeLabel } from '../utils/pace';
 
 // ─── Rótulos padrão por tipo de bloco ────────────────────────────────────────
 const DEFAULT_DESCRIPTIONS: Record<string, string> = {
@@ -24,14 +25,13 @@ const BLOCK_TITLES: Record<string, string> = {
 };
 
 // ─── Formatação ──────────────────────────────────────────────────────────────
-/** Pace (min/km decimal, ex. 4.5 = 4:30) → "4:30/km". */
-function formatPace(paceMin?: number): string | undefined {
-  if (typeof paceMin !== 'number' || !isFinite(paceMin) || paceMin <= 0) {
-    return undefined;
-  }
-  const minutes = Math.floor(paceMin);
-  const seconds = Math.round((paceMin - minutes) * 60);
-  return `${minutes}:${seconds.toString().padStart(2, '0')}/km`;
+/** Faixa-alvo de pace (segundos/km, tolera decimal legado) → "4:50–5:10/km". */
+function formatPaceRange(
+  min?: number | null,
+  max?: number | null,
+): string | undefined {
+  const label = formatPaceRangeLabel(min, max);
+  return label ? `${label}/km` : undefined;
 }
 
 /** Rótulo de quantidade de um sub-bloco: "400m", "1.0 km" ou "90s"/"5:00 min". */
@@ -120,16 +120,16 @@ function buildGoalSteps(blocks: WorkoutBlockAPI[]): GoalStep[] {
       const rep = block as RepeatSegmentAPI;
       const reps = Math.max(1, Math.round(rep.reps || 1));
       amountLabel = `${reps}× ${amountLabelOf(rep.work)}`;
-      pace = formatPace(rep.work.pace_min);
+      pace = formatPaceRange(rep.work.pace_min, rep.work.pace_max);
       const recAmount = amountLabelOf(rep.recovery);
-      const recPace = formatPace(rep.recovery.pace_min);
+      const recPace = formatPaceRange(rep.recovery.pace_min, rep.recovery.pace_max);
       recovery = recAmount
         ? `Recuperação ${recAmount}${recPace ? ` · ${recPace}` : ''}`
         : undefined;
     } else {
       const simple = block as SimpleSegmentAPI;
       amountLabel = amountLabelOf(simple);
-      if (block.type === 'main') pace = formatPace(simple.pace_min);
+      if (block.type === 'main') pace = formatPaceRange(simple.pace_min, simple.pace_max);
     }
 
     return {

@@ -2,6 +2,7 @@ import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BadgeShield } from './BadgeShield';
+import { paceValueToSecondsPerKm } from '../utils/pace';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -92,8 +93,14 @@ function getPaceMinutes(workout: WorkoutData): number {
   if (workout.instructions_json?.length > 0) {
     const main =
       workout.instructions_json.find((i) => i.type === 'main') ??
+      workout.instructions_json.find((i: any) => i.type === 'repeat') ??
       workout.instructions_json[0];
-    if (main?.pace_min) return main.pace_min;
+    // pace_min pode estar em segundos/km (novo) ou decimal min/km (legado).
+    // Esta função retorna minutos decimais (usada em formatPace e pace×distância).
+    const paceSecs = paceValueToSecondsPerKm(
+      main?.pace_min ?? (main as any)?.work?.pace_min,
+    );
+    if (paceSecs != null) return paceSecs / 60;
   }
   const defaults: Record<string, number> = {
     easy_run: 6.5,

@@ -2,6 +2,7 @@ import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { SupabaseService } from '../../database';
 import { NotificationService } from '../notifications/notification.service';
 import { AIRouterService, AI_FEATURES } from '../../common/ai';
+import { formatPaceRangeLabel } from '../../common/pace-calculator';
 
 export interface WorkoutComparison {
   planned: {
@@ -185,7 +186,10 @@ IMPORTANTE: Responda APENAS com um JSON válido, sem texto adicional.`;
     const executedDistanceKm = comparison.executed.distance / 1000;
     const plannedPaceRange =
       comparison.planned.segments.length > 0
-        ? `${comparison.planned.segments[0].pace_min?.toFixed(1) || '?'}-${comparison.planned.segments[0].pace_max?.toFixed(1) || '?'} min/km`
+        ? `${formatPaceRangeLabel(
+            comparison.planned.segments[0].pace_min,
+            comparison.planned.segments[0].pace_max,
+          )}/km`
         : 'não especificado';
 
     const distanceDiff =

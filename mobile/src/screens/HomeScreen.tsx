@@ -31,6 +31,7 @@ import { LevelCard } from '../components/level/LevelCard';
 import { OverviewSection } from '../components/home/OverviewSection';
 import { Patent } from '../components/patents/Patent';
 import { getCurrentPatent } from '../utils/patents';
+import { paceValueToSecondsPerKm, formatPaceLabel } from '../utils/pace';
 import { useHealthKitStore } from '../stores/healthKitStore';
 import { useHealthConnectStore } from '../stores/healthConnectStore';
 import { useProFeature } from '../hooks/useProFeature';
@@ -609,12 +610,12 @@ export function HomeScreen({ navigation }: any) {
             // em work.pace_min. Cai para qualquer segmento com pace informado.
             const mainBlock =
                 segs.find((i: any) => i.type === 'main' || i.type === 'repeat') || segs[0];
-            const paceMinRaw =
-                mainBlock?.pace_min ?? mainBlock?.work?.pace_min ?? undefined;
-            if (typeof paceMinRaw === 'number' && paceMinRaw > 0) {
-                const paceMin = Math.floor(paceMinRaw);
-                const paceSec = Math.round((paceMinRaw - paceMin) * 60);
-                return `${paceMin}:${paceSec.toString().padStart(2, '0')}`;
+            // pace_min pode estar em segundos/km (novo) ou decimal min/km (legado);
+            // o util normaliza e formata como "m:ss". Estimativa compacta → só o alvo.
+            const paceRaw = mainBlock?.pace_min ?? mainBlock?.work?.pace_min;
+            const paceSecs = paceValueToSecondsPerKm(paceRaw);
+            if (paceSecs != null) {
+                return formatPaceLabel(paceSecs);
             }
         }
         const defaultPaces: Record<string, string> = {

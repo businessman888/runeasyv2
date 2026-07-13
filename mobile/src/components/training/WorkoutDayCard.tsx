@@ -2,6 +2,7 @@ import React, { memo, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { typography, spacing, borderRadius } from '../../theme';
+import { paceValueToSecondsPerKm, formatPaceLabel } from '../../utils/pace';
 
 /**
  * Single workout/activity card for a given day, shared by Calendar and Home.
@@ -56,11 +57,10 @@ function WorkoutDayCardInner({ workout: w, onPress }: WorkoutDayCardProps) {
         return { color: '#FFC107', label: 'Pendente' };
     })();
 
-    const paceText = w.instructions_json?.[0]?.pace_min
-        ? `${Math.floor(w.instructions_json[0].pace_min)}:${String(
-              Math.round((w.instructions_json[0].pace_min % 1) * 60),
-          ).padStart(2, '0')} /km`
-        : '6:00 /km';
+    // pace_min do 1º bloco (aquecimento) em segundos/km (novo) ou decimal (legado);
+    // o util normaliza e formata como "m:ss".
+    const paceSecs = paceValueToSecondsPerKm(w.instructions_json?.[0]?.pace_min);
+    const paceText = paceSecs != null ? `${formatPaceLabel(paceSecs)} /km` : '6:00 /km';
 
     return (
         <View style={styles.workoutDetailCard}>

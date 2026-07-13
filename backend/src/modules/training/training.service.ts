@@ -17,6 +17,7 @@ import {
   PlanWorkoutDto,
   WeekPhase,
 } from './dto/plan-overview.dto';
+import { formatPaceRangeLabel } from '../../common/pace-calculator';
 
 // Generation status types
 export type GenerationStatus = 'partial' | 'generating' | 'complete' | 'failed';
@@ -1161,7 +1162,8 @@ export class TrainingService {
     userId: string,
     dto: import('./dto/create-manual-workout.dto').CreateManualWorkoutDto,
   ) {
-    const paceMinutes = dto.target_pace_seconds / 60;
+    // Unidade única de armazenamento: segundos/km (o DTO já vem nessa unidade).
+    const paceSeconds = dto.target_pace_seconds;
 
     const { data, error } = await this.supabaseService
       .from('workouts')
@@ -1181,8 +1183,8 @@ export class TrainingService {
           {
             type: 'main',
             distance_km: dto.distance_km,
-            pace_min: paceMinutes,
-            pace_max: paceMinutes,
+            pace_min: paceSeconds,
+            pace_max: paceSeconds,
           },
         ],
         objective: dto.title,
@@ -1551,8 +1553,9 @@ export class TrainingService {
     const segments = Array.isArray(workout?.instructions_json)
       ? workout.instructions_json
       : [];
-    // Sub-bloco (segmento simples, ou work/recovery de um repeat) → "400m @ 4:00-4:10"
-    // ou "90s @ 6:30-7:00". Aceita distância OU tempo; tolera o formato antigo.
+    // Sub-bloco (segmento simples, ou work/recovery de um repeat) → "400m @ 5:08–5:27/km"
+    // ou "90s @ 6:30–7:00/km". Aceita distância OU tempo; paces em segundos/km
+    // (tolera o formato decimal antigo via formatPaceRangeLabel).
     const describeEffort = (e: any): string => {
       if (!e) return '';
       const amount =
@@ -1561,10 +1564,11 @@ export class TrainingService {
           : e.duration_seconds != null
             ? `${e.duration_seconds}s`
             : '';
-      const pace =
-        e.pace_min != null && e.pace_max != null
-          ? ` @ ${e.pace_min}-${e.pace_max} min/km`
+      const range =
+        e.pace_min != null || e.pace_max != null
+          ? formatPaceRangeLabel(e.pace_min, e.pace_max)
           : '';
+      const pace = range && range !== '—' ? ` @ ${range}/km` : '';
       return `${amount}${pace}`;
     };
 

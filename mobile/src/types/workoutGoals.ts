@@ -16,6 +16,8 @@ export type GoalMetricType = 'distance' | 'time';
 export interface SegmentEffortAPI {
   distance_km?: number;
   duration_seconds?: number;
+  // Faixa-alvo em SEGUNDOS/KM (min = mais rápido, max = mais lento). Planos antigos
+  // podem trazer decimal min/km — use utils/pace (tolera ambos).
   pace_min: number;
   pace_max: number;
   zone?: string;
@@ -26,6 +28,7 @@ export interface SimpleSegmentAPI {
   type: 'warmup' | 'main' | 'cooldown';
   distance_km?: number;
   duration_seconds?: number;
+  // Faixa-alvo em SEGUNDOS/KM (min = mais rápido, max = mais lento). Ver SegmentEffortAPI.
   pace_min: number;
   pace_max: number;
   zone?: string;
