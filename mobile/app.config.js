@@ -48,7 +48,10 @@ export default {
       NSHealthUpdateUsageDescription: "Precisamos salvar informações dos seus treinos realizados no RunEasy.",
       NSBluetoothAlwaysUsageDescription: "O RunEasy usa o Bluetooth para conectar à sua esteira e receber dados de treino em tempo real (velocidade, distância, inclinação).",
       NSBluetoothPeripheralUsageDescription: "O RunEasy usa o Bluetooth para conectar à sua esteira e receber dados de treino em tempo real.",
-      UIBackgroundModes: ["fetch", "location", "remote-notification", "bluetooth-central"],
+      // "audio" habilita o coach de voz falar com a tela apagada (celular no bolso,
+      // fone no ouvido). Justificativa p/ revisão Apple: coaching por voz durante a
+      // corrida em background. Disparo real vem da locationTask (ver coachOrchestrator).
+      UIBackgroundModes: ["fetch", "location", "remote-notification", "bluetooth-central", "audio"],
       LSApplicationQueriesSchemes: [
         "instagram",
         "instagram-stories"
@@ -122,6 +125,10 @@ export default {
       }
     ],
     "expo-web-browser",
+    // Coach de áudio: só REPRODUÇÃO de voz (expo-speech) — nunca gravação. Desliga
+    // a permissão de microfone (iOS NSMicrophoneUsageDescription + Android RECORD_AUDIO)
+    // que o plugin declara por padrão, evitando escrutínio de loja sem uso legítimo.
+    ["expo-audio", { microphonePermission: false, recordAudioAndroid: false }],
     [
       "@react-native-google-signin/google-signin",
       {

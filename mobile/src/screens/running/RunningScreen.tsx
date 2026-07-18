@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,11 @@ import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { trackingStorage } from '../../tasks/locationTask';
 import { TreadmillRunningView } from './TreadmillRunningView';
 import type { WorkoutBlockAPI } from '../../types/workoutGoals';
+import { useCoach } from '../../hooks/useCoach';
+import { CoachBell } from '../../components/coach/CoachBell';
+import { useSubscriptionStore } from '../../stores/subscriptionStore';
+import { COACH_MMKV } from '../../services/coach/coachConfig';
+import { resetCoachRun, stopCoach } from '../../services/coach/coachOrchestrator';
 
 // ─── Tipos de rota ────────────────────────────────────────────────────────────
 export type RunMode = 'planned' | 'manual' | 'free';
@@ -154,6 +159,33 @@ function OutdoorRunningView() {
 
   const mode: RunMode = route.params?.mode ?? (route.params?.workoutId ? 'planned' : 'free');
   const isFreeMode = mode === 'free';
+
+  // ── Coach de áudio ──────────────────────────────────────────────────────
+  const isProUser = useSubscriptionStore((s) => s.isProUser);
+  const { enabled: coachEnabled, lastMessage, unread, markRead } = useCoach(true);
+
+  // Reset do estado de split SÓ na montagem (nova corrida) — não herda km/último
+  // aviso de uma sessão anterior. Separado do snapshot para que uma atualização de
+  // assinatura no meio da corrida não apague os splits já falados.
+  useEffect(() => {
+    resetCoachRun();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Snapshot idempotente do contexto do coach no MMKV para o orquestrador (que roda
+  // no background/locationTask) ler síncrono. Split é Free/todos os treinos; isPro +
+  // mode só passam a importar na Fase 4 (alertas de pace).
+  useEffect(() => {
+    trackingStorage.set(COACH_MMKV.enabled, coachEnabled); // fecha a janela do rehydrate assíncrono
+    trackingStorage.set(COACH_MMKV.mode, mode);
+    trackingStorage.set(COACH_MMKV.isPro, isProUser);
+  }, [mode, isProUser, coachEnabled]);
+
+  // Ao pausar, interrompe qualquer fala em andamento (a flag tracking_paused já
+  // silencia novos avisos; isto corta o que estiver falando na hora).
+  useEffect(() => {
+    if (sessionState === 'paused') stopCoach();
+  }, [sessionState]);
 
   // ── Prominent Disclosure de localização (Google Play) ──────────────────
   // "Permitir" dispara o pedido nativo; "Agora não" fecha sem consentir. Em
@@ -491,6 +523,12 @@ function OutdoorRunningView() {
         style={[sideLayout ? styles.rightControlsLeft : styles.rightControls, { top: insets.top + 70 }]}
         pointerEvents="box-none"
       >
+        {/* Sino do coach — topo da coluna, só quando o coach está ligado. O balão
+            abre à esquerda (não cobre o mapa sozinho — pull, não push). */}
+        {coachEnabled && (
+          <CoachBell unread={unread} message={lastMessage} onOpen={markRead} />
+        )}
+
         {/* Metas — primeiro no topo da coluna */}
         {hasGoals && !isFreeMode && (
           <Pressable
@@ -688,6 +726,7 @@ function OutdoorRunningView() {
           onFinish={handleFinish}
           dayLabel={isFreeMode ? undefined : dayLabel}
           workoutTitle={isFreeMode ? undefined : workoutTitle}
+          splits={liveSplits}
         />
       )}
 

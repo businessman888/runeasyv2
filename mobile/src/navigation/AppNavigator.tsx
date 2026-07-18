@@ -46,6 +46,7 @@ import {
     WeekDetailScreen,
     PrePaywallScreen,
     TreadmillSetupScreen,
+    CoachAudioSettingsScreen,
 } from '../screens';
 import { PlanPreviewScreen as QuizPlanPreviewScreen } from '../screens/quiz/PlanPreviewScreen';
 import { PlanLoadingScreen } from '../screens/quiz/PlanLoadingScreen';
@@ -447,6 +448,14 @@ export function AppNavigator() {
                         <Stack.Screen
                             name="NotificationSettings"
                             component={NotificationSettingsScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'card',
+                            }}
+                        />
+                        <Stack.Screen
+                            name="CoachAudioSettings"
+                            component={CoachAudioSettingsScreen}
                             options={{
                                 headerShown: false,
                                 presentation: 'card',

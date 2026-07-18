@@ -12,6 +12,8 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { fonts } from '../../theme';
+import { SplitsBars } from '../../components/coach/SplitsBars';
+import type { LiveSplit } from '../../utils/livePace';
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
@@ -48,6 +50,8 @@ interface Props {
   onFinish: () => void;
   dayLabel?: string;
   workoutTitle?: string;
+  /** Splits de km já completados (Fase 2). Renderizados como barras aqui. */
+  splits?: LiveSplit[];
 }
 
 /** Par "label / valor" sem fundo nem borda — idêntico ao FlatMetric da esteira. */
@@ -93,6 +97,7 @@ export function ExpandedMetricsOverlay({
   onFinish,
   dayLabel,
   workoutTitle,
+  splits,
 }: Props) {
   const insets = useSafeAreaInsets();
   const showWorkoutPill = !!(dayLabel || workoutTitle);
@@ -197,6 +202,10 @@ export function ExpandedMetricsOverlay({
             <FlatMetric label="Distância" value={`${distanceText} km`} />
           </View>
         </View>
+
+        {/* Splits por km já completados (barras, estilo Strava). Visíveis direto
+            no expandido — sem 2º nível de colapso. */}
+        {!!splits && splits.length > 0 && <SplitsBars splits={splits} />}
       </View>
 
       {/* Dock inferior — idêntico à esteira, botões reativos ao estado. */}

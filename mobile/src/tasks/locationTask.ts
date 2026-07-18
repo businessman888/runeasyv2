@@ -2,6 +2,7 @@ import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
 import haversine from 'haversine';
 import { createMMKV } from 'react-native-mmkv';
+import { onProgress as coachOnProgress } from '../services/coach/coachOrchestrator';
 
 export const LOCATION_TRACKING_TASK = 'BACKGROUND_LOCATION_TASK';
 
@@ -171,6 +172,15 @@ TaskManager.defineTask(LOCATION_TRACKING_TASK, async ({ data, error }) => {
     trackingStorage.set('current_distance', currentDistance);
     trackingStorage.set('route_points', JSON.stringify(routePointsList));
     trackingStorage.set('last_update_ts', Date.now());
+
+    // Coach de áudio: detecta cruzamento de km e dispara o split (foreground E
+    // background — este é o ÚNICO ponto que roda em ambos). Nunca pode derrubar
+    // o tracking, então é protegido. Curto-circuita barato quando o coach está off.
+    try {
+      coachOnProgress(routePointsList);
+    } catch (coachErr) {
+      console.warn('[Tracking Task] coach onProgress falhou (ignorado):', coachErr);
+    }
 
   } catch (e) {
     console.error('[Tracking Task] Erro processando coordenadas em background', e);

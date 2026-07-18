@@ -27,6 +27,7 @@ export * from './RetrospectiveScreen';
 export * from './CustomizeGoalScreen';
 export * from './ManualWorkoutConfigScreen';
 export * from './PrePaywallScreen';
+export * from './coach/CoachAudioSettingsScreen';
 
 // Plan Goals (visão do plano completo + detalhe semanal)
 export * from './plan-goals';

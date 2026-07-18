@@ -14,6 +14,7 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fonts, borderRadius } from '../theme';
 import { useAuthStore, useTrialModalStore, getDisplayName, getAvatarUrl } from '../stores';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
+import { useCoachStore } from '../stores/coachStore';
 import { useProFeature } from '../hooks/useProFeature';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { Skeleton } from '../components/Skeleton';
@@ -60,6 +61,7 @@ function EditIcon({ size = 14, color = '#0A0A18' }: { size?: number; color?: str
 
 export function SettingsScreen({ navigation }: any) {
     const { user, logout } = useAuthStore();
+    const coachEnabled = useCoachStore((s) => s.enabled);
 
     // One-time (per app open) "Iniciar Teste Grátis" promo — Free only, and only
     // once the subscription has resolved (avoids flashing it to a Pro user).
@@ -208,6 +210,30 @@ export function SettingsScreen({ navigation }: any) {
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>PREFERÊNCIAS</Text>
                     <View style={styles.menuCard}>
+                        {/* Coach de áudio — mesmo padrão de linha (replicado, não há
+                            componente compartilhado). Mostra o estado atual à direita. */}
+                        <TouchableOpacity
+                            style={styles.menuItem}
+                            onPress={() => navigation.navigate('CoachAudioSettings')}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Coach de áudio, ${coachEnabled ? 'ligado' : 'desligado'}`}
+                        >
+                            <View style={styles.menuItemLeft}>
+                                <View style={styles.menuIconContainer}>
+                                    <Ionicons name="headset" size={20} color={colors.textLight} />
+                                </View>
+                                <Text style={styles.menuItemText}>Coach de Áudio</Text>
+                            </View>
+                            <View style={styles.menuItemRight}>
+                                <Text style={[styles.stateLabel, coachEnabled && styles.stateLabelOn]}>
+                                    {coachEnabled ? 'Ligado' : 'Desligado'}
+                                </Text>
+                                <ChevronIcon size={20} />
+                            </View>
+                        </TouchableOpacity>
+
+                        <View style={styles.menuDivider} />
+
                         <TouchableOpacity
                             style={styles.menuItem}
                             onPress={() => navigation.navigate('NotificationSettings')}
@@ -420,6 +446,19 @@ const styles = StyleSheet.create({
         fontFamily: fonts.medium,
         fontSize: 15,
         color: colors.text,
+    },
+    menuItemRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    stateLabel: {
+        fontFamily: fonts.medium,
+        fontSize: 13,
+        color: colors.textSecondary,
+    },
+    stateLabelOn: {
+        color: colors.primary,
     },
     menuDivider: {
         height: 1,
