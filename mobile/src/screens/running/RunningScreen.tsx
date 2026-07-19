@@ -31,6 +31,7 @@ import { CoachBell } from '../../components/coach/CoachBell';
 import { useSubscriptionStore } from '../../stores/subscriptionStore';
 import { COACH_MMKV } from '../../services/coach/coachConfig';
 import { resetCoachRun, stopCoach } from '../../services/coach/coachOrchestrator';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // ─── Tipos de rota ────────────────────────────────────────────────────────────
 export type RunMode = 'planned' | 'manual' | 'free';
@@ -484,30 +485,56 @@ function OutdoorRunningView() {
 
       {/* ── HEADER OVERLAY ──────────────────────────────────────────────── */}
       <SafeAreaView style={styles.topOverlay} edges={['top']}>
+        {/* Scrim de sombra difusa — background quase transparente que escurece no
+            topo e desvanece suavemente para baixo, dando legibilidade aos controles
+            sobre o mapa sem um container sólido. Fica atrás de tudo (absoluto). */}
+        <LinearGradient
+          colors={['rgba(10,10,24,0.55)', 'rgba(10,10,24,0.28)', 'rgba(10,10,24,0)']}
+          locations={[0, 0.55, 1]}
+          pointerEvents="none"
+          style={styles.headerScrim}
+        />
         <View style={styles.headerRow}>
 
-          {/* Botão voltar */}
+          {/* Botão voltar — ícone limpo sobre o scrim (sem container). */}
           <Pressable
-            style={styles.backBtn}
+            style={styles.headerIconBtn}
             onPress={() => navigation.goBack()}
             accessibilityRole="button"
             accessibilityLabel="Voltar"
           >
-            <Ionicons name="chevron-back" size={22} color={T.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={T.textPrimary} />
           </Pressable>
 
-          {/* Card de info do treino — só aparece em treinos manuais e do plano */}
+          {/* Título — texto puro centralizado (sem fundo/borda). Absoluto p/ ficar
+              sempre no centro da tela, independente das larguras laterais.
+              Só aparece em treinos manuais e do plano. */}
           {!isFreeMode && (
-            <View style={styles.workoutCard}>
-              <Text style={styles.workoutDay}>{dayLabel}</Text>
-              <Text style={styles.workoutTitle} numberOfLines={1}>{workoutTitle}</Text>
+            <View style={styles.headerTitleWrap} pointerEvents="none">
+              <Text style={styles.headerTitleDay}>{dayLabel}</Text>
+              <Text style={styles.headerTitle} numberOfLines={1}>{workoutTitle}</Text>
             </View>
           )}
 
-          {/* Spacer: mantém o botão voltar à esquerda quando não há card central.
-              O status do GPS agora vive no header do card de telemetria (banner
-              "Calculando GPS" → "GPS Pronto"), tornando o indicador do topo redundante. */}
-          {isFreeMode && <View style={{ flex: 1 }} />}
+          {/* Metas — canto direito do header (ícone limpo). Movido da coluna
+              lateral. Só quando há metas e não é modo livre. */}
+          {hasGoals && !isFreeMode ? (
+            <Pressable
+              style={styles.headerIconBtn}
+              onPress={() => setGoalsModalVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Ver metas do treino"
+            >
+              {allCompleted ? (
+                <Ionicons name="checkmark-circle" size={24} color="#32CD32" />
+              ) : (
+                <MaterialCommunityIcons name="bullseye-arrow" size={24} color={T.cyan} />
+              )}
+            </Pressable>
+          ) : (
+            // Spacer da largura do ícone p/ manter o título centralizado.
+            <View style={styles.headerRightSpacer} />
+          )}
 
         </View>
 
@@ -529,21 +556,7 @@ function OutdoorRunningView() {
           <CoachBell unread={unread} message={lastMessage} onOpen={markRead} />
         )}
 
-        {/* Metas — primeiro no topo da coluna */}
-        {hasGoals && !isFreeMode && (
-          <Pressable
-            style={[styles.mapCircleBtn, allCompleted && styles.goalsBtnCompleted]}
-            onPress={() => setGoalsModalVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Ver metas do treino"
-          >
-            {allCompleted ? (
-              <Ionicons name="checkmark-circle" size={24} color="#32CD32" />
-            ) : (
-              <MaterialCommunityIcons name="bullseye-arrow" size={24} color={T.cyan} />
-            )}
-          </Pressable>
-        )}
+        {/* Metas foi movido para o header (canto superior direito). */}
 
         {/* Trilhas/parques OSM (opt-in) */}
         <Pressable
@@ -790,47 +803,49 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    gap: 10,
   },
-  backBtn: {
+  // Scrim de sombra difusa — gradiente vertical quase transparente atrás do
+  // header. Cobre a safe-area do topo + a altura do headerRow e desvanece.
+  headerScrim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 140,
+  },
+  // Botão de ícone limpo (sem container), com alvo de toque de 44×44.
+  headerIconBtn: {
     width: 44,
-    height: 50,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  workoutCard: {
-    flex: 1,
-    height: 50,
-    backgroundColor: '#1C1C2E',
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: '#EBEBF5',
-    justifyContent: 'center',
+  // Título absolutamente centralizado na tela (independe das larguras laterais).
+  headerTitleWrap: {
+    position: 'absolute',
+    left: 64,
+    right: 64,
     alignItems: 'center',
-    paddingHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
   },
-  workoutDay: {
+  headerTitleDay: {
     color: 'rgba(235,235,245,0.60)',
     fontSize: 12,
     fontWeight: '500',
     textAlign: 'center',
   },
-  workoutTitle: {
+  headerTitle: {
     color: '#EBEBF5',
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
     textAlign: 'center',
   },
-  goalsBtnCompleted: {
-    borderWidth: 2,
-    borderColor: '#32CD32',
+  // Mantém o título centralizado quando não há botão de metas à direita.
+  headerRightSpacer: {
+    width: 44,
+    height: 44,
   },
 
   // ── Coluna de controles da lateral direita (Metas / Trilhas / Recentralizar)
