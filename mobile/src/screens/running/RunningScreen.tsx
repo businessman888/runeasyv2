@@ -30,7 +30,8 @@ import { useCoach } from '../../hooks/useCoach';
 import { CoachBell } from '../../components/coach/CoachBell';
 import { useSubscriptionStore } from '../../stores/subscriptionStore';
 import { COACH_MMKV } from '../../services/coach/coachConfig';
-import { resetCoachRun, stopCoach } from '../../services/coach/coachOrchestrator';
+import { resetCoachRun, stopCoach, enqueue as enqueueCoach } from '../../services/coach/coachOrchestrator';
+import { buildMotivFinish } from '../../services/coach/coachMessages';
 import { LinearGradient } from 'expo-linear-gradient';
 
 // ─── Tipos de rota ────────────────────────────────────────────────────────────
@@ -180,7 +181,17 @@ function OutdoorRunningView() {
     trackingStorage.set(COACH_MMKV.enabled, coachEnabled); // fecha a janela do rehydrate assíncrono
     trackingStorage.set(COACH_MMKV.mode, mode);
     trackingStorage.set(COACH_MMKV.isPro, isProUser);
-  }, [mode, isProUser, coachEnabled]);
+    // Estrutura do treino p/ a Fase 4 (segmento ativo/faixa/transições) — só plano.
+    // O orquestrador (background) lê daqui, pois não tem acesso a route params.
+    if (mode === 'planned') {
+      trackingStorage.set(
+        COACH_MMKV.segments,
+        JSON.stringify(route.params?.workoutBlocks ?? []),
+      );
+    } else {
+      trackingStorage.set(COACH_MMKV.segments, '');
+    }
+  }, [mode, isProUser, coachEnabled, route.params?.workoutBlocks]);
 
   // Ao pausar, interrompe qualquer fala em andamento (a flag tracking_paused já
   // silencia novos avisos; isto corta o que estiver falando na hora).
@@ -206,6 +217,10 @@ function OutdoorRunningView() {
   const handleFinish = useCallback(async () => {
     const workoutId = route.params?.workoutId;
     console.log(`[RunningScreen] handleFinish iniciado. mode=${mode}, workoutId=${workoutId}`);
+
+    // Motivacional de encerramento — enfileirado ANTES de finishTracking (que seta
+    // tracking_finished e silencia o coach). Gated internamente a plano+Pro+coach on.
+    enqueueCoach(buildMotivFinish());
 
     setIsFinishing(true);
 
