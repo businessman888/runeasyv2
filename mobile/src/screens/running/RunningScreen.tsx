@@ -489,7 +489,7 @@ function OutdoorRunningView() {
             topo e desvanece suavemente para baixo, dando legibilidade aos controles
             sobre o mapa sem um container sólido. Fica atrás de tudo (absoluto). */}
         <LinearGradient
-          colors={['rgba(10,10,24,0.55)', 'rgba(10,10,24,0.28)', 'rgba(10,10,24,0)']}
+          colors={['rgba(10,10,24,0.82)', 'rgba(10,10,24,0.52)', 'rgba(10,10,24,0)']}
           locations={[0, 0.55, 1]}
           pointerEvents="none"
           style={styles.headerScrim}
