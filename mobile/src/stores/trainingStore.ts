@@ -424,7 +424,7 @@ interface TrainingState {
     fetchPlanOverview: () => Promise<void>;
     clearPlanOverview: () => void;
     skipWorkout: (workoutId: string, reason: string) => Promise<void>;
-    completeWorkout: (payload: WorkoutTrackingPayload) => Promise<{ success: boolean; savedLocally: boolean }>;
+    completeWorkout: (payload: WorkoutTrackingPayload) => Promise<{ success: boolean; savedLocally: boolean; workout?: Workout }>;
     completeFreeRun: (payload: FreeRunPayload) => Promise<{ success: boolean; savedLocally: boolean; workout?: Workout }>;
     createManualWorkout: (dto: ManualWorkoutDto) => Promise<Workout>;
     retryPendingWorkouts: () => Promise<void>;
@@ -714,12 +714,21 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
             }
 
             // Sucesso! Remove do pending e registra envio Garmin no dedup map.
-            console.log(`[completeWorkout] Workout ${payload.workoutId} salvo no backend com sucesso`);
+            // Lê o workout retornado (contém `activity_id`) — usado pela tela de
+            // processamento pós-treino para polling do feedback + navegação.
+            let workout: Workout | undefined;
+            try {
+                const data = await response.json();
+                workout = data?.workout;
+            } catch {
+                // Corpo vazio/não-JSON: não é fatal, seguimos sem o workout.
+            }
+            console.log(`[completeWorkout] Workout ${payload.workoutId} salvo no backend. activity_id=${workout?.activity_id ?? 'n/a'}`);
             removePendingWorkout(payload.workoutId);
             if (isGarminPayload && payload.external_id) markGarminSent(payload.external_id);
             get().fetchUpcomingWorkouts();
             useWellnessStore.getState().reset();
-            return { success: true, savedLocally: false };
+            return { success: true, savedLocally: false, workout };
         } catch (error) {
             console.error('[completeWorkout] Erro de rede:', error);
             // Dados já estão no pending — mantém lá para retry quando rede voltar
@@ -900,6 +909,15 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         console.log(`[retryPendingWorkouts] Tentando reenviar ${pending.length} workout(s)...`);
 
         for (const payload of pending) {
+            // Guard: never POST to /workouts/local_.../complete — the backend
+            // rejects a synthetic id ("Workout not found") and the item would
+            // loop in the queue forever. A synthetic id means the run had no
+            // real plan/manual workout, so it belongs on the free-run queue.
+            if (payload.workoutId.startsWith('local_')) {
+                console.warn(`[retryPendingWorkouts] Ignorando id sintético ${payload.workoutId} (não é workout do backend); removendo do pending.`);
+                removePendingWorkout(payload.workoutId);
+                continue;
+            }
             try {
                 console.log(`[retryPendingWorkouts] Reenviando workoutId=${payload.workoutId}, dist=${payload.total_distance_meters}m`);
                 const response = await authedFetch(
@@ -910,10 +928,25 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
                             'Content-Type': 'application/json',
                             'x-user-id': userId,
                         },
+                        // Reenvia o body COMPLETO (mesmo shape do completeWorkout).
+                        // Antes só ia route_points/distance/duration, perdendo
+                        // source/external_id/started_at/HR/environment/treadmill_data
+                        // na sincronização — o que degradava a activity gerada e a
+                        // análise do treinador do plano.
                         body: JSON.stringify({
                             route_points: payload.route_points,
                             total_distance_meters: payload.total_distance_meters,
                             duration_seconds: payload.duration_seconds,
+                            ...(payload.source            && { source: payload.source }),
+                            ...(payload.external_id       && { external_id: payload.external_id }),
+                            ...(payload.started_at        && { started_at: payload.started_at }),
+                            ...(payload.average_heartrate != null && { average_heartrate: payload.average_heartrate }),
+                            ...(payload.max_heartrate     != null && { max_heartrate: payload.max_heartrate }),
+                            ...(payload.calories          != null && { calories: payload.calories }),
+                            ...(payload.avg_pace_seconds_per_km != null && { avg_pace_seconds_per_km: payload.avg_pace_seconds_per_km }),
+                            ...(payload.garmin_device_name && { garmin_device_name: payload.garmin_device_name }),
+                            ...(payload.environment       && { environment: payload.environment }),
+                            ...(payload.treadmill_data    && { treadmill_data: payload.treadmill_data }),
                         }),
                     },
                 );

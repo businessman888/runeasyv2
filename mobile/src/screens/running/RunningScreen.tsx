@@ -13,7 +13,6 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useTracking } from '../../hooks/useTracking';
 import { useWorkoutGoals } from '../../hooks/useWorkoutGoals';
-import { useTrainingStore } from '../../stores';
 import { GoalsModal } from '../../components/GoalsModal';
 import { LocationDisclosureModal } from '../../components/LocationDisclosureModal';
 import { MapLocationPuck } from '../../components/map/MapLocationPuck';
@@ -156,9 +155,6 @@ function OutdoorRunningView() {
     dismissLocationDisclosure,
   } = useTracking(route.params?.workoutId);
 
-  const completeWorkout = useTrainingStore((s) => s.completeWorkout);
-  const completeFreeRun = useTrainingStore((s) => s.completeFreeRun);
-
   const mode: RunMode = route.params?.mode ?? (route.params?.workoutId ? 'planned' : 'free');
   const isFreeMode = mode === 'free';
 
@@ -240,38 +236,7 @@ function OutdoorRunningView() {
       return;
     }
 
-    // 2. Envia ao backend (save-first: dados salvos em MMKV ANTES da tentativa de API)
-    let savedLocally = false;
-    let resolvedWorkoutId: string | undefined = workoutId;
-    try {
-      if (isFreeMode) {
-        const result = await completeFreeRun({
-          localId: `free_${Date.now()}`,
-          route_points: trackingData.routeData,
-          total_distance_meters: trackingData.distance,
-          duration_seconds: Math.round(trackingData.timeMs / 1000),
-          started_at: new Date(Date.now() - trackingData.timeMs).toISOString(),
-        });
-        savedLocally = result.savedLocally;
-        if (result.workout?.id) resolvedWorkoutId = result.workout.id;
-        console.log(`[RunningScreen] completeFreeRun resultado: success=${result.success}, savedLocally=${result.savedLocally}, workoutId=${resolvedWorkoutId}`);
-      } else {
-        const result = await completeWorkout({
-          workoutId: workoutId || `local_${Date.now()}`,
-          route_points: trackingData.routeData,
-          total_distance_meters: trackingData.distance,
-          duration_seconds: Math.round(trackingData.timeMs / 1000),
-        });
-        savedLocally = result.savedLocally;
-        console.log(`[RunningScreen] completeWorkout resultado: success=${result.success}, savedLocally=${result.savedLocally}`);
-      }
-    } catch (error) {
-      // completeWorkout/completeFreeRun já salvam localmente internamente, mas por segurança:
-      console.error('[RunningScreen] Erro inesperado na finalização:', error);
-      savedLocally = true;
-    }
-
-    // 3. Limpa o tracking MMKV — protegido: NUNCA pode bloquear a navegação.
+    // 2. Limpa o tracking MMKV — protegido: NUNCA pode bloquear a navegação.
     // (clearTracking chama mmkv.delete + setSessionState; se algo lançar aqui,
     // a Promise rejeita silenciosamente e o overlay de loading nunca sai.)
     try {
@@ -281,32 +246,61 @@ function OutdoorRunningView() {
       console.error('[RunningScreen] Erro ao limpar tracking (ignorado):', clearError);
     }
 
-    // 4. Navega para tela de resumo.
-    // IMPORTANTE: index aponta para a rota ATIVA. RunSummary está em routes[1],
-    // então index precisa ser 1 — caso contrário Main fica visível e o resumo
-    // nunca é renderizado.
-    console.log('[RunningScreen] Navegando para RunSummary...');
+    // 3. Entrega à WorkoutProcessingScreen, que faz o envio ao backend
+    // (save-first dentro da store), o polling do feedback do plano e o
+    // roteamento correto: plano → CoachAnalysis (análise pronta) senão Home;
+    // manual/livre → RunSummary. Isso substitui o modal de "Finalizando" na
+    // própria tela de tracking e impede voltar para o tracking.
+    const durationSeconds = Math.round(trackingData.timeMs / 1000);
+    // Um treino de plano/manual sempre deveria ter um workoutId real do backend.
+    // Se faltar, NÃO inventamos um id sintético (`local_...`) — o backend o
+    // rejeita ("Workout not found") e o item ficaria preso no pending. Em vez
+    // disso degradamos para free-run, que tem idempotência própria por
+    // external_id. `effectiveMode` reflete essa degradação para o roteamento.
+    const degradeToFree = !isFreeMode && !workoutId;
+    const effectiveMode = degradeToFree ? 'free' : mode;
+    const submit = (isFreeMode || degradeToFree)
+      ? {
+          kind: 'free' as const,
+          payload: {
+            localId: `free_${Date.now()}`,
+            route_points: trackingData.routeData,
+            total_distance_meters: trackingData.distance,
+            duration_seconds: durationSeconds,
+            started_at: new Date(Date.now() - trackingData.timeMs).toISOString(),
+          },
+        }
+      : {
+          kind: 'workout' as const,
+          payload: {
+            workoutId: workoutId as string,
+            route_points: trackingData.routeData,
+            total_distance_meters: trackingData.distance,
+            duration_seconds: durationSeconds,
+          },
+        };
+
     const summaryParams = {
-      workoutId: resolvedWorkoutId || undefined,
+      workoutId: workoutId || undefined,
       distance: trackingData.distance,
       timeMs: trackingData.timeMs,
       routePoints: trackingData.routeData,
       routeCoordinates: trackingData.routeData.map(
         (p: { longitude: number; latitude: number }) => [p.longitude, p.latitude]
       ),
-      savedLocally,
-      mode,
+      mode: effectiveMode,
       targetPaceSeconds: route.params?.targetPaceSeconds,
       targetDistanceKm: route.params?.targetDistanceKm,
       workoutTitle: route.params?.title,
     };
 
+    console.log('[RunningScreen] Navegando para WorkoutProcessing...');
     try {
       navigation.reset({
         index: 1,
         routes: [
           { name: 'Main' as never, params: { initialTab: 'Home' } },
-          { name: 'RunSummary' as never, params: summaryParams },
+          { name: 'WorkoutProcessing' as never, params: { mode: effectiveMode, submit, summaryParams } as never },
         ],
       });
       console.log('[RunningScreen] navigation.reset disparado');
@@ -314,10 +308,10 @@ function OutdoorRunningView() {
       console.error('[RunningScreen] Erro no navigation.reset:', navError);
       // Fallback 1: navigate normal
       try {
-        (navigation as any).navigate('RunSummary', summaryParams);
+        (navigation as any).navigate('WorkoutProcessing', { mode: effectiveMode, submit, summaryParams });
       } catch (e) {
         console.error('[RunningScreen] Erro no navigate fallback:', e);
-        // Fallback 2: volta pra Home (dados já estão salvos)
+        // Fallback 2: volta pra Home
         try {
           navigation.reset({
             index: 0,
@@ -330,7 +324,7 @@ function OutdoorRunningView() {
     } finally {
       setIsFinishing(false);
     }
-  }, [route.params?.workoutId, route.params?.title, route.params?.targetPaceSeconds, route.params?.targetDistanceKm, mode, isFreeMode, finishTracking, completeWorkout, completeFreeRun, clearTracking, navigation]);
+  }, [route.params?.workoutId, route.params?.title, route.params?.targetPaceSeconds, route.params?.targetDistanceKm, mode, isFreeMode, finishTracking, clearTracking, navigation]);
 
   // ── Sistema de Metas ────────────────────────────────────────────────────
   const workoutBlocks = route.params?.workoutBlocks;

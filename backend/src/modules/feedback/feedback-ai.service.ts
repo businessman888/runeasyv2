@@ -1,8 +1,26 @@
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { SupabaseService } from '../../database';
 import { NotificationService } from '../notifications/notification.service';
 import { AIRouterService, AI_FEATURES } from '../../common/ai';
 import { formatPaceRangeLabel } from '../../common/pace-calculator';
+
+/** Lifecycle state of an AI coach feedback row. Persisted on ai_feedbacks. */
+export type FeedbackStatus =
+  | 'processing'
+  | 'completed'
+  | 'failed'
+  | 'skipped'
+  | 'none';
+
+export interface FeedbackStatusResult {
+  status: FeedbackStatus;
+  feedbackId: string | null;
+  workoutId: string | null;
+  activityId: string | null;
+  reason: string | null;
+}
 
 export interface WorkoutComparison {
   planned: {
@@ -72,7 +90,164 @@ export class FeedbackAIService {
     @Inject(forwardRef(() => NotificationService))
     private notificationService: NotificationService,
     private aiRouter: AIRouterService,
+    @InjectQueue('feedback-queue') private feedbackQueue: Queue,
   ) {}
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Feedback lifecycle status (processing → completed / failed / skipped)
+  // ──────────────────────────────────────────────────────────────────────
+
+  /**
+   * Upsert the single ai_feedbacks row for a (workout, activity) pair.
+   * There is no DB unique constraint (historical duplicates exist), so we
+   * find-then-update the most recent row, or insert when none exists. This
+   * keeps exactly one live row per completion and lets status transitions
+   * (processing → completed/failed) update in place.
+   */
+  private async persistFeedbackRow(
+    userId: string,
+    workoutId: string,
+    activityId: string,
+    patch: Record<string, unknown>,
+  ): Promise<{ id: string } | null> {
+    const { data: existing } = await this.supabaseService
+      .from('ai_feedbacks')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('workout_id', workoutId)
+      .eq('activity_id', activityId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existing?.id) {
+      const { data, error } = await this.supabaseService
+        .from('ai_feedbacks')
+        .update(patch)
+        .eq('id', existing.id)
+        .select('id')
+        .single();
+      if (error) throw error;
+      return data;
+    }
+
+    const { data, error } = await this.supabaseService
+      .from('ai_feedbacks')
+      .insert({
+        user_id: userId,
+        workout_id: workoutId,
+        activity_id: activityId,
+        ...patch,
+      })
+      .select('id')
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  /** Mark generation as in-flight (placeholder row, no content yet). */
+  async markProcessing(userId: string, workoutId: string, activityId: string) {
+    return this.persistFeedbackRow(userId, workoutId, activityId, {
+      status: 'processing',
+      status_reason: null,
+    });
+  }
+
+  /** Mark generation as intentionally skipped (quota / no activity). */
+  async markSkipped(
+    userId: string,
+    workoutId: string,
+    activityId: string,
+    reason: string,
+  ) {
+    return this.persistFeedbackRow(userId, workoutId, activityId, {
+      status: 'skipped',
+      status_reason: reason,
+    });
+  }
+
+  /** Mark generation as failed (worker threw / retries exhausted). */
+  async markFailed(
+    userId: string,
+    workoutId: string,
+    activityId: string,
+    reason: string,
+  ) {
+    return this.persistFeedbackRow(userId, workoutId, activityId, {
+      status: 'failed',
+      status_reason: reason,
+    });
+  }
+
+  /**
+   * Mark processing and enqueue the BullMQ generation job. Used both by the
+   * completion flow and by the "Tentar novamente" retry endpoint.
+   */
+  async enqueueGeneration(
+    userId: string,
+    workoutId: string,
+    activityId: string,
+  ) {
+    await this.markProcessing(userId, workoutId, activityId);
+    await this.feedbackQueue.add(
+      'generate',
+      { userId, workoutId, activityId },
+      { delay: 1000 },
+    );
+  }
+
+  /**
+   * Resolve the current feedback lifecycle for a workout/activity. Prefers a
+   * completed row (returns its id for navigation); otherwise reports the
+   * latest non-completed state (processing/failed/skipped) or 'none'.
+   */
+  async getFeedbackStatus(
+    userId: string,
+    params: { workoutId?: string; activityId?: string },
+  ): Promise<FeedbackStatusResult> {
+    const { workoutId, activityId } = params;
+    if (!workoutId && !activityId) {
+      return {
+        status: 'none',
+        feedbackId: null,
+        workoutId: workoutId ?? null,
+        activityId: activityId ?? null,
+        reason: null,
+      };
+    }
+
+    let query = this.supabaseService
+      .from('ai_feedbacks')
+      .select('id, status, status_reason, workout_id, activity_id, created_at')
+      .eq('user_id', userId);
+    // activity_id is the canonical key (survives orphan/duplicate workouts).
+    if (activityId) query = query.eq('activity_id', activityId);
+    else if (workoutId) query = query.eq('workout_id', workoutId);
+
+    const { data: rows } = await query.order('created_at', {
+      ascending: false,
+    });
+
+    if (!rows || rows.length === 0) {
+      return {
+        status: 'none',
+        feedbackId: null,
+        workoutId: workoutId ?? null,
+        activityId: activityId ?? null,
+        reason: null,
+      };
+    }
+
+    const completed = rows.find((r: any) => r.status === 'completed');
+    const chosen = completed ?? rows[0];
+    return {
+      status: chosen.status as FeedbackStatus,
+      feedbackId: completed?.id ?? null,
+      workoutId: chosen.workout_id ?? workoutId ?? null,
+      activityId: chosen.activity_id ?? activityId ?? null,
+      reason: chosen.status_reason ?? null,
+    };
+  }
 
   /**
    * Generate post-workout feedback using Claude AI
@@ -127,26 +302,27 @@ export class FeedbackAIService {
       userId,
     );
 
-    // 4. Save feedback to database
-    const { data: savedFeedback, error } = await this.supabaseService
-      .from('ai_feedbacks')
-      .insert({
-        user_id: userId,
-        workout_id: workoutId,
-        activity_id: activityId,
+    // 4. Save feedback to database. Updates the 'processing' placeholder row
+    //    created at enqueue time (or inserts if absent) and flips it to
+    //    'completed' so the home card / status endpoint see it as ready.
+    const savedFeedback = await this.persistFeedbackRow(
+      userId,
+      workoutId,
+      activityId,
+      {
         hero_message: feedback.hero_message,
         hero_tone: feedback.hero_tone,
         metrics_comparison: feedback.metrics_comparison,
         strengths: feedback.strengths,
         improvements: feedback.improvements,
         progression_impact: feedback.progression_impact,
-      })
-      .select()
-      .single();
+        status: 'completed',
+        status_reason: null,
+      },
+    );
 
-    if (error) {
-      this.logger.error('Failed to save feedback', error);
-      throw error;
+    if (!savedFeedback) {
+      throw new Error('Failed to persist feedback row');
     }
 
     // 5. Send push notification to user
@@ -300,6 +476,9 @@ Regras:
       .from('ai_feedbacks')
       .select('*, workouts(*), activities(*)')
       .eq('user_id', userId)
+      // Only ready feedback belongs in history — hide processing/failed/skipped
+      // placeholder rows so they don't render as empty coach cards.
+      .eq('status', 'completed')
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -332,6 +511,8 @@ Regras:
     const empty = {
       activity: null,
       feedback: null,
+      feedback_status: 'none' as FeedbackStatus,
+      feedback_status_reason: null as string | null,
       efficiency_percent: 0,
       conquest: null,
     };
@@ -421,14 +602,30 @@ Regras:
     latestActivity: any,
     scopedWorkoutIdHint: string | null = null,
   ) {
-    // 2. Get associated feedback if exists
-    const { data: feedback } = await this.supabaseService
+    // 2. Get associated feedback if exists.
+    //    Fetch ALL rows for this activity ordered newest-first (there can be
+    //    duplicates from orphan workout + recompletion, plus a 'processing'
+    //    placeholder alongside a later 'completed' row). Prefer the completed
+    //    one; expose the lifecycle status so the card can render
+    //    processing/failed/skipped states instead of a permanent "em preparo".
+    const { data: feedbackRows } = await this.supabaseService
       .from('ai_feedbacks')
       .select(
-        'id, hero_message, hero_tone, strengths, improvements, metrics_comparison, workout_id',
+        'id, hero_message, hero_tone, strengths, improvements, metrics_comparison, workout_id, status, status_reason',
       )
       .eq('activity_id', latestActivity.id)
-      .maybeSingle();
+      .order('created_at', { ascending: false });
+
+    const rows = Array.isArray(feedbackRows) ? feedbackRows : [];
+    const completedFeedback = rows.find((r: any) => r.status === 'completed');
+    const latestFeedbackRow = rows[0] ?? null;
+    // Only surface `feedback` content when it is actually ready.
+    const feedback = completedFeedback ?? null;
+    const feedbackStatus: FeedbackStatus = completedFeedback
+      ? 'completed'
+      : (latestFeedbackRow?.status as FeedbackStatus) ?? 'none';
+    const feedbackStatusReason: string | null =
+      latestFeedbackRow?.status_reason ?? null;
 
     // 3. Get linked workout to check goal.
     // Usar .maybeSingle() em vez de .single() — .single() retornava erro
@@ -571,6 +768,10 @@ Regras:
             improvements: feedback.improvements || [],
           }
         : null,
+      // Lifecycle so the coach card can distinguish "em preparo" (processing)
+      // from "falhou → tentar novamente" (failed/skipped) and self-heal.
+      feedback_status: feedbackStatus,
+      feedback_status_reason: feedbackStatusReason,
       efficiency_percent: Math.round(efficiencyPercent * 10) / 10,
       // Cadeia de fallback do workout_id: lookup direto → feedback → hint
       // pré-resolvido pelo escopo. Garante que o card sempre tenha um id

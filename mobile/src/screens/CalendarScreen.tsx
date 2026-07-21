@@ -11,6 +11,7 @@ import {
     Modal,
     Dimensions,
     PanResponder,
+    Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
@@ -397,17 +398,39 @@ export function CalendarScreen({ navigation }: any) {
                 return;
             }
 
+            // Plano concluído mas a análise do treinador ainda não ficou pronta
+            // (feedback assíncrono). Em vez de cair silenciosamente no RunSummary
+            // — que para um treino do plano parece a "tela errada" — informamos
+            // que está em preparo e deixamos ver o resumo como opção.
+            if (source === 'plan') {
+                Alert.alert(
+                    'Análise em preparo',
+                    'A análise do treinador para este treino ainda está sendo preparada. Você será avisado quando estiver pronta.',
+                    [
+                        ...(workout?.id
+                            ? [{
+                                text: 'Ver resumo do treino',
+                                onPress: () => navigation.navigate('RunSummary', {
+                                    workoutId: workout.id,
+                                    mode: 'planned',
+                                }),
+                            }]
+                            : []),
+                        { text: 'Fechar', style: 'cancel' as const },
+                    ],
+                );
+                return;
+            }
+
             // Sem id, o RunSummary abriria vazio (sem cold-start loading)
             // e o tap pareceria "sem ação". Aborta o redirect.
             if (!workout?.id) return;
 
             // Dumb redirect: only `workoutId` + `mode` (for the layout
             // branch — manual shows "Planejado vs Executado", free does
-            // not). RunSummaryScreen owns hydration and persistence; this
-            // tap is just routing.
-            const mode = source === 'manual' ? 'manual'
-                : source === 'plan' ? 'planned'
-                    : 'free';
+            // not). Plan já foi tratado acima (early return), então aqui só
+            // resta manual/free. RunSummaryScreen owns hydration/persistence.
+            const mode = source === 'manual' ? 'manual' : 'free';
             navigation.navigate('RunSummary', {
                 workoutId: workout.id,
                 mode,

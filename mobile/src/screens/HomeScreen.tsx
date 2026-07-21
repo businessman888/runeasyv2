@@ -120,7 +120,10 @@ export function HomeScreen({ navigation }: any) {
         latestSummary, fetchLatestSummary, fetchLatestActivity,
         latestPlanActivity, latestPlanActivityLoading,
         latestActivityResult, latestActivityResultLoading,
+        retryFeedback,
     } = useFeedbackStore();
+    // Activity id currently being re-requested via the coach card retry button.
+    const [retryingActivityId, setRetryingActivityId] = useState<string | null>(null);
     const { scope, setScope } = useWorkoutScopeStore();
     const { summary, fetchSummary, isLoading: statsLoading } = useStatsStore();
     const { unreadCount, fetchUnreadCount } = useNotificationStore();
@@ -517,7 +520,17 @@ export function HomeScreen({ navigation }: any) {
     const renderResultCardBody = (data: LatestActivityData) => {
         const source = data.workout_source;
         const isPlanWorkout = source === 'plan';
-        const isCoachReady = isPlanWorkout && !!data.feedback;
+
+        // feedback_status (backend novo) é a fonte de verdade do ciclo de vida da
+        // análise. Fallback para `!!feedback` quando ausente (backend antigo).
+        const status = data.feedback_status;
+        const isCoachReady = isPlanWorkout && !!data.feedback && status !== 'failed' && status !== 'skipped';
+        // 'failed'/'skipped' = a geração não vai se resolver sozinha → oferecer
+        // retry em vez de "em preparo" para sempre.
+        const isCoachFailed = isPlanWorkout && (status === 'failed' || status === 'skipped');
+        const activityId = data.activity?.id ?? null;
+        const canRetryCoach = isCoachFailed && !!data.workout_id && !!activityId;
+        const isRetrying = !!activityId && retryingActivityId === activityId;
 
         // Sem workout_id (caso degradado: linkedWorkout query retornou null por
         // múltiplas linhas, ou activity sem workout linkado) o RunSummary abre
@@ -528,13 +541,41 @@ export function HomeScreen({ navigation }: any) {
         const hasSummaryTarget = !!data.workout_id;
         const hasCoachTarget = !!data.feedback?.id;
         const canOpen = isPlanWorkout ? (isCoachReady && hasCoachTarget) : hasSummaryTarget;
+        // O botão fica ativo quando abre a análise OU quando permite retry.
+        const isButtonEnabled = (canOpen || canRetryCoach) && !isRetrying;
 
         const cardTitle = isPlanWorkout ? 'Análise do Treinador' : 'Resumo do treino';
         const cardCta = isPlanWorkout
-            ? (isCoachReady ? 'Ver feedback completo' : 'Análise em preparo...')
+            ? (isCoachReady
+                ? 'Ver feedback completo'
+                : isRetrying
+                    ? 'Reenviando…'
+                    : isCoachFailed
+                        ? (status === 'skipped' ? 'Análise indisponível — tentar de novo' : 'Tentar novamente')
+                        : 'Análise em preparo...')
             : (hasSummaryTarget ? 'Ver resumo do treino' : 'Resumo indisponível');
 
+        const handleRetryCoach = async () => {
+            if (!canRetryCoach || isRetrying) return;
+            setRetryingActivityId(activityId);
+            try {
+                await retryFeedback({
+                    workoutId: data.workout_id as string,
+                    activityId: activityId as string,
+                });
+                // Dá tempo ao worker (delay 1s + geração) e reflete o novo status.
+                setTimeout(() => fetchLatestActivity('plan'), 3000);
+                setTimeout(() => fetchLatestActivity('plan'), 9000);
+            } finally {
+                setTimeout(() => setRetryingActivityId(null), 9000);
+            }
+        };
+
         const handleOpen = () => {
+            if (isPlanWorkout && isCoachFailed) {
+                handleRetryCoach();
+                return;
+            }
             if (!canOpen) return;
             if (isPlanWorkout) {
                 navigation.navigate('CoachAnalysis', {
@@ -591,10 +632,10 @@ export function HomeScreen({ navigation }: any) {
                 <TouchableOpacity
                     style={[
                         styles.feedbackButton,
-                        !canOpen && { opacity: 0.5 },
+                        !isButtonEnabled && { opacity: 0.5 },
                     ]}
                     onPress={handleOpen}
-                    disabled={!canOpen}
+                    disabled={!isButtonEnabled}
                 >
                     <Text style={styles.feedbackButtonText}>{cardCta}</Text>
                     <ArrowRightIcon size={18} color="#00D4FF" />

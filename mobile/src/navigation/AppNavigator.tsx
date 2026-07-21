@@ -42,6 +42,7 @@ import {
     ManualWorkoutConfigScreen,
     RunningScreen,
     RunSummaryScreen,
+    WorkoutProcessingScreen,
     PlanGoalsScreen,
     WeekDetailScreen,
     PrePaywallScreen,
@@ -547,6 +548,15 @@ export function AppNavigator() {
                         <Stack.Screen
                             name="RunSummary"
                             component={RunSummaryScreen}
+                            options={{
+                                headerShown: false,
+                                gestureEnabled: false,
+                                animation: 'fade',
+                            }}
+                        />
+                        <Stack.Screen
+                            name="WorkoutProcessing"
+                            component={WorkoutProcessingScreen}
                             options={{
                                 headerShown: false,
                                 gestureEnabled: false,

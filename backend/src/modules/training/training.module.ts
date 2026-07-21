@@ -14,6 +14,7 @@ import { GamificationModule } from '../gamification/gamification.module';
 import { ReadinessModule } from '../readiness/readiness.module';
 import { StatsModule } from '../stats/stats.module';
 import { SubscriptionModule } from '../subscription/subscription.module';
+import { FeedbackModule } from '../feedback/feedback.module';
 
 /**
  * SubscriptionModule is wrapped in forwardRef because SubscriptionModule
@@ -30,6 +31,10 @@ import { SubscriptionModule } from '../subscription/subscription.module';
     ReadinessModule,
     StatsModule,
     forwardRef(() => SubscriptionModule),
+    // forwardRef: defensive against transitive module cycles through
+    // Notification/Gamification. TrainingService injects FeedbackAIService to
+    // drive the ai_feedbacks lifecycle (processing/skipped) at completion.
+    forwardRef(() => FeedbackModule),
     BullModule.registerQueue({
       name: 'feedback-queue',
     }),

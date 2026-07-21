@@ -50,6 +50,27 @@ export class FeedbackProcessor extends WorkerHost {
           `Failed to generate feedback for workout ${workoutId}`,
           error,
         );
+        // Persist a 'failed' status so the coach card can offer "Tentar
+        // novamente" instead of hanging on "Análise em preparo…" forever.
+        // Only on the final attempt — earlier attempts stay 'processing' so a
+        // BullMQ retry can still succeed. Best-effort; never masks the throw.
+        const isFinalAttempt =
+          !job.opts?.attempts || job.attemptsMade + 1 >= job.opts.attempts;
+        if (isFinalAttempt) {
+          try {
+            await this.feedbackAIService.markFailed(
+              userId,
+              workoutId,
+              activityId,
+              'ai_error',
+            );
+          } catch (markErr) {
+            this.logger.error(
+              `Failed to mark feedback failed for workout ${workoutId}`,
+              markErr,
+            );
+          }
+        }
         throw error;
       }
     }

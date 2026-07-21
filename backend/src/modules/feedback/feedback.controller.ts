@@ -20,8 +20,11 @@ export class FeedbackController {
   constructor(private readonly feedbackAIService: FeedbackAIService) {}
 
   /**
-   * Generate feedback for a completed workout
-   * Usually called automatically after activity sync
+   * (Re)generate feedback for a completed workout. Marks the feedback row as
+   * 'processing' and enqueues the async BullMQ job (same path as automatic
+   * post-completion generation). This backs the coach card's "Tentar
+   * novamente" retry: it returns immediately with status 'processing' and the
+   * card self-heals once the worker finishes.
    */
   @Post('generate')
   async generateFeedback(
@@ -32,24 +35,55 @@ export class FeedbackController {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
 
+    if (!dto?.workoutId || !dto?.activityId) {
+      throw new HttpException(
+        'workoutId and activityId are required',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     try {
-      const feedback = await this.feedbackAIService.generateFeedback(
+      await this.feedbackAIService.enqueueGeneration(
         userId,
         dto.workoutId,
         dto.activityId,
       );
-
-      return {
-        success: true,
-        feedback,
-      };
+      return { success: true, status: 'processing' };
     } catch (error) {
-      this.logger.error('Failed to generate feedback', error);
+      this.logger.error('Failed to enqueue feedback generation', error);
       throw new HttpException(
         'Failed to generate feedback',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  /**
+   * Resolve the feedback lifecycle for a workout/activity. Polled by the
+   * post-workout processing screen to decide when to route to CoachAnalysis,
+   * and by the home card to render processing/failed/skipped states.
+   */
+  @Get('status')
+  async getFeedbackStatus(
+    @User('id') userId: string,
+    @Query('workoutId') workoutId?: string,
+    @Query('activityId') activityId?: string,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+
+    if (!workoutId && !activityId) {
+      throw new HttpException(
+        'workoutId or activityId is required',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    return this.feedbackAIService.getFeedbackStatus(userId, {
+      workoutId,
+      activityId,
+    });
   }
 
   /**

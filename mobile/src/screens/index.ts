@@ -41,6 +41,7 @@ export * from './readiness';
 // Running (Tracking Nativo)
 export * from './running/RunningScreen';
 export * from './running/RunSummaryScreen';
+export * from './running/WorkoutProcessingScreen';
 
 // Treadmill (Esteira via FTMS / manual)
 export * from './treadmill';

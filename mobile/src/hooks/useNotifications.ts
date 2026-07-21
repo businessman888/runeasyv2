@@ -26,6 +26,7 @@ interface NotificationData {
     workoutId?: string;
     retrospectiveId?: string;
     analysisId?: string;
+    activityId?: string;
     [key: string]: unknown;
 }
 
@@ -92,8 +93,14 @@ export function useNotifications(): UseNotificationsReturn {
 
                 case 'CoachAnalysis':
                 case NotificationTypes.RECOVERY_ANALYSIS:
+                    // Backend sends `feedbackId` (screen: 'CoachAnalysis'); the
+                    // screen reads `feedbackId` (not the legacy `analysisId`),
+                    // so pass it through — otherwise the analysis opens empty.
                     console.log('[Notifications] Navigating to CoachAnalysis screen');
-                    navigate('CoachAnalysis', { analysisId: data.analysisId });
+                    navigate('CoachAnalysis', {
+                        feedbackId: data.feedbackId ?? data.analysisId,
+                        activityId: data.activityId,
+                    });
                     break;
 
                 case NotificationTypes.BADGE_EARNED:

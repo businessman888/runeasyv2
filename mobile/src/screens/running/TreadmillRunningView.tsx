@@ -31,12 +31,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 import { useNavigation } from '@react-navigation/native';
 import { useTreadmillTracking } from '../../hooks/useTreadmillTracking';
-import {
-  useTreadmillStore,
-  useTrainingStore,
-} from '../../stores';
+import { useTreadmillStore } from '../../stores';
 import { MANUAL_TREADMILL_SPEED } from '../../constants/bluetooth';
-import { saveTreadmillCache } from '../../utils/treadmillCache';
 import { useWorkoutGoals } from '../../hooks/useWorkoutGoals';
 import { GoalsModal } from '../../components/GoalsModal';
 import type { WorkoutBlockAPI } from '../../types/workoutGoals';
@@ -105,9 +101,6 @@ export function TreadmillRunningView({
     clearTracking,
   } = useTreadmillTracking(treadmillMode);
 
-  const completeWorkout = useTrainingStore((s) => s.completeWorkout);
-  const completeFreeRun = useTrainingStore((s) => s.completeFreeRun);
-
   const isCalculating = sessionState === 'calculating';
   const isTraining = sessionState === 'training';
   const isPaused = sessionState === 'paused';
@@ -171,52 +164,50 @@ export function TreadmillRunningView({
         ? Math.round(durationSec / (tracking.distance / 1000))
         : undefined;
 
-    let savedLocally = false;
-    let resolvedWorkoutId: string | undefined = workoutId;
-    try {
-      if (mode === 'free') {
-        const result = await completeFreeRun({
-          localId: `free_${Date.now()}`,
-          route_points: [],
-          total_distance_meters: tracking.distance,
-          duration_seconds: durationSec,
-          started_at: startedAtIso,
-          environment: 'treadmill',
-          treadmill_data: tracking.treadmillData,
-          average_heartrate: tracking.heartRateAvg ?? undefined,
-          max_heartrate: tracking.heartRateMax ?? undefined,
-          calories: tracking.treadmillData.total_calories,
-          avg_pace_seconds_per_km: avgPaceSec,
-        });
-        savedLocally = result.savedLocally;
-        if (result.workout?.id) resolvedWorkoutId = result.workout.id;
-      } else {
-        const result = await completeWorkout({
-          workoutId: workoutId || `local_${Date.now()}`,
-          route_points: [],
-          total_distance_meters: tracking.distance,
-          duration_seconds: durationSec,
-          environment: 'treadmill',
-          treadmill_data: tracking.treadmillData,
-          average_heartrate: tracking.heartRateAvg ?? undefined,
-          max_heartrate: tracking.heartRateMax ?? undefined,
-          calories: tracking.treadmillData.total_calories,
-          avg_pace_seconds_per_km: avgPaceSec,
-        });
-        savedLocally = result.savedLocally;
-      }
-    } catch (error) {
-      console.error('[TreadmillRunningView] completeWorkout/free erro:', error);
-      savedLocally = true;
-    }
-
-    // Local-first persistence: save the treadmill telemetry to disk keyed
-    // by workoutId BEFORE clearing in-memory state. This guarantees the
-    // RunSummary "Velocidade na esteira" card survives reopen even if the
-    // backend round-trip fails to surface treadmill_data on re-fetch.
-    if (resolvedWorkoutId && tracking.treadmillData) {
-      saveTreadmillCache(resolvedWorkoutId, tracking.treadmillData);
-    }
+    // Entrega o envio + roteamento à WorkoutProcessingScreen (mesmo fluxo do
+    // outdoor). O cache de telemetria da esteira é persistido lá, após o
+    // submit resolver o workoutId. Limpeza da sessão fica aqui, antes do
+    // handoff, para não voltar ao tracking.
+    const treadmillData = tracking.treadmillData;
+    // Sem id real de plano/manual → degradar para free-run (nunca inventar um
+    // id sintético que o backend rejeita). Ver RunningScreen para o racional.
+    const degradeToFree = mode !== 'free' && !workoutId;
+    const effectiveMode = degradeToFree ? 'free' : mode;
+    const submit =
+      mode === 'free' || degradeToFree
+        ? {
+            kind: 'free' as const,
+            payload: {
+              localId: `free_${Date.now()}`,
+              route_points: [],
+              total_distance_meters: tracking.distance,
+              duration_seconds: durationSec,
+              started_at: startedAtIso,
+              environment: 'treadmill',
+              treadmill_data: treadmillData,
+              average_heartrate: tracking.heartRateAvg ?? undefined,
+              max_heartrate: tracking.heartRateMax ?? undefined,
+              calories: treadmillData.total_calories,
+              avg_pace_seconds_per_km: avgPaceSec,
+            },
+            treadmillCache: treadmillData,
+          }
+        : {
+            kind: 'workout' as const,
+            payload: {
+              workoutId: workoutId as string,
+              route_points: [],
+              total_distance_meters: tracking.distance,
+              duration_seconds: durationSec,
+              environment: 'treadmill',
+              treadmill_data: treadmillData,
+              average_heartrate: tracking.heartRateAvg ?? undefined,
+              max_heartrate: tracking.heartRateMax ?? undefined,
+              calories: treadmillData.total_calories,
+              avg_pace_seconds_per_km: avgPaceSec,
+            },
+            treadmillCache: treadmillData,
+          };
 
     try {
       clearTracking();
@@ -226,15 +217,14 @@ export function TreadmillRunningView({
     }
 
     const summaryParams = {
-      workoutId: resolvedWorkoutId || undefined,
+      workoutId: workoutId || undefined,
       distance: tracking.distance,
       timeMs: tracking.timeMs,
       routePoints: [],
       routeCoordinates: [],
-      savedLocally,
-      mode,
+      mode: effectiveMode,
       environment: 'treadmill' as const,
-      treadmillData: tracking.treadmillData,
+      treadmillData,
       targetPaceSeconds,
       targetDistanceKm,
       workoutTitle: title,
@@ -245,11 +235,11 @@ export function TreadmillRunningView({
         index: 1,
         routes: [
           { name: 'Main' as never, params: { initialTab: 'Home' } as never },
-          { name: 'RunSummary' as never, params: summaryParams as never },
+          { name: 'WorkoutProcessing' as never, params: { mode: effectiveMode, submit, summaryParams } as never },
         ],
       });
     } catch {
-      (navigation as any).navigate('RunSummary', summaryParams);
+      (navigation as any).navigate('WorkoutProcessing', { mode: effectiveMode, submit, summaryParams });
     } finally {
       setIsFinishing(false);
     }
@@ -260,8 +250,6 @@ export function TreadmillRunningView({
     title,
     targetPaceSeconds,
     targetDistanceKm,
-    completeFreeRun,
-    completeWorkout,
     clearTracking,
     resetTreadmillStore,
     navigation,

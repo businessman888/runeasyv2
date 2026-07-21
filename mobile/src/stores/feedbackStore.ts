@@ -3,6 +3,22 @@ import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
 import { authedFetch } from '../services/apiClient';
 
+/** Mirror of the backend ai_feedbacks lifecycle (feedback-ai.service.ts). */
+export type FeedbackStatus =
+    | 'processing'
+    | 'completed'
+    | 'failed'
+    | 'skipped'
+    | 'none';
+
+export interface FeedbackStatusResult {
+    status: FeedbackStatus;
+    feedbackId: string | null;
+    workoutId: string | null;
+    activityId: string | null;
+    reason: string | null;
+}
+
 interface MetricsComparison {
     distance: { planned: number; executed: number; diff_percent: number };
     pace: { planned: string; executed: string; diff_percent: number };
@@ -109,6 +125,14 @@ export interface LatestActivityData {
         strengths: Array<{ title: string; description: string; icon?: string }>;
         improvements: Array<{ title: string; description: string; tip?: string; icon?: string }>;
     } | null;
+    /**
+     * Lifecycle of the AI coach analysis for this activity. Lets the card
+     * distinguish "em preparo" (processing) from "falhou → tentar novamente"
+     * (failed/skipped) so it never hangs permanently. Older backends may omit
+     * it → treat as undefined and fall back to `!!feedback`.
+     */
+    feedback_status?: FeedbackStatus;
+    feedback_status_reason?: string | null;
     workout_id: string | null;
     workout_source: 'plan' | 'manual' | 'free' | null;
     workout_title: string | null;
@@ -171,6 +195,10 @@ interface FeedbackState {
     fetchFeedback: (feedbackId: string) => Promise<void>;
     fetchLatestSummary: () => Promise<void>;
     fetchLatestActivity: (scope?: 'plan' | 'activity') => Promise<void>;
+    /** Poll the AI coach analysis lifecycle for a workout/activity. */
+    fetchFeedbackStatus: (params: { workoutId?: string; activityId?: string }) => Promise<FeedbackStatusResult>;
+    /** Re-enqueue feedback generation (card "Tentar novamente"). */
+    retryFeedback: (params: { workoutId: string; activityId: string }) => Promise<boolean>;
     rateFeedback: (feedbackId: string, rating: number) => Promise<void>;
     fetchWorkoutHistory: (limit?: number, offset?: number) => Promise<void>;
     loadMoreWorkouts: () => Promise<void>;
@@ -305,6 +333,53 @@ export const useFeedbackStore = create<FeedbackState>((set, get) => ({
             console.error('Fetch latest activity error:', error);
         } finally {
             set({ [slot.loading]: false } as any);
+        }
+    },
+
+    fetchFeedbackStatus: async ({ workoutId, activityId }) => {
+        const fallback: FeedbackStatusResult = {
+            status: 'none',
+            feedbackId: null,
+            workoutId: workoutId ?? null,
+            activityId: activityId ?? null,
+            reason: null,
+        };
+        try {
+            const userId = await getUserId();
+            if (!userId || (!workoutId && !activityId)) return fallback;
+
+            const params: string[] = [];
+            if (workoutId) params.push(`workoutId=${encodeURIComponent(workoutId)}`);
+            if (activityId) params.push(`activityId=${encodeURIComponent(activityId)}`);
+
+            const response = await authedFetch(`${API_URL}/feedback/status?${params.join('&')}`, {
+                headers: { 'x-user-id': userId },
+            });
+            if (!response.ok) return fallback;
+            return (await response.json()) as FeedbackStatusResult;
+        } catch (error) {
+            console.error('Fetch feedback status error:', error);
+            return fallback;
+        }
+    },
+
+    retryFeedback: async ({ workoutId, activityId }) => {
+        try {
+            const userId = await getUserId();
+            if (!userId) return false;
+
+            const response = await authedFetch(`${API_URL}/feedback/generate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-user-id': userId,
+                },
+                body: JSON.stringify({ workoutId, activityId }),
+            });
+            return response.ok;
+        } catch (error) {
+            console.error('Retry feedback error:', error);
+            return false;
         }
     },
 

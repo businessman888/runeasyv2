@@ -18,7 +18,18 @@ export type RootStackParamList = {
     Retrospective: undefined;
     Feedback: { feedbackId: string };
     WorkoutDetail: { workoutId: string };
-    CoachAnalysis: { analysisId?: string };
+    // The screen consumes `feedbackId` (+ optional `activityId` for GPS
+    // hydration). `analysisId` was a legacy misnomer never read by the screen.
+    CoachAnalysis: { feedbackId?: string; activityId?: string };
+    WorkoutProcessing: {
+        mode: string;
+        submit: {
+            kind: 'workout' | 'free';
+            payload: Record<string, unknown>;
+            treadmillCache?: unknown;
+        };
+        summaryParams: Record<string, unknown>;
+    };
     ReadinessQuiz: undefined;
     ReadinessResult: undefined;
     ReadinessSuccess: undefined;

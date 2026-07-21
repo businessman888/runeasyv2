@@ -10,6 +10,7 @@ import {
 } from './training-ai.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { SubscriptionService } from '../subscription/subscription.service';
+import { FeedbackAIService } from '../feedback/feedback-ai.service';
 import { AiQuotaService, AIRouterService, AI_FEATURES } from '../../common/ai';
 import {
   PlanOverviewResponseDto,
@@ -59,6 +60,9 @@ export class TrainingService {
     @InjectQueue('elevation-queue') private elevationQueue: Queue,
     private readonly aiQuotaService: AiQuotaService,
     private readonly aiRouter: AIRouterService,
+    // Owns the ai_feedbacks lifecycle (processing/completed/failed/skipped).
+    @Inject(forwardRef(() => FeedbackAIService))
+    private readonly feedbackAIService: FeedbackAIService,
   ) {}
 
   /**
@@ -1129,20 +1133,41 @@ export class TrainingService {
         this.logger.log(
           `Enqueueing AI Feedback for Workout ${workoutId} / Activity ${activityId}`,
         );
-        await this.feedbackQueue.add(
-          'generate',
-          { userId, workoutId, activityId },
-          { delay: 1000 },
-        );
+        // Marks a 'processing' placeholder row THEN enqueues, so the coach
+        // card shows "em preparo" immediately and the status endpoint can be
+        // polled. Never fail completion if the status write hiccups.
+        try {
+          await this.feedbackAIService.enqueueGeneration(
+            userId,
+            workoutId,
+            activityId,
+          );
+        } catch (enqueueErr) {
+          this.logger.error(
+            `[completeWorkout] failed to enqueue feedback for workout ${workoutId}: ${(enqueueErr as Error).message}`,
+          );
+        }
       } else {
         this.logger.log(
           `Skipping AI feedback for workout ${workoutId}: user ${userId} reached daily free quota`,
         );
+        // Persist a 'skipped' row so the card can show a quota message + retry
+        // instead of a permanent "Análise em preparo…".
+        await this.feedbackAIService
+          .markSkipped(userId, workoutId, activityId, 'quota')
+          .catch((e) =>
+            this.logger.error(
+              `[completeWorkout] failed to mark feedback skipped (quota) for ${workoutId}: ${(e as Error).message}`,
+            ),
+          );
       }
     } else if (!activityId) {
       this.logger.warn(
         `Skipping AI feedback enqueue for workout ${workoutId}: activity row was not created`,
       );
+      // No activityId → nothing to key a feedback row on; the coach card falls
+      // back to its own "no activity" handling. (Cannot persist a status row
+      // without an activity_id FK.)
     } else {
       this.logger.log(
         `Skipping AI feedback for workout ${workoutId}: source=${workout.source} (no AI coach for manual/free)`,
