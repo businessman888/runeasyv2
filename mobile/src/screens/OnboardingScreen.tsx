@@ -21,6 +21,7 @@ import Animated, {
     FadeIn,
 } from 'react-native-reanimated';
 import { useOnboardingStore } from '../stores/onboardingStore';
+import { useCoachStore } from '../stores/coachStore';
 
 // Question screens
 import { ObjectiveScreen } from './quiz/ObjectiveScreen';
@@ -38,6 +39,7 @@ import { DistanceTimeScreen } from './quiz/DistanceTimeScreen';
 import { StartDateScreen } from './quiz/StartDateScreen';
 import { GoalTimeframeScreen } from './quiz/GoalTimeframeScreen';
 import { WearableConnectionScreen } from './quiz/WearableConnectionScreen';
+import { AudioCoachScreen } from './quiz/AudioCoachScreen';
 import { ReferralCodeScreen } from './quiz/ReferralCodeScreen';
 import { TestimonialsScreen } from './quiz/TestimonialsScreen';
 import { GoalTypeScreen } from './quiz/GoalTypeScreen';
@@ -142,6 +144,7 @@ interface QuizStep {
     Component: React.ComponentType<any>;
     isInterstitial?: boolean;
     isWearableStep?: boolean;
+    isCoachStep?: boolean;
     extraPropsKey?: string;
 }
 
@@ -182,6 +185,7 @@ const ALL_QUIZ_STEPS: QuizStep[] = [
     { key: 'startDate', Component: StartDateScreen },
     { key: 'limitations', Component: LimitationsScreen },
     { key: 'goalTimeframe', Component: GoalTimeframeScreen },                                 // skipped on race path
+    { key: 'audioCoach', Component: AudioCoachScreen, isCoachStep: true },                    // opt-in do coach de áudio (antes do device)
     { key: 'preferredWearable', Component: WearableConnectionScreen, isWearableStep: true },
     { key: '__i_testimonials', Component: TestimonialsScreen, isInterstitial: true },
     {
@@ -278,6 +282,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             case 'goalTimeframe':
                 return typeof data.goalTimeframe === 'number' && data.goalTimeframe > 0;
             case 'preferredWearable': return true;
+            case 'audioCoach': return true; // footer é Ativar/Agora não (não usa Continuar)
             case 'referralCode': return true; // optional — user can always skip
             default: return false;
         }
@@ -377,6 +382,28 @@ export function OnboardingScreen({ navigation, route }: any) {
         setWearableModalOpen(false);
     };
 
+    // Coach de áudio — espelha o padrão da wearable (footer próprio + XP + advance).
+    // Só liga a PREFERÊNCIA (mesmo estado do card no Profile). Não verifica TTS, não
+    // concede Pro (entitlement é checado no disparo do áudio, não aqui).
+    const handleCoachYes = () => {
+        useCoachStore.getState().setEnabled(true);
+        if (!xpCreditedRef.current.has(safeStep)) {
+            addXP(XP_PER_QUESTION);
+            xpCreditedRef.current.add(safeStep);
+        }
+        advanceOrFinish();
+    };
+
+    const handleCoachNo = () => {
+        // "Agora não": avança e deixa a preferência no default OFF (sem modal, sem
+        // insistência). Dá pra ligar depois pelo Profile normalmente.
+        if (!xpCreditedRef.current.has(safeStep)) {
+            addXP(XP_PER_QUESTION);
+            xpCreditedRef.current.add(safeStep);
+        }
+        advanceOrFinish();
+    };
+
     const handleChange = useCallback((value: any) => {
         if (currentStepData.keys) {
             updateData(value);
@@ -426,6 +453,7 @@ export function OnboardingScreen({ navigation, route }: any) {
     };
 
     const isWearableStep = !!currentStepData.isWearableStep;
+    const isCoachStep = !!currentStepData.isCoachStep;
     const isInterstitial = !!currentStepData.isInterstitial;
     const showBackButton = safeStep > 0;
     const continueDisabled = !canContinue();
@@ -535,7 +563,15 @@ export function OnboardingScreen({ navigation, route }: any) {
             </ScrollView>
 
             <View style={[styles.buttonContainer, { paddingBottom: bottomInset }]}>
-                {isWearableStep ? (
+                {isCoachStep ? (
+                    <FixedNavigationButtons
+                        variant="primarySecondary"
+                        onYes={handleCoachYes}
+                        onNo={handleCoachNo}
+                        yesLabel="Ativar / habilitar coach"
+                        noLabel="Agora não"
+                    />
+                ) : isWearableStep ? (
                     <FixedNavigationButtons
                         variant="yesNo"
                         onYes={handleWearableYes}
