@@ -1,15 +1,17 @@
 /**
  * Splits em barras horizontais (Figma componentSplits 1604:1934), estilo Strava.
  * Uma barra por km JÁ COMPLETADO — pace acima, altura ∝ pace (mais lento = mais
- * alta). Barra atual (mais recente) em ciano. NÃO exibe slots de km futuros
- * (exigiria distância-alvo, que não existe em corrida livre → manter só o que
- * aconteceu é consistente em todos os tipos de treino).
+ * alta). Barra atual (mais recente) em ciano. NÃO exibe slots de km futuros.
+ *
+ * Corrida longa (ex.: 42 km): as barras vivem numa ScrollView HORIZONTAL — quando
+ * não cabem, rolam lateralmente (não quebram em várias linhas nem estouram). O
+ * auto-scroll mantém o km mais recente visível. Quando cabem, ficam centradas.
  *
  * A entrada de um split novo é animada (Reanimated) sem "pulo" de layout.
  */
 
-import React, { memo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { memo, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import type { LiveSplit } from '../../utils/livePace';
 
@@ -35,6 +37,8 @@ interface Props {
 }
 
 export const SplitsBars = memo(({ splits }: Props) => {
+  const scrollRef = useRef<ScrollView>(null);
+
   if (!splits || splits.length === 0) return null;
 
   // Normaliza a altura pela faixa de pace da própria corrida (mais lento = mais alto).
@@ -53,7 +57,15 @@ export const SplitsBars = memo(({ splits }: Props) => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Splits</Text>
-      <View style={styles.barsRow}>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.scroll}
+        contentContainerStyle={styles.barsRow}
+        // Mantém o km mais recente visível quando a lista cresce além da largura.
+        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+      >
         {splits.map((s, i) => {
           const isCurrent = i === lastIdx;
           const color = isCurrent ? T.cyan : T.textCompleted;
@@ -63,10 +75,7 @@ export const SplitsBars = memo(({ splits }: Props) => {
                 {paceLabel(s.paceSecPerKm)}
               </Text>
               <View
-                style={[
-                  styles.bar,
-                  { height: heightFor(s.paceSecPerKm), backgroundColor: color },
-                ]}
+                style={[styles.bar, { height: heightFor(s.paceSecPerKm), backgroundColor: color }]}
               />
               <Text style={styles.km} allowFontScaling={false}>
                 {s.km}
@@ -74,7 +83,7 @@ export const SplitsBars = memo(({ splits }: Props) => {
             </Animated.View>
           );
         })}
-      </View>
+      </ScrollView>
     </View>
   );
 });
@@ -84,19 +93,24 @@ SplitsBars.displayName = 'SplitsBars';
 const styles = StyleSheet.create({
   container: {
     marginTop: 28,
-    alignItems: 'center',
+    alignSelf: 'stretch', // ocupa a largura para a ScrollView poder rolar
   },
   title: {
     color: T.textPrimary,
     fontSize: 15,
     fontWeight: '700',
     marginBottom: 14,
+    textAlign: 'center',
+  },
+  scroll: {
+    alignSelf: 'stretch',
   },
   barsRow: {
+    flexGrow: 1, // centra quando cabem; permite rolar quando não cabem
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'center',
-    flexWrap: 'wrap',
+    paddingHorizontal: 16,
     gap: 8,
   },
   barCol: {

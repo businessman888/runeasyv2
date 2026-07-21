@@ -1,25 +1,35 @@
 /**
- * Sino do coach + balão do último aviso (Figma componentAlert 1604:1967).
+ * Sino do coach + balão do último aviso (baseado no Figma componentAlert 1604:1967,
+ * refinado para bolha de chat premium).
  *
  * Princípio de UX: áudio é primário, a tela é histórico consultável — PULL, não
- * push. Nada aparece sozinho cobrindo o mapa. O balão só abre/fecha ao TOCAR
- * (nunca some por timeout — quem corre precisa de tempo para ler).
+ * push. O balão só abre/fecha ao TOCAR (nunca some por timeout — quem corre precisa
+ * de tempo para ler).
  *
- * Estados do sino (Figma): idle (bg escuro, sino ciano) / não-lido (bg ciano,
- * sino escuro + dot). Alvo de toque 46pt (≥44, acessibilidade) — o Figma usa 40.
+ * Estados do sino:
+ *  - idle: superfície neutra (igual aos outros botões do mapa), sino ciano, SEM borda ciano.
+ *  - destacado (não-lido OU aberto): bg ciano, sino escuro. Dot só quando não-lido.
+ *
+ * O balão é `position: absolute` de propósito: se estivesse no fluxo, ao abrir ele
+ * alargaria a coluna de controles (alignItems: center) e "empurraria" os botões de
+ * baixo. Absoluto → o componente mantém 46×46 e nada mais se move.
  */
 
 import React, { memo, useState, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, FadeIn } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const T = {
-  bell: '#0E0E1F',
+  dark: '#0E0E1F',
+  surface: '#1C1C2E', // = card de telemetria (consistência)
   cyan: '#00D4FF',
   textPrimary: '#EBEBF5',
-  balloonBg: 'rgba(0, 127, 153, 0.30)', // = insightCard existente
-  balloonBorder: 'rgba(0, 212, 255, 0.35)',
+  textMuted: 'rgba(235, 235, 245, 0.55)',
+  neutralBorder: 'rgba(235, 235, 245, 0.12)',
 };
+
+const BELL = 46;
 
 interface Props {
   unread: boolean;
@@ -30,8 +40,13 @@ interface Props {
 
 export const CoachBell = memo(({ unread, message, onOpen }: Props) => {
   const [open, setOpen] = useState(false);
-  // "não-lido" visual só enquanto o balão está fechado.
-  const active = unread && !open;
+  const [balloonH, setBalloonH] = useState(44);
+
+  // Destaque ciano quando há aviso não-lido OU o balão está aberto.
+  const highlight = unread || open;
+
+  const scale = useSharedValue(1);
+  const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
   const handlePress = useCallback(() => {
     setOpen((prev) => {
@@ -42,29 +57,39 @@ export const CoachBell = memo(({ unread, message, onOpen }: Props) => {
   }, [onOpen]);
 
   return (
-    <View style={styles.row}>
+    <View style={styles.wrap}>
       {open && !!message && (
-        <View style={styles.balloon} accessibilityRole="text" accessibilityLabel={`Último aviso: ${message}`}>
-          <Text style={styles.balloonText} numberOfLines={3}>
-            {message}
-          </Text>
-        </View>
+        <Animated.View
+          entering={FadeIn.duration(160)}
+          onLayout={(e) => setBalloonH(e.nativeEvent.layout.height)}
+          style={[styles.balloon, { top: BELL / 2 - balloonH / 2 }]}
+          accessibilityRole="text"
+          accessibilityLabel={`Aviso do coach: ${message}`}
+        >
+          <Text style={styles.balloonSender}>COACH</Text>
+          <Text style={styles.balloonText}>{message}</Text>
+          {/* Cauda apontando para o sino (à direita). */}
+          <View style={styles.tail} />
+        </Animated.View>
       )}
 
       <Pressable
         onPress={handlePress}
-        style={[styles.bell, active && styles.bellActive]}
+        onPressIn={() => {
+          scale.value = withSpring(0.9, { damping: 12, stiffness: 260 });
+        }}
+        onPressOut={() => {
+          scale.value = withSpring(1, { damping: 12, stiffness: 260 });
+        }}
         accessibilityRole="button"
         accessibilityLabel={open ? 'Fechar avisos do coach' : 'Ver último aviso do coach'}
         accessibilityState={{ selected: open }}
         hitSlop={8}
       >
-        <MaterialCommunityIcons
-          name="bell"
-          size={20}
-          color={active ? T.bell : T.cyan}
-        />
-        {active && <View style={styles.dot} />}
+        <Animated.View style={[styles.bell, highlight ? styles.bellOn : styles.bellIdle, pressStyle]}>
+          <MaterialCommunityIcons name="bell" size={20} color={highlight ? T.dark : T.cyan} />
+          {unread && <View style={styles.dot} />}
+        </Animated.View>
       </Pressable>
     </View>
   );
@@ -73,20 +98,70 @@ export const CoachBell = memo(({ unread, message, onOpen }: Props) => {
 CoachBell.displayName = 'CoachBell';
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 10,
+  // Tamanho fixo = só o sino. O balão (absoluto) NÃO altera esta largura.
+  wrap: {
+    width: BELL,
+    height: BELL,
   },
-  balloon: {
-    maxWidth: 220,
-    backgroundColor: T.balloonBg,
-    borderRadius: 14,
+  bell: {
+    width: BELL,
+    height: BELL,
+    borderRadius: BELL / 2,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: T.balloonBorder,
+  },
+  bellIdle: {
+    backgroundColor: T.surface,
+    borderColor: T.neutralBorder, // sem borda ciano por padrão
+  },
+  bellOn: {
+    backgroundColor: T.cyan,
+    borderColor: T.cyan,
+    shadowColor: T.cyan,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  dot: {
+    position: 'absolute',
+    top: 9,
+    right: 9,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: T.dark,
+    borderWidth: 1.5,
+    borderColor: T.cyan,
+  },
+
+  // ── Balão de chat (absoluto, à esquerda do sino) ──
+  balloon: {
+    position: 'absolute',
+    right: BELL + 12, // 12px à esquerda do sino
+    maxWidth: 210,
+    minWidth: 96,
+    backgroundColor: T.surface,
+    borderRadius: 16,
+    borderTopRightRadius: 6, // canto "de chat" do lado da cauda
+    borderWidth: 1,
+    borderColor: 'rgba(0, 212, 255, 0.18)',
     paddingHorizontal: 14,
     paddingVertical: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 30,
+  },
+  balloonSender: {
+    color: T.cyan,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginBottom: 3,
   },
   balloonText: {
     color: T.textPrimary,
@@ -94,34 +169,16 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '500',
   },
-  bell: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: T.bell,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.35)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bellActive: {
-    backgroundColor: T.cyan,
-    borderColor: T.cyan,
-    shadowColor: T.cyan,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  dot: {
+  tail: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: T.bell,
-    borderWidth: 1.5,
-    borderColor: T.cyan,
+    right: -5,
+    top: 16,
+    width: 12,
+    height: 12,
+    backgroundColor: T.surface,
+    borderRightWidth: 1,
+    borderTopWidth: 1,
+    borderColor: 'rgba(0, 212, 255, 0.18)',
+    transform: [{ rotate: '45deg' }],
   },
 });
