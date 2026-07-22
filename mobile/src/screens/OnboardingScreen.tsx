@@ -565,11 +565,11 @@ export function OnboardingScreen({ navigation, route }: any) {
             <View style={[styles.buttonContainer, { paddingBottom: bottomInset }]}>
                 {isCoachStep ? (
                     <FixedNavigationButtons
-                        variant="primarySecondary"
+                        variant="yesNo"
                         onYes={handleCoachYes}
                         onNo={handleCoachNo}
-                        yesLabel="Ativar / habilitar coach"
-                        noLabel="Agora não"
+                        yesLabel="Ativar"
+                        noLabel="Pular"
                     />
                 ) : isWearableStep ? (
                     <FixedNavigationButtons
