@@ -26,10 +26,16 @@ interface OnboardingData {
     injuryDetails: string; // Pace screen - injury details
 
     // Performance Block (New)
-    recentDistance: number | null; // 3, 5, 10, or 15 km
+    recentDistance: number | null; // 3, 5, 10, or 15 km — 0 = "nunca corri" (sentinela)
     distanceTime: { hours: number; minutes: number; seconds: number } | null;
     calculatedPace: number | null; // min/km calculated from distance and time
     startDate: string | null; // ISO string for start date
+
+    // Capacidade atual (Fase A) — alimentam o motor de volume determinístico da
+    // Fase B. Guardados como enum-string; a derivação numérica é feita na Fase B.
+    recentFrequency: string | null;  // 'never' | '1x' | '2x' | '3x' | '4x_plus'
+    currentWeeklyKm: string | null;  // 'lt5' | '5_10' | '10_20' | '20_30' | 'gt30'
+    walkCapacity: string | null;     // 'easy' | 'effort' | 'not_yet' (só no fluxo "nunca corri")
 
     // Original remaining fields
     paceMinutes: string; // Timeframe screen - pace minutes
@@ -135,6 +141,11 @@ const initialData: Partial<OnboardingData> = {
     distanceTime: null,
     calculatedPace: null,
     startDate: null,
+
+    // Capacidade atual (Fase A)
+    recentFrequency: null,
+    currentWeeklyKm: null,
+    walkCapacity: null,
 
     // Original remaining fields
     paceMinutes: '',
@@ -326,6 +337,11 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                 calculated_pace: data.calculatedPace ?? null,
                 start_date: sanitizedStartDate,
 
+                // Capacidade atual (Fase A) — transporte para o motor de volume (Fase B)
+                recent_frequency: data.recentFrequency ?? null,
+                current_weekly_km: data.currentWeeklyKm ?? null,
+                walk_capacity: data.walkCapacity ?? null,
+
                 // Onboarding XP (credited to user upon successful submission)
                 onboarding_xp: xpEarned ?? 0,
             };
@@ -497,6 +513,9 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                 distance_time: data.distanceTime ?? null,
                 calculated_pace: data.calculatedPace ?? null,
                 start_date: sanitizedStartDate,
+                recent_frequency: data.recentFrequency ?? null,
+                current_weekly_km: data.currentWeeklyKm ?? null,
+                walk_capacity: data.walkCapacity ?? null,
                 onboarding_xp: xpEarned ?? 0,
             };
 

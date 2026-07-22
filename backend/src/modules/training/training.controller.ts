@@ -58,10 +58,16 @@ interface CreatePlanDto {
   preferred_days: number[];
 
   // Performance Baseline (New)
-  recent_distance: number | null; // 3, 5, 10, or 15 km
+  recent_distance: number | null; // 3, 5, 10, or 15 km — 0 = "nunca corri"
   distance_time: { hours: number; minutes: number; seconds: number } | null;
   calculated_pace: number | null; // min/km
   start_date: string | null; // ISO string
+
+  // Capacidade atual (Fase A) — enum-strings; só transportadas/persistidas.
+  // A Fase B (motor de volume determinístico) as consome.
+  recent_frequency?: string | null; // 'never' | '1x' | '2x' | '3x' | '4x_plus'
+  current_weekly_km?: string | null; // 'lt5' | '5_10' | '10_20' | '20_30' | 'gt30'
+  walk_capacity?: string | null; // 'easy' | 'effort' | 'not_yet'
 
   // Race goal (Fase 2) — set when the user picks/enters a race instead of a
   // pure distance goal. goal_timeframe stays null; the horizon is the race date.
@@ -245,6 +251,10 @@ export class TrainingController {
           distance_time: dto.distance_time,
           calculated_pace: dto.calculated_pace,
           start_date: dto.start_date,
+          // Capacidade atual (Fase A)
+          recent_frequency: dto.recent_frequency ?? null,
+          current_weekly_km: dto.current_weekly_km ?? null,
+          walk_capacity: dto.walk_capacity ?? null,
           // Meta
           completed_at: new Date().toISOString(),
           responses_json: dto,
@@ -333,6 +343,10 @@ export class TrainingController {
         raceName: dto.race_name ?? null,
         raceDistance: dto.race_distance ?? null,
         raceWeeksUntil: weeksUntil(dto.race_date),
+        // Capacidade atual (Fase A) — transporte para a Fase B
+        recentFrequency: dto.recent_frequency ?? null,
+        currentWeeklyKm: dto.current_weekly_km ?? null,
+        walkCapacity: dto.walk_capacity ?? null,
       });
 
       // Return immediately with first workout data
@@ -404,6 +418,9 @@ export class TrainingController {
           distance_time: dto.distance_time,
           calculated_pace: dto.calculated_pace,
           start_date: dto.start_date,
+          recent_frequency: dto.recent_frequency ?? null,
+          current_weekly_km: dto.current_weekly_km ?? null,
+          walk_capacity: dto.walk_capacity ?? null,
           completed_at: new Date().toISOString(),
           responses_json: dto,
         });
@@ -589,6 +606,12 @@ export class TrainingController {
         raceName: dto.race_name ?? onboardingData.race_name ?? null,
         raceDistance: dto.race_distance ?? onboardingData.race_distance ?? null,
         raceWeeksUntil: weeksUntil(dto.race_date ?? onboardingData.race_date),
+        // Capacidade atual (Fase A) — lê do responses_json ou da coluna dedicada
+        recentFrequency:
+          dto.recent_frequency ?? onboardingData.recent_frequency ?? null,
+        currentWeeklyKm:
+          dto.current_weekly_km ?? onboardingData.current_weekly_km ?? null,
+        walkCapacity: dto.walk_capacity ?? onboardingData.walk_capacity ?? null,
       });
 
       this.logger.log(

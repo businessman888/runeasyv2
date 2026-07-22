@@ -18,7 +18,13 @@ export interface TrainingPlanRequest {
   // Preferred over currentPace5k for VDOT estimation: estimateVDOTFromRace is
   // distance-aware, so a 10/15km result is not mistaken for a 5k pace.
   calculatedPace?: number | null; // min/km on the recent distance
-  recentDistanceKm?: number | null; // 3 | 5 | 10 | 15
+  recentDistanceKm?: number | null; // 3 | 5 | 10 | 15 — 0 = "nunca corri" (sentinela)
+  // Capacidade atual (Fase A). Enum-strings vindas do onboarding; NÃO usadas na
+  // geração ainda — só transportadas/persistidas. A Fase B (motor de volume
+  // determinístico) derivará os números a partir delas.
+  recentFrequency?: string | null; // 'never' | '1x' | '2x' | '3x' | '4x_plus'
+  currentWeeklyKm?: string | null; // 'lt5' | '5_10' | '10_20' | '20_30' | 'gt30'
+  walkCapacity?: string | null; // 'easy' | 'effort' | 'not_yet' (fluxo "nunca corri")
   // Manual overrides from Customize Screen
   targetTime?: string; // e.g., "01:55:00"
   targetPace?: string; // e.g., "5:30"

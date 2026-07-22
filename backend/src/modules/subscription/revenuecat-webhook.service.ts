@@ -260,6 +260,12 @@ export class RevenueCatWebhookService {
         limitations: dto.limitations || onboarding.limitations,
         preferredDays: selectedDays,
         startDate: dto.start_date || onboarding.start_date,
+        // Capacidade atual (Fase A) — transporte para a Fase B
+        recentFrequency:
+          dto.recent_frequency ?? onboarding.recent_frequency ?? null,
+        currentWeeklyKm:
+          dto.current_weekly_km ?? onboarding.current_weekly_km ?? null,
+        walkCapacity: dto.walk_capacity ?? onboarding.walk_capacity ?? null,
       });
       this.logger.log(
         `[RC] Plan generated for ${userId} after upgrade — plan_id=${result.plan_id}`,

@@ -35,6 +35,9 @@ import { HeightScreen } from './quiz/HeightScreen';
 import { AvailableDaysScreen } from './quiz/AvailableDaysScreen';
 import { IntenseDayScreen } from './quiz/IntenseDayScreen';
 import { RecentDistanceScreen } from './quiz/RecentDistanceScreen';
+import { RecentFrequencyScreen } from './quiz/RecentFrequencyScreen';
+import { CurrentWeeklyKmScreen } from './quiz/CurrentWeeklyKmScreen';
+import { WalkCapacityScreen } from './quiz/WalkCapacityScreen';
 import { DistanceTimeScreen } from './quiz/DistanceTimeScreen';
 import { StartDateScreen } from './quiz/StartDateScreen';
 import { GoalTimeframeScreen } from './quiz/GoalTimeframeScreen';
@@ -179,6 +182,9 @@ const ALL_QUIZ_STEPS: QuizStep[] = [
     { key: 'availableDays', Component: AvailableDaysScreen, extraPropsKey: 'availableDays' },
     { key: 'intenseDayIndex', Component: IntenseDayScreen, extraPropsKey: 'intenseDay' },
     { key: 'recentDistance', Component: RecentDistanceScreen },
+    { key: 'recentFrequency', Component: RecentFrequencyScreen },                              // Fase A — capacidade atual
+    { key: 'currentWeeklyKm', Component: CurrentWeeklyKmScreen },                              // Fase A — volume âncora
+    { key: 'walkCapacity', Component: WalkCapacityScreen },                                    // Fase A — só no fluxo "nunca corri"
     { key: 'distanceTime', Component: DistanceTimeScreen, extraPropsKey: 'distanceTime' },
     { key: '__i3_time_compare', Component: TimeCompareScreen, isInterstitial: true },
     { keys: ['paceMinutes', 'paceSeconds', 'dontKnowPace'], key: 'pace', Component: PaceConfirmScreen },
@@ -208,6 +214,9 @@ export function OnboardingScreen({ navigation, route }: any) {
     const insets = useSafeAreaInsets();
 
     const isRaceGoal = data.goal_type === 'race';
+    // "Nunca corri" (sentinela recentDistance === 0): sem teste de desempenho.
+    // Pula tempo/pace/frequência/volume e mostra só a pergunta de caminhada.
+    const neverRan = data.recentDistance === 0;
 
     const activeSteps = useMemo(() => {
         return ALL_QUIZ_STEPS.filter((step) => {
@@ -217,9 +226,20 @@ export function OnboardingScreen({ navigation, route }: any) {
             if (step.key === 'goalTimeframe' && isRaceGoal) return false;  // horizon = race date
             if (step.key === '__i_testimonials' && !SHOW_TESTIMONIALS) return false; // depoimentos ocultos
             if (step.key === 'referralCode' && !SHOW_REFERRAL) return false; // referral oculto (Apple 3.1.1)
+            // Fluxo "nunca corri": esconde as perguntas de desempenho/volume, o
+            // interstitial de comparação de tempo e a confirmação de pace.
+            if (neverRan && (
+                step.key === 'recentFrequency' ||
+                step.key === 'currentWeeklyKm' ||
+                step.key === 'distanceTime' ||
+                step.key === '__i3_time_compare' ||
+                step.key === 'pace'
+            )) return false;
+            // A pergunta de caminhada só existe no fluxo "nunca corri".
+            if (step.key === 'walkCapacity' && !neverRan) return false;
             return true;
         });
-    }, [isRaceGoal, data.use_manual_race_date]);
+    }, [isRaceGoal, data.use_manual_race_date, neverRan]);
 
     const TOTAL_QUESTIONS = activeSteps.filter(s => !s.isInterstitial).length;
     const TOTAL_INDICES = activeSteps.length;
@@ -266,7 +286,12 @@ export function OnboardingScreen({ navigation, route }: any) {
                 return Array.isArray(data.availableDays) && data.availableDays.length > 0;
             case 'intenseDayIndex':
                 return data.intenseDayIndex !== null && data.intenseDayIndex !== undefined;
-            case 'recentDistance': return !!data.recentDistance;
+            // 0 = "nunca corri" é uma escolha válida (não usar truthiness aqui).
+            case 'recentDistance':
+                return data.recentDistance !== null && data.recentDistance !== undefined;
+            case 'recentFrequency': return !!data.recentFrequency;
+            case 'currentWeeklyKm': return !!data.currentWeeklyKm;
+            case 'walkCapacity': return !!data.walkCapacity;
             case 'distanceTime':
                 return !!data.distanceTime
                     && (data.distanceTime.hours > 0
@@ -418,6 +443,25 @@ export function OnboardingScreen({ navigation, route }: any) {
                 race_distance: null,
                 use_manual_race_date: false,
             });
+        } else if (currentStepData.key === 'recentDistance') {
+            if (value === 0) {
+                // "Nunca corri": a step de pace é pulada, então força "não sei" e
+                // limpa qualquer pace/tempo/volume residual — backend cai no VDOT
+                // beginner e nenhum dado do fluxo normal vaza para a Fase B.
+                updateData({
+                    recentDistance: 0,
+                    dontKnowPace: true,
+                    paceMinutes: '',
+                    paceSeconds: '',
+                    calculatedPace: null,
+                    recentFrequency: null,
+                    currentWeeklyKm: null,
+                });
+            } else {
+                // Voltar para uma distância real reabre o teste de desempenho e
+                // descarta a resposta de caminhada (só vale no fluxo "nunca corri").
+                updateData({ recentDistance: value, dontKnowPace: false, walkCapacity: null });
+            }
         } else if (currentStepData.key) {
             updateData({ [currentStepData.key]: value });
         }

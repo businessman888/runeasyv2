@@ -5,7 +5,10 @@ import { SelectableOption } from '../../components/onboarding/SelectableOption';
 import { QUIZ } from './_tokens';
 import { DISTANCE_ICONS } from './_icons';
 
+// value 0 = "Nunca corri" (sentinela). Escolher essa opção adapta o fluxo:
+// pula tempo/pace/frequência/volume e leva à pergunta de caminhada (Fase A).
 const DISTANCES = [
+    { value: 0, label: 'Nunca corri', description: 'Estou começando agora' },
     { value: 3, label: '3 km', description: 'Iniciante' },
     { value: 5, label: '5 km', description: 'Popular' },
     { value: 10, label: '10 km', description: 'Intermediário' },
@@ -35,7 +38,7 @@ export function RecentDistanceScreen({ value, onChange }: RecentDistanceScreenPr
         <>
             <QuizHeader
                 title={<>Qual foi a maior distância <Hl>que você correu recentemente</Hl>?</>}
-                subtitle="Isso nos ajuda a calibrar o ponto de partida do seu plano."
+                subtitle="Considere corridas dos últimos meses — queremos sua capacidade de hoje, não o seu recorde histórico."
             />
 
             <View style={styles.options}>
@@ -53,7 +56,7 @@ export function RecentDistanceScreen({ value, onChange }: RecentDistanceScreenPr
 
             <View style={styles.infoCard}>
                 <Text style={styles.infoText}>
-                    🏃 Não se preocupe se foi há algum tempo. Usamos essa informação como referência inicial.
+                    🏃 Seja realista: é a partir daqui que calibramos a progressão do seu plano.
                 </Text>
             </View>
         </>
