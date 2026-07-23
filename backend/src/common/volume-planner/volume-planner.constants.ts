@@ -61,8 +61,30 @@ export const DELOAD_PCT = 0.25; // −25%
  */
 export const TAPER_FACTORS = [0.6, 0.45]; // [penúltima, última]; taper de 3+ prepende 0.75
 
-/** Longão como fração máxima do volume semanal (guia Daniels; ~35% p/ baixo volume). */
+/**
+ * Longão como fração máxima do volume semanal — VARIÁVEL POR DISTÂNCIA DA META.
+ * Corredores de volume moderado fazem longões que são fatia MAIOR do volume na
+ * maratona (um longão de 30 km numa semana de 65 km = 46%); em provas curtas a
+ * fatia é menor. Sem isso, a maratona ficava sistematicamente inviável
+ * (31 km ÷ 0.35 = 88.6 km/sem necessários, acima da barreira de 87.5).
+ *   • ≤10k → 35%    • 21k → 35%    • 42k → 45%    (interpola entre 21 e 42)
+ */
+export const LONG_RUN_SHARE_BY_GOAL: Array<{ goalKm: number; share: number }> = [
+  { goalKm: 10, share: 0.35 },
+  { goalKm: 21.1, share: 0.35 },
+  { goalKm: 42.2, share: 0.45 },
+];
+
+/** Fatia default (≤10k) — usada também no teto do longão inicial (goal-independente). */
 export const LONG_RUN_SHARE_MAX = 0.35;
+
+/**
+ * Segunda barreira independente ao crescimento do volume: o pico semanal nunca
+ * ultrapassa este múltiplo da capacidade inicial, mesmo que a rampa permita.
+ * Impede que um atleta saindo de 30 km/sem chegue a 100+ km/sem em um plano.
+ * (A barreira primária é atar o pico ao longão: pico ≤ peakLong / SHARE_MAX.)
+ */
+export const MAX_VOLUME_GROWTH_FACTOR = 2.5;
 
 // ── Longão de pico atado à meta (tabela por distância, com interpolação) ─────
 

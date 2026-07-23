@@ -1204,6 +1204,21 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
         paceEstimate: 'No seu ritmo',
         type: 'run',
       },
+      // Viabilidade também no walk/run: a Fase C não pode ficar sem sinal para o
+      // usuário mais frágil. O protocolo caminhada/corrida é o ponto de partida
+      // CORRETO para quem nunca correu — sempre "viável" como fundação; a meta de
+      // distância em si é endereçada num bloco de corrida posterior (fora desta
+      // fase). effectiveWeeklyKm=0 e peakLongRunKm=0 sinalizam "começando do zero".
+      viability: {
+        feasible: true,
+        requiredWeeklyIncreasePct: 0,
+        minWeeksRecommended: request.targetWeeks,
+        maxGoalKmInWindow: 0,
+        peakLongRunKm: 0,
+        effectiveWeeklyKm: 0,
+        goalKm: this.resolveGoalKm(request),
+        weeksAvailable: request.targetWeeks,
+      },
     };
     return plan;
   }

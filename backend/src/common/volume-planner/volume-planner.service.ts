@@ -19,6 +19,8 @@ import {
   DELOAD_PCT,
   TAPER_FACTORS,
   LONG_RUN_SHARE_MAX,
+  LONG_RUN_SHARE_BY_GOAL,
+  MAX_VOLUME_GROWTH_FACTOR,
   LONG_RUN_TABLE,
   MIN_WARMUP_KM,
   MIN_COOLDOWN_KM,
@@ -149,6 +151,25 @@ export class VolumePlannerService {
     return this.round((min + max) / 2);
   }
 
+  /**
+   * Fração máxima do longão sobre o volume semanal, VARIÁVEL por distância da
+   * meta (interpola na LONG_RUN_SHARE_BY_GOAL). Maratona usa fatia maior (45%)
+   * porque longões de maratona são proporção maior do volume em corredores de
+   * volume moderado; provas curtas usam ~35%.
+   */
+  private longRunShareForGoal(goalKm: number): number {
+    const t = LONG_RUN_SHARE_BY_GOAL;
+    if (goalKm <= t[0].goalKm) return t[0].share;
+    if (goalKm >= t[t.length - 1].goalKm) return t[t.length - 1].share;
+    for (let i = 0; i < t.length - 1; i++) {
+      if (goalKm >= t[i].goalKm && goalKm <= t[i + 1].goalKm) {
+        const f = (goalKm - t[i].goalKm) / (t[i + 1].goalKm - t[i].goalKm);
+        return t[i].share + (t[i + 1].share - t[i].share) * f;
+      }
+    }
+    return t[t.length - 1].share;
+  }
+
   // ── Escopo 8 — viabilidade (PURA, chamável sem gerar plano) ─────────────────
 
   /**
@@ -166,8 +187,9 @@ export class VolumePlannerService {
     const phases = input.phases ?? this.calculatePhases(totalWeeks, goalKm);
 
     const peakLong = this.peakLongTarget(goalKm);
-    // Volume de pico necessário p/ o longão caber no share máximo.
-    const peakWeeklyNeeded = peakLong / LONG_RUN_SHARE_MAX;
+    const share = this.longRunShareForGoal(goalKm);
+    // Volume de pico necessário p/ o longão caber no share máximo (por meta).
+    const peakWeeklyNeeded = peakLong / share;
     const v1 = capacity.weeklyKm;
 
     // Semanas efetivas de rampa (base+build; deloads não somam progresso).
@@ -179,7 +201,14 @@ export class VolumePlannerService {
     const requiredWeeklyIncreasePct =
       ratio <= 1 ? 0 : Math.pow(ratio, 1 / rampWeeks) - 1;
 
-    const feasible = requiredWeeklyIncreasePct <= cap + 1e-9;
+    // Viável exige DUAS coisas: (a) a rampa cabe no teto/semana E (b) o volume de
+    // pico necessário não ultrapassa a barreira absoluta de crescimento (2.5×).
+    // Sem (b), a maratona de quem sai de 30 km/sem seria marcada "viável" mesmo o
+    // longão travando em 26 km (barreira) sem nunca chegar aos 31 km da tabela.
+    const withinRamp = requiredWeeklyIncreasePct <= cap + 1e-9;
+    const withinAbsolute =
+      peakWeeklyNeeded <= v1 * MAX_VOLUME_GROWTH_FACTOR + 1e-9;
+    const feasible = withinRamp && withinAbsolute;
 
     // Semanas mínimas: rampWeeks p/ chegar em peakWeeklyNeeded ao teto seguro,
     // + peak + taper.
@@ -188,10 +217,14 @@ export class VolumePlannerService {
     const minWeeksRecommended =
       rampWeeksNeeded + phases.peak + phases.taper + this.deloadCount(rampWeeksNeeded);
 
-    // Maior meta atingível no prazo: qual peakLong a rampa segura alcança, e
-    // qual meta corresponde a esse peakLong (inverso da tabela).
-    const reachablePeakWeekly = v1 * Math.pow(1 + cap, rampWeeks);
-    const reachablePeakLong = reachablePeakWeekly * LONG_RUN_SHARE_MAX;
+    // Maior meta atingível no prazo: qual peakLong a rampa segura alcança
+    // (limitada pela barreira absoluta de crescimento), e qual meta corresponde
+    // a esse peakLong (inverso da tabela).
+    const reachablePeakWeekly = Math.min(
+      v1 * Math.pow(1 + cap, rampWeeks),
+      v1 * MAX_VOLUME_GROWTH_FACTOR,
+    );
+    const reachablePeakLong = reachablePeakWeekly * share;
     const maxGoalKmInWindow = this.goalForPeakLong(reachablePeakLong);
 
     return {
@@ -218,14 +251,26 @@ export class VolumePlannerService {
     const lastPeakWeek = phases.base + phases.build + phases.peak; // 1-based
 
     const peakLong = this.peakLongTarget(goalKm);
+    const share = this.longRunShareForGoal(goalKm);
+
+    // TETO DE VOLUME DE PICO — duas barreiras independentes, a menor vence:
+    //  (1) atado ao longão: pico ≤ peakLong / share. Impede o volume de crescer
+    //      descolado do longão (o que inchava os treinos de meio de semana ACIMA
+    //      do longão — estrutura invertida).
+    //  (2) absoluta: pico ≤ MAX_VOLUME_GROWTH_FACTOR × capacidade inicial.
+    const peakWeeklyCeil = Math.min(
+      peakLong / share,
+      capacity.weeklyKm * MAX_VOLUME_GROWTH_FACTOR,
+    );
 
     // 1) Curva de volume semanal (segura). A LINHA DE TENDÊNCIA (`trend`) sobe
-    //    monotonicamente pelas semanas de rampa; o deload é um VALE temporário
-    //    (trend×0.75) que NÃO reduz a tendência — senão 1.10³×0.75≈1.0 zeraria o
-    //    ganho do ciclo e o volume serrilharia no lugar (o atleta nunca evolui).
+    //    monotonicamente pelas semanas de rampa (limitada por peakWeeklyCeil); o
+    //    deload é um VALE temporário (trend×0.75) que NÃO reduz a tendência —
+    //    senão 1.10³×0.75≈1.0 zeraria o ganho do ciclo e o volume serrilharia no
+    //    lugar (o atleta nunca evolui).
     const totals: number[] = [];
     const deload: boolean[] = [];
-    let trend = capacity.weeklyKm;
+    let trend = Math.min(capacity.weeklyKm, peakWeeklyCeil);
     for (let w = 1; w <= totalWeeks; w++) {
       const phase = phaseByWeek[w - 1];
       if (w === 1) {
@@ -252,8 +297,8 @@ export class VolumePlannerService {
         totals.push(this.round(trend));
         deload.push(false);
       } else {
-        // Rampa: a tendência sobe (teto seguro por semana).
-        trend = trend * (1 + WEEKLY_INCREASE_CAP_PCT);
+        // Rampa: a tendência sobe (teto seguro por semana), limitada pelo teto.
+        trend = Math.min(trend * (1 + WEEKLY_INCREASE_CAP_PCT), peakWeeklyCeil);
         totals.push(this.round(trend));
         deload.push(false);
       }
@@ -266,7 +311,7 @@ export class VolumePlannerService {
     for (let w = 1; w <= totalWeeks; w++) {
       const phase = phaseByWeek[w - 1];
       const total = totals[w - 1];
-      const shareCap = total * LONG_RUN_SHARE_MAX;
+      const shareCap = total * share;
 
       let longTarget: number;
       if (phase === 'taper') {
@@ -301,7 +346,13 @@ export class VolumePlannerService {
     return skeleton;
   }
 
-  /** Distribui o volume da semana entre os slots (longão + qualidade + easy). */
+  /**
+   * Distribui o volume da semana entre os slots (longão + qualidade + easy).
+   * Invariante: nenhum treino não-longo excede o longão (o longão é o mais
+   * longo). O ÚLTIMO easy absorve o resto para a soma bater EXATAMENTE o total —
+   * elimina o drift de arredondamento que fazia o incremento semanal passar de
+   * 10% (semana arredonda p/ baixo, seguinte p/ cima).
+   */
   private distributeWeek(
     totalKm: number,
     longRunKm: number,
@@ -312,12 +363,28 @@ export class VolumePlannerService {
     const longSlot = days - 1; // último dia = longão (default)
     const hasQuality = days >= 3 && (phase === 'build' || phase === 'peak');
     const qualitySlot = hasQuality ? 1 : -1;
+    const floor = MIN_WARMUP_KM + MIN_COOLDOWN_KM;
 
-    const remaining = Math.max(totalKm - longRunKm, 0);
     const otherSlots = days - 1;
+    const remaining = Math.max(totalKm - longRunKm, 0);
     const perOther = otherSlots > 0 ? remaining / otherSlots : 0;
 
+    // Distribui os não-longos; o último absorve o resíduo para somar exato.
+    const others: number[] = [];
+    let assigned = 0;
+    for (let k = 0; k < otherSlots; k++) {
+      const isLast = k === otherSlots - 1;
+      let dist = isLast ? remaining - assigned : perOther;
+      // Nunca exceder o longão nem cair abaixo do piso.
+      dist = Math.min(dist, longRunKm);
+      dist = Math.max(dist, floor);
+      dist = this.round(dist);
+      others.push(dist);
+      assigned += dist;
+    }
+
     const workouts: WorkoutSlot[] = [];
+    let otherIdx = 0;
     for (let i = 0; i < days; i++) {
       if (i === longSlot) {
         workouts.push({
@@ -327,7 +394,7 @@ export class VolumePlannerService {
           isQuality: false,
         });
       } else {
-        const dist = this.round(Math.max(perOther, MIN_WARMUP_KM + MIN_COOLDOWN_KM));
+        const dist = others[otherIdx++];
         const isQuality = i === qualitySlot;
         workouts.push({
           slotIndex: i,
