@@ -3,6 +3,11 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { typography, spacing, borderRadius } from '../../theme';
 import { paceValueToSecondsPerKm, formatPaceLabel } from '../../utils/pace';
+import {
+    workoutDurationSeconds,
+    formatDurationLabel,
+    isTimeBasedWorkout,
+} from '../../utils/workoutTransform';
 
 /**
  * Single workout/activity card for a given day, shared by Calendar and Home.
@@ -19,7 +24,7 @@ export interface DayWorkout {
     source?: 'plan' | 'manual' | 'free' | null;
     status?: 'pending' | 'completed' | 'skipped' | 'missed' | null;
     objective?: string | null;
-    instructions_json?: Array<{ pace_min?: number | null }> | null;
+    instructions_json?: any[] | null;
 }
 
 interface WorkoutDayCardProps {
@@ -34,6 +39,7 @@ const TYPE_LABELS: Record<string, string> = {
     tempo: 'Tempo Run',
     recovery: 'Recuperação',
     free_run: 'Corrida Livre',
+    walk_run: 'Caminhada e Corrida',
 };
 
 const formatKm = (km: number | null | undefined): string => {
@@ -45,7 +51,14 @@ function WorkoutDayCardInner({ workout: w, onPress }: WorkoutDayCardProps) {
     const handlePress = useCallback(() => onPress(w), [onPress, w]);
 
     const distanceLabel = formatKm(w.distance_km);
-    const titleText = `${TYPE_LABELS[w.type] || w.type} - ${distanceLabel}km`;
+    // Treino por tempo (caminhada/corrida): rotular por DURAÇÃO, nunca "0km/0min".
+    const timeBased = isTimeBasedWorkout(w.distance_km, w.instructions_json);
+    const durationLabel = timeBased
+        ? formatDurationLabel(workoutDurationSeconds(w.instructions_json))
+        : `${Math.round((w.distance_km || 0) * 6)} min`;
+    const titleText = timeBased
+        ? `${TYPE_LABELS[w.type] || w.type} - ${durationLabel}`
+        : `${TYPE_LABELS[w.type] || w.type} - ${distanceLabel}km`;
     const intensityText =
         w.type === 'intervals' || w.type === 'tempo' ? 'ALTA INTENSIDADE' : 'MODERADO';
     const src = w.source ?? 'plan';
@@ -59,8 +72,13 @@ function WorkoutDayCardInner({ workout: w, onPress }: WorkoutDayCardProps) {
 
     // pace_min do 1º bloco (aquecimento) em segundos/km (novo) ou decimal (legado);
     // o util normaliza e formata como "m:ss".
+    // Treino por tempo não tem alvo de pace — não inventar "6:00" (número falso).
     const paceSecs = paceValueToSecondsPerKm(w.instructions_json?.[0]?.pace_min);
-    const paceText = paceSecs != null ? `${formatPaceLabel(paceSecs)} /km` : '6:00 /km';
+    const paceText = timeBased
+        ? 'No seu ritmo'
+        : paceSecs != null
+            ? `${formatPaceLabel(paceSecs)} /km`
+            : '6:00 /km';
 
     return (
         <View style={styles.workoutDetailCard}>
@@ -102,7 +120,7 @@ function WorkoutDayCardInner({ workout: w, onPress }: WorkoutDayCardProps) {
                             <View style={styles.metricItem}>
                                 <MaterialCommunityIcons name="timer-outline" size={20} color="#00D4FF" />
                                 <Text style={styles.metricText}>
-                                    {Math.round((w.distance_km || 0) * 6)} min
+                                    {durationLabel}
                                 </Text>
                             </View>
                             <View style={styles.metricItem}>

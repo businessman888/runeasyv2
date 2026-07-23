@@ -18,6 +18,7 @@ import { EncryptionModule } from './common/encryption';
 
 // Pace Calculator (Global)
 import { PaceCalculatorModule } from './common/pace-calculator';
+import { VolumePlannerModule } from './common/volume-planner';
 
 // Feature Modules
 import { TrainingModule } from './modules/training';
@@ -109,6 +110,9 @@ import { RacesModule } from './modules/races';
 
     // Pace Calculator (Global — Daniels VDOT, training paces)
     PaceCalculatorModule,
+
+    // Volume Planner (Global — motor determinístico de volume/progressão, Fase B)
+    VolumePlannerModule,
 
     // Feature Modules
     TrainingModule,

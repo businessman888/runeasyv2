@@ -3,6 +3,11 @@ import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BadgeShield } from './BadgeShield';
 import { paceValueToSecondsPerKm } from '../utils/pace';
+import {
+  workoutDurationSeconds,
+  formatDurationLabel,
+  isTimeBasedWorkout,
+} from '../utils/workoutTransform';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -74,6 +79,7 @@ function getWorkoutTypeName(type: string): string {
     intervals: 'Intervalado',
     tempo: 'Tempo Run',
     recovery: 'Recuperação',
+    walk_run: 'Caminhada e Corrida',
   };
   return names[type] ?? type;
 }
@@ -85,6 +91,7 @@ function getIntensityLabel(type: string): string {
     intervals: 'Alta',
     tempo: 'Moderada-Alta',
     recovery: 'Leve',
+    walk_run: 'Leve',
   };
   return `Nível de intensidade: ${labels[type] ?? 'Moderada'}`;
 }
@@ -215,15 +222,25 @@ export const WorkoutCard = memo(
     const workoutName = getWorkoutTypeName(workout.type);
 
     const useExecuted = !!executedOverride && isCompleted;
+    // Treino planejado por tempo (caminhada/corrida): sem distância nem pace —
+    // exibir a duração dos segmentos, nunca "0.00 Km / 0:00 / pace falso".
+    const timeBased =
+      !useExecuted && isTimeBasedWorkout(workout.distance_km, workout.instructions_json);
     const distanceLabel = useExecuted
       ? `${executedOverride!.distanceKm.toFixed(2)} Km`
-      : `${workout.distance_km.toFixed(2)} Km`;
+      : timeBased
+        ? '—'
+        : `${workout.distance_km.toFixed(2)} Km`;
     const timeLabel = useExecuted
       ? formatDurationFromSeconds(executedOverride!.durationSeconds)
-      : formatEstimatedTime(workout);
+      : timeBased
+        ? formatDurationLabel(workoutDurationSeconds(workout.instructions_json))
+        : formatEstimatedTime(workout);
     const paceLabel = useExecuted
       ? `${formatPaceFromSecondsPerKm(executedOverride!.paceSecondsPerKm)} /km`
-      : `${formatPace(pace)} /km`;
+      : timeBased
+        ? 'No seu ritmo'
+        : `${formatPace(pace)} /km`;
 
     // Resolve earnable badges against the user's real badge list
     const earnableBadges = useMemo(() => {

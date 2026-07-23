@@ -58,6 +58,45 @@ const WORKOUT_TYPE_LABELS: Record<string, string> = {
     hill_repeats: 'Subidas',
     race_simulation: 'Simulado',
     free_run: 'Corrida Livre',
+    walk_run: 'Caminhada e Corrida',
+};
+
+/**
+ * Duração total (segundos) somando os segmentos por TEMPO (expande `repeat`:
+ * reps × (work + recovery)). Segmentos por distância contribuem 0 — por isso só
+ * é usada como fonte de verdade quando o treino é por tempo (distance_km≈0),
+ * como o protocolo caminhada/corrida ("nunca corri"). Fonte única de verdade.
+ */
+export const workoutDurationSeconds = (instructions: any[] | null | undefined): number => {
+    if (!Array.isArray(instructions)) return 0;
+    let total = 0;
+    for (const seg of instructions) {
+        if (seg?.type === 'repeat') {
+            const reps = Math.max(1, Math.round(seg.reps || 1));
+            total += reps * ((seg.work?.duration_seconds || 0) + (seg.recovery?.duration_seconds || 0));
+        } else {
+            total += seg?.duration_seconds || 0;
+        }
+    }
+    return total;
+};
+
+/** Segundos → "36 min" ou "1h05". */
+export const formatDurationLabel = (seconds: number): string => {
+    const m = Math.round(seconds / 60);
+    if (m < 60) return `${m} min`;
+    const h = Math.floor(m / 60);
+    const rem = m % 60;
+    return rem === 0 ? `${h}h` : `${h}h${String(rem).padStart(2, '0')}`;
+};
+
+/** Treino é medido por tempo (sem distância) — ex.: protocolo caminhada/corrida. */
+export const isTimeBasedWorkout = (
+    distanceKm: number | null | undefined,
+    instructions: any[] | null | undefined,
+): boolean => {
+    const km = typeof distanceKm === 'number' ? distanceKm : 0;
+    return !(km > 0) && workoutDurationSeconds(instructions) > 0;
 };
 
 /** Faixa-alvo de pace (segundos/km, tolera decimal legado) → "4:50–5:10/km". */
@@ -160,11 +199,21 @@ export function transformWorkoutToUI(workout: any): WorkoutData {
         workout.objective ||
         'Mantenha o foco e aproveite o treino!';
 
+    // Treino por tempo (caminhada/corrida): exibir DURAÇÃO (soma dos segmentos),
+    // nunca "0 km / 0 min" derivado de distance_km*6.
+    const typeLabel = WORKOUT_TYPE_LABELS[workout.type] || workout.type;
+    const timeBased = isTimeBasedWorkout(workout.distance_km, workout.instructions_json);
+    const durationLabel = timeBased
+        ? formatDurationLabel(workoutDurationSeconds(workout.instructions_json))
+        : `${Math.round((workout.distance_km || 0) * 6)} min`; // estimativa 6 min/km
+
     return {
         id: workout.id,
-        title: `${WORKOUT_TYPE_LABELS[workout.type] || workout.type} - ${distanceLabel}km`,
-        distance: `${distanceLabel} km`,
-        duration: `${Math.round((workout.distance_km || 0) * 6)} min`, // Estimate based on 6 min/km
+        title: timeBased
+            ? `${typeLabel} - ${durationLabel}`
+            : `${typeLabel} - ${distanceLabel}km`,
+        distance: timeBased ? '—' : `${distanceLabel} km`,
+        duration: durationLabel,
         rpe: rpeFromMetadata,
         blocks,
         insight,

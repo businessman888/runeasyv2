@@ -4,6 +4,18 @@ import {
   PaceCalculatorService,
   TrainingZone,
 } from '../../common/pace-calculator';
+import {
+  VolumePlannerService,
+  WeekSkeleton,
+  WorkoutSlot,
+  WalkRunInterval,
+  Phases,
+  PlanViability,
+  MIN_REPS,
+  MIN_WARMUP_KM,
+  MIN_COOLDOWN_KM,
+  WEEKLY_TOTAL_TOLERANCE_KM,
+} from '../../common/volume-planner';
 
 export interface TrainingPlanRequest {
   goal: string;
@@ -111,7 +123,9 @@ export type GeneratedWorkoutType =
   | 'progressive'
   | 'repetition'
   | 'hill_repeats'
-  | 'race_simulation';
+  | 'race_simulation'
+  // Protocolo caminhada/corrida (Fase B, "nunca corri"): por TEMPO, sem pace.
+  | 'walk_run';
 
 /**
  * Sub-bloco de esforço dentro de um intervalado: o "tiro" (`work`) ou a
@@ -198,6 +212,9 @@ export interface GeneratedPlan {
   welcomeBadge?: string;
   nextWorkout?: NextWorkout;
   fullSchedulePreview?: ScheduleWeek[];
+  // Viabilidade da meta (Fase B) — registro no plan_json; a Fase C consome a
+  // função pura VolumePlannerService.assessViability antes de gerar o plano.
+  viability?: PlanViability;
 }
 
 @Injectable()
@@ -207,6 +224,7 @@ export class TrainingAIService {
   constructor(
     private aiRouter: AIRouterService,
     private paceCalculator: PaceCalculatorService,
+    private volumePlanner: VolumePlannerService,
   ) {}
 
   // Shared helper maps
@@ -639,6 +657,59 @@ REGRAS ADICIONAIS DE PROVA:
     const paces = this.paceCalculator.getTrainingPaces(vdot);
     const formattedPaces = this.paceCalculator.formatPaces(paces);
 
+    // ── Motor determinístico de volume (Fase B) ──────────────────────────────
+    // Capacidade efetiva → esqueleto de volume/longão → injeção no prompt →
+    // pós-processamento (applyDeterministicVolume). Número é cálculo; a IA só
+    // escolhe a forma dentro das distâncias dadas.
+    const goalKm = this.resolveGoalKm(request);
+    const capacity = this.volumePlanner.deriveEffectiveCapacity({
+      currentWeeklyKm: request.currentWeeklyKm,
+      recentFrequency: request.recentFrequency,
+      recentDistanceKm: request.recentDistanceKm,
+      level: request.level,
+    });
+    const phases =
+      request.goalType === 'race'
+        ? this.calculateRacePhases(
+            request.raceWeeksUntil ?? request.targetWeeks,
+            goalKm,
+          )
+        : this.volumePlanner.calculatePhases(request.targetWeeks, goalKm);
+
+    // "Nunca corri" → protocolo caminhada/corrida (por tempo, sem pace). O
+    // backend monta 100% dos treinos; a IA só decora textos.
+    if (capacity.neverRan) {
+      this.logger.log(
+        `[Volume] neverRan → walk/run protocol (goal=${goalKm}km, weeks=${request.targetWeeks})`,
+      );
+      return this.generateWalkRunPlan(request, phases);
+    }
+
+    const skeleton = this.volumePlanner.buildVolumeSkeleton({
+      capacity,
+      goalKm,
+      totalWeeks: request.targetWeeks,
+      daysPerWeek: request.daysPerWeek,
+      phases,
+    });
+    const viability: PlanViability = {
+      ...this.volumePlanner.assessViability({
+        capacity,
+        goalKm,
+        totalWeeks: request.targetWeeks,
+        phases,
+      }),
+      effectiveWeeklyKm: capacity.weeklyKm,
+      goalKm,
+      weeksAvailable: request.targetWeeks,
+    };
+    this.logger.log(
+      `[Volume] effWeekly=${capacity.weeklyKm}km longCap=${capacity.longRunCapKm}km ` +
+        `peakLong=${viability.peakLongRunKm}km feasible=${viability.feasible} ` +
+        `(reqInc=${viability.requiredWeeklyIncreasePct}, minWeeks=${viability.minWeeksRecommended})`,
+    );
+    const volumeTable = this.formatVolumeTable(skeleton);
+
     const systemPrompt = `Você é um treinador de corrida de elite da RunEasy, formado na metodologia Jack Daniels (Daniels Running Formula). Sua tarefa é gerar planos de treino estruturados, periodizados e cientificamente embasados.
 
 REGRA CRÍTICA: Responda APENAS com JSON válido. Sem texto, markdown ou explicações antes/depois.
@@ -652,19 +723,24 @@ REGRA CRÍTICA: Responda APENAS com JSON válido. Sem texto, markdown ou explica
   Z4 Interval (I)     95-100% FC máx — aumentar VO2max. Intervalados clássicos (ex: 5x1000m, 6x800m).
   Z5 Repetition (R)   >100% FC máx   — economia/velocidade pura, mecânica. Strides, 200m, 400m.
 
-REGRAS DE DISTRIBUIÇÃO
+REGRAS DE DISTRIBUIÇÃO (INTENSIDADE — sua responsabilidade)
   • Regra 80/20: ~80% do volume semanal em Z1-Z2, ~20% em Z3-Z5.
   • Máximo 2 sessões de qualidade (Z3, Z4 ou Z5) por semana, com ≥48h entre elas.
-  • Longão ≤ 30% do volume semanal total.
-  • Aumento de volume entre semanas consecutivas ≤ 10%.
-  • Deload a cada 3-4 semanas: reduzir volume em 20-30%.
   • Z5 (repetition) ≤ 10% do volume semanal.
 
-PERIODIZAÇÃO (4 fases ao longo do plano)
-  base   (~40% do plano)        construir volume, predominância Z1, no máximo 1 sessão de qualidade.
-  build  (~30%)                  introduzir Z3/Z4, até 2 sessões de qualidade. Longão pode incluir trechos Z2.
-  peak   (~20%)                  simulados, intensidade sobe, volume estabiliza ou cai levemente.
-  taper  (~10%, mínimo 1 semana) volume -40/-60%, mantém intensidade curta, mais descanso.
+VOLUME E PROGRESSÃO (NÃO é sua responsabilidade — o SISTEMA já calculou)
+  • As distâncias de cada treino, o volume semanal, o longão, as semanas de deload
+    e o taper são DADOS, entregues por semana no user prompt. NÃO os invente, NÃO os
+    "corrija", NÃO aplique regras próprias de progressão (10%, % de longão etc.):
+    o cálculo determinístico já garante tudo isso. Sua tarefa é escolher a FORMA
+    (tipo de treino, zona, estrutura de segmentos, textos) que melhor USA a distância
+    dada de cada dia.
+
+PERIODIZAÇÃO (as fases também vêm dadas por semana; caracterize a INTENSIDADE de cada uma)
+  base    construir base aeróbia, predominância Z1, no máximo 1 sessão de qualidade.
+  build   introduzir Z3/Z4, até 2 sessões de qualidade. Longão pode incluir trechos Z2.
+  peak    simulados, intensidade sobe.
+  taper   mantém intensidade curta, mais descanso.
 
 TIPOS DE TREINO VÁLIDOS (escolha o que melhor encaixar)
   easy_run         rodagem leve Z1, base aeróbia. Pode terminar com 4-6×100m de strides em Z5.
@@ -789,12 +865,19 @@ VALORES PRÉ-DEFINIDOS:
 - duration_weeks: ${request.targetWeeks}
 - frequency_per_week: ${request.daysPerWeek}
 
+═══ ESQUELETO DE VOLUME (DADOS DO SISTEMA — use exatamente estas distâncias) ═══
+Cada linha é uma semana: a fase, se é deload/pico/taper, e a distância (km) de CADA
+treino na ordem dos dias. O treino marcado [L] é o longão; [Q] é o slot de qualidade
+(onde deve entrar a sessão intensa da semana, quando houver). NÃO altere as distâncias:
+escolha o TIPO/ZONA/estrutura que melhor usa a distância dada de cada dia.
+${volumeTable}
+
 EXIGÊNCIAS DO PLANO:
-1. ${request.daysPerWeek} treinos por semana, TODA semana.
-2. Aplique as fases: base (40%) → build (30%) → peak (20%) → taper (10%) do total de ${request.targetWeeks} semanas.
+1. ${request.daysPerWeek} treinos por semana, TODA semana, com as distâncias EXATAS do esqueleto acima (na ordem dos dias).
+2. Use a fase indicada em cada semana para calibrar a INTENSIDADE (não o volume — já dado).
 3. Aplique a regra 80/20 do volume semanal (Z1+Z2 dominantes).
-4. Máximo 2 sessões de qualidade (Z3/Z4/Z5) por semana, com ≥48h de intervalo.
-5. Inclua deload (-25% volume) a cada 3-4 semanas quando o plano permitir.
+4. Máximo 2 sessões de qualidade (Z3/Z4/Z5) por semana, com ≥48h de intervalo; prefira o slot [Q].
+5. No treino [Q] intervalado, o total de tiros (reps × distância do tiro) NÃO pode exceder o teto indicado — o resto da distância vira aquecimento/desaquecimento.
 ${request.targetPace ? `6. PACE ALVO FINAL: ${request.targetPace} min/km — progrida ritmos das sessões de qualidade gradualmente em direção a este alvo.` : ''}
 ${request.limitations ? `7. ADAPTAÇÃO obrigatória às limitações: ${request.limitations}` : ''}
 ${request.goalType === 'race' ? this.buildRacePromptBlock(request) : ''}
@@ -823,11 +906,21 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
         `[FullPlan] Generated plan with ${result.data.weeks?.length || 0} weeks in ${result.latencyMs}ms`,
       );
 
+      // Pós-processamento determinístico de VOLUME: o backend — não a IA —
+      // crava as distâncias do esqueleto e reescala os segmentos. Roda ANTES do
+      // de pace (que depende só da zona). Garante que, mesmo que a IA invente
+      // distâncias, o valor final é o do motor.
+      this.applyDeterministicVolume(result.data, skeleton);
+
       // Pós-processamento determinístico: o backend — não a IA — define os paces
       // finais, em segundos/km inteiros, a partir da zona de cada segmento. Isso
       // elimina o bug do split "m:ss" (pace_min:5, pace_max:18) e garante faixa
       // coerente [min=rápido, max=lento] para o motor de alertas (Fase 4).
       this.applyDeterministicPaces(result.data, vdot);
+
+      // Registro da viabilidade no plan_json (insumo da Fase C; a função pura
+      // assessViability já é chamável sem gerar plano).
+      result.data.viability = viability;
 
       return result.data;
     } catch (error) {
@@ -866,5 +959,298 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
         }
       }
     }
+  }
+
+  // ═══ Motor de volume — helpers (Fase B) ════════════════════════════════════
+
+  private r1(v: number): number {
+    return Math.round(v * 10) / 10;
+  }
+
+  /** Distância-meta em km a partir do objetivo/prova. */
+  private resolveGoalKm(request: TrainingPlanRequest): number {
+    if (request.goalType === 'race' && request.raceDistance) {
+      return request.raceDistance;
+    }
+    const map: Record<string, number> = {
+      '5k': 5,
+      '10k': 10,
+      half_marathon: 21.1,
+      marathon: 42.2,
+      general_fitness: 10,
+    };
+    return map[request.goal] ?? request.recentDistanceKm ?? 10;
+  }
+
+  /** Tabela por semana injetada no prompt (distâncias são dados, não sugestões). */
+  private formatVolumeTable(skeleton: WeekSkeleton[]): string {
+    return skeleton
+      .map((w) => {
+        const tag = w.isDeload
+          ? ' deload'
+          : w.isPeak
+            ? ' pico'
+            : w.isTaper
+              ? ' taper'
+              : '';
+        const dists = w.workouts
+          .map((s) => {
+            const mark = s.isLong ? '[L]' : s.isQuality ? '[Q]' : '';
+            const cap =
+              s.isQuality && s.maxWorkKm ? ` (tiros≤${s.maxWorkKm}km)` : '';
+            return `${s.distanceKm}km${mark}${cap}`;
+          })
+          .join(', ');
+        return `Sem ${w.weekNumber} [${w.phase}${tag}] total ${w.totalKm}km: ${dists}`;
+      })
+      .join('\n');
+  }
+
+  /**
+   * Pós-processamento de VOLUME (espelha applyDeterministicPaces). Crava as
+   * distâncias do esqueleto e reescala os segmentos. Garante dois invariantes:
+   * distância do longão e volume total da semana (± tolerância). Intervalado que
+   * estoura o alvo: reduz reps (piso MIN_REPS) → apara os easy da semana →
+   * registra o desvio. Nunca "aquecimento negativo".
+   */
+  private applyDeterministicVolume(
+    plan: GeneratedPlan,
+    skeleton: WeekSkeleton[],
+  ): void {
+    const byWeek = new Map<number, WeekSkeleton>();
+    for (const s of skeleton) byWeek.set(s.weekNumber, s);
+
+    for (let wi = 0; wi < (plan.weeks ?? []).length; wi++) {
+      const week = plan.weeks[wi];
+      const sk = byWeek.get(week.week_number) ?? skeleton[wi];
+      if (!sk) continue;
+      const slots = sk.workouts;
+      const n = Math.min(week.workouts.length, slots.length);
+
+      // 1ª passada: crava cada treino no alvo do slot (por índice/ordem dos dias).
+      const achieved: number[] = [];
+      for (let i = 0; i < n; i++) {
+        achieved[i] = this.reconcileWorkoutDistance(
+          week.workouts[i],
+          slots[i].distanceKm,
+          slots[i],
+        );
+      }
+
+      // Reconciliação semanal: absorve overshoot (intervalado que não coube) nos
+      // treinos easy, mantendo o volume total da semana dentro da tolerância.
+      const weekTarget = sk.totalKm;
+      let overshoot =
+        achieved.reduce((a, b) => a + b, 0) - weekTarget;
+      if (overshoot > WEEKLY_TOTAL_TOLERANCE_KM) {
+        for (let i = 0; i < n && overshoot > WEEKLY_TOTAL_TOLERANCE_KM; i++) {
+          const slot = slots[i];
+          if (slot.isLong || slot.isQuality) continue; // só apara easy
+          const floor = MIN_WARMUP_KM + MIN_COOLDOWN_KM;
+          const reducible = achieved[i] - floor;
+          if (reducible <= 0) continue;
+          const cut = Math.min(reducible, overshoot);
+          achieved[i] = this.reconcileWorkoutDistance(
+            week.workouts[i],
+            achieved[i] - cut,
+            slot,
+          );
+          overshoot -= cut;
+        }
+      }
+      if (overshoot > WEEKLY_TOTAL_TOLERANCE_KM) {
+        this.logger.warn(
+          `[Volume] Sem ${week.week_number}: desvio de +${this.r1(overshoot)}km ` +
+            `não absorvido (intervalado grande + easy no piso).`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Ajusta um treino para a distância-alvo e devolve a distância REAL atingida
+   * (pode exceder o alvo num intervalado que não cabe nem no piso de reps).
+   */
+  private reconcileWorkoutDistance(
+    workout: GeneratedWorkout,
+    targetKm: number,
+    slot: WorkoutSlot,
+  ): number {
+    const segs = workout.segments ?? [];
+    const repeatIdx = segs.findIndex((s) => s.type === 'repeat');
+
+    if (repeatIdx === -1) {
+      // Contínuo: reescala os segmentos simples proporcionalmente ao alvo.
+      this.scaleSimpleSegments(segs, targetKm);
+      workout.distance_km = this.r1(targetKm);
+      return targetKm;
+    }
+
+    // Intervalado.
+    const rep = segs[repeatIdx] as RepeatSegment;
+    const workByDist =
+      rep.work?.distance_km != null && rep.work.distance_km > 0;
+    const maxWorkKm =
+      slot.maxWorkKm ??
+      Math.max(targetKm - MIN_WARMUP_KM - MIN_COOLDOWN_KM, 0.4);
+
+    let repsWorkKm = 0;
+    if (workByDist) {
+      let reps = Math.max(1, Math.round(rep.reps || 1));
+      const workDist = rep.work.distance_km as number;
+      // Precedência: reduz reps até caber (piso MIN_REPS).
+      while (reps > MIN_REPS && reps * workDist > maxWorkKm) reps -= 1;
+      rep.reps = reps;
+      repsWorkKm = reps * workDist;
+    }
+
+    // Preenche warmup/cooldown para completar o alvo (mínimos garantidos).
+    const fill = Math.max(
+      targetKm - repsWorkKm,
+      MIN_WARMUP_KM + MIN_COOLDOWN_KM,
+    );
+    this.setWarmupCooldown(segs, fill);
+    const achieved = repsWorkKm + fill;
+    workout.distance_km = this.r1(achieved);
+    return achieved;
+  }
+
+  /** Reescala os segmentos simples (por distância) para somarem `targetKm`. */
+  private scaleSimpleSegments(segs: GeneratedSegment[], targetKm: number): void {
+    const simple = segs.filter(
+      (s): s is SimpleSegment =>
+        s.type !== 'repeat' && s.distance_km != null && s.distance_km > 0,
+    );
+    const sum = simple.reduce((a, s) => a + (s.distance_km as number), 0);
+    if (simple.length === 0) return; // nada por distância (raro em contínuo)
+    if (sum <= 0) {
+      simple[0].distance_km = this.r1(targetKm);
+      return;
+    }
+    const factor = targetKm / sum;
+    for (const s of simple) s.distance_km = this.r1((s.distance_km as number) * factor);
+  }
+
+  /** Distribui `fillKm` entre warmup/cooldown simples (metade/metade, com piso). */
+  private setWarmupCooldown(segs: GeneratedSegment[], fillKm: number): void {
+    const warm = segs.find(
+      (s) => s.type === 'warmup',
+    ) as SimpleSegment | undefined;
+    const cool = segs.find(
+      (s) => s.type === 'cooldown',
+    ) as SimpleSegment | undefined;
+    if (warm && cool) {
+      warm.distance_km = this.r1(Math.max(fillKm * 0.5, MIN_WARMUP_KM));
+      cool.distance_km = this.r1(Math.max(fillKm * 0.5, MIN_COOLDOWN_KM));
+    } else if (warm) {
+      warm.distance_km = this.r1(fillKm);
+    } else if (cool) {
+      cool.distance_km = this.r1(fillKm);
+    }
+    // Sem warmup/cooldown: a distância do treino fica só nos tiros (edge; log a
+    // cargo do chamador via reconciliação semanal).
+  }
+
+  // ═══ Protocolo caminhada/corrida ("nunca corri") ═══════════════════════════
+
+  /** Duração total (segundos) de um bloco caminhada/corrida. */
+  private walkRunDurationSec(b: WalkRunInterval): number {
+    return b.reps * (b.runSeconds + b.walkSeconds);
+  }
+
+  /**
+   * Plano completo de caminhada/corrida. O backend monta 100% (por tempo, sem
+   * pace); a IA só decora os textos (best-effort — se falhar, usa templates).
+   */
+  private async generateWalkRunPlan(
+    request: TrainingPlanRequest,
+    phases: Phases,
+  ): Promise<GeneratedPlan> {
+    const wr = this.volumePlanner.buildWalkRunSkeleton({
+      walkCapacity: request.walkCapacity,
+      totalWeeks: request.targetWeeks,
+      daysPerWeek: request.daysPerWeek,
+      phases,
+    });
+
+    const weeks: GeneratedWeek[] = wr.map((week) => ({
+      week_number: week.weekNumber,
+      phase: week.phase,
+      workouts: week.workouts.map((blk, i) =>
+        this.buildWalkRunWorkout(blk, i, week.weekNumber, request.targetWeeks),
+      ),
+    }));
+
+    const first = wr[0]?.workouts[0];
+    const firstMin = first
+      ? Math.round(this.walkRunDurationSec(first) / 60)
+      : 30;
+
+    const plan: GeneratedPlan = {
+      duration_weeks: request.targetWeeks,
+      frequency_per_week: request.daysPerWeek,
+      weeks,
+      planHeader: {
+        objectiveShort: this.goalLabels[request.goal] || request.goal,
+        durationWeeks: `${request.targetWeeks} Sem`,
+        frequencyWeekly: `${request.daysPerWeek}x/Sem`,
+      },
+      planHeadline:
+        'Seu plano de caminhada e corrida para começar do zero, com segurança.',
+      welcomeBadge: 'Primeiros Passos',
+      nextWorkout: {
+        title: 'Caminhada e Corrida',
+        duration: `${firstMin} min`,
+        paceEstimate: 'No seu ritmo',
+        type: 'run',
+      },
+    };
+    return plan;
+  }
+
+  /** Um treino caminhada/corrida por TEMPO (repeat run/walk), sem pace. */
+  private buildWalkRunWorkout(
+    blk: WalkRunInterval,
+    dayIndex: number,
+    weekNumber: number,
+    totalWeeks: number,
+  ): GeneratedWorkout {
+    const runMin = Math.round(blk.runSeconds / 60);
+    const runLabel =
+      blk.runSeconds >= 60 ? `${runMin} min` : `${blk.runSeconds}s`;
+    const walkMin = Math.round(blk.walkSeconds / 60);
+    const isLastWeek = weekNumber === totalWeeks;
+
+    return {
+      day_of_week: dayIndex, // reordenado depois para os dias escolhidos
+      type: 'walk_run',
+      distance_km: 0, // por tempo — a UI exibe a duração dos segmentos
+      segments: [
+        {
+          type: 'repeat',
+          reps: blk.reps,
+          // pace_min/max = 0: sem alvo de ritmo (pessoa sem VDOT). A UI formata
+          // como "sem pace"; nenhum applyDeterministicPaces roda neste caminho.
+          work: { duration_seconds: blk.runSeconds, pace_min: 0, pace_max: 0 },
+          recovery: {
+            duration_seconds: blk.walkSeconds,
+            pace_min: 0,
+            pace_max: 0,
+          },
+          zone: 'Z1',
+          description: `${blk.reps}× correr ${runLabel} / caminhar ${walkMin} min`,
+          coach_note:
+            'Corra num ritmo em que consiga conversar. Se cansar, caminhe mais — sem culpa.',
+        },
+      ],
+      objective: isLastWeek
+        ? 'Consolidar a corrida contínua no seu ritmo'
+        : 'Aumentar aos poucos o tempo de corrida',
+      tips: ['Respire pelo nariz', 'Passos curtos e leves'],
+      zone: 'Z1',
+      perceived_effort: '3-4/10',
+      scientific_note:
+        'Alternar corrida e caminhada constrói base aeróbia sem sobrecarregar articulações.',
+    };
   }
 }
