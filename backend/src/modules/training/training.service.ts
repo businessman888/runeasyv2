@@ -202,16 +202,42 @@ export class TrainingService {
       );
       const startTime = Date.now();
 
-      // STEP 1: Call AI to generate the full plan
-      this.logger.log(`[FullGen] STEP 1: Calling AI (generateTrainingPlan)...`);
-      const fullPlan =
-        await this.trainingAIService.generateTrainingPlan(onboardingData);
-      this.logger.log(
-        `[FullGen] STEP 1 DONE: AI returned ${fullPlan.weeks?.length || 0} weeks, duration_weeks=${fullPlan.duration_weeks}, frequency=${fullPlan.frequency_per_week} (${Date.now() - startTime}ms)`,
-      );
-
-      if (!fullPlan.weeks || fullPlan.weeks.length === 0) {
-        throw new Error('AI returned empty weeks array');
+      // STEP 1: Call AI to generate the full plan.
+      // RESILIÊNCIA (Etapa 3): a falha de parse (JSON truncado/malformado) é
+      // NÃO-DETERMINÍSTICA — a IA às vezes devolve JSON válido, às vezes não para
+      // o MESMO input (a meia falhou, a maratona do mesmo tamanho passou). Um
+      // retry resolve a maioria dos casos. Tentamos até MAX_GEN_ATTEMPTS.
+      const MAX_GEN_ATTEMPTS = 2;
+      let fullPlan: GeneratedPlan | undefined;
+      for (let attempt = 1; attempt <= MAX_GEN_ATTEMPTS; attempt++) {
+        this.logger.log(
+          `[FullGen] STEP 1: Calling AI (generateTrainingPlan) — tentativa ${attempt}/${MAX_GEN_ATTEMPTS}...`,
+        );
+        try {
+          const candidate =
+            await this.trainingAIService.generateTrainingPlan(onboardingData);
+          if (!candidate.weeks || candidate.weeks.length === 0) {
+            throw new Error('AI returned empty weeks array');
+          }
+          fullPlan = candidate;
+          this.logger.log(
+            `[FullGen] STEP 1 DONE: AI returned ${fullPlan.weeks.length} weeks, duration_weeks=${fullPlan.duration_weeks}, frequency=${fullPlan.frequency_per_week} (tentativa ${attempt}, ${Date.now() - startTime}ms)`,
+          );
+          break;
+        } catch (genErr) {
+          const gm = genErr instanceof Error ? genErr.message : String(genErr);
+          if (attempt < MAX_GEN_ATTEMPTS) {
+            this.logger.warn(
+              `[FullGen] STEP 1 tentativa ${attempt}/${MAX_GEN_ATTEMPTS} falhou p/ plano ${planId} ` +
+                `(weeks=${onboardingData.targetWeeks}, days=${onboardingData.daysPerWeek}): ${gm} — retry`,
+            );
+            continue;
+          }
+          throw genErr; // esgotou as tentativas → catch externo marca como falha
+        }
+      }
+      if (!fullPlan) {
+        throw new Error('AI generation produced no plan after retries');
       }
 
       // STEP 2: Update plan record with complete data
@@ -330,15 +356,23 @@ export class TrainingService {
       );
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
+      // Log rico p/ diagnosticar sem reproduzir: duração, treinos/semana, meta.
       this.logger.error(
-        `[FullGen] ❌ Failed for plan ${planId}: ${errorMsg}`,
+        `[FullGen] ❌ Failed for plan ${planId} após retries: ${errorMsg} ` +
+          `(goal=${onboardingData.goal}, level=${onboardingData.level}, ` +
+          `weeks=${onboardingData.targetWeeks}, days=${onboardingData.daysPerWeek})`,
         error,
       );
 
-      // Mark as failed and store error message for debugging
+      // ESTADO CONSISTENTE NA FALHA (Etapa 3): um plano que falhou NÃO pode ficar
+      // status:'active' — senão getActivePlan() devolve um plano quebrado e o app
+      // mostra um plano ativo sem treinos. Marcamos status:'cancelled' para o app
+      // distinguir "sem plano" de "plano quebrado" (generation_status:'failed'
+      // continua registrando o motivo; um cancel de usuário NÃO tem esse marcador).
       await this.supabaseService
         .from('training_plans')
         .update({
+          status: 'cancelled',
           generation_status: 'failed',
           plan_json: { error: errorMsg, failed_at: new Date().toISOString() },
         })
