@@ -836,7 +836,11 @@ REGRAS DE GERAÇÃO
   7. Distribua as fases respeitando os percentuais (base 40 / build 30 / peak 20 / taper 10).
   8. Respeite a regra 80/20, o máximo de 2 sessões de qualidade/semana, e o limite de 10% de aumento de volume.
   9. nextWorkout deve corresponder ao primeiro treino da semana 1.
- 10. Gere TODAS as semanas no array "weeks", cada uma com exatamente o número de treinos pedido no user prompt.`;
+ 10. Gere TODAS as semanas no array "weeks", cada uma com exatamente o número de treinos pedido no user prompt.
+ 11. HIGIENE DE JSON (obrigatória): retorne JSON válido puro. Em TODO campo de texto
+     (planHeadline, objective, scientific_note, tips, description, coach_note) escreva
+     em UMA linha — NUNCA insira quebra de linha ou tab literais dentro das aspas. Se
+     precisar de quebra, use \\n escapado. Aspas dentro do texto devem vir escapadas (\\").`;
 
     const userPrompt = `Crie o plano de treino COMPLETO (todas as ${request.targetWeeks} semanas):
 

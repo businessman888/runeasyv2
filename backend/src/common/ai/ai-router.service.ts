@@ -226,23 +226,37 @@ export class AIRouterService {
     }
     cleaned = cleaned.trim();
 
+    // Causa-raiz confirmada (staging, maratona+meia): "Bad control character in
+    // string literal" — a IA emite uma quebra de linha LITERAL dentro de um
+    // coach_note/scientific_note em vez de `\n` escapado. Saneia SEMPRE, antes do
+    // parse: é determinístico e no-op em JSON já válido (ver método abaixo), então
+    // não depende do retry caro (regeração ~7min/$0.56) pra curar.
+    const { text: sanitized, escapedCount } =
+      this.escapeControlCharsInStrings(cleaned);
+    if (escapedCount > 0) {
+      this.logger.warn(
+        `[AIRouter] extractJSON escapou ${escapedCount} control char(s) cru(s) em ` +
+          `strings de ${meta?.featureName ?? 'unknown'} antes do parse`,
+      );
+    }
+
     try {
-      return JSON.parse(cleaned) as T;
+      return JSON.parse(sanitized) as T;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       // Extrai "position N" da mensagem do V8 (ex.: "... at position 36222").
       const posMatch = /position (\d+)/.exec(msg);
       const pos = posMatch ? parseInt(posMatch[1], 10) : -1;
-      const len = cleaned.length;
+      const len = sanitized.length;
       // A string TERMINA no erro? (truncamento) ou CONTINUA? (malformada)
       const endsAtError = pos >= 0 && len - pos <= 2;
       const window =
         pos >= 0
-          ? cleaned.slice(Math.max(0, pos - 200), Math.min(len, pos + 200))
-          : cleaned.slice(-400);
+          ? sanitized.slice(Math.max(0, pos - 200), Math.min(len, pos + 200))
+          : sanitized.slice(-400);
       this.logger.error(
         `[AIRouter] JSON parse FAILED for ${meta?.featureName ?? 'unknown'} — ` +
-          `${msg} | totalChars=${len} errorPos=${pos} ` +
+          `${msg} | totalChars=${len} errorPos=${pos} escapedCtrl=${escapedCount} ` +
           `stop_reason=${meta?.stopReason ?? 'n/a'} maxTokens=${meta?.maxTokens ?? 'n/a'} | ` +
           `provável=${
             meta?.stopReason === 'max_tokens' || endsAtError
@@ -253,5 +267,85 @@ export class AIRouterService {
       );
       throw err;
     }
+  }
+
+  /**
+   * Escapa caracteres de controle CRUS (U+0000–U+001F) que aparecem DENTRO de
+   * valores string do JSON. A IA às vezes quebra a linha literalmente num
+   * coach_note/scientific_note em vez de escrever `\n`, o que faz o JSON.parse
+   * estourar com "Bad control character in string literal".
+   *
+   * SEGURANÇA (por que é seguro rodar SEMPRE, antes do primeiro parse):
+   *  • É um NO-OP em JSON bem-formado. JSON válido nunca tem control char cru
+   *    dentro de uma string (estaria escapado), então o único ramo que altera
+   *    texto (`inString && código < 0x20`) jamais dispara — retorna o input
+   *    intacto (escapedCount=0).
+   *  • Só toca o INTERIOR de strings. As quebras de linha ESTRUTURAIS entre
+   *    campos ficam fora de string e não são alteradas — logo não corrompe um
+   *    plano que já estava bom.
+   *  • Rastreia o estado de escape para não confundir `\"` (aspa escapada) com o
+   *    fim da string. Scanner de um passo, O(n), sem regex sobre o texto inteiro.
+   */
+  private escapeControlCharsInStrings(input: string): {
+    text: string;
+    escapedCount: number;
+  } {
+    let out = '';
+    let inString = false;
+    let escaped = false;
+    let escapedCount = 0;
+
+    for (let i = 0; i < input.length; i++) {
+      const ch = input[i];
+      const code = input.charCodeAt(i);
+
+      if (!inString) {
+        out += ch;
+        if (ch === '"') inString = true;
+        continue;
+      }
+
+      // Dentro de uma string.
+      if (escaped) {
+        out += ch;
+        escaped = false;
+      } else if (ch === '\\') {
+        out += ch;
+        escaped = true;
+      } else if (ch === '"') {
+        out += ch;
+        inString = false;
+      } else if (code < 0x20) {
+        // Control char cru dentro da string → escapa (isto é o conserto).
+        switch (code) {
+          case 0x08:
+            out += '\\b';
+            break;
+          case 0x09:
+            out += '\\t';
+            break;
+          case 0x0a:
+            out += '\\n';
+            break;
+          case 0x0c:
+            out += '\\f';
+            break;
+          case 0x0d:
+            out += '\\r';
+            break;
+          default:
+            out += '\\u' + code.toString(16).padStart(4, '0');
+            break;
+        }
+        escapedCount++;
+      } else {
+        out += ch;
+      }
+    }
+
+    // No-op real quando nada mudou: devolve a referência original.
+    return escapedCount > 0
+      ? { text: out, escapedCount }
+      : { text: input, escapedCount: 0 };
   }
 }
