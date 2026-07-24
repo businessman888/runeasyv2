@@ -100,7 +100,11 @@ export class AIRouterService {
         throw new Error('No text content in AI response');
       }
 
-      const data = this.extractJSON<T>(textBlock.text);
+      const data = this.extractJSON<T>(textBlock.text, {
+        featureName: options.featureName,
+        stopReason: (message as any).stop_reason ?? null,
+        maxTokens: options.maxTokens,
+      });
 
       const usage = {
         input_tokens: message.usage?.input_tokens || 0,
@@ -127,9 +131,14 @@ export class AIRouterService {
         success: true,
       });
 
+      // stop_reason + chars no log de SUCESSO: se um plano que PASSOU vier com
+      // stop_reason='max_tokens' (ou out: perto de maxTokens), já sabemos que
+      // estamos raspando o teto e a causa é truncamento — sem esperar uma falha.
       this.logger.log(
         `[AIRouter] ${options.featureName} via ${model} in ${latencyMs}ms ` +
-          `(in:${usage.input_tokens} out:${usage.output_tokens} cost:$${cost.toFixed(6)})`,
+          `(in:${usage.input_tokens} out:${usage.output_tokens}/${options.maxTokens} ` +
+          `chars:${textBlock.text.length} stop:${(message as any).stop_reason ?? 'n/a'} ` +
+          `cost:$${cost.toFixed(6)})`,
       );
 
       return { data, usage, model, latencyMs, wasFallback: isFallback };
@@ -190,9 +199,22 @@ export class AIRouterService {
   }
 
   /**
-   * Extract JSON from AI response text (handles markdown code blocks)
+   * Extract JSON from AI response text (handles markdown code blocks).
+   *
+   * Diagnóstico (Fase B/troubleshooting): quando o parse falha, loga tamanho da
+   * resposta, stop_reason e a janela de ±200 chars ao redor da posição do erro.
+   * Isso distingue TRUNCAMENTO (stop_reason='max_tokens' e/ou a string TERMINA na
+   * posição do erro) de STRING MALFORMADA (a string CONTINUA depois da posição —
+   * ex.: aspa não escapada num coach_note PT-BR). Sem isso, a causa exata some.
    */
-  private extractJSON<T>(text: string): T {
+  private extractJSON<T>(
+    text: string,
+    meta?: {
+      featureName?: string;
+      stopReason?: string | null;
+      maxTokens?: number;
+    },
+  ): T {
     let cleaned = text.trim();
     if (cleaned.startsWith('```json')) {
       cleaned = cleaned.slice(7);
@@ -204,6 +226,32 @@ export class AIRouterService {
     }
     cleaned = cleaned.trim();
 
-    return JSON.parse(cleaned) as T;
+    try {
+      return JSON.parse(cleaned) as T;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Extrai "position N" da mensagem do V8 (ex.: "... at position 36222").
+      const posMatch = /position (\d+)/.exec(msg);
+      const pos = posMatch ? parseInt(posMatch[1], 10) : -1;
+      const len = cleaned.length;
+      // A string TERMINA no erro? (truncamento) ou CONTINUA? (malformada)
+      const endsAtError = pos >= 0 && len - pos <= 2;
+      const window =
+        pos >= 0
+          ? cleaned.slice(Math.max(0, pos - 200), Math.min(len, pos + 200))
+          : cleaned.slice(-400);
+      this.logger.error(
+        `[AIRouter] JSON parse FAILED for ${meta?.featureName ?? 'unknown'} — ` +
+          `${msg} | totalChars=${len} errorPos=${pos} ` +
+          `stop_reason=${meta?.stopReason ?? 'n/a'} maxTokens=${meta?.maxTokens ?? 'n/a'} | ` +
+          `provável=${
+            meta?.stopReason === 'max_tokens' || endsAtError
+              ? 'TRUNCAMENTO'
+              : 'STRING_MALFORMADA'
+          } (endsAtError=${endsAtError})\n` +
+          `--- janela ±200 chars ao redor da posição do erro ---\n${window}\n---`,
+      );
+      throw err;
+    }
   }
 }
