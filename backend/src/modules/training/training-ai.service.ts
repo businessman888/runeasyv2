@@ -873,7 +873,7 @@ escolha o TIPO/ZONA/estrutura que melhor usa a distância dada de cada dia.
 ${volumeTable}
 
 EXIGÊNCIAS DO PLANO:
-1. ${request.daysPerWeek} treinos por semana, TODA semana, com as distâncias EXATAS do esqueleto acima (na ordem dos dias).
+1. EXATAMENTE ${request.daysPerWeek} treinos em CADA semana — nem mais, nem menos. Cada linha do esqueleto lista ${request.daysPerWeek} distâncias; devolva ${request.daysPerWeek} treinos por semana, com essas distâncias EXATAS. Inclua SEMPRE um treino type "long_run" (o marcado [L]).
 2. Use a fase indicada em cada semana para calibrar a INTENSIDADE (não o volume — já dado).
 3. Aplique a regra 80/20 do volume semanal (Z1+Z2 dominantes).
 4. Máximo 2 sessões de qualidade (Z3/Z4/Z5) por semana, com ≥48h de intervalo; prefira o slot [Q].
@@ -1019,49 +1019,137 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
   ): void {
     const byWeek = new Map<number, WeekSkeleton>();
     for (const s of skeleton) byWeek.set(s.weekNumber, s);
+    const QUALITY = new Set<GeneratedWorkoutType>([
+      'intervals',
+      'tempo',
+      'fartlek',
+      'hill_repeats',
+      'repetition',
+      'progressive',
+    ]);
+    const floor = MIN_WARMUP_KM + MIN_COOLDOWN_KM;
+    const synthSlot = (dist: number): WorkoutSlot => ({
+      slotIndex: 0,
+      distanceKm: dist,
+      isLong: false,
+      isQuality: false,
+    });
 
     for (let wi = 0; wi < (plan.weeks ?? []).length; wi++) {
       const week = plan.weeks[wi];
       const sk = byWeek.get(week.week_number) ?? skeleton[wi];
-      if (!sk) continue;
-      const slots = sk.workouts;
-      const n = Math.min(week.workouts.length, slots.length);
+      const workouts = week?.workouts ?? [];
+      if (!sk || workouts.length === 0) continue;
 
-      // 1ª passada: crava cada treino no alvo do slot (por índice/ordem dos dias).
-      const achieved: number[] = [];
-      for (let i = 0; i < n; i++) {
-        achieved[i] = this.reconcileWorkoutDistance(
-          week.workouts[i],
-          slots[i].distanceKm,
-          slots[i],
-        );
+      // Mapeia por PAPEL (não por índice) E é robusto à DIVERGÊNCIA DE CONTAGEM:
+      // a IA devolve os treinos na ordem dela e às vezes em número diferente de
+      // days_per_week. Casar slot[i]→workout[i] causava dois bugs: (a) a distância
+      // do longão grudava num easy (long_run ficava curto); (b) com menos treinos
+      // que slots, o slot órfão (o longão, que fica por último) SUMIA do plano —
+      // o total caía p/ total−longão (o sintoma 30→19.5). Aqui: escolhemos o
+      // long_run e o treino de qualidade por TIPO, e espalhamos o volume RESTANTE
+      // entre os easies REAIS, de modo que o total sempre bata com o esqueleto.
+      const slots = sk.workouts;
+      const longSlot = slots.find((s) => s.isLong);
+      const qualitySlot = slots.find((s) => s.isQuality);
+      const weekTotal = sk.totalKm;
+
+      let longWo = workouts.find((w) => w.type === 'long_run');
+      if (!longWo) {
+        // A IA não marcou nenhum long_run: promove o último treino a longão
+        // (recebe a distância do longão E o tipo, p/ o calendário exibir certo).
+        longWo = workouts[workouts.length - 1];
+        if (longWo) longWo.type = 'long_run';
+      }
+      const qualityWo = qualitySlot
+        ? workouts.find((w) => w !== longWo && QUALITY.has(w.type))
+        : undefined;
+      const easies = workouts.filter((w) => w !== longWo && w !== qualityWo);
+
+      const longDist = longSlot ? longSlot.distanceKm : this.r1(weekTotal * 0.3);
+      const qualityDist =
+        qualitySlot && qualityWo ? qualitySlot.distanceKm : 0;
+      const remVol = Math.max(weekTotal - longDist - qualityDist, 0);
+      // easy nunca excede o longão (mantém o longão como o mais longo mesmo com
+      // poucos treinos); o total pode ficar levemente abaixo nesse caso extremo.
+      const perEasy =
+        easies.length > 0
+          ? Math.min(Math.max(remVol / easies.length, floor), longDist)
+          : 0;
+
+      const results: Array<{
+        wo: GeneratedWorkout;
+        slot: WorkoutSlot;
+        achieved: number;
+        isEasy: boolean;
+      }> = [];
+      const longTargetSlot = longSlot ?? synthSlot(longDist);
+      results.push({
+        wo: longWo,
+        slot: longTargetSlot,
+        achieved: this.reconcileWorkoutDistance(longWo, longDist, longTargetSlot),
+        isEasy: false,
+      });
+      if (qualityWo && qualitySlot) {
+        results.push({
+          wo: qualityWo,
+          slot: qualitySlot,
+          achieved: this.reconcileWorkoutDistance(
+            qualityWo,
+            qualityDist,
+            qualitySlot,
+          ),
+          isEasy: false,
+        });
+      }
+      for (const e of easies) {
+        const s = synthSlot(perEasy);
+        results.push({
+          wo: e,
+          slot: s,
+          achieved: this.reconcileWorkoutDistance(e, perEasy, s),
+          isEasy: true,
+        });
       }
 
       // Reconciliação semanal: absorve overshoot (intervalado que não coube) nos
       // treinos easy, mantendo o volume total da semana dentro da tolerância.
-      const weekTarget = sk.totalKm;
-      let overshoot =
-        achieved.reduce((a, b) => a + b, 0) - weekTarget;
+      let overshoot = results.reduce((a, r) => a + r.achieved, 0) - weekTotal;
       if (overshoot > WEEKLY_TOTAL_TOLERANCE_KM) {
-        for (let i = 0; i < n && overshoot > WEEKLY_TOTAL_TOLERANCE_KM; i++) {
-          const slot = slots[i];
-          if (slot.isLong || slot.isQuality) continue; // só apara easy
-          const floor = MIN_WARMUP_KM + MIN_COOLDOWN_KM;
-          const reducible = achieved[i] - floor;
+        for (const r of results) {
+          if (overshoot <= WEEKLY_TOTAL_TOLERANCE_KM) break;
+          if (!r.isEasy) continue;
+          const reducible = r.achieved - floor;
           if (reducible <= 0) continue;
           const cut = Math.min(reducible, overshoot);
-          achieved[i] = this.reconcileWorkoutDistance(
-            week.workouts[i],
-            achieved[i] - cut,
-            slot,
+          r.achieved = this.reconcileWorkoutDistance(
+            r.wo,
+            r.achieved - cut,
+            r.slot,
           );
           overshoot -= cut;
         }
       }
-      if (overshoot > WEEKLY_TOTAL_TOLERANCE_KM) {
+
+      // Balanço final: NUNCA descartar volume em silêncio. Dois casos:
+      //  • sobra (overshoot): intervalado grande + easies no piso não absorveram.
+      //  • falta (undershoot): o cap "easy ≤ longão" mordeu porque a IA devolveu
+      //    poucos treinos (ex.: 2 treinos numa semana de 5) — o excedente não tem
+      //    onde caber sem inflar um easy acima do longão ou o longão acima do
+      //    teto de share. Fica volume-a-MENOS (seguro), mas registrado.
+      const finalTotal = results.reduce((a, r) => a + r.achieved, 0);
+      const diff = this.r1(finalTotal - weekTotal);
+      if (diff > WEEKLY_TOTAL_TOLERANCE_KM) {
         this.logger.warn(
-          `[Volume] Sem ${week.week_number}: desvio de +${this.r1(overshoot)}km ` +
-            `não absorvido (intervalado grande + easy no piso).`,
+          `[Volume] Sem ${week.week_number}: +${diff}km acima do esqueleto ` +
+            `(${this.r1(finalTotal)}/${weekTotal}km) — intervalado grande + easies no piso.`,
+        );
+      } else if (-diff > WEEKLY_TOTAL_TOLERANCE_KM) {
+        this.logger.warn(
+          `[Volume] Sem ${week.week_number}: ${this.r1(-diff)}km NÃO alocados ` +
+            `(${this.r1(finalTotal)}/${weekTotal}km) — a IA devolveu ${workouts.length} ` +
+            `treino(s) e o cap 'easy ≤ longão' impediu realocar. Volume-a-menos (seguro); ` +
+            `reforçar a contagem de treinos no prompt.`,
         );
       }
     }
