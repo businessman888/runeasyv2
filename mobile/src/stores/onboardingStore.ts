@@ -84,6 +84,16 @@ export interface GeneratedPlanResult {
     };
 }
 
+// Veredito de viabilidade da meta (Fase C) — retornado pelo /onboarding/precheck.
+export interface ViabilityCheck {
+    feasible: boolean;
+    neverRan: boolean;
+    minWeeksRecommended: number; // semanas mínimas p/ a meta ficar viável
+    maxGoalKmInWindow: number;   // maior meta (km) viável no prazo atual
+    peakLongRunKm: number;
+    requiredWeeklyIncreasePct: number;
+}
+
 // Error codes for handling in UI
 export const ONBOARDING_ERRORS = {
     AUTH_REQUIRED: 'AUTH_REQUIRED',
@@ -114,6 +124,7 @@ interface OnboardingState {
     submitOnboarding: () => Promise<GeneratedPlanResult | null>;
     saveOnboardingOnly: () => Promise<boolean>;
     triggerPlanGeneration: () => Promise<string | null>;
+    checkViability: (overrides?: { goal?: string; goalTimeframe?: number }) => Promise<ViabilityCheck>;
     clearError: () => void;
 }
 
@@ -589,6 +600,72 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
             console.error('[triggerPlanGeneration] Error:', error);
             set({ lastGenerationStatus: null });
             return null;
+        }
+    },
+
+    /**
+     * Pré-check de viabilidade da meta (Fase C). Chamado ANTES de finalizar o
+     * onboarding e a cada ajuste no modal de viabilidade. `overrides` permite
+     * revalidar uma meta/prazo hipotético sem gravar no estado ainda.
+     *
+     * FAIL-OPEN: qualquer erro/timeout → `feasible:true` (com console.warn) pra
+     * NUNCA prender o usuário; a rede de segurança do backend (dias distintos) e o
+     * plano conservador ainda protegem. Timeout curto (5s) p/ não travar em rede ruim.
+     */
+    checkViability: async (overrides) => {
+        const failOpen: ViabilityCheck = {
+            feasible: true,
+            neverRan: false,
+            minWeeksRecommended: 0,
+            maxGoalKmInWindow: 0,
+            peakLongRunKm: 0,
+            requiredWeeklyIncreasePct: 0,
+        };
+        try {
+            const { data } = get();
+            const userId = await Storage.getItemAsync('user_id');
+
+            const goal = overrides?.goal ?? resolveGoal(data);
+            const goalTimeframe = overrides?.goalTimeframe ?? data.goalTimeframe ?? null;
+            const targetWeeks = goalTimeframe ? goalTimeframe * 4 : (data.targetWeeks || 8);
+
+            const body = {
+                ...raceRequestFields(data), // goal_type + race_id/date/name/distance
+                goal,
+                goal_timeframe: goalTimeframe,
+                target_weeks: targetWeeks,
+                level: data.experience_level || 'beginner',
+                days_per_week: data.daysPerWeek || 3,
+                recent_distance: data.recentDistance ?? null,
+                recent_frequency: data.recentFrequency ?? null,
+                current_weekly_km: data.currentWeeklyKm ?? null,
+            };
+
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 5000);
+            let response: Response;
+            try {
+                response = await authedFetch(`${API_URL}/training/onboarding/precheck`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-user-id': userId || '',
+                    },
+                    body: JSON.stringify(body),
+                    signal: controller.signal,
+                });
+            } finally {
+                clearTimeout(timer);
+            }
+
+            if (!response.ok) {
+                console.warn('[checkViability] non-OK, fail-open:', response.status);
+                return failOpen;
+            }
+            return (await response.json()) as ViabilityCheck;
+        } catch (error) {
+            console.warn('[checkViability] error, fail-open:', error);
+            return failOpen;
         }
     },
 }));

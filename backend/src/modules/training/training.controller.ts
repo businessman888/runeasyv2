@@ -106,6 +106,7 @@ export class TrainingController {
     private readonly supabaseService: SupabaseService,
     private readonly usersService: UsersService,
     private readonly gamificationService: GamificationService,
+    private readonly trainingAIService: TrainingAIService,
   ) {}
 
   /**
@@ -634,6 +635,48 @@ export class TrainingController {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  /**
+   * Pré-check de viabilidade da meta (Fase C) — rápido, puro, sem IA/DB. O mobile
+   * chama ANTES de finalizar o onboarding: inviável → modal de ajuste (distância)
+   * ou informativo (prova). Usa a MESMA derivação da geração
+   * (TrainingAIService.assessRequestViability), então o veredito é idêntico ao
+   * plano que seria gerado. neverRan (nunca correu) → sempre feasible.
+   */
+  @Post('onboarding/precheck')
+  assessViability(@Body() dto: CreatePlanDto, @User('id') userId: string) {
+    const goalType = dto.goal_type ?? 'distance';
+    const raceWeeks =
+      goalType === 'race' && dto.race_date ? weeksUntil(dto.race_date) : null;
+    const totalWeeks = raceWeeks ?? dto.target_weeks;
+
+    const verdict = this.trainingAIService.assessRequestViability({
+      goal: dto.goal,
+      goalType,
+      raceDistance: dto.race_distance ?? null,
+      raceWeeksUntil: raceWeeks,
+      targetWeeks: totalWeeks,
+      recentDistanceKm: dto.recent_distance ?? null,
+      recentFrequency: dto.recent_frequency ?? null,
+      currentWeeklyKm: dto.current_weekly_km ?? null,
+      level: dto.level,
+    });
+
+    this.logger.log(
+      `[precheck] user=${userId} goal=${dto.goal} type=${goalType} weeks=${totalWeeks} ` +
+        `→ feasible=${verdict.feasible} minWeeks=${verdict.minWeeksRecommended} ` +
+        `maxGoalKm=${verdict.maxGoalKmInWindow} neverRan=${verdict.neverRan}`,
+    );
+
+    return {
+      feasible: verdict.feasible,
+      neverRan: verdict.neverRan,
+      minWeeksRecommended: verdict.minWeeksRecommended,
+      maxGoalKmInWindow: verdict.maxGoalKmInWindow,
+      peakLongRunKm: verdict.peakLongRunKm,
+      requiredWeeklyIncreasePct: verdict.requiredWeeklyIncreasePct,
+    };
   }
 
   /**

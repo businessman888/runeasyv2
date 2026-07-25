@@ -21,7 +21,9 @@ import Animated, {
     FadeIn,
 } from 'react-native-reanimated';
 import { useOnboardingStore } from '../stores/onboardingStore';
+import type { ViabilityCheck } from '../stores/onboardingStore';
 import { useCoachStore } from '../stores/coachStore';
+import { FeasibilityModal } from '../components/onboarding/FeasibilityModal';
 
 // Question screens
 import { ObjectiveScreen } from './quiz/ObjectiveScreen';
@@ -203,9 +205,15 @@ const ALL_QUIZ_STEPS: QuizStep[] = [
 
 export function OnboardingScreen({ navigation, route }: any) {
     const userId = route?.params?.userId;
-    const { data, updateData, xpEarned, addXP } = useOnboardingStore();
+    const { data, updateData, xpEarned, addXP, checkViability } = useOnboardingStore();
     const [currentStep, setCurrentStep] = useState(0);
     const [wearableModalOpen, setWearableModalOpen] = useState(false);
+    // Fase C — pré-check de viabilidade antes de finalizar o onboarding.
+    const [checkingViability, setCheckingViability] = useState(false);
+    const [feasibilityModal, setFeasibilityModal] = useState<{
+        mode: 'forced' | 'informational';
+        verdict: ViabilityCheck;
+    } | null>(null);
     const [reduceMotion, setReduceMotion] = useState(false);
     // Lets a child (e.g. the height ruler) lock the parent scroll while dragging,
     // so vertical pans don't fight the ScrollView and feel "stuck".
@@ -328,13 +336,44 @@ export function OnboardingScreen({ navigation, route }: any) {
     // the active list shrinks — hiding later steps (referral, testimonials) can
     // make a non-Continue step (e.g. the wearable Yes/No step) the last one,
     // which would otherwise run off the end and never reach Quiz_PlanLoading.
+    const creditCompletionXpAndNavigate = () => {
+        if (!xpCreditedRef.current.has(-1)) {
+            addXP(XP_COMPLETION_BONUS);
+            xpCreditedRef.current.add(-1);
+        }
+        navigation.navigate('Quiz_PlanLoading', { userId });
+    };
+
+    // Pré-check de viabilidade (Fase C) ANTES de finalizar. feasible/neverRan →
+    // segue direto (maioria). Inviável → modal: forçado (distância, obriga ajuste)
+    // ou informativo (prova, só avisa). Fail-open no store: erro → feasible:true.
+    const finishQuiz = async () => {
+        if (checkingViability) return;
+        setCheckingViability(true);
+        try {
+            const verdict = await checkViability();
+            if (verdict.feasible || verdict.neverRan) {
+                creditCompletionXpAndNavigate();
+                return;
+            }
+            // Inviável. Provas → informativo (data/distância fixas, sem alavanca).
+            // Distância → forçado SÓ SE existe caminho viável; se nem 5k@6meses passa
+            // (capacidade muito baixa), forçar seria beco sem saída → cai no informativo
+            // ("construir base"). Pendência C: rotear esse usuário pro protocolo de base.
+            let mode: 'forced' | 'informational' = 'informational';
+            if (!isRaceGoal) {
+                const easiest = await checkViability({ goal: '5k', goalTimeframe: 6 });
+                mode = easiest.feasible ? 'forced' : 'informational';
+            }
+            setFeasibilityModal({ mode, verdict });
+        } finally {
+            setCheckingViability(false);
+        }
+    };
+
     const advanceOrFinish = () => {
         if (safeStep === TOTAL_INDICES - 1) {
-            if (!xpCreditedRef.current.has(-1)) {
-                addXP(XP_COMPLETION_BONUS);
-                xpCreditedRef.current.add(-1);
-            }
-            navigation.navigate('Quiz_PlanLoading', { userId });
+            void finishQuiz();
             return;
         }
         setCurrentStep(safeStep + 1);
@@ -507,7 +546,7 @@ export function OnboardingScreen({ navigation, route }: any) {
     const isCoachStep = !!currentStepData.isCoachStep;
     const isInterstitial = !!currentStepData.isInterstitial;
     const showBackButton = safeStep > 0;
-    const continueDisabled = !canContinue();
+    const continueDisabled = !canContinue() || checkingViability;
     const isLastStep = safeStep === TOTAL_INDICES - 1;
 
     const StepComponent = currentStepData.Component;
@@ -638,6 +677,31 @@ export function OnboardingScreen({ navigation, route }: any) {
                     />
                 )}
             </View>
+
+            {feasibilityModal && (
+                <FeasibilityModal
+                    visible={!!feasibilityModal}
+                    mode={feasibilityModal.mode}
+                    goal={data.goal || ''}
+                    goalTimeframe={data.goalTimeframe ?? null}
+                    level={data.experience_level}
+                    goalType={data.goal_type}
+                    raceDistance={data.race_distance}
+                    raceName={data.race_name}
+                    initialVerdict={feasibilityModal.verdict}
+                    onCheck={checkViability}
+                    onConfirm={({ goal, goalTimeframe }) => {
+                        updateData({ goal, goalTimeframe });
+                        setFeasibilityModal(null);
+                        creditCompletionXpAndNavigate();
+                    }}
+                    onAcknowledge={() => {
+                        setFeasibilityModal(null);
+                        creditCompletionXpAndNavigate();
+                    }}
+                    onClose={() => setFeasibilityModal(null)}
+                />
+            )}
         </View>
     );
 }

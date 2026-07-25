@@ -11,6 +11,7 @@ import {
   WalkRunInterval,
   Phases,
   PlanViability,
+  EffectiveCapacity,
   MIN_REPS,
   MIN_WARMUP_KM,
   MIN_COOLDOWN_KM,
@@ -661,20 +662,9 @@ REGRAS ADICIONAIS DE PROVA:
     // Capacidade efetiva → esqueleto de volume/longão → injeção no prompt →
     // pós-processamento (applyDeterministicVolume). Número é cálculo; a IA só
     // escolhe a forma dentro das distâncias dadas.
-    const goalKm = this.resolveGoalKm(request);
-    const capacity = this.volumePlanner.deriveEffectiveCapacity({
-      currentWeeklyKm: request.currentWeeklyKm,
-      recentFrequency: request.recentFrequency,
-      recentDistanceKm: request.recentDistanceKm,
-      level: request.level,
-    });
-    const phases =
-      request.goalType === 'race'
-        ? this.calculateRacePhases(
-            request.raceWeeksUntil ?? request.targetWeeks,
-            goalKm,
-          )
-        : this.volumePlanner.calculatePhases(request.targetWeeks, goalKm);
+    // Deriva goalKm/capacidade/fases — MESMO método que o pré-check da Fase C
+    // usa (assessRequestViability), garantindo veredito idêntico por construção.
+    const { goalKm, capacity, phases } = this.deriveViabilityInputs(request);
 
     // "Nunca corri" → protocolo caminhada/corrida (por tempo, sem pace). O
     // backend monta 100% dos treinos; a IA só decora textos.
@@ -979,19 +969,84 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
     return Math.round(v * 10) / 10;
   }
 
-  /** Distância-meta em km a partir do objetivo/prova. */
+  /** Distância-meta em km — delega ao mapa único no VolumePlannerService. */
   private resolveGoalKm(request: TrainingPlanRequest): number {
-    if (request.goalType === 'race' && request.raceDistance) {
-      return request.raceDistance;
+    return this.volumePlanner.resolveGoalKm({
+      goal: request.goal,
+      goalType: request.goalType,
+      raceDistance: request.raceDistance,
+      recentDistanceKm: request.recentDistanceKm,
+    });
+  }
+
+  /**
+   * Deriva goalKm, capacidade efetiva e fases — base COMPARTILHADA entre a geração
+   * e o pré-check de viabilidade (Fase C). Aceita um subconjunto do request (só o
+   * que a viabilidade precisa), pra o controller do pré-check chamar sem montar um
+   * TrainingPlanRequest completo.
+   */
+  private deriveViabilityInputs(
+    input: Partial<TrainingPlanRequest> & { targetWeeks: number },
+  ): { goalKm: number; capacity: EffectiveCapacity; phases: Phases } {
+    const goalKm = this.volumePlanner.resolveGoalKm({
+      goal: input.goal,
+      goalType: input.goalType,
+      raceDistance: input.raceDistance,
+      recentDistanceKm: input.recentDistanceKm,
+    });
+    const capacity = this.volumePlanner.deriveEffectiveCapacity({
+      currentWeeklyKm: input.currentWeeklyKm,
+      recentFrequency: input.recentFrequency,
+      recentDistanceKm: input.recentDistanceKm,
+      level: input.level,
+    });
+    const phases: Phases =
+      input.goalType === 'race'
+        ? this.calculateRacePhases(
+            input.raceWeeksUntil ?? input.targetWeeks,
+            goalKm,
+          )
+        : this.volumePlanner.calculatePhases(input.targetWeeks, goalKm);
+    return { goalKm, capacity, phases };
+  }
+
+  /**
+   * Viabilidade de um request SEM gerar plano (pré-check da Fase C). Usa a MESMA
+   * derivação da geração (deriveViabilityInputs → assessViability), então o veredito
+   * é idêntico ao que o plano gerado registraria — parity por construção. "Nunca
+   * corri" (neverRan) → sempre viável: a geração vai pro protocolo caminhada/corrida
+   * do zero, sem meta de distância a cumprir.
+   */
+  assessRequestViability(
+    input: Partial<TrainingPlanRequest> & { targetWeeks: number },
+  ): PlanViability & { neverRan: boolean } {
+    const { goalKm, capacity, phases } = this.deriveViabilityInputs(input);
+    if (capacity.neverRan) {
+      return {
+        feasible: true,
+        requiredWeeklyIncreasePct: 0,
+        minWeeksRecommended: input.targetWeeks,
+        maxGoalKmInWindow: goalKm,
+        peakLongRunKm: 0,
+        effectiveWeeklyKm: capacity.weeklyKm,
+        goalKm,
+        weeksAvailable: input.targetWeeks,
+        neverRan: true,
+      };
     }
-    const map: Record<string, number> = {
-      '5k': 5,
-      '10k': 10,
-      half_marathon: 21.1,
-      marathon: 42.2,
-      general_fitness: 10,
+    const v = this.volumePlanner.assessViability({
+      capacity,
+      goalKm,
+      totalWeeks: input.targetWeeks,
+      phases,
+    });
+    return {
+      ...v,
+      effectiveWeeklyKm: capacity.weeklyKm,
+      goalKm,
+      weeksAvailable: input.targetWeeks,
+      neverRan: false,
     };
-    return map[request.goal] ?? request.recentDistanceKm ?? 10;
   }
 
   /** Tabela por semana injetada no prompt (distâncias são dados, não sugestões). */

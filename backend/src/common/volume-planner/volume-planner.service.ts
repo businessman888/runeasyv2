@@ -145,6 +145,31 @@ export class VolumePlannerService {
     return { min: last.min, max: last.max };
   }
 
+  /**
+   * Distância-meta (km) a partir do objetivo/prova. FONTE ÚNICA do mapa meta→km,
+   * consumida tanto pela geração (TrainingAIService) quanto pelo pré-check de
+   * viabilidade (Fase C) — assim o veredito de viabilidade é idêntico ao plano
+   * que seria gerado, por construção (não por coincidência de dois mapas iguais).
+   */
+  resolveGoalKm(input: {
+    goal?: string | null;
+    goalType?: string | null;
+    raceDistance?: number | null;
+    recentDistanceKm?: number | null;
+  }): number {
+    if (input.goalType === 'race' && input.raceDistance) {
+      return input.raceDistance;
+    }
+    const map: Record<string, number> = {
+      '5k': 5,
+      '10k': 10,
+      half_marathon: 21.1,
+      marathon: 42.2,
+      general_fitness: 10,
+    };
+    return map[input.goal ?? ''] ?? input.recentDistanceKm ?? 10;
+  }
+
   /** Alvo único (ponto médio da faixa) do longão de pico. */
   private peakLongTarget(goalKm: number): number {
     const { min, max } = this.peakLongRunForGoal(goalKm);
