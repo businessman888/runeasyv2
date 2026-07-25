@@ -470,6 +470,34 @@ export class TrainingService {
   }
 
   /**
+   * Expande uma lista de dias selecionados para `count` dias DISTINTOS da semana
+   * (0=Dom..6=Sáb), preservando os escolhidos e preenchendo o restante com dias
+   * livres espalhados a partir do último dia escolhido.
+   *
+   * Conserta a COLISÃO do módulo: antes, `enforcedDays[i % len]` fazia o 5º
+   * treino cair no mesmo dia do 1º quando havia 5 treinos mas só 4 dias marcados
+   * (onboarding com daysPerWeek=5 e preferredDays de 4 dias). Resultado: dois
+   * treinos na mesma data toda semana e um dia planejado vazio. Aqui cada treino
+   * ganha um dia próprio. Rede de segurança pra dados antigos e chamadas fora do
+   * app; a validação preferredDays.length===daysPerWeek fica no onboarding (mobile).
+   */
+  private buildDistinctDaySchedule(baseDays: number[], count: number): number[] {
+    const result = baseDays.slice(0, count);
+    const used = new Set(result);
+    // Preenche dias livres começando após o último escolhido (espalha em vez de
+    // amontoar no começo da semana). Cap em 7 dias distintos.
+    const anchor = result.length > 0 ? Math.max(...result) : -1;
+    for (let step = 1; step <= 7 && result.length < count; step++) {
+      const d = (anchor + step) % 7;
+      if (!used.has(d)) {
+        used.add(d);
+        result.push(d);
+      }
+    }
+    return result.sort((a, b) => a - b);
+  }
+
+  /**
    * Helper: Create workout records for a single week.
    *
    * When `enforcedDays` is provided, each workout's day_of_week is overridden
@@ -486,6 +514,14 @@ export class TrainingService {
   ): any[] {
     const workoutsToInsert = [];
 
+    // Agenda de dias DISTINTOS pra esta semana: expande os dias selecionados até
+    // o nº de treinos, sem repetir (ver buildDistinctDaySchedule). Substitui o
+    // antigo `enforcedDays[i % len]`, que colidia quando treinos > dias marcados.
+    const daySchedule =
+      enforcedDays && enforcedDays.length > 0
+        ? this.buildDistinctDaySchedule(enforcedDays, week.workouts.length)
+        : null;
+
     // CRITICAL: every getter and setter here MUST be the UTC variant.
     // `baseDate` is anchored at UTC midnight by parsePlanStartAsUTC; mixing
     // local-time methods (.getDay/.getDate/.setDate) with .toISOString()
@@ -498,12 +534,11 @@ export class TrainingService {
 
       const workoutDate = new Date(weekStart);
       const currentDay = workoutDate.getUTCDay();
-      // Prefer the user's selected day at this index; fall back to the
-      // AI's choice when no selection is available or there are more
-      // workouts than selected days.
+      // Cada treino ganha um dia próprio da agenda distinta; fallback pro dia da
+      // IA quando não há seleção (ou, no limite >7 treinos, sem dia livre).
       const targetDay =
-        enforcedDays && enforcedDays.length > 0
-          ? enforcedDays[i % enforcedDays.length]
+        daySchedule && daySchedule[i] !== undefined
+          ? daySchedule[i]
           : workout.day_of_week;
       const daysToAdd = (targetDay - currentDay + 7) % 7;
       workoutDate.setUTCDate(workoutDate.getUTCDate() + daysToAdd);
