@@ -282,8 +282,15 @@ export function OnboardingScreen({ navigation, route }: any) {
                 return typeof data.daysPerWeek === 'number'
                     && data.daysPerWeek >= 2
                     && data.daysPerWeek <= 7;
-            case 'availableDays':
-                return Array.isArray(data.availableDays) && data.availableDays.length > 0;
+            case 'availableDays': {
+                // Trava até o nº de dias marcados bater com a frequência declarada
+                // (mesma default do prop maxDays em AvailableDaysScreen). É o fix de
+                // raiz da colisão de agendamento: garante preferredDays.length ===
+                // days_per_week antes de chegar ao backend.
+                const requiredDays = data.daysPerWeek || 3;
+                return Array.isArray(data.availableDays)
+                    && data.availableDays.length === requiredDays;
+            }
             case 'intenseDayIndex':
                 return data.intenseDayIndex !== null && data.intenseDayIndex !== undefined;
             // 0 = "nunca corri" é uma escolha válida (não usar truthiness aqui).

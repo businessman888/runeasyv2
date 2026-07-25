@@ -155,12 +155,23 @@ export function AvailableDaysScreen({ value, onChange, maxDays = 7 }: AvailableD
                 })}
             </View>
 
-            {/* Selected Count Indicator */}
+            {/* Selected Count Indicator — quando incompleto, explica por que o
+                Continuar está travado (estado em progresso, tom calmo — não erro). */}
             <View style={styles.countContainer}>
-                <Text style={styles.countText}>
-                    <Text style={styles.countNumber}>{selectedDays.length}</Text>
-                    <Text style={styles.countLabel}> / {maxDays} dias selecionados</Text>
-                </Text>
+                {selectedDays.length < maxDays ? (
+                    <Text style={styles.countText}>
+                        <Text style={styles.countLabel}>Selecione mais </Text>
+                        <Text style={styles.countNumber}>{maxDays - selectedDays.length}</Text>
+                        <Text style={styles.countLabel}>
+                            {' '}dia{maxDays - selectedDays.length !== 1 ? 's' : ''}
+                        </Text>
+                    </Text>
+                ) : (
+                    <Text style={styles.countText}>
+                        <Text style={styles.countNumber}>{selectedDays.length}</Text>
+                        <Text style={styles.countLabel}> / {maxDays} dias selecionados</Text>
+                    </Text>
+                )}
             </View>
 
             {/* Warning for consecutive days */}
