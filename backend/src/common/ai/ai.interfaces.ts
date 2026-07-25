@@ -19,6 +19,19 @@ export interface AICallOptions {
   model?: string;
   /** Enable fallback to Sonnet if Haiku fails (default: true for EFFICIENCY tier) */
   enableFallback?: boolean;
+  /**
+   * Timeout (ms) desta requisição, sobrescreve o default do SDK (10 min). Usar
+   * em gerações longas (plano completo ~7 min) pra não serem cortadas perto do
+   * teto de 10 min. Aplicado por-requisição, não muda o cliente global.
+   */
+  timeoutMs?: number;
+  /**
+   * maxRetries desta requisição, sobrescreve o default do SDK (2). Defina 0 na
+   * geração de plano: a Etapa 3 (retry no training.service) é a ÚNICA camada de
+   * retry ali, evitando o encadeamento SDK(2)×Etapa3(2) = até 6 chamadas de ~15
+   * min. Outras chamadas mantêm o default (resiliência a 429 transitório).
+   */
+  maxRetries?: number;
 }
 
 export interface AICallResult<T = unknown> {

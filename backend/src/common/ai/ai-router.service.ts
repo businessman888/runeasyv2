@@ -78,18 +78,31 @@ export class AIRouterService {
     // "Streaming is required for operations that may take longer than 10 minutes"
     const useStreaming = options.maxTokens > 8000;
 
+    // Opções por-requisição (timeout/maxRetries) — sobrescrevem os defaults do
+    // SDK (10 min / 2 retries) só nesta chamada, sem tocar o cliente global.
+    const requestOptions: { timeout?: number; maxRetries?: number } = {};
+    if (options.timeoutMs != null) requestOptions.timeout = options.timeoutMs;
+    if (options.maxRetries != null) requestOptions.maxRetries = options.maxRetries;
+
     try {
       let message: Anthropic.Message;
 
       if (useStreaming) {
         this.logger.log(
-          `[AIRouter] Using streaming for ${options.featureName} (maxTokens: ${options.maxTokens})`,
+          `[AIRouter] Using streaming for ${options.featureName} ` +
+            `(maxTokens: ${options.maxTokens}` +
+            `${options.timeoutMs != null ? `, timeout: ${options.timeoutMs}ms` : ''}` +
+            `${options.maxRetries != null ? `, maxRetries: ${options.maxRetries}` : ''})`,
         );
-        const stream = this.anthropic.messages.stream(params as any);
+        const stream = this.anthropic.messages.stream(
+          params as any,
+          requestOptions,
+        );
         message = await stream.finalMessage();
       } else {
         message = (await this.anthropic.messages.create(
           params as any,
+          requestOptions,
         )) as Anthropic.Message;
       }
 
