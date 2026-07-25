@@ -905,10 +905,13 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
         userMessage: userPrompt,
         maxTokens: 64000,
         // Geração longa (~7 min): 15 min de timeout pra não raspar o teto de 10
-        // min do SDK. maxRetries:0 porque a Etapa 3 (retry em generateAndSaveFullPlan)
-        // é a única camada de retry aqui — impede o encadeamento SDK(2)×Etapa3(2).
+        // min do SDK. maxRetries:1 (não o default 2): o SDK reperga UMA vez o
+        // transitório barato — 429 é rate-limit no INÍCIO da requisição, re-requisita
+        // em segundos sem descartar geração — e a Etapa 3 (2 tentativas em
+        // generateAndSaveFullPlan, cataloga rede TAMBÉM, não só parse) cobre o resto.
+        // Limita o encadeamento SDK×Etapa3; pior caso ~teórico, 429 não gera hang.
         timeoutMs: 15 * 60 * 1000,
-        maxRetries: 0,
+        maxRetries: 1,
       });
 
       this.logger.log(

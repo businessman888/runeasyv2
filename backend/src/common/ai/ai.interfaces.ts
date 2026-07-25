@@ -26,10 +26,11 @@ export interface AICallOptions {
    */
   timeoutMs?: number;
   /**
-   * maxRetries desta requisição, sobrescreve o default do SDK (2). Defina 0 na
-   * geração de plano: a Etapa 3 (retry no training.service) é a ÚNICA camada de
-   * retry ali, evitando o encadeamento SDK(2)×Etapa3(2) = até 6 chamadas de ~15
-   * min. Outras chamadas mantêm o default (resiliência a 429 transitório).
+   * maxRetries desta requisição, sobrescreve o default do SDK (2). Na geração de
+   * plano usamos 1 (não 2): o SDK reperga o transitório barato uma vez (429 é no
+   * início da requisição) e a Etapa 3 (retry no training.service, cataloga rede
+   * também) cobre o resto, limitando o encadeamento SDK×Etapa3. Outras chamadas
+   * mantêm o default.
    */
   maxRetries?: number;
 }
