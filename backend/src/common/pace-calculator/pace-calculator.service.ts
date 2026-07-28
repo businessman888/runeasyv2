@@ -10,7 +10,15 @@ import {
 export class PaceCalculatorService {
   private readonly logger = new Logger(PaceCalculatorService.name);
 
-  private readonly MIN_VDOT = 25;
+  /**
+   * Piso alinhado à menor âncora da tabela (27). Era 25 — mas a tabela começava
+   * em 30, então 25–30 colapsava tudo na linha 30 e todo iniciante recebia o
+   * mesmo pace. Manter piso == menor âncora é o invariante que impede o colapso
+   * de voltar: se uma âncora mais baixa for adicionada, baixe isto junto.
+   * Abaixo de 27 o modelo entraria em velocidade de caminhada, e esse usuário
+   * pertence ao protocolo caminhada/corrida (Fase B), não a um pace prescrito.
+   */
+  private readonly MIN_VDOT = 27;
   private readonly MAX_VDOT = 85;
   private readonly BEGINNER_VDOT = 30;
 

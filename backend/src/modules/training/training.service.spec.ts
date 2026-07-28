@@ -6,6 +6,7 @@ import { TrainingAIService } from './training-ai.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { AiQuotaService, AIRouterService } from '../../common/ai';
+import { FeedbackAIService } from '../feedback/feedback-ai.service';
 
 describe('TrainingService', () => {
   let service: TrainingService;
@@ -110,6 +111,12 @@ describe('TrainingService', () => {
             isAvailable: true,
             call: jest.fn(),
           },
+        },
+        // Injetado com forwardRef no TrainingService. Único método consumido é
+        // enqueueGeneration (pós-treino); mockado para não subir fila real.
+        {
+          provide: FeedbackAIService,
+          useValue: { enqueueGeneration: jest.fn().mockResolvedValue(undefined) },
         },
       ],
     }).compile();

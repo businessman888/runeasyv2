@@ -25,12 +25,14 @@ import { usePlacement, useUser } from 'expo-superwall';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PAYWALL_PLACEMENTS } from '../../services/paywall';
 import {
-    Archetype,
+    getArchetypeNarrative,
     getGoalLabel,
     getGoalDescription,
     getGoalGainText,
-    formatPace,
+    formatDeclaredPace,
 } from '../../utils/archetypes';
+import { formatPaceRangeLabel } from '../../utils/pace';
+import type { PlanPreview } from '../../stores/onboardingStore';
 import { RaceCountdownBadge } from '../../components/onboarding/RaceCountdownBadge';
 import { weeksUntilRace } from '../../utils/raceFormat';
 
@@ -105,6 +107,80 @@ const ProgressChart = ({ chartPoints, accentColor }: { chartPoints: number[]; ac
 };
 
 // =============================================
+// TREINO #1 — formatação do que veio do backend
+// =============================================
+
+/** Rótulo do tipo de treino. Os números NUNCA são montados aqui. */
+const WORKOUT_TYPE_LABELS: Record<string, string> = {
+    easy_run: 'Rodagem Leve',
+    long_run: 'Longão',
+    recovery: 'Regenerativo',
+    tempo: 'Tempo Run',
+    intervals: 'Intervalado',
+    progressive: 'Progressivo',
+    walk_run: 'Caminhada e Corrida',
+};
+
+function formatDurationLabel(seconds: number): string {
+    return `${Math.max(1, Math.round(seconds / 60))} min`;
+}
+
+/**
+ * Traduz a prévia do backend para o que o card exibe. Três estados do MESMO
+ * card (consistência visual), cada um distinguível por texto+ícone e não só por
+ * cor:
+ *  - `run`      → distância real + faixa de pace real (segundos/km → m:ss)
+ *  - `walk_run` → duração + "No seu ritmo"; NÃO existe pace e nada é inventado
+ *  - neutro     → sem prévia (falha de rede): nenhum número, só a promessa
+ */
+function describeFirstWorkout(preview: PlanPreview | null): {
+    title: string;
+    duration: string | null;
+    paceLabel: string | null;
+    paceIcon: 'speedometer' | 'walk';
+    note: string | null;
+} {
+    if (!preview) {
+        return {
+            title: 'Seu primeiro treino',
+            duration: null,
+            paceLabel: null,
+            paceIcon: 'speedometer',
+            note: 'Calculado a partir do seu perfil assim que você confirmar.',
+        };
+    }
+
+    const w = preview.week1FirstWorkout;
+    const typeLabel = WORKOUT_TYPE_LABELS[w.type] ?? 'Treino';
+
+    if (preview.mode === 'walk_run') {
+        const s = w.structure;
+        return {
+            title: typeLabel,
+            duration: formatDurationLabel(w.durationSeconds),
+            // Sem VDOT não há pace-alvo — e a tela não inventa um.
+            paceLabel: 'No seu ritmo',
+            paceIcon: 'walk',
+            note: s
+                ? `${s.reps}× correr ${s.runSeconds}s / caminhar ${Math.round(s.walkSeconds / 60)} min`
+                : null,
+        };
+    }
+
+    const range = formatPaceRangeLabel(
+        w.paceRangeSeconds?.min,
+        w.paceRangeSeconds?.max,
+    );
+    return {
+        title: w.distanceKm != null ? `${typeLabel} — ${w.distanceKm} km` : typeLabel,
+        duration: formatDurationLabel(w.durationSeconds),
+        paceLabel: range ? `Pace ${range}` : null,
+        paceIcon: 'speedometer',
+        note: null,
+    };
+}
+
+// =============================================
 // MAIN COMPONENT
 // =============================================
 export function BriefingScreen({ navigation, route }: any) {
@@ -112,7 +188,10 @@ export function BriefingScreen({ navigation, route }: any) {
     const { saveOnboardingOnly } = useOnboardingStore();
     const isPro = useSubscriptionStore((s) => s.isProUser);
     const userId = route?.params?.userId;
-    const archetype: Archetype = route?.params?.archetype;
+    // Prévia determinística vinda do backend (motores puros, sem IA). `null`
+    // quando o endpoint falhou → narrativa neutra, sem número inventado.
+    const preview: PlanPreview | null = route?.params?.preview ?? null;
+    const archetype = getArchetypeNarrative(preview?.archetypeKey);
     // Observabilidade do disparo (Superwall suporta esses callbacks nativamente).
     // Em modo MANUAL, distinguir "apresentou" de "pulou por Holdout/status" é o
     // que permite diagnosticar em runtime sem inferir pelo comportamento visual.
@@ -154,28 +233,28 @@ export function BriefingScreen({ navigation, route }: any) {
     const goal = data.goal || '10k';
     const goalTimeframe = data.goalTimeframe || 3;
     const daysPerWeek = data.daysPerWeek || 4;
-    const paceMinutes = data.paceMinutes || '7';
-    const paceSeconds = data.paceSeconds || '00';
-    const paceDisplay = formatPace(paceMinutes, paceSeconds);
+    // Pace DECLARADO no onboarding. `null` quando não existe (fluxo "nunca
+    // corri" limpa esses campos) — antes, o `|| '7'` fabricava "7:00 min/km" e a
+    // tela afirmava um pace para quem nunca tinha corrido.
+    const paceDisplay = formatDeclaredPace(data.paceMinutes, data.paceSeconds);
     const isRaceGoal = data.goal_type === 'race' && !!data.race_date;
     const raceWeeks = isRaceGoal ? weeksUntilRace(data.race_date as string) : 0;
     const durationWeeks = isRaceGoal ? `${raceWeeks} Sem` : `${(goalTimeframe) * 4} Sem`;
     const frequencyWeekly = `${daysPerWeek}x/Sem`;
 
-    // Archetype data
-    const accentColor = archetype?.accentColor || DS.cyan;
-    const chartPoints = archetype?.chartPoints || [140, 130, 115, 95, 70, 45, 25, 10];
-    const sampleWorkout = archetype?.sampleWorkout || {
-        title: 'Rodagem Leve - 5 km',
-        duration: '35 min',
-        pace: 'Pace 5:30',
-        type: 'easy_run',
-    };
+    // Narrativa do arquétipo (só embalagem: nome, cor, curva, dica).
+    const accentColor = archetype.accentColor;
+    const chartPoints = archetype.chartPoints;
+    const firstWorkout = describeFirstWorkout(preview);
+
+    // Meta inviável no prazo (chega aqui só no modo informativo da Fase C).
+    // Suprime a projeção otimista: sem "+42km em 3 meses", sem "Meta Alcançada".
+    const goalFeasible = preview?.viability.feasible ?? true;
 
     const handleShare = async () => {
         try {
             await Share.share({
-                message: `🏃 Meu plano de treino "${archetype?.name}" para ${getGoalLabel(goal)} está pronto! RunEasy - Treinamento inteligente de corrida.`,
+                message: `🏃 Meu plano de treino "${archetype.name}" para ${getGoalLabel(goal)} está pronto! RunEasy - Treinamento inteligente de corrida.`,
             });
         } catch { }
     };
@@ -286,12 +365,12 @@ export function BriefingScreen({ navigation, route }: any) {
                     <View style={styles.topHeader}>
                         <View style={styles.topHeaderLeft}>
                             <MaterialCommunityIcons
-                                name={(archetype?.icon || 'lightning-bolt-circle') as any}
+                                name={archetype.icon as any}
                                 size={40}
                                 color={accentColor}
                             />
                             <Text style={[styles.topHeaderTitle, { color: accentColor }]}>
-                                {archetype?.name || 'Plano Personalizado'}
+                                {archetype.name}
                             </Text>
                         </View>
                         <TouchableOpacity onPress={handleShare} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -305,27 +384,41 @@ export function BriefingScreen({ navigation, route }: any) {
                     <View style={styles.titleSection}>
                         <Text style={styles.title}>
                             Coach RunEasy:{'\n'}
-                            <Text style={{ color: accentColor }}>{archetype?.name}</Text>
+                            <Text style={{ color: accentColor }}>{archetype.name}</Text>
                         </Text>
+                        {/* A cláusula de pace só aparece quando existe pace declarado. */}
                         {isRaceGoal ? (
                             <Text style={styles.subtitle}>
-                                Com seu pace de{' '}
-                                <Text style={styles.goalHighlight}>{paceDisplay} min/km</Text>
-                                {' '}e a sua prova em{' '}
+                                {paceDisplay ? (
+                                    <>
+                                        Com seu pace de{' '}
+                                        <Text style={styles.goalHighlight}>{paceDisplay} min/km</Text>
+                                        {' '}e a{' '}
+                                    </>
+                                ) : (
+                                    <>Com a{' '}</>
+                                )}
+                                sua prova em{' '}
                                 <Text style={styles.goalHighlight}>{raceWeeks} {raceWeeks === 1 ? 'semana' : 'semanas'}</Text>
                                 , montamos uma periodização ancorada no dia da prova.
                             </Text>
                         ) : (
                             <Text style={styles.subtitle}>
-                                Com seu pace de{' '}
-                                <Text style={styles.goalHighlight}>{paceDisplay} min/km</Text>
-                                {' '}e meta de{' '}
+                                {paceDisplay ? (
+                                    <>
+                                        Com seu pace de{' '}
+                                        <Text style={styles.goalHighlight}>{paceDisplay} min/km</Text>
+                                        {' '}e meta de{' '}
+                                    </>
+                                ) : (
+                                    <>Com sua meta de{' '}</>
+                                )}
                                 <Text style={styles.goalHighlight}>{getGoalDescription(goal)}</Text>
                                 , estruturamos sua jornada de{' '}
                                 <Text style={styles.goalHighlight}>{goalTimeframe} {goalTimeframe === 1 ? 'mês' : 'meses'}</Text>.
                             </Text>
                         )}
-                        <Text style={styles.tagline}>{archetype?.tagline}</Text>
+                        <Text style={styles.tagline}>{archetype.tagline}</Text>
                     </View>
 
                     {isRaceGoal && (
@@ -367,9 +460,11 @@ export function BriefingScreen({ navigation, route }: any) {
                             </View>
                             <View style={styles.chartGainContainer}>
                                 <Text style={[styles.chartGainValue, { color: accentColor }]}>
-                                    {getGoalGainText(goal, goalTimeframe)}
+                                    {goalFeasible ? getGoalGainText(goal, goalTimeframe) : 'Base sólida'}
                                 </Text>
-                                <Text style={styles.chartGainSub}>progressão estimada</Text>
+                                <Text style={styles.chartGainSub}>
+                                    {goalFeasible ? 'progressão estimada' : 'foco desta jornada'}
+                                </Text>
                             </View>
                         </View>
 
@@ -379,8 +474,20 @@ export function BriefingScreen({ navigation, route }: any) {
 
                         <View style={styles.chartLabelsRow}>
                             <Text style={styles.chartLabelLeft}>Estado Atual</Text>
-                            <Text style={[styles.chartLabelRight, { color: accentColor }]}>Meta Alcançada</Text>
+                            <Text style={[styles.chartLabelRight, { color: accentColor }]}>
+                                {goalFeasible ? 'Meta Alcançada' : 'Base Construída'}
+                            </Text>
                         </View>
+
+                        {/* Tom honesto quando a meta não cabe no prazo — mesma
+                            linguagem do FeasibilityModal informativo (Fase C):
+                            orientação, não erro. */}
+                        {!goalFeasible && (
+                            <Text style={styles.chartHonestNote}>
+                                Sua meta pede mais tempo do que o prazo escolhido. Este plano
+                                constrói sua base com segurança — é daqui que você chega lá.
+                            </Text>
+                        )}
                     </View>
 
                     {/* =============================================
@@ -406,24 +513,42 @@ export function BriefingScreen({ navigation, route }: any) {
                         <Text style={styles.sectionTitle}>Seus treinos</Text>
                     </View>
 
-                    {/* Workout #1 — ACTIVE (archetype sample) */}
+                    {/* Workout #1 — número REAL vindo do motor determinístico.
+                        Três estados no mesmo card: corrida (distância+pace),
+                        caminhada/corrida (duração+"No seu ritmo") e neutro
+                        (sem prévia → sem número algum). */}
                     <View style={[styles.workoutCardActive, { borderColor: accentColor + '50', shadowColor: accentColor + '50' }]}>
                         <View style={styles.workoutContent}>
                             <Text style={styles.workoutLabel}>TREINO #1</Text>
-                            <Text style={[styles.workoutTitle, { color: accentColor }]}>{sampleWorkout.title}</Text>
-                            <View style={styles.workoutMetrics}>
-                                <View style={styles.wMetricItem}>
-                                    <MaterialCommunityIcons name="timer-outline" size={16} color={DS.textSecondary} />
-                                    <Text style={styles.wMetricText}>{sampleWorkout.duration}</Text>
+                            <Text style={[styles.workoutTitle, { color: accentColor }]}>{firstWorkout.title}</Text>
+
+                            {(firstWorkout.duration || firstWorkout.paceLabel) && (
+                                <View style={styles.workoutMetrics}>
+                                    {!!firstWorkout.duration && (
+                                        <View style={styles.wMetricItem}>
+                                            <MaterialCommunityIcons name="timer-outline" size={16} color={DS.textSecondary} />
+                                            <Text style={styles.wMetricText}>{firstWorkout.duration}</Text>
+                                        </View>
+                                    )}
+                                    {!!firstWorkout.paceLabel && (
+                                        <View style={styles.wMetricItem}>
+                                            <MaterialCommunityIcons name={firstWorkout.paceIcon} size={16} color={DS.textSecondary} />
+                                            <Text style={styles.wMetricText}>{firstWorkout.paceLabel}</Text>
+                                        </View>
+                                    )}
                                 </View>
-                                <View style={styles.wMetricItem}>
-                                    <MaterialCommunityIcons name="speedometer" size={16} color={DS.textSecondary} />
-                                    <Text style={styles.wMetricText}>{sampleWorkout.pace}</Text>
-                                </View>
-                            </View>
+                            )}
+
+                            {!!firstWorkout.note && (
+                                <Text style={styles.workoutNote}>{firstWorkout.note}</Text>
+                            )}
                         </View>
                         <View style={[styles.runnerCircle, { backgroundColor: accentColor }]}>
-                            <MaterialCommunityIcons name="run-fast" size={25} color={DS.bg} />
+                            <MaterialCommunityIcons
+                                name={preview?.mode === 'walk_run' ? 'walk' : 'run-fast'}
+                                size={25}
+                                color={DS.bg}
+                            />
                         </View>
                     </View>
 
@@ -467,7 +592,13 @@ export function BriefingScreen({ navigation, route }: any) {
                         <View style={styles.aiTipTextCol}>
                             <Text style={[styles.aiTipTitle, { color: accentColor }]}>Dica do Coach</Text>
                             <Text style={styles.aiTipBody}>
-                                {archetype?.coachTip || 'Baseado no seu perfil, criamos um plano otimizado para seus objetivos.'}
+                                {archetype.coachTip}
+                                {/* A limitação COMPÕE com qualquer arquétipo em vez de
+                                    substituí-lo — quem nunca correu e tem limitação
+                                    mantém o protocolo certo, com o aviso por cima. */}
+                                {preview?.hasLimitation
+                                    ? ' Como você relatou uma limitação física, a progressão entra ainda mais conservadora e priorizamos baixo impacto.'
+                                    : ''}
                             </Text>
                         </View>
                     </View>
@@ -716,6 +847,14 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         color: DS.cyan,
     },
+    chartHonestNote: {
+        fontSize: 13,
+        fontWeight: '400',
+        color: DS.textSecondary,
+        lineHeight: 19,
+        paddingHorizontal: 8,
+        paddingTop: 10,
+    },
 
     // — 5. Badge Card —
     badgeCard: {
@@ -835,6 +974,13 @@ const styles = StyleSheet.create({
         fontSize: 13,
         fontWeight: '400',
         color: DS.textSecondary,
+    },
+    workoutNote: {
+        fontSize: 13,
+        fontWeight: '400',
+        color: DS.textSecondary,
+        lineHeight: 18,
+        marginTop: 10,
     },
     runnerCircle: {
         width: 50,

@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { getQueueToken } from '@nestjs/bullmq';
 import { FeedbackAIService } from './feedback-ai.service';
 import { SupabaseService } from '../../database';
 import { NotificationService } from '../notifications/notification.service';
@@ -60,6 +61,12 @@ describe('FeedbackAIService', () => {
         { provide: SupabaseService, useValue: mockSupabaseService },
         { provide: NotificationService, useValue: mockNotificationService },
         { provide: AIRouterService, useValue: mockAIRouter },
+        // Fila BullMQ (@InjectQueue('feedback-queue')). Mockada: estes testes
+        // exercitam leitura/histórico, não o enfileiramento.
+        {
+          provide: getQueueToken('feedback-queue'),
+          useValue: { add: jest.fn() },
+        },
       ],
     }).compile();
 

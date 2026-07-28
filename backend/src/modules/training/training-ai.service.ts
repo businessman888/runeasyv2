@@ -17,6 +17,11 @@ import {
   MIN_COOLDOWN_KM,
   WEEKLY_TOTAL_TOLERANCE_KM,
 } from '../../common/volume-planner';
+import { selectArchetypeKey } from '../../common/archetype';
+import {
+  PlanPreviewDto,
+  PreviewViabilityDto,
+} from './dto/plan-preview.dto';
 
 export interface TrainingPlanRequest {
   goal: string;
@@ -1046,6 +1051,128 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
       goalKm,
       weeksAvailable: input.targetWeeks,
       neverRan: false,
+    };
+  }
+
+  /**
+   * Prévia determinística do plano para o BriefingScreen (PRÉ-pagamento).
+   *
+   * ⚠️ SEM IA — de propósito. Roda só os motores puros (volume + pace), os MESMOS
+   * que `generatePlan` usa, e devolve o treino #1 da semana 1 exatamente como ele
+   * será gerado. A IA escolhe a FORMA dos treinos, não os números — então os
+   * números da prévia já são finais. Isso é parity por construção: não existe um
+   * segundo cálculo que possa divergir.
+   *
+   * A chave do arquétipo também sai daqui (e não no mobile) porque ela é função
+   * da capacidade efetiva — a mesma que define o volume. Deixar o mobile decidir
+   * criaria uma 2ª classificação, livre para prometer "Maratonista Nato" a quem
+   * vai receber um plano de iniciante.
+   */
+  buildPlanPreview(
+    input: Partial<TrainingPlanRequest> & { targetWeeks: number },
+  ): PlanPreviewDto {
+    const { goalKm, capacity, phases } = this.deriveViabilityInputs(input);
+    const verdict = this.assessRequestViability(input);
+    const viability: PreviewViabilityDto = {
+      feasible: verdict.feasible,
+      minWeeksRecommended: verdict.minWeeksRecommended,
+      maxGoalKmInWindow: verdict.maxGoalKmInWindow,
+      peakLongRunKm: verdict.peakLongRunKm,
+      requiredWeeklyIncreasePct: verdict.requiredWeeklyIncreasePct,
+    };
+
+    const archetype = selectArchetypeKey({
+      effectiveWeeklyKm: capacity.weeklyKm,
+      neverRan: capacity.neverRan,
+      recentDistanceKm: input.recentDistanceKm,
+      recentFrequency: input.recentFrequency,
+      goalKm,
+      goal: input.goal,
+      goalType: input.goalType,
+      level: input.level,
+      daysPerWeek: input.daysPerWeek ?? 3,
+      goalTimeframeMonths: input.targetWeeks
+        ? Math.round(input.targetWeeks / 4)
+        : null,
+      paceMinPerKm: this.clampPace(input.calculatedPace) ?? input.currentPace5k,
+      hasLimitation: !!input.limitations,
+    });
+
+    // ── "Nunca corri" → protocolo caminhada/corrida (por tempo, SEM pace) ──
+    if (capacity.neverRan) {
+      const wr = this.volumePlanner.buildWalkRunSkeleton({
+        walkCapacity: input.walkCapacity,
+        totalWeeks: input.targetWeeks,
+        daysPerWeek: input.daysPerWeek ?? 3,
+        phases,
+      });
+      const blk = wr[0]?.workouts[0];
+      const structure: WalkRunInterval = blk ?? {
+        reps: 6,
+        runSeconds: 60,
+        walkSeconds: 180,
+      };
+      return {
+        mode: 'walk_run',
+        week1FirstWorkout: {
+          type: 'walk_run',
+          zone: 'Z1',
+          distanceKm: null, // por tempo — não existe distância prescrita
+          durationSeconds: this.walkRunDurationSec(structure),
+          paceRangeSeconds: null, // sem VDOT → não inventar pace
+          structure: {
+            reps: structure.reps,
+            runSeconds: structure.runSeconds,
+            walkSeconds: structure.walkSeconds,
+          },
+        },
+        archetypeKey: archetype.key,
+        hasLimitation: archetype.hasLimitation,
+        effectiveWeeklyKm: 0, // começando do zero
+        week1TotalKm: null,
+        viability,
+      };
+    }
+
+    // ── Corrida — semana 1 do esqueleto real ──────────────────────────────────
+    const skeleton = this.volumePlanner.buildVolumeSkeleton({
+      capacity,
+      goalKm,
+      totalWeeks: input.targetWeeks,
+      daysPerWeek: input.daysPerWeek ?? 3,
+      phases,
+    });
+    const week1 = skeleton[0];
+    // TREINO #1 = primeiro slot da semana 1. A semana 1 é sempre fase `base`, e
+    // `distributeWeek` só marca qualidade em build/peak — então este treino é
+    // easy (ou o longão, quando daysPerWeek === 1).
+    const slot: WorkoutSlot = week1.workouts[0];
+    const type = slot.isLong ? 'long_run' : slot.isQuality ? 'tempo' : 'easy_run';
+    const zone: TrainingZone = slot.isQuality && !slot.isLong ? 'Z3' : 'Z1';
+
+    const vdot = this.resolveVDOT(
+      input as TrainingPlanRequest,
+      this.clampPace(input.currentPace5k),
+    );
+    const range = this.paceCalculator.getZonePaceRangesSeconds(vdot)[zone];
+    // Duração estimada pelo ponto médio da faixa (o mesmo número que o usuário
+    // vê como pace) — assim duração e pace exibidos nunca se contradizem.
+    const midPaceSec = (range.min + range.max) / 2;
+
+    return {
+      mode: 'run',
+      week1FirstWorkout: {
+        type,
+        zone,
+        distanceKm: slot.distanceKm,
+        durationSeconds: Math.round(slot.distanceKm * midPaceSec),
+        paceRangeSeconds: { min: range.min, max: range.max },
+      },
+      archetypeKey: archetype.key,
+      hasLimitation: archetype.hasLimitation,
+      effectiveWeeklyKm: capacity.weeklyKm,
+      week1TotalKm: week1.totalKm,
+      viability,
     };
   }
 

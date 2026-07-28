@@ -94,6 +94,44 @@ export interface ViabilityCheck {
     requiredWeeklyIncreasePct: number;
 }
 
+// ── Prévia determinística do plano (BriefingScreen, PRÉ-pagamento) ──────────
+// Espelha PlanPreviewDto do backend. SEM IA: vem dos motores puros (volume +
+// pace), os mesmos da geração real — então o treino #1 mostrado é o treino #1
+// que o usuário vai receber.
+
+export interface PreviewWalkRunStructure {
+    reps: number;
+    runSeconds: number;
+    walkSeconds: number;
+}
+
+export interface PreviewWorkout {
+    type: string;
+    zone: string | null;
+    /** `null` no walk/run — o treino é por TEMPO. */
+    distanceKm: number | null;
+    durationSeconds: number;
+    /** Segundos/km. `null` no walk/run: não existe pace-alvo. */
+    paceRangeSeconds: { min: number; max: number } | null;
+    structure?: PreviewWalkRunStructure;
+}
+
+export interface PlanPreview {
+    mode: 'run' | 'walk_run';
+    week1FirstWorkout: PreviewWorkout;
+    archetypeKey: string;
+    hasLimitation: boolean;
+    effectiveWeeklyKm: number;
+    week1TotalKm: number | null;
+    viability: {
+        feasible: boolean;
+        minWeeksRecommended: number;
+        maxGoalKmInWindow: number;
+        peakLongRunKm: number;
+        requiredWeeklyIncreasePct: number;
+    };
+}
+
 // Error codes for handling in UI
 export const ONBOARDING_ERRORS = {
     AUTH_REQUIRED: 'AUTH_REQUIRED',
@@ -125,6 +163,7 @@ interface OnboardingState {
     saveOnboardingOnly: () => Promise<boolean>;
     triggerPlanGeneration: () => Promise<string | null>;
     checkViability: (overrides?: { goal?: string; goalTimeframe?: number }) => Promise<ViabilityCheck>;
+    fetchPlanPreview: () => Promise<PlanPreview | null>;
     clearError: () => void;
 }
 
@@ -666,6 +705,73 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
         } catch (error) {
             console.warn('[checkViability] error, fail-open:', error);
             return failOpen;
+        }
+    },
+
+    /**
+     * Prévia determinística do 1º treino + chave do arquétipo (BriefingScreen).
+     * Chamada durante os 8s do PlanLoadingScreen, que já eram ociosos.
+     *
+     * SEM IA e SEM DB no backend — só os motores puros. Timeout de 5s (< 8s da
+     * animação), então a resposta sempre chega antes da navegação.
+     *
+     * FAIL-CLOSED quanto ao CONTEÚDO: erro → `null`, e a tela cai na narrativa
+     * neutra SEM número nenhum. Nunca inventar distância/pace — era exatamente
+     * esse o bug que a refatoração corrigiu.
+     */
+    fetchPlanPreview: async () => {
+        try {
+            const { data } = get();
+            const userId = await Storage.getItemAsync('user_id');
+
+            const body = {
+                ...raceRequestFields(data),
+                goal: resolveGoal(data),
+                goal_timeframe: data.goalTimeframe ?? null,
+                target_weeks: data.goalTimeframe
+                    ? data.goalTimeframe * 4
+                    : (data.targetWeeks || 8),
+                level: data.experience_level || 'beginner',
+                days_per_week: data.daysPerWeek || 3,
+                recent_distance: data.recentDistance ?? null,
+                recent_frequency: data.recentFrequency ?? null,
+                current_weekly_km: data.currentWeeklyKm ?? null,
+                // Campos que o /precheck NÃO envia e a prévia precisa:
+                walk_capacity: data.walkCapacity ?? null,
+                calculated_pace: data.calculatedPace ?? null,
+                current_pace_5k: data.currentPace5k ?? null,
+                pace_minutes: data.paceMinutes || null,
+                pace_seconds: data.paceSeconds || null,
+                limitations: data.limitations?.hasLimitation
+                    ? data.limitations.details
+                    : null,
+            };
+
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 5000);
+            let response: Response;
+            try {
+                response = await authedFetch(`${API_URL}/training/onboarding/preview`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-user-id': userId || '',
+                    },
+                    body: JSON.stringify(body),
+                    signal: controller.signal,
+                });
+            } finally {
+                clearTimeout(timer);
+            }
+
+            if (!response.ok) {
+                console.warn('[fetchPlanPreview] non-OK:', response.status);
+                return null;
+            }
+            return (await response.json()) as PlanPreview;
+        } catch (error) {
+            console.warn('[fetchPlanPreview] error, prévia neutra:', error);
+            return null;
         }
     },
 }));

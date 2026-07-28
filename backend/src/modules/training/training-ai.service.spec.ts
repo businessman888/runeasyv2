@@ -6,6 +6,7 @@ import {
 } from './training-ai.service';
 import { AIRouterService } from '../../common/ai';
 import { PaceCalculatorService } from '../../common/pace-calculator';
+import { VolumePlannerService } from '../../common/volume-planner';
 
 /**
  * Focused on the VDOT resolution introduced to fix the critical bug where the
@@ -45,6 +46,10 @@ describe('TrainingAIService — VDOT resolution', () => {
       providers: [
         TrainingAIService,
         PaceCalculatorService,
+        // Motor de volume (Fase B) — registrado REAL, como o PaceCalculator:
+        // é função pura sem I/O, e os testes de VDOT dependem do esqueleto que
+        // ele produz para o prompt.
+        VolumePlannerService,
         {
           provide: AIRouterService,
           useValue: { isAvailable: true, call: callMock },

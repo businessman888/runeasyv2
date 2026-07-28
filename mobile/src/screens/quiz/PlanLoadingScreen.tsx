@@ -8,8 +8,7 @@ import {
     Animated,
 } from 'react-native';
 import LottieView from 'lottie-react-native';
-import { useOnboardingStore } from '../../stores/onboardingStore';
-import { determineArchetype } from '../../utils/archetypes';
+import { useOnboardingStore, PlanPreview } from '../../stores/onboardingStore';
 import { fonts } from '../../theme';
 
 const { width } = Dimensions.get('window');
@@ -29,7 +28,11 @@ const TOTAL_DURATION = 8000; // 8 seconds fixed
 
 export function PlanLoadingScreen({ navigation, route }: any) {
     const { userId } = route?.params || {};
-    const { data } = useOnboardingStore();
+    const fetchPlanPreview = useOnboardingStore((s) => s.fetchPlanPreview);
+
+    // Prévia determinística vinda do backend. Preenchida durante a animação;
+    // lida no ref (e não no state) para não re-renderizar a tela à toa.
+    const previewRef = useRef<PlanPreview | null>(null);
 
     const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
     const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -64,22 +67,25 @@ export function PlanLoadingScreen({ navigation, route }: any) {
         }).start();
     }, [progressAnim]);
 
-    // After 8 seconds, compute archetype and navigate to BriefingScreen
+    // Busca a prévia determinística em paralelo à animação. Os 8s já eram
+    // ociosos, e o timeout do store é 5s — então a resposta sempre chega antes
+    // da navegação, sem custo de UX percebido.
+    useEffect(() => {
+        let cancelled = false;
+        fetchPlanPreview().then((preview) => {
+            if (!cancelled) previewRef.current = preview;
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [fetchPlanPreview]);
+
+    // Depois de 8s, navega para o Briefing com a prévia (ou `null` → narrativa
+    // neutra, sem número inventado).
     useEffect(() => {
         const timer = setTimeout(() => {
-            const archetype = determineArchetype({
-                goal: data.goal || '5k',
-                experience_level: data.experience_level || 'beginner',
-                daysPerWeek: data.daysPerWeek || 3,
-                goalTimeframe: data.goalTimeframe,
-                calculatedPace: data.calculatedPace,
-                limitations: data.limitations,
-                hasInjury: data.hasInjury,
-                goal_type: data.goal_type,
-            });
-
             navigation.replace('BriefingScreen', {
-                archetype,
+                preview: previewRef.current,
                 userId,
             });
         }, TOTAL_DURATION);

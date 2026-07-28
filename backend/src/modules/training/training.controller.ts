@@ -680,6 +680,49 @@ export class TrainingController {
   }
 
   /**
+   * Prévia determinística do plano (BriefingScreen, PRÉ-pagamento) — rápido,
+   * puro, SEM IA e SEM DB. Devolve o treino #1 da semana 1 exatamente como a
+   * geração o produzirá, a chave do arquétipo e o veredito de viabilidade.
+   *
+   * Mesmo padrão do /precheck: reusa `deriveViabilityInputs` + os motores da
+   * Fase B, então a prévia não pode divergir do plano gerado depois do pagamento.
+   * A geração com IA (~7 min, com custo) continua acontecendo só após o paywall.
+   */
+  @Post('onboarding/preview')
+  buildPlanPreview(@Body() dto: CreatePlanDto, @User('id') userId: string) {
+    const goalType = dto.goal_type ?? 'distance';
+    const raceWeeks =
+      goalType === 'race' && dto.race_date ? weeksUntil(dto.race_date) : null;
+    const totalWeeks = raceWeeks ?? dto.target_weeks;
+
+    const preview = this.trainingAIService.buildPlanPreview({
+      goal: dto.goal,
+      goalType,
+      raceDistance: dto.race_distance ?? null,
+      raceWeeksUntil: raceWeeks,
+      targetWeeks: totalWeeks,
+      daysPerWeek: dto.days_per_week,
+      level: dto.level,
+      recentDistanceKm: dto.recent_distance ?? null,
+      recentFrequency: dto.recent_frequency ?? null,
+      currentWeeklyKm: dto.current_weekly_km ?? null,
+      walkCapacity: dto.walk_capacity ?? null,
+      calculatedPace: dto.calculated_pace ?? null,
+      currentPace5k: dto.current_pace_5k ?? null,
+      limitations: dto.limitations ?? null,
+    });
+
+    this.logger.log(
+      `[preview] user=${userId} goal=${dto.goal} weeks=${totalWeeks} ` +
+        `→ mode=${preview.mode} archetype=${preview.archetypeKey} ` +
+        `w1=${preview.week1FirstWorkout.distanceKm ?? 'tempo'} ` +
+        `feasible=${preview.viability.feasible}`,
+    );
+
+    return preview;
+  }
+
+  /**
    * Get plan generation status (for polling during background generation)
    */
   @Get('plan/:id/status')
