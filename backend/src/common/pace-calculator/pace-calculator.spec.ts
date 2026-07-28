@@ -66,6 +66,7 @@ describe('PaceCalculatorService — âncora VDOT 27', () => {
 
   describe('monotonicidade', () => {
     it('cada zona fica mais rápida conforme o VDOT sobe, sem inversões', () => {
+      // Varredura contínua sobre TODO o domínio modelado (menor → maior âncora).
       for (const zone of ZONES) {
         for (let vdot = 27; vdot < 70; vdot += 0.5) {
           const cur = pc.getZonePaceRangesSeconds(vdot)[zone];
@@ -96,16 +97,56 @@ describe('PaceCalculatorService — âncora VDOT 27', () => {
       expect(kmh(Z1.min)).toBeLessThan(7.0);
     });
 
-    it('o piso do clamp é a menor âncora da tabela (senão o colapso volta)', () => {
-      const lowestAnchor = Math.min(...Object.keys(VDOT_REFERENCE_TABLE).map(Number));
-      // Abaixo do piso tudo clampa — e o piso tem de ser exatamente a âncora,
-      // senão existe um intervalo colapsado como o antigo 25–30.
-      expect(pc.getZonePaceRangesSeconds(lowestAnchor - 5)).toEqual(
-        pc.getZonePaceRangesSeconds(lowestAnchor),
+    /**
+     * O INVARIANTE central da tabela, agora nas DUAS pontas: os limites do clamp
+     * têm de coincidir com os extremos da tabela. Sempre que divergirem, nasce um
+     * intervalo "aceito pelo clamp mas não modelado", que colapsa em silêncio —
+     * foi exatamente isso que produziu os dois bugs (25–30 embaixo, 70–85 em cima).
+     */
+    it('os limites do clamp são EXATAMENTE os extremos da tabela', () => {
+      // Asserção direta sobre os limites, e não sobre o comportamento: um teto
+      // acima da maior âncora (o bug: MAX_VDOT 85 × tabela até 70) devolve a
+      // linha do topo para todo mundo, então uma checagem só comportamental
+      // passaria mesmo com o defeito presente. Aqui ela falha.
+      const bounds = pc as unknown as { MIN_VDOT: number; MAX_VDOT: number };
+      const anchors = Object.keys(VDOT_REFERENCE_TABLE).map(Number);
+
+      expect(bounds.MIN_VDOT).toBe(Math.min(...anchors));
+      expect(bounds.MAX_VDOT).toBe(Math.max(...anchors));
+    });
+
+    it('fora do domínio clampa; dentro dele há diferenciação', () => {
+      const anchors = Object.keys(VDOT_REFERENCE_TABLE).map(Number);
+      const lowest = Math.min(...anchors);
+      const highest = Math.max(...anchors);
+
+      expect(pc.getZonePaceRangesSeconds(lowest - 5)).toEqual(
+        pc.getZonePaceRangesSeconds(lowest),
       );
-      expect(pc.getZonePaceRangesSeconds(lowestAnchor + 0.5)).not.toEqual(
-        pc.getZonePaceRangesSeconds(lowestAnchor),
+      expect(pc.getZonePaceRangesSeconds(highest + 15)).toEqual(
+        pc.getZonePaceRangesSeconds(highest),
       );
+      expect(pc.getZonePaceRangesSeconds(lowest + 0.5)).not.toEqual(
+        pc.getZonePaceRangesSeconds(lowest),
+      );
+      expect(pc.getZonePaceRangesSeconds(highest - 0.5)).not.toEqual(
+        pc.getZonePaceRangesSeconds(highest),
+      );
+    });
+
+    it('todo o domínio modelado responde, sem platô achatado', () => {
+      // Se existisse um intervalo colapsado, VDOTs vizinhos repetiriam a saída.
+      const anchors = Object.keys(VDOT_REFERENCE_TABLE).map(Number);
+      const lowest = Math.min(...anchors);
+      const highest = Math.max(...anchors);
+      const vistos = new Set<string>();
+      for (let v = lowest; v <= highest; v += 0.5) {
+        vistos.add(JSON.stringify(pc.getZonePaceRangesSeconds(v)));
+      }
+      const amostras = (highest - lowest) / 0.5 + 1;
+      // Tolera repetições pontuais por arredondamento ao segundo, mas não um
+      // platô inteiro (o bug antigo colapsava ~30 amostras num único valor).
+      expect(vistos.size).toBeGreaterThan(amostras * 0.9);
     });
 
     it('VDOT 27 corresponde a ~33:25 nos 5 km (origem da âncora)', () => {

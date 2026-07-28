@@ -19,7 +19,20 @@ export class PaceCalculatorService {
    * pertence ao protocolo caminhada/corrida (Fase B), não a um pace prescrito.
    */
   private readonly MIN_VDOT = 27;
-  private readonly MAX_VDOT = 85;
+  /**
+   * Teto alinhado à MAIOR âncora da tabela (70), pelo mesmo motivo do piso: era
+   * 85, mas a tabela para em 70, então 70–85 colapsava todo na linha 70 — um
+   * intervalo "aceito pelo clamp, mas não modelado".
+   *
+   * Baixar para 70 é um NO-OP comportamental (um VDOT 75 já recebia a linha 70
+   * e continua recebendo); o que muda é o invariante passar a valer nas duas
+   * pontas: piso == menor âncora, teto == maior âncora.
+   *
+   * Não estendemos a tabela para cima porque não foi possível obter valores
+   * oficiais do Daniels verificáveis para 75/80/85 — ver nota em `vdot-table.ts`.
+   * Se um dia forem adicionados, SUBA este teto junto.
+   */
+  private readonly MAX_VDOT = 70;
   private readonly BEGINNER_VDOT = 30;
 
   /**

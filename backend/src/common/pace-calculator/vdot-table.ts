@@ -45,8 +45,26 @@
  * A adição é ADITIVA: para VDOT ≥ 30 o par de âncoras interpolado não muda, e
  * todas as zonas permanecem idênticas (ver `pace-calculator.spec.ts`).
  *
- * PENDENTE (não corrigido): o mesmo colapso existe no TOPO — VDOT 70 a 85 cai
- * todo na linha 70. Impacto desprezível (VDOT 75+ é elite).
+ * ── Topo (elite) — por que a tabela NÃO foi estendida ───────────────────────
+ *
+ * O mesmo colapso existia acima: `MAX_VDOT` era 85 e a tabela para em 70, então
+ * 70–85 caía todo na linha 70. Fechado pelo outro lado — `MAX_VDOT` baixou para
+ * 70, casando o teto com a maior âncora (no-op comportamental: um VDOT 75 já
+ * recebia a linha 70). O invariante "clamp == extremos da tabela" agora vale nas
+ * duas pontas, e não há mais faixa aceita-porém-não-modelada.
+ *
+ * Estender para 75/80/85 exigiria os valores oficiais do Daniels, e NÃO foi
+ * possível obtê-los de forma verificável: as tabelas encontradas na web
+ * reprovaram na validação contra a linha 70 daqui (uma dava Easy de 3:06/km para
+ * VDOT 70, ≈19 km/h; outra estava deslocada ~10 pontos de VDOT, implicando
+ * maratona de 2:48 para um corredor de 5 km em 14:55). Derivar pelo método usado
+ * no piso também não serve aqui: a inversão da Daniels–Gilbert fica
+ * não-monotônica em velocidades extremas e devolve 5 km em 10:00 para VDOT 85 —
+ * 2,5 min abaixo do recorde mundial.
+ *
+ * Para estender no futuro: pegue as linhas da Table 2.2 do Daniels Running
+ * Formula, confira que a linha 70 da fonte bate com a daqui, adicione as âncoras
+ * e SUBA o `MAX_VDOT` junto.
  */
 
 export interface VDOTRow {
