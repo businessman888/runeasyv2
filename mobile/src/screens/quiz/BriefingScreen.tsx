@@ -247,9 +247,22 @@ export function BriefingScreen({ navigation, route }: any) {
     const chartPoints = archetype.chartPoints;
     const firstWorkout = describeFirstWorkout(preview);
 
-    // Meta inviável no prazo (chega aqui só no modo informativo da Fase C).
-    // Suprime a projeção otimista: sem "+42km em 3 meses", sem "Meta Alcançada".
-    const goalFeasible = preview?.viability.feasible ?? true;
+    // Tom da projeção: otimista (gráfico "Meta Alcançada" + ganho estimado) ou
+    // conservador. O critério MUDA conforme o tipo de meta:
+    //
+    //  • DISTÂNCIA — `feasible`. Está correto: quem escolheu 10 km num prazo
+    //    impossível deve mesmo ver o tom conservador, e ali há alavanca (a Fase C
+    //    força ajustar prazo ou meta).
+    //  • PROVA — `raceRiskWarning`, o limiar dedicado e bem mais tolerante.
+    //    Usar `feasible` aqui era pessimismo sem motivo: no espaço plausível,
+    //    ~48% das provas são `feasible: false` com risco perfeitamente aceitável
+    //    (a data é fixa, não há alavanca), e escondíamos a projeção justamente
+    //    na tela onde o usuário decide assinar.
+    //
+    // Fail-open nos dois ramos: sem prévia (falha de rede) → tom otimista.
+    const goalFeasible = isRaceGoal
+        ? !(preview?.viability.raceRiskWarning ?? false)
+        : (preview?.viability.feasible ?? true);
 
     const handleShare = async () => {
         try {

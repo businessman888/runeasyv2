@@ -1117,6 +1117,7 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
       maxGoalKmInWindow: verdict.maxGoalKmInWindow,
       peakLongRunKm: verdict.peakLongRunKm,
       requiredWeeklyIncreasePct: verdict.requiredWeeklyIncreasePct,
+      raceRiskWarning: verdict.raceRiskWarning,
     };
 
     const archetype = selectArchetypeKey({

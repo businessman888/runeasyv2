@@ -176,6 +176,57 @@ describe('TrainingAIService — aviso de risco em provas', () => {
     });
   });
 
+  // ── A flag chega ao Briefing (via /preview, não só /precheck) ─────────────
+
+  describe('exposição no preview do Briefing', () => {
+    it('prova de risco aceitável: feasible false MAS raceRiskWarning false', () => {
+      // É o caso das ~48% que faziam o Briefing esconder a projeção sem motivo.
+      const p = service.buildPlanPreview(
+        race(10, 12, {
+          level: 'intermediate',
+          recentDistanceKm: 5,
+          recentFrequency: '3x',
+          currentWeeklyKm: '10_20',
+        }),
+      );
+      expect(p.viability.feasible).toBe(false);
+      expect(p.viability.raceRiskWarning).toBe(false);
+    });
+
+    it('prova arriscada: raceRiskWarning true chega ao preview', () => {
+      const p = service.buildPlanPreview(
+        race(21.1, 5, {
+          recentDistanceKm: 5,
+          recentFrequency: '1x',
+          currentWeeklyKm: 'lt5',
+        }),
+      );
+      expect(p.viability.raceRiskWarning).toBe(true);
+    });
+
+    it('nunca correu + maratona 12 sem: aviso chega mesmo no modo walk_run', () => {
+      const p = service.buildPlanPreview(neverRanRace(42.2, 12));
+      expect(p.mode).toBe('walk_run');
+      expect(p.viability.raceRiskWarning).toBe(true);
+    });
+
+    it('meta de distância nunca acende a flag no preview', () => {
+      for (const goal of ['5k', '10k', 'half_marathon', 'marathon']) {
+        const p = service.buildPlanPreview({
+          goal,
+          goalType: 'distance',
+          level: 'beginner',
+          daysPerWeek: 4,
+          targetWeeks: 12,
+          recentDistanceKm: 5,
+          recentFrequency: '2x',
+          currentWeeklyKm: '5_10',
+        });
+        expect(p.viability.raceRiskWarning).toBe(false);
+      }
+    });
+  });
+
   // ── ISOLAMENTO: o item inegociável ────────────────────────────────────────
 
   describe('isolamento das metas de distância', () => {

@@ -136,6 +136,8 @@ export interface PlanPreview {
         maxGoalKmInWindow: number;
         peakLongRunKm: number;
         requiredWeeklyIncreasePct: number;
+        /** Só provas — ver ViabilityCheck.raceRiskWarning. */
+        raceRiskWarning: boolean;
     };
 }
 

@@ -40,6 +40,15 @@ export interface PreviewViabilityDto {
   maxGoalKmInWindow: number;
   peakLongRunKm: number;
   requiredWeeklyIncreasePct: number;
+  /**
+   * Só para PROVAS: a rampa exigida passou do limiar dedicado (bem mais
+   * tolerante que o `feasible`). O Briefing usa ISTO — e não `feasible` — para
+   * decidir o tom da projeção no caminho de prova: quase metade das provas
+   * plausíveis é `feasible: false` com risco perfeitamente aceitável, e
+   * esconder a projeção nelas parecia pessimismo sem motivo na tela de compra.
+   * Sempre `false` fora do caminho de prova.
+   */
+  raceRiskWarning: boolean;
 }
 
 export interface PlanPreviewDto {
