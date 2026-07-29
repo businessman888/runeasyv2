@@ -666,7 +666,8 @@ export class TrainingController {
     this.logger.log(
       `[precheck] user=${userId} goal=${dto.goal} type=${goalType} weeks=${totalWeeks} ` +
         `→ feasible=${verdict.feasible} minWeeks=${verdict.minWeeksRecommended} ` +
-        `maxGoalKm=${verdict.maxGoalKmInWindow} neverRan=${verdict.neverRan}`,
+        `maxGoalKm=${verdict.maxGoalKmInWindow} neverRan=${verdict.neverRan} ` +
+        `raceRisk=${verdict.raceRiskWarning}`,
     );
 
     return {
@@ -676,6 +677,9 @@ export class TrainingController {
       maxGoalKmInWindow: verdict.maxGoalKmInWindow,
       peakLongRunKm: verdict.peakLongRunKm,
       requiredWeeklyIncreasePct: verdict.requiredWeeklyIncreasePct,
+      // Só provas: rampa acima do limiar dedicado. Alimenta o aviso informativo
+      // do onboarding; não bloqueia e não altera o plano gerado.
+      raceRiskWarning: verdict.raceRiskWarning,
     };
   }
 

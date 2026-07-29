@@ -48,6 +48,27 @@ export const MIN_WEEKLY_KM = 6;
 /** Teto de aumento de volume entre semanas consecutivas (regra dos ~10%). */
 export const WEEKLY_INCREASE_CAP_PCT = 0.1;
 
+/**
+ * Rampa semanal a partir da qual uma PROVA COM DATA MARCADA vira aviso de risco.
+ *
+ * Separado de `WEEKLY_INCREASE_CAP_PCT` de propósito, e MUITO mais tolerante
+ * (2,5× o teto seguro). Provas não têm alavanca — a data é fixa e a pessoa já se
+ * inscreveu —, então o aviso é informativo e não bloqueia. Um aviso que aparece
+ * quase sempre vira ruído e é ignorado: com o teto das metas de distância (10%),
+ * 88% dos cenários de prova disparavam. Com 25%, cai para ~20% no espaço
+ * plausível.
+ *
+ * ⚠️ Lido EXCLUSIVAMENTE no cálculo da flag `raceRiskWarning`. NUNCA entra em
+ * `assessViability` — o veredito `feasible` das metas de distância não pode ser
+ * afetado por este número (ver o teste de regressão em
+ * `race-risk-warning.spec.ts`).
+ *
+ * Calibração: 25% pega "nunca correu + maratona em 16 semanas" (27%/sem), que
+ * com 30% escapava, sem pegar "10k em 12 semanas" (21%/sem), que é apertado mas
+ * fazível.
+ */
+export const RACE_WARNING_INCREASE_THRESHOLD = 0.25;
+
 /** Semana de recuo (deload) a cada N semanas de base/build. */
 export const DELOAD_EVERY_N_WEEKS = 4;
 

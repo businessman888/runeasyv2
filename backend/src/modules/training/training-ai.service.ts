@@ -16,6 +16,7 @@ import {
   MIN_WARMUP_KM,
   MIN_COOLDOWN_KM,
   WEEKLY_TOTAL_TOLERANCE_KM,
+  RACE_WARNING_INCREASE_THRESHOLD,
 } from '../../common/volume-planner';
 import { selectArchetypeKey } from '../../common/archetype';
 import {
@@ -1024,9 +1025,15 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
    */
   assessRequestViability(
     input: Partial<TrainingPlanRequest> & { targetWeeks: number },
-  ): PlanViability & { neverRan: boolean } {
+  ): PlanViability & { neverRan: boolean; raceRiskWarning: boolean } {
     const { goalKm, capacity, phases } = this.deriveViabilityInputs(input);
+    const isRace = input.goalType === 'race';
+
     if (capacity.neverRan) {
+      // O plano de quem nunca correu NÃO muda: segue o protocolo
+      // caminhada/corrida (feasible/neverRan intactos). O que muda é que, se
+      // houver PROVA com data marcada, avaliamos o risco só para acender o
+      // aviso — sem prova, nada é calculado e o comportamento é o de sempre.
       return {
         feasible: true,
         requiredWeeklyIncreasePct: 0,
@@ -1037,8 +1044,12 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
         goalKm,
         weeksAvailable: input.targetWeeks,
         neverRan: true,
+        raceRiskWarning: isRace
+          ? this.isRaceRisky(capacity, goalKm, input.targetWeeks, phases)
+          : false,
       };
     }
+
     const v = this.volumePlanner.assessViability({
       capacity,
       goalKm,
@@ -1051,7 +1062,34 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
       goalKm,
       weeksAvailable: input.targetWeeks,
       neverRan: false,
+      // Só provas acendem o aviso, e por um limiar PRÓPRIO — bem mais tolerante
+      // que o `feasible` acima, que continua governando as metas de distância.
+      raceRiskWarning:
+        isRace && v.requiredWeeklyIncreasePct > RACE_WARNING_INCREASE_THRESHOLD,
     };
+  }
+
+  /**
+   * Risco de uma prova com data marcada, para o aviso informativo. Roda o mesmo
+   * motor puro e compara com o limiar DEDICADO a provas.
+   *
+   * Existe separado porque o caminho `neverRan` não passa por `assessViability`
+   * (o plano dele é o walk/run, não uma rampa de volume) — mas o risco de chegar
+   * numa prova longa sem base precisa ser medido mesmo assim.
+   */
+  private isRaceRisky(
+    capacity: EffectiveCapacity,
+    goalKm: number,
+    totalWeeks: number,
+    phases: Phases,
+  ): boolean {
+    const v = this.volumePlanner.assessViability({
+      capacity,
+      goalKm,
+      totalWeeks,
+      phases,
+    });
+    return v.requiredWeeklyIncreasePct > RACE_WARNING_INCREASE_THRESHOLD;
   }
 
   /**

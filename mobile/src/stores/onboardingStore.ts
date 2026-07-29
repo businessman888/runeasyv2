@@ -92,6 +92,13 @@ export interface ViabilityCheck {
     maxGoalKmInWindow: number;   // maior meta (km) viável no prazo atual
     peakLongRunKm: number;
     requiredWeeklyIncreasePct: number;
+    /**
+     * Só para PROVAS com data marcada: a rampa exigida passou do limiar dedicado
+     * (bem mais tolerante que o das metas de distância). Acende o aviso
+     * informativo — não bloqueia e não muda o plano. Sempre `false` fora do
+     * caminho de prova.
+     */
+    raceRiskWarning: boolean;
 }
 
 // ── Prévia determinística do plano (BriefingScreen, PRÉ-pagamento) ──────────
@@ -659,6 +666,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
             maxGoalKmInWindow: 0,
             peakLongRunKm: 0,
             requiredWeeklyIncreasePct: 0,
+            raceRiskWarning: false, // fail-open: erro de rede → sem aviso
         };
         try {
             const { data } = get();

@@ -352,19 +352,37 @@ export function OnboardingScreen({ navigation, route }: any) {
         setCheckingViability(true);
         try {
             const verdict = await checkViability();
+
+            // ── PROVAS: ramo próprio, isolado do caminho de distância ────────
+            // A data é fixa e a pessoa já se inscreveu — não há alavanca, então
+            // nunca forçamos ajuste. O aviso usa um limiar DEDICADO
+            // (`raceRiskWarning`), bem mais tolerante que o `feasible` das metas
+            // de distância: com o limiar delas, 88% das provas disparavam o
+            // modal e o aviso virava ruído. Inclui quem nunca correu — o perfil
+            // mais arriscado — que antes passava batido pelo short-circuit de
+            // `neverRan`.
+            if (isRaceGoal) {
+                if (verdict.raceRiskWarning) {
+                    setFeasibilityModal({ mode: 'informational', verdict });
+                    return;
+                }
+                creditCompletionXpAndNavigate();
+                return;
+            }
+
+            // ── METAS DE DISTÂNCIA: inalterado ───────────────────────────────
             if (verdict.feasible || verdict.neverRan) {
                 creditCompletionXpAndNavigate();
                 return;
             }
-            // Inviável. Provas → informativo (data/distância fixas, sem alavanca).
-            // Distância → forçado SÓ SE existe caminho viável; se nem 5k@6meses passa
-            // (capacidade muito baixa), forçar seria beco sem saída → cai no informativo
-            // ("construir base"). Pendência C: rotear esse usuário pro protocolo de base.
-            let mode: 'forced' | 'informational' = 'informational';
-            if (!isRaceGoal) {
-                const easiest = await checkViability({ goal: '5k', goalTimeframe: 6 });
-                mode = easiest.feasible ? 'forced' : 'informational';
-            }
+            // Meta de distância inviável → forçado SÓ SE existe caminho viável;
+            // se nem 5k@6meses passa (capacidade muito baixa), forçar seria beco
+            // sem saída → cai no informativo ("construir base"). Pendência C:
+            // rotear esse usuário pro protocolo de base.
+            const easiest = await checkViability({ goal: '5k', goalTimeframe: 6 });
+            const mode: 'forced' | 'informational' = easiest.feasible
+                ? 'forced'
+                : 'informational';
             setFeasibilityModal({ mode, verdict });
         } finally {
             setCheckingViability(false);

@@ -5,6 +5,7 @@ export {
   MIN_WARMUP_KM,
   MIN_COOLDOWN_KM,
   WEEKLY_TOTAL_TOLERANCE_KM,
+  RACE_WARNING_INCREASE_THRESHOLD,
 } from './volume-planner.constants';
 export type { Phases, SkeletonInput, WalkRunInput } from './volume-planner.service';
 export type {
