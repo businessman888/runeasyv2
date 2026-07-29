@@ -24,10 +24,11 @@ export type ArchetypeKey =
     | 'corredor_express'
     | 'maratonista_nato'
     | 'aspirante_performance'
+    | 'cacador_recordes'
     | 'explorador_limites'
     | 'guerreiro_consistencia'
     | 'foco_saude'
-    | 'o_recomeco';
+    | 'primeira_prova';
 
 export interface ArchetypeNarrative {
     key: ArchetypeKey | 'neutro';
@@ -169,15 +170,35 @@ const ARCHETYPE_NARRATIVES: Record<ArchetypeKey, ArchetypeNarrative> = {
             'Correr em zona aeróbica confortável é a melhor forma de criar o hábito. Vamos focar em prazer e constância, os resultados vêm naturalmente.',
     },
 
-    o_recomeco: {
-        key: 'o_recomeco',
-        name: 'O Recomeço',
-        tagline: 'Cada passo é uma conquista',
-        icon: 'sprout',
+    cacador_recordes: {
+        key: 'cacador_recordes',
+        name: 'Caçador de Recordes',
+        tagline: 'Sua distância você já domina. Agora é sobre ser mais rápido nela.',
+        // `bullseye-arrow` casa com "Caçador"; `lightning-bolt` já é do Guerreiro,
+        // e `speedometer`/`timer-outline` são usados pelas métricas do card de
+        // treino na mesma tela.
+        icon: 'bullseye-arrow',
+        accentColor: '#FF3860',
+        // Ganho tardio e acentuado: velocidade responde depois da base de qualidade.
+        chartPoints: [138, 132, 122, 108, 88, 62, 34, 10],
+        coachTip:
+            'Seu plano foca no que torna um 5k ou 10k mais veloz: trabalho de limiar, tiros na velocidade-alvo e economia de corrida. Menos volume, mais qualidade — cada treino tem propósito de deixar seu ritmo mais afiado.',
+    },
+
+    // Fallback. Já se chamou "O Recomeço" e prometia caminhada/trote — papel que
+    // migrou para `walk_run_starter`. Hoje sobra aqui um perfil só: quem JÁ corre
+    // com regularidade e mira a primeira prova curta.
+    primeira_prova: {
+        key: 'primeira_prova',
+        name: 'Rumo aos 5K',
+        tagline: 'Você já corre. Agora vamos até a linha de chegada da sua primeira prova.',
+        // `flag-outline` (linha de chegada) no lugar de `sprout` — o broto
+        // significava "germinando do zero", exatamente o que deixou de ser.
+        icon: 'flag-outline',
         accentColor: '#26DE81',
         chartPoints: [148, 142, 135, 125, 112, 95, 75, 55],
         coachTip:
-            'O primeiro passo é o mais importante. Vamos alternar caminhada e trote para construir condicionamento de forma segura e prazerosa.',
+            'Você tem a base — agora é transformar corrida em conquista. Seu plano vai construir com consistência até você cruzar seus primeiros 5 km com confiança, no ritmo certo pra chegar inteiro.',
     },
 };
 

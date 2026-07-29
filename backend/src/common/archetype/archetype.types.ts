@@ -19,10 +19,15 @@ export type ArchetypeKey =
   | 'corredor_express'
   | 'maratonista_nato'
   | 'aspirante_performance'
+  // Avançado com meta curta (<21 km): quer ficar mais rápido, não mais longe.
+  | 'cacador_recordes'
   | 'explorador_limites'
   | 'guerreiro_consistencia'
   | 'foco_saude'
-  | 'o_recomeco';
+  // Fallback. Já se chamou `o_recomeco`, quando descrevia caminhada/corrida —
+  // papel que migrou para `walk_run_starter`. Renomeado junto com a copy para a
+  // chave voltar a dizer o que o perfil é.
+  | 'primeira_prova';
 
 export interface ArchetypeSelectionInput {
   /** Capacidade efetiva derivada pelo motor de volume (Fase B). */
