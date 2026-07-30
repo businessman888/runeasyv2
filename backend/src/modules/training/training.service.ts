@@ -1,4 +1,10 @@
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  Inject,
+  forwardRef,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { SupabaseService } from '../../database';
@@ -1021,11 +1027,19 @@ export class TrainingService {
         ).toISOString();
     const externalId = payload.external_id || `${source}_${workoutId}`;
     // Pace recebido tem precedência (vem do builder do HealthKit no Watch);
-    // fallback é o cálculo local feito acima (paceMinPerKm).
-    const finalPaceMinPerKm =
+    // fallback é o cálculo local feito acima (paceSeconds).
+    //
+    // UNIDADE: segundos/km inteiros — a unidade canônica de armazenamento do
+    // repo, declarada em common/pace-calculator/pace-format.ts e já usada por
+    // workouts.pace_seconds_per_km e instructions_json[].pace_min/max. Até
+    // 2026-07-30 este campo gravava decimal min/km, contradizendo o que o
+    // WellnessService lia — ver a nota de migração em pace-format.ts.
+    const finalPaceSecondsPerKm =
       payload.avg_pace_seconds_per_km != null
-        ? payload.avg_pace_seconds_per_km / 60
-        : paceMinPerKm || null;
+        ? Math.round(payload.avg_pace_seconds_per_km)
+        : paceSeconds > 0
+          ? Math.round(paceSeconds)
+          : null;
 
     // Use UPSERT so retries (user restarted the workout, network glitch
     // resubmitted, etc.) overwrite the previous row instead of failing the
@@ -1048,8 +1062,8 @@ export class TrainingService {
             distance: finalDistanceKm * 1000, // meters
             moving_time: payload.duration_seconds || 0,
             elapsed_time: payload.duration_seconds || 0,
-            average_pace: finalPaceMinPerKm,
-            max_pace: finalPaceMinPerKm,
+            average_pace: finalPaceSecondsPerKm, // segundos/km (canônico)
+            max_pace: finalPaceSecondsPerKm, // segundos/km (canônico)
             elevation_gain: elevationGain,
             gps_route: isTreadmill ? null : payload.route_points || null,
             average_heartrate: payload.average_heartrate ?? null,
@@ -1108,6 +1122,10 @@ export class TrainingService {
           completed_at: completedAtIso,
           environment,
           ...(activityId ? { activity_id: activityId } : {}),
+          // RPE reportado (Borg CR10). Só entra no update quando veio no payload —
+          // espalhar `rpe: undefined` faria o PostgREST zerar um valor já gravado
+          // por PATCH numa reentrada (retry da fila offline, re-sync de relógio).
+          ...(payload.rpe != null ? { rpe: payload.rpe } : {}),
         })
         .eq('id', workoutId)
         .select()
@@ -1413,9 +1431,48 @@ export class TrainingService {
         started_at: payload.started_at,
         environment,
         treadmill_data: payload.treadmill_data,
+        rpe: payload.rpe,
       },
       true, // isAlreadyFreeRun → breaks the completeWorkout⇄completeFreeWorkout recursion
     );
+  }
+
+  /**
+   * Grava a percepção de esforço REPORTADA pelo atleta (Borg CR10, 1–10).
+   *
+   * Endpoint próprio, desacoplado da conclusão, porque a coleta acontece depois:
+   * a WorkoutProcessingScreen dispara o submit já no mount, então o app pergunta
+   * o RPE na tela de destino (RunSummary / CoachAnalysis) e chama este método
+   * quando o atleta responde.
+   *
+   * Idempotente por natureza (é um SET, não um incremento) — reenviar o mesmo
+   * valor é inofensivo, e corrigir a resposta é só chamar de novo.
+   */
+  async setWorkoutRpe(userId: string, workoutId: string, rpe: number) {
+    // Filtrar por user_id no próprio UPDATE resolve posse e existência numa ida
+    // só: um workout de outro usuário simplesmente não casa e volta zero linhas.
+    const { data, error } = await this.supabaseService
+      .from('workouts')
+      .update({ rpe })
+      .eq('id', workoutId)
+      .eq('user_id', userId)
+      .select('id, rpe')
+      .maybeSingle();
+
+    if (error) {
+      this.logger.error(
+        `[setWorkoutRpe] Failed to set rpe=${rpe} on workout ${workoutId}: ${error.message}`,
+        error,
+      );
+      throw error;
+    }
+
+    if (!data) {
+      throw new NotFoundException('Workout not found');
+    }
+
+    this.logger.log(`[setWorkoutRpe] workout=${workoutId} rpe=${rpe}`);
+    return data;
   }
 
   /**
@@ -1540,8 +1597,12 @@ export class TrainingService {
         distance: Number(data.distance_run ?? data.distance_km ?? 0) * 1000,
         moving_time: Number(data.time_run_seconds ?? 0),
         elapsed_time: Number(data.time_run_seconds ?? 0),
+        // segundos/km — mesma unidade canônica de `activities.average_pace`,
+        // então a activity sintetizada é indistinguível de uma real para o
+        // consumidor. Antes dividia por 60 (decimal min/km) porque a coluna
+        // real gravava nessa unidade.
         average_pace: data.pace_seconds_per_km
-          ? Number(data.pace_seconds_per_km) / 60
+          ? Math.round(Number(data.pace_seconds_per_km))
           : null,
         average_speed: null,
         elevation_gain: 0,

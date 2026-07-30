@@ -1,11 +1,14 @@
 import {
   IsArray,
   IsIn,
+  IsInt,
   IsISO8601,
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -135,4 +138,24 @@ export class CreateWorkoutTrackingDto {
   @ValidateNested()
   @Type(() => TreadmillDataDto)
   treadmill_data?: TreadmillDataDto;
+
+  /**
+   * Percepção de esforço REPORTADA pelo atleta (Borg CR10, 1–10). Opcional —
+   * nunca bloqueia a conclusão.
+   *
+   * O app coleta o RPE DEPOIS da conclusão (RunSummary / CoachAnalysis, sem
+   * pressão de tempo) e envia por `PATCH /training/workouts/:id/rpe`, porque a
+   * WorkoutProcessingScreen submete a conclusão já no mount — antes de qualquer
+   * interação possível. Este campo existe para as origens que JÁ conhecem o RPE
+   * no momento do envio (fila offline que carregava o valor, relógio, importação
+   * de terceiro) chegarem sem um segundo roundtrip.
+   *
+   * NÃO confundir com `metadata.perceived_effort`, que é o esforço PRESCRITO
+   * pela IA.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  rpe?: number;
 }

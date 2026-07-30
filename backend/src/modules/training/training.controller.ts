@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -29,6 +30,7 @@ import { UsersService } from '../users/users.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { CreateManualWorkoutDto } from './dto/create-manual-workout.dto';
 import { CompleteFreeWorkoutDto } from './dto/complete-free-workout.dto';
+import { SetWorkoutRpeDto } from './dto/set-workout-rpe.dto';
 
 interface CreatePlanDto {
   // Biometrics (New)
@@ -995,6 +997,44 @@ export class TrainingController {
       this.logger.error(`Failed to complete workout ${workoutId}`, error);
       throw new HttpException(
         error.message || 'Failed to complete workout',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * Record the athlete's REPORTED perceived exertion (Borg CR10, 1–10).
+   *
+   * Separate from the completion payload on purpose: WorkoutProcessingScreen
+   * submits the completion on mount, so there is no window to answer before it.
+   * The app asks on the destination screen (RunSummary for free/manual runs,
+   * CoachAnalysis for plan workouts) with no time pressure and a skip option.
+   *
+   * Not Pro-gated — the athlete's own perception is not a paid AI feature, and
+   * free runs must be able to record it too.
+   */
+  @Patch('workouts/:id/rpe')
+  async setWorkoutRpe(
+    @User('id') userId: string,
+    @Param('id') workoutId: string,
+    @Body() dto: SetWorkoutRpeDto,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+
+    try {
+      const workout = await this.trainingService.setWorkoutRpe(
+        userId,
+        workoutId,
+        dto.rpe,
+      );
+      return { success: true, workout };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      this.logger.error(`Failed to set RPE for workout ${workoutId}`, error);
+      throw new HttpException(
+        error.message || 'Failed to set RPE',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

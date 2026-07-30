@@ -35,6 +35,7 @@ import { Terrain3DLayers } from '../../components/map/Terrain3DLayers';
 import { StatMapRoute } from '../../components/map/StatMapRoute';
 import { StatMapSelector, type StatMapMode } from '../../components/map/StatMapSelector';
 import { FinishFlagMarker } from '../../components/map/FinishFlagMarker';
+import { RpeSelector } from '../../components/workout/RpeSelector';
 import { loadTreadmillCache } from '../../utils/treadmillCache';
 import {
   downsampleSpeedSamples,
@@ -191,7 +192,21 @@ export function RunSummaryScreen() {
   // que o mapa, splits, gráfico de pace e card de "Planejado vs Executado"
   // funcionem identicamente nos 3 fluxos (pós-finalização, Home, Histórico).
   const fetchWorkoutDetails = useTrainingStore((s) => s.fetchWorkoutDetails);
+  const setWorkoutRpe = useTrainingStore((s) => s.setWorkoutRpe);
   const hasInitialRoute = initialRoutePoints.length > 1;
+
+  // RPE reportado. `undefined` = ainda não sabemos (não hidratou); `null` = o
+  // backend respondeu e não há valor. A distinção evita piscar o card de
+  // pergunta em cima de um treino que já foi respondido.
+  const [savedRpe, setSavedRpe] = useState<number | null | undefined>(undefined);
+
+  const handleSelectRpe = React.useCallback(
+    async (rpe: number) => {
+      if (!workoutId) throw new Error('Sem workoutId para gravar RPE');
+      await setWorkoutRpe(workoutId, rpe);
+    },
+    [workoutId, setWorkoutRpe],
+  );
 
   type Enriched = {
     routePoints: RoutePoint[];
@@ -220,7 +235,14 @@ export function RunSummaryScreen() {
   const [enriching, setEnriching] = useState(false);
 
   useEffect(() => {
-    if (hasInitialRoute || !workoutId) return;
+    if (hasInitialRoute || !workoutId) {
+      // Sem hidratação (corrida recém-finalizada: a rota já veio nos params).
+      // Nesse caminho o treino acabou de ser concluído, então não existe RPE —
+      // liberamos o card em modo pergunta em vez de deixá-lo em `undefined`,
+      // que é justamente o caso principal de coleta.
+      if (workoutId) setSavedRpe(null);
+      return;
+    }
     let cancelled = false;
     setEnriching(true);
 
@@ -264,6 +286,9 @@ export function RunSummaryScreen() {
         setEnriching(false);
         return;
       }
+
+      // RPE já respondido (reabrindo do Histórico/Home) → card em modo leitura.
+      setSavedRpe(details.rpe ?? null);
 
       // Mapeia o `source` do banco ('plan' | 'manual' | 'free') para o RunMode
       // do app ('planned' | 'manual' | 'free'). Plan workouts não devem cair
@@ -866,6 +891,19 @@ export function RunSummaryScreen() {
             <MetricCell label="Elev. Gan" value={`${resolvedElevationGain} m`} />
             <MetricCell label="Elev Max" value={`${resolvedMaxAltitude} m`} />
           </View>
+
+          {/* Esforço percebido (RPE reportado). Só quando já sabemos que o
+              treino existe no backend e ainda não hidratamos um valor — o
+              próprio card decide entre pergunta e leitura. Fica logo abaixo das
+              métricas porque a resposta é sobre a corrida que acabou de
+              aparecer ali em cima. */}
+          {workoutId && savedRpe !== undefined && (
+            <RpeSelector
+              value={savedRpe}
+              onSelect={handleSelectRpe}
+              onSkip={() => setSavedRpe(undefined)}
+            />
+          )}
 
           {/* Card Mapa — seletor de coloração da rota (Stat Maps). Só outdoor com rota. */}
           {!isTreadmill && hasRoute && (

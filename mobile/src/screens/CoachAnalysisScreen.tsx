@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Image,
@@ -42,6 +42,8 @@ import { StatMapRoute } from '../components/map/StatMapRoute';
 import { StatMapSelector, type StatMapMode } from '../components/map/StatMapSelector';
 import { FinishFlagMarker } from '../components/map/FinishFlagMarker';
 import { CoachAnalysisSkeleton } from '../components/skeletons/ScreenSkeletons';
+import { RpeSelector } from '../components/workout/RpeSelector';
+import { paceValueToSecondsPerKm } from '../utils/pace';
 import { SharingModal } from './sharing/SharingModal';
 
 // ─── Design Tokens (alinhados ao RunSummary/Figma) ────────────────────────────
@@ -80,10 +82,16 @@ function getInitials(name: string): string {
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
-/** decimal min/km → segundos por km */
-function paceMinPerKmToSeconds(p: number | null | undefined): number {
-    if (!p || !isFinite(p) || p <= 0) return 0;
-    return p * 60;
+/**
+ * `activities.average_pace` → segundos por km.
+ *
+ * Delega ao util compartilhado, que trata o formato legado (decimal min/km,
+ * gravado até 2026-07-30) pelo limiar documentado. Antes esta função
+ * multiplicava por 60 incondicionalmente — o que passaria a produzir valores
+ * 60× errados agora que o backend grava segundos.
+ */
+function activityPaceToSeconds(p: number | null | undefined): number {
+    return paceValueToSecondsPerKm(p) ?? 0;
 }
 /** Aceita "5:00", "5'00\"", "5’00”", "5.00 min/km" → segundos por km */
 function parsePaceString(p: string | null | undefined): number {
@@ -172,6 +180,19 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
     const [enriched, setEnriched] = useState<Enriched | null>(null);
     const [enriching, setEnriching] = useState(false);
 
+    // RPE reportado. `undefined` = ainda não hidratou; `null` = backend
+    // respondeu e não há valor (card entra em modo pergunta).
+    const [savedRpe, setSavedRpe] = useState<number | null | undefined>(undefined);
+    const setWorkoutRpe = useTrainingStore((s) => s.setWorkoutRpe);
+
+    const handleSelectRpe = useCallback(
+        async (rpe: number) => {
+            if (!workoutId) throw new Error('Sem workoutId para gravar RPE');
+            await setWorkoutRpe(workoutId, rpe);
+        },
+        [workoutId, setWorkoutRpe],
+    );
+
     useEffect(() => {
         if (!workoutId) return;
         let cancelled = false;
@@ -205,6 +226,10 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                 setEnriching(false);
                 return;
             }
+
+            // RPE reportado — null quando ainda não respondeu (card pergunta).
+            setSavedRpe(details.rpe ?? null);
+
             const activity = details.activity;
             const gps = (activity?.gps_route ?? []) as RoutePoint[];
             const coords = gps
@@ -414,11 +439,12 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
         [statMapMode, routePoints],
     );
 
-    // Avg pace robusto: usa o GPS se houver, senão cai para average_pace decimal vindo do backend
+    // Avg pace robusto: usa o GPS se houver, senão cai para `average_pace` do
+    // backend (segundos/km — normalizado no helper por segurança).
     const avgPaceSeconds =
         summary.avgPaceSecondsPerKm > 0
             ? summary.avgPaceSecondsPerKm
-            : paceMinPerKmToSeconds(
+            : activityPaceToSeconds(
                 activityFromFeedback?.average_pace ?? activityFromLatest?.average_pace ?? 0,
             );
 
@@ -795,6 +821,17 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                         <MetricCell label="Elev. Gan" value={`${resolvedElevationGain} m`} />
                         <MetricCell label="Elev Max" value={`${resolvedMaxAltitude} m`} />
                     </View>
+
+                    {/* Esforço percebido (RPE reportado). Logo abaixo das métricas:
+                        a análise da IA acima é o esforço PRESCRITO, este card é o
+                        que o atleta SENTIU — a proximidade é intencional. */}
+                    {workoutId && savedRpe !== undefined && (
+                        <RpeSelector
+                            value={savedRpe}
+                            onSelect={handleSelectRpe}
+                            onSkip={() => setSavedRpe(undefined)}
+                        />
+                    )}
 
                     {/* Card Mapa — seletor de coloração da rota (Stat Maps). Só outdoor com rota. */}
                     {!isTreadmill && hasRoute && (

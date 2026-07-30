@@ -314,6 +314,10 @@ interface Workout {
     completed_at?: string | null;
     /** TRUE only for the race-day placeholder workout (race goal). */
     is_race_day?: boolean;
+    /** Percepção de esforço REPORTADA pelo atleta (Borg CR10, 1–10). Null quando
+     *  ainda não respondeu — a coleta é opcional. NÃO confundir com
+     *  `metadata.perceived_effort`, que é o esforço PRESCRITO pela IA. */
+    rpe?: number | null;
 }
 
 /** Returned by GET /training/workouts/:id — workout row enriched with the
@@ -326,7 +330,10 @@ export interface WorkoutDetails extends Workout {
         distance: number;            // metros
         moving_time: number;          // segundos
         elapsed_time?: number;
-        average_pace: number;         // min/km
+        /** Segundos por km — unidade canônica (ver utils/pace.ts). Linhas
+         *  gravadas antes de 2026-07-30 podem vir em decimal min/km; normalize
+         *  sempre com `paceValueToSecondsPerKm` antes de usar. */
+        average_pace: number;
         average_speed: number;        // m/s
         total_elevation_gain?: number;
         elevation_gain?: number;
@@ -424,6 +431,8 @@ interface TrainingState {
     fetchPlanOverview: () => Promise<void>;
     clearPlanOverview: () => void;
     skipWorkout: (workoutId: string, reason: string) => Promise<void>;
+    /** RPE reportado (Borg CR10, 1–10). Lança em falha — o card oferece retry. */
+    setWorkoutRpe: (workoutId: string, rpe: number) => Promise<void>;
     completeWorkout: (payload: WorkoutTrackingPayload) => Promise<{ success: boolean; savedLocally: boolean; workout?: Workout }>;
     completeFreeRun: (payload: FreeRunPayload) => Promise<{ success: boolean; savedLocally: boolean; workout?: Workout }>;
     createManualWorkout: (dto: ManualWorkoutDto) => Promise<Workout>;
@@ -512,6 +521,43 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
             console.error('[fetchWorkoutDetails] erro:', e);
             return null;
         }
+    },
+
+    /**
+     * Grava a percepção de esforço REPORTADA pelo atleta (Borg CR10, 1–10).
+     *
+     * Chamada separada da conclusão de propósito: a WorkoutProcessingScreen
+     * submete o treino já no mount, então não há janela para responder antes.
+     * O RpeSelector aparece na tela de destino (RunSummary / CoachAnalysis) e
+     * chama isto quando o atleta escolhe um valor.
+     *
+     * Propaga o erro (em vez de engolir) para o card poder oferecer nova
+     * tentativa em vez de fingir que salvou. Sem fila offline: RPE é opcional e
+     * perde a validade se ressincronizado dias depois.
+     */
+    setWorkoutRpe: async (workoutId: string, rpe: number) => {
+        const userId = await getUserId();
+        if (!userId) throw new Error('Sem userId para gravar RPE');
+
+        const response = await authedFetch(
+            `${API_URL}/training/workouts/${workoutId}/rpe`,
+            {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-user-id': userId,
+                },
+                body: JSON.stringify({ rpe }),
+            },
+        );
+
+        if (!response.ok) {
+            const body = await response.text();
+            console.error(`[setWorkoutRpe] API ${response.status}: ${body}`);
+            throw new Error(`Falha ao gravar RPE (${response.status})`);
+        }
+
+        console.log(`[setWorkoutRpe] workout=${workoutId} rpe=${rpe} OK`);
     },
 
     fetchPlan: async () => {

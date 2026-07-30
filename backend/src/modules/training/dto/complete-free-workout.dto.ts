@@ -1,11 +1,14 @@
 import {
   IsArray,
   IsIn,
+  IsInt,
   IsISO8601,
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -106,4 +109,15 @@ export class CompleteFreeWorkoutDto {
   @ValidateNested()
   @Type(() => TreadmillDataDto)
   treadmill_data?: TreadmillDataDto;
+
+  /**
+   * Percepção de esforço REPORTADA pelo atleta (Borg CR10, 1–10). Opcional.
+   * Ver a nota extensa em `CreateWorkoutTrackingDto.rpe` — o caminho normal de
+   * coleta é o `PATCH /training/workouts/:id/rpe`, feito depois da conclusão.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  rpe?: number;
 }
