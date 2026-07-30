@@ -62,6 +62,7 @@ export interface Feedback {
         name: string;
         distance: number;
         moving_time: number;
+        /** Segundos por km — unidade canônica (ver utils/pace.ts). */
         average_pace: number;
         elevation_gain: number;
         start_date: string;
@@ -111,6 +112,7 @@ export interface LatestActivityData {
         distance: number;
         distance_km: string;
         moving_time: number;
+        /** Segundos por km — unidade canônica (ver utils/pace.ts). */
         average_pace: number;
         formatted_pace: string;
         elevation_gain: number;

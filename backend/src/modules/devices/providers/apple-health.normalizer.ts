@@ -31,12 +31,13 @@ export class AppleHealthNormalizer {
     const distanceMeters = dto.distance_meters;
     const movingTime = dto.duration_seconds;
 
-    // Average pace in min/km (same unit as other wearables in this codebase)
+    // Average pace in SECONDS per km — the repo's canonical storage unit
+    // (see common/pace-calculator/pace-format.ts). Until 2026-07-30 this
+    // produced decimal min/km, which disagreed with what WellnessService read.
     let averagePace: number | undefined;
     if (distanceMeters > 0 && movingTime > 0) {
       const distanceKm = distanceMeters / 1000;
-      const timeMinutes = movingTime / 60;
-      averagePace = timeMinutes / distanceKm;
+      averagePace = Math.round(movingTime / distanceKm);
     }
 
     return {

@@ -4,7 +4,11 @@ import { Queue } from 'bullmq';
 import { SupabaseService } from '../../database';
 import { NotificationService } from '../notifications/notification.service';
 import { AIRouterService, AI_FEATURES } from '../../common/ai';
-import { formatPaceRangeLabel } from '../../common/pace-calculator';
+import {
+  formatPaceLabel,
+  formatPaceRangeLabel,
+  paceValueToSecondsPerKm,
+} from '../../common/pace-calculator';
 
 /** Lifecycle state of an AI coach feedback row. Persisted on ai_feedbacks. */
 export type FeedbackStatus =
@@ -37,7 +41,9 @@ export interface WorkoutComparison {
   executed: {
     distance: number;
     moving_time: number;
+    /** Segundos por km (unidade canônica — ver pace-format.ts). */
     average_pace: number;
+    /** Segundos por km (unidade canônica — ver pace-format.ts). */
     max_pace: number;
     elevation_gain: number;
     average_heartrate?: number;
@@ -398,8 +404,8 @@ TREINO PLANEJADO:
 
 TREINO EXECUTADO:
 - Distância: ${executedDistanceKm.toFixed(2)} km (${distanceDiff > 0 ? '+' : ''}${distanceDiff.toFixed(1)}%)
-- Pace médio: ${comparison.executed.average_pace?.toFixed(2) || 'N/A'} min/km
-- Pace máximo: ${comparison.executed.max_pace?.toFixed(2) || 'N/A'} min/km
+- Pace médio: ${formatPaceLabel(comparison.executed.average_pace)}/km
+- Pace máximo: ${formatPaceLabel(comparison.executed.max_pace)}/km
 - Tempo total: ${Math.floor(comparison.executed.moving_time / 60)} minutos
 ${isTreadmill ? '' : `- Elevação: ${comparison.executed.elevation_gain?.toFixed(0) || 0}m\n`}${comparison.executed.average_heartrate ? `- FC média: ${comparison.executed.average_heartrate} bpm` : ''}${treadmillContext}
 
@@ -418,7 +424,7 @@ Gere um feedback seguindo este formato JSON exato:
     },
     "pace": {
       "planned": "${plannedPaceRange}",
-      "executed": "${comparison.executed.average_pace?.toFixed(2) || 'N/A'} min/km",
+      "executed": "${formatPaceLabel(comparison.executed.average_pace)}/km",
       "diff_percent": 0
     }
   },
@@ -690,11 +696,9 @@ Regras:
     if (isToday) dateLabel = 'hoje';
     else if (isYesterday) dateLabel = 'ontem';
 
-    // 8. Format pace (min:sec per km)
-    const paceMinPerKm = latestActivity.average_pace || 0;
-    const paceMinutes = Math.floor(paceMinPerKm);
-    const paceSeconds = Math.round((paceMinPerKm - paceMinutes) * 60);
-    const formattedPace = `${paceMinutes}:${paceSeconds.toString().padStart(2, '0')}`;
+    // 8. Format pace (m:ss per km). `average_pace` é segundos/km — o helper
+    //    formata e ainda normaliza o decimal min/km legado.
+    const formattedPace = formatPaceLabel(latestActivity.average_pace);
 
     // 9. Calculate VO2 Max estimate
     const vo2Estimate = this.calculateVO2MaxEstimate(
@@ -748,7 +752,9 @@ Regras:
         distance: latestActivity.distance,
         distance_km: executedDistanceKm.toFixed(1),
         moving_time: latestActivity.moving_time,
-        average_pace: latestActivity.average_pace,
+        // Segundos/km — normalizado para o mobile nunca receber o decimal
+        // min/km legado neste payload.
+        average_pace: paceValueToSecondsPerKm(latestActivity.average_pace),
         formatted_pace: formattedPace,
         elevation_gain: latestActivity.elevation_gain || 0,
         average_heartrate: latestActivity.average_heartrate,
@@ -816,7 +822,13 @@ Regras:
    * Calculate estimated VO2 Max based on running performance
    */
   calculateVO2MaxEstimate(
-    averagePaceMinPerKm: number,
+    /**
+     * Pace em SEGUNDOS por km (unidade canônica de `activities.average_pace`).
+     * Aceita o decimal min/km legado — `paceValueToSecondsPerKm` normaliza pelo
+     * limiar documentado em pace-format.ts, então linhas antigas não produzem
+     * um VO₂ 60× errado.
+     */
+    averagePaceSecondsPerKm: number,
     averageHeartrate: number | null,
     distanceMeters: number,
     movingTimeSeconds: number,
@@ -827,15 +839,13 @@ Regras:
     // Pace ausente/zero (ex.: activity vinda do Strava sem average_speed
     // ou treino só-telefone com bug no cálculo) explodiria a divisão
     // abaixo em Infinity → 80 capado, gerando trend falso.
-    if (
-      !averagePaceMinPerKm ||
-      averagePaceMinPerKm <= 0 ||
-      !isFinite(averagePaceMinPerKm)
-    ) {
+    const paceSecPerKm = paceValueToSecondsPerKm(averagePaceSecondsPerKm);
+    if (paceSecPerKm == null) {
       return { value: 0, isValid: false, method: 'invalid_pace' };
     }
 
-    const velocityMPerMin = 1000 / averagePaceMinPerKm;
+    // m/min = (1000 m / seg-por-km) × 60 seg
+    const velocityMPerMin = (1000 / paceSecPerKm) * 60;
     const vo2FromPace =
       -4.6 +
       0.182258 * velocityMPerMin +

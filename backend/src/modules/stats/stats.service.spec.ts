@@ -6,6 +6,9 @@ describe('StatsService', () => {
   let service: StatsService;
   let mockSupabaseService: Partial<SupabaseService>;
 
+  // `average_pace: 6.0` é o formato LEGADO (decimal min/km, gravado até
+  // 2026-07-30). Mantido de propósito: exercita a normalização de leitura, que
+  // precisa devolver 360 segundos/km — nunca 6.
   const mockActivities = [
     {
       start_date: '2024-01-15T10:00:00Z',
@@ -97,6 +100,27 @@ describe('StatsService', () => {
 
       expect(Array.isArray(weeklyStats)).toBe(true);
     });
+
+    it('expõe average_pace em SEGUNDOS/km, normalizando o legado min/km', async () => {
+      const mockFrom = jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        gte: jest.fn().mockReturnThis(),
+        order: jest
+          .fn()
+          .mockResolvedValue({ data: mockActivities, error: null }),
+      });
+
+      (mockSupabaseService.from as jest.Mock) = mockFrom;
+
+      const weeklyStats = await service.getWeeklyStats('user-123', 4);
+
+      // As fixtures são 6.0 decimal min/km → 360 s/km. Sem normalização o
+      // resultado seria 6, que o mobile formataria como "0:06/km".
+      for (const week of weeklyStats) {
+        expect(week.average_pace).toBe(360);
+      }
+    });
   });
 
   describe('getPaceProgression', () => {
@@ -116,6 +140,10 @@ describe('StatsService', () => {
       const progression = await service.getPaceProgression('user-123', 10);
 
       expect(Array.isArray(progression)).toBe(true);
+      // Mesmo contrato de unidade da agregação semanal: segundos/km.
+      for (const point of progression) {
+        expect(point.pace).toBe(360);
+      }
     });
   });
 });

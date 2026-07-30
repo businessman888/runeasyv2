@@ -11,6 +11,7 @@ import {
   saoPauloTodayStr,
   toSaoPauloDateStr,
 } from '../training/wellness/helpers/streak.helper';
+import { paceValueToSecondsPerKm } from '../../common/pace-calculator';
 
 interface PeriodRecord {
   dayStr: string; // local (São Paulo) YYYY-MM-DD
@@ -19,10 +20,18 @@ interface PeriodRecord {
 }
 const WEEKDAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 
+/**
+ * UNIDADE DE PACE — todo `average_pace` / `pace` exposto por este serviço está em
+ * SEGUNDOS POR KM inteiros, a unidade canônica do repo (ver
+ * `common/pace-calculator/pace-format.ts`). As linhas de `activities` são
+ * normalizadas na leitura por `paceValueToSecondsPerKm`, então o formato legado
+ * (decimal min/km, gravado até 2026-07-30) é curado de forma transparente.
+ */
 export interface WeeklyStats {
   week_start: string;
   total_distance_km: number;
   total_workouts: number;
+  /** Segundos por km. */
   average_pace: number;
   total_elevation: number;
   total_time_minutes: number;
@@ -32,6 +41,7 @@ export interface MonthlyStats {
   month: string;
   total_distance_km: number;
   total_workouts: number;
+  /** Segundos por km. */
   average_pace: number;
   consistency_percent: number;
 }
@@ -39,6 +49,7 @@ export interface MonthlyStats {
 export interface PaceProgression {
   date: string;
   workout_type: string;
+  /** Segundos por km. */
   pace: number;
   distance_km: number;
 }
@@ -97,7 +108,8 @@ export class StatsService {
         time: existing.time + (activity.moving_time || 0),
         elevation: existing.elevation + (activity.elevation_gain || 0),
         count: existing.count + 1,
-        paceSum: existing.paceSum + (activity.average_pace || 0),
+        paceSum:
+          existing.paceSum + (paceValueToSecondsPerKm(activity.average_pace) ?? 0),
       });
     });
 
@@ -105,10 +117,9 @@ export class StatsService {
       week_start,
       total_distance_km: Math.round((stats.distance / 1000) * 100) / 100,
       total_workouts: stats.count,
+      // Segundos/km inteiros.
       average_pace:
-        stats.count > 0
-          ? Math.round((stats.paceSum / stats.count) * 100) / 100
-          : 0,
+        stats.count > 0 ? Math.round(stats.paceSum / stats.count) : 0,
       total_elevation: Math.round(stats.elevation),
       total_time_minutes: Math.round(stats.time / 60),
     }));
@@ -161,7 +172,8 @@ export class StatsService {
       monthlyMap.set(monthKey, {
         distance: existing.distance + (activity.distance || 0),
         count: existing.count + 1,
-        paceSum: existing.paceSum + (activity.average_pace || 0),
+        paceSum:
+          existing.paceSum + (paceValueToSecondsPerKm(activity.average_pace) ?? 0),
       });
     });
 
@@ -190,10 +202,9 @@ export class StatsService {
         month,
         total_distance_km: Math.round((stats.distance / 1000) * 100) / 100,
         total_workouts: stats.count,
+        // Segundos/km inteiros.
         average_pace:
-          stats.count > 0
-            ? Math.round((stats.paceSum / stats.count) * 100) / 100
-            : 0,
+          stats.count > 0 ? Math.round(stats.paceSum / stats.count) : 0,
         consistency_percent: consistency,
       };
     });
@@ -219,7 +230,7 @@ export class StatsService {
     return (data || []).reverse().map((activity) => ({
       date: (activity.start_date ?? '').split('T')[0],
       workout_type: this.inferWorkoutType(activity.name, activity.distance),
-      pace: activity.average_pace,
+      pace: paceValueToSecondsPerKm(activity.average_pace) ?? 0, // segundos/km
       distance_km: Math.round(((activity.distance ?? 0) / 1000) * 100) / 100,
     }));
   }
@@ -243,7 +254,11 @@ export class StatsService {
       activities?.reduce((sum, a) => sum + (a.elevation_gain || 0), 0) || 0;
     const totalRuns = activities?.length || 0;
 
-    // Get best pace
+    // Melhor pace = o MENOR valor em segundos/km. A ordenação acontece no
+    // Postgres, então ela pressupõe unidade homogênea na coluna: uma linha
+    // legada em decimal min/km (5.5) ordenaria antes de qualquer valor em
+    // segundos (300) e venceria sempre. A migration de correção do dado legado
+    // normaliza as linhas antigas justamente por isso.
     const { data: bestPace } = await this.supabaseService
       .from('activities')
       .select('average_pace')
@@ -265,7 +280,7 @@ export class StatsService {
       total_time_hours: Math.round((totalTime / 3600) * 10) / 10,
       total_elevation_m: Math.round(totalElevation),
       total_runs: totalRuns,
-      best_pace: bestPace?.[0]?.average_pace || null,
+      best_pace: paceValueToSecondsPerKm(bestPace?.[0]?.average_pace), // segundos/km
       longest_run_km: longestRun?.[0]
         ? Math.round((longestRun[0].distance / 1000) * 10) / 10
         : null,

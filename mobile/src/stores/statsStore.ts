@@ -3,10 +3,17 @@ import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
 import { authedFetch } from '../services/apiClient';
 
+/**
+ * UNIDADE DE PACE — todo `average_pace` / `pace` / `best_pace` devolvido por
+ * /api/stats está em SEGUNDOS POR KM inteiros. O backend (StatsService)
+ * normaliza na leitura, então nenhum consumidor precisa converter: basta
+ * formatar com `formatPaceLabel` de utils/pace.ts.
+ */
 interface WeeklyStats {
     week_start: string;
     total_distance_km: number;
     total_workouts: number;
+    /** Segundos por km. */
     average_pace: number;
     total_elevation: number;
     total_time_minutes: number;
@@ -16,6 +23,7 @@ interface MonthlyStats {
     month: string;
     total_distance_km: number;
     total_workouts: number;
+    /** Segundos por km. */
     average_pace: number;
     consistency_percent: number;
 }
@@ -23,6 +31,7 @@ interface MonthlyStats {
 interface PaceProgression {
     date: string;
     workout_type: string;
+    /** Segundos por km. */
     pace: number;
     distance_km: number;
 }

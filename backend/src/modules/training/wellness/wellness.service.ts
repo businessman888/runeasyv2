@@ -27,6 +27,7 @@ import {
   saoPauloTodayStr,
   toSaoPauloDateStr,
 } from './helpers/streak.helper';
+import { paceValueToSecondsPerKm } from '../../../common/pace-calculator';
 
 const SAO_PAULO_OFFSET_HOURS = -3;
 
@@ -35,7 +36,16 @@ interface ActivityRow {
   start_date: string;
   distance: number | null; // meters
   moving_time: number | null; // seconds
-  average_pace: number | null; // seconds per km
+  /**
+   * Segundos por km — a unidade canônica do repo (ver pace-format.ts) e a que o
+   * mobile espera (`formatPace(seconds)` em PerformanceGrid/EvolutionChart).
+   *
+   * Este comentário já dizia "seconds per km" enquanto TODOS os produtores
+   * gravavam decimal min/km, e o resultado era visível: `Math.round(5.53)` = 6
+   * fazia a tela renderizar "0:06/km". Desde 2026-07-30 os produtores gravam
+   * segundos e a leitura passa por `paceValueToSecondsPerKm`, que cura o legado.
+   */
+  average_pace: number | null; // segundos por km
   elevation_gain: number | null; // meters
   average_heartrate: number | null;
   max_heartrate: number | null;
@@ -384,12 +394,15 @@ export class WellnessService {
     const sum = (arr: ActivityRow[], pick: (a: ActivityRow) => number) =>
       arr.reduce((acc, a) => acc + (pick(a) || 0), 0);
 
+    // Pace médio ponderado pela distância, em segundos/km. `paceValueToSecondsPerKm`
+    // normaliza linhas legadas em decimal min/km para a unidade canônica.
     const avgWeighted = (arr: ActivityRow[]): number => {
       const totalDist = sum(arr, (a) => a.distance || 0);
       if (totalDist <= 0) return 0;
       const weightedPace = arr.reduce((acc, a) => {
-        if (!a.average_pace || !a.distance) return acc;
-        return acc + a.average_pace * a.distance;
+        const paceSec = paceValueToSecondsPerKm(a.average_pace);
+        if (paceSec == null || !a.distance) return acc;
+        return acc + paceSec * a.distance;
       }, 0);
       return weightedPace / totalDist;
     };
@@ -439,7 +452,7 @@ export class WellnessService {
         this.sparkline7(
           currentActivities,
           currentWeek.start,
-          (a) => a.average_pace || 0,
+          (a) => paceValueToSecondsPerKm(a.average_pace) ?? 0,
         ),
       ),
       duration: this.buildMetric(

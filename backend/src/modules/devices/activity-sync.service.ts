@@ -4,6 +4,7 @@ import { SubscriptionService } from '../subscription/subscription.service';
 import { TrainingService } from '../training/training.service';
 import { CreateWorkoutTrackingDto } from '../training/dto/workout-tracking.dto';
 import { CompleteFreeWorkoutDto } from '../training/dto/complete-free-workout.dto';
+import { paceValueToSecondsPerKm } from '../../common/pace-calculator';
 
 /**
  * Standardized activity payload from any wearable provider.
@@ -19,8 +20,10 @@ export interface WearableActivity {
   distance: number; // meters
   moving_time: number; // seconds
   elapsed_time?: number; // seconds (total including pauses)
-  average_pace?: number; // min/km
-  max_pace?: number; // min/km
+  // Unidade canônica do repo: SEGUNDOS por km (ver pace-format.ts). Os
+  // normalizers (apple-health / health-connect) já entregam nessa unidade.
+  average_pace?: number; // segundos/km
+  max_pace?: number; // segundos/km
   elevation_gain?: number; // meters
   average_heartrate?: number; // bpm
   max_heartrate?: number; // bpm
@@ -144,8 +147,10 @@ export class ActivitySyncService {
         distance: activity.distance,
         moving_time: activity.moving_time,
         elapsed_time: activity.elapsed_time || activity.moving_time,
-        average_pace: activity.average_pace || null,
-        max_pace: activity.max_pace || null,
+        // Segundos/km (canônico). O helper é no-op para valores já em segundos
+        // e converte o decimal min/km de um provider legado que ainda o envie.
+        average_pace: paceValueToSecondsPerKm(activity.average_pace),
+        max_pace: paceValueToSecondsPerKm(activity.max_pace),
         elevation_gain: activity.elevation_gain || 0,
         average_heartrate: activity.average_heartrate || null,
         max_heartrate: activity.max_heartrate || null,
@@ -496,10 +501,10 @@ export class ActivitySyncService {
       average_heartrate: activity.average_heartrate,
       max_heartrate: activity.max_heartrate,
       calories: activity.calories,
+      // `average_pace` já vem em segundos/km dos normalizers — só normalizamos
+      // o formato legado (decimal min/km) por segurança, via o helper único.
       avg_pace_seconds_per_km:
-        typeof activity.average_pace === 'number' && activity.average_pace > 0
-          ? activity.average_pace * 60
-          : undefined,
+        paceValueToSecondsPerKm(activity.average_pace) ?? undefined,
       environment: activity.environment,
     };
   }
@@ -531,10 +536,10 @@ export class ActivitySyncService {
       average_heartrate: activity.average_heartrate,
       max_heartrate: activity.max_heartrate,
       calories: activity.calories,
+      // `average_pace` já vem em segundos/km dos normalizers — só normalizamos
+      // o formato legado (decimal min/km) por segurança, via o helper único.
       avg_pace_seconds_per_km:
-        typeof activity.average_pace === 'number' && activity.average_pace > 0
-          ? activity.average_pace * 60
-          : undefined,
+        paceValueToSecondsPerKm(activity.average_pace) ?? undefined,
       environment: activity.environment,
     };
   }

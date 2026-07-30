@@ -9,6 +9,22 @@
  * Logo: valor < 20 → decimal min/km legado (×60); valor ≥ 20 → já em segundos/km.
  *
  * Isto mantém os planos Easy antigos exibindo certo até a regeneração, sem crash.
+ *
+ * ── COLUNAS QUE SEGUEM ESTA UNIDADE ───────────────────────────────────────────
+ *
+ *   workouts.pace_seconds_per_km
+ *   workouts.target_pace_seconds
+ *   workouts.instructions_json[].pace_min / pace_max   (e work/recovery de repeats)
+ *   activities.average_pace / max_pace                 (desde 2026-07-30)
+ *
+ * `activities.average_pace` foi o retardatário: até 2026-07-30 os cinco
+ * produtores (completeWorkout, a activity sintetizada de getWorkout, os
+ * normalizers apple-health e health-connect, e o upsert de wearable em
+ * ActivitySyncService) gravavam DECIMAL min/km, enquanto o WellnessService lia
+ * como segundos — e arredondava, então um pace real de 5,53 min/km virava 6 e a
+ * tela Wellness renderizava "0:06/km". Os produtores foram alinhados a segundos
+ * e TODOS os leitores passam por `paceValueToSecondsPerKm`, que cura as linhas
+ * antigas pelo limiar acima. `pace-unit.spec.ts` trava essa convenção.
  */
 
 const LEGACY_DECIMAL_THRESHOLD = 20;
