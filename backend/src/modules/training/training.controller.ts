@@ -1106,8 +1106,10 @@ export class TrainingController {
         return { retrospective: null, hasRetrospective: false };
       }
 
-      // Format pace for display
+      // Format pace for display. `—` quando não há dado, para a tela não
+      // renderizar "0:00" como se fosse um pace real.
       const formatPace = (seconds: number) => {
+        if (!seconds || seconds <= 0) return '—';
         const mins = Math.floor(seconds / 60);
         const secs = Math.round(seconds % 60);
         return `${mins}:${String(secs).padStart(2, '0')}`;
@@ -1118,6 +1120,9 @@ export class TrainingController {
         retrospective: {
           ...retrospective,
           avgPaceFormatted: formatPace(retrospective.avgPaceSeconds),
+          // Até a Fase 1A o backend calculava o pace-alvo e o descartava; a tela
+          // exibia um "5:30" hardcoded para qualquer plano.
+          targetPaceFormatted: formatPace(retrospective.targetPaceSeconds),
         },
       };
     } catch (error) {

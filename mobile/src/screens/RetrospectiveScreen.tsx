@@ -19,15 +19,27 @@ import * as Storage from '../utils/storage';
 
 interface RetrospectiveData {
     id: string;
+    /** Total corrido no período — INCLUI corrida livre. Não é aderência. */
     totalDistanceKm: number;
+    /** Km executados DENTRO do plano. Numerador de distanceVsGoalPercent. */
+    planDistanceCompletedKm: number;
+    /** Soma do planejado. Denominador de distanceVsGoalPercent. */
+    totalDistancePlannedKm: number;
+    freeRunDistanceKm: number;
+    totalRunsInPeriod: number;
     totalWorkoutsCompleted: number;
     totalWorkoutsPlanned: number;
     avgPaceSeconds: number;
     avgPaceFormatted: string;
+    /** Pace-alvo do plano, formatado ("m:ss" ou "—"). */
+    targetPaceFormatted: string;
     completionRate: number;
     distanceVsGoalPercent: number;
     paceVsGoalPercent: number;
+    /** Cadência semanal vs. a declarada — distinta de completionRate. */
     frequencyVsGoalPercent: number;
+    frequencyActualPerWeek: number;
+    frequencyTargetPerWeek: number;
     aiInsights: string;
     suggestedNextGoal: string;
     suggestedNextGoalType: string;
@@ -212,8 +224,13 @@ export function RetrospectiveScreen() {
                             {data.totalDistanceKm}<Text style={styles.metricUnit}>km</Text>
                         </Text>
                         <View style={styles.metricDivider} />
+                        {/* A meta vem direto do backend. Antes era reconstruída
+                            dividindo o total pelo percentual — o que dava NaN/
+                            Infinity quando o percentual era 0 e, desde que o
+                            percentual passou a ter numerador só do plano,
+                            devolveria uma meta inflada. */}
                         <Text style={styles.metricComparison}>
-                            Meta: {Math.round(data.totalDistanceKm / (data.distanceVsGoalPercent / 100))}km{' '}
+                            Meta: {data.totalDistancePlannedKm}km{' '}
                             <Text style={distanceDiff >= 0 ? styles.positive : styles.negative}>
                                 ({distanceDiff >= 0 ? '+' : ''}{distanceDiff}%)
                             </Text>
@@ -235,8 +252,11 @@ export function RetrospectiveScreen() {
                             {data.avgPaceFormatted}<Text style={styles.metricUnit}>/km</Text>
                         </Text>
                         <View style={styles.metricDivider} />
+                        {/* O pace-alvo real do plano. Era um "5:30" hardcoded —
+                            o backend já calculava targetPaceSeconds e o
+                            descartava antes de responder. */}
                         <Text style={styles.metricComparison}>
-                            Meta: 5:30{' '}
+                            Meta: {data.targetPaceFormatted}{' '}
                             <Text style={paceDiff >= 0 ? styles.positive : styles.negative}>
                                 ({paceDiff >= 0 ? '+' : ''}{paceDiff}%)
                             </Text>
@@ -249,11 +269,15 @@ export function RetrospectiveScreen() {
                 <View style={styles.frequencyCard}>
                     <View style={styles.frequencyLeft}>
                         <Text style={styles.metricLabel}>Frequência Semanal</Text>
+                        {/* Valor e delta agora são a MESMA métrica. Antes o
+                            valor era completionRate (conclusão por sessão) e o
+                            delta vinha de frequencyVsGoalPercent — que, por sua
+                            vez, era uma cópia literal de completionRate no
+                            backend, então o delta era sempre completionRate-100. */}
                         <Text style={styles.frequencyValue}>
-                            {data.completionRate}%{' '}
+                            {data.frequencyActualPerWeek}/sem{' '}
                             <Text style={styles.frequencyDiff}>
-                                {data.frequencyVsGoalPercent >= 100 ? '+' : ''}
-                                {data.frequencyVsGoalPercent - 100}% vs Meta
+                                de {data.frequencyTargetPerWeek} ({data.frequencyVsGoalPercent}%)
                             </Text>
                         </Text>
                     </View>

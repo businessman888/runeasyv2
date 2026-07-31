@@ -179,6 +179,18 @@ export class TrainingSchedulerService {
   /**
    * Check for completed training plans and generate retrospectives
    * Runs at midnight São Paulo time (00:00 UTC-3)
+   *
+   * ⚠️ NÃO ENVIE NOTIFICAÇÃO DAQUI. `RetrospectiveService.generateRetrospective`
+   * é o dono do envio, e por um motivo estrutural: o endpoint manual
+   * `POST /training/retrospective/generate` chama aquele método direto, sem
+   * passar por este cron — se o dono fosse aqui, geração manual não notificaria
+   * ninguém.
+   *
+   * Até a Fase 1A este método tinha o seu próprio `sendRetrospectiveNotification`,
+   * e o resultado eram 2 linhas em `notifications` + 2 pushes por retrospectiva
+   * (uma 'recovery_analysis' do service, uma 'achievement' daqui, com títulos
+   * diferentes). O método foi removido — `training-scheduler.service.spec.ts`
+   * trava a remoção contra reintrodução.
    */
   @Cron('0 0 * * *', {
     name: 'retrospective-check',
@@ -194,58 +206,12 @@ export class TrainingSchedulerService {
       const generatedRetros =
         await this.retrospectiveService.checkForCompletedPlans();
 
-      // Send notifications for each generated retrospective
-      for (const { userId, retroId } of generatedRetros) {
-        try {
-          await this.sendRetrospectiveNotification(userId, retroId);
-        } catch (notifError) {
-          this.logger.error(
-            `[Retrospective Cron] Failed to send notification for retro ${retroId}:`,
-            notifError,
-          );
-        }
-      }
-
       this.logger.log(
         `[Retrospective Cron] Completed successfully, generated ${generatedRetros.length} retrospectives`,
       );
     } catch (error) {
       this.logger.error('[Retrospective Cron] Failed:', error);
     }
-  }
-
-  /**
-   * Send push notification when retrospective is ready
-   */
-  async sendRetrospectiveNotification(userId: string, retrospectiveId: string) {
-    const title = '🎯 Ciclo Concluído!';
-    const description =
-      'Sua retrospectiva está pronta. Veja como foi seu desempenho!';
-
-    await this.notificationService.createNotification(
-      userId,
-      'achievement',
-      title,
-      description,
-      {
-        retrospective_id: retrospectiveId,
-        screen: 'Retrospective',
-      },
-    );
-
-    await this.notificationService.sendPushNotification(
-      userId,
-      title,
-      description,
-      {
-        type: 'retrospective_ready',
-        retrospective_id: retrospectiveId,
-        screen: 'Retrospective',
-      },
-      { channelId: 'achievements' },
-    );
-
-    this.logger.log(`[Retrospective] Notification sent to user ${userId}`);
   }
 
   /**
