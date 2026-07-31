@@ -648,6 +648,23 @@ function printOracle(params: {
   const freeKm = params.freeRunList.reduce((s, f) => s + f.run.distanceKm, 0);
   const round1 = (v: number) => Math.round(v * 10) / 10;
 
+  // Recorde esperado: a maior corrida ÚNICA entre TODAS as geradas (plano E
+  // livre). O escopo é de propósito diferente do de aderência — se a corrida
+  // livre for a maior, é ela que tem que aparecer em longest_run_km.
+  const allRuns = [
+    ...params.completed.map((c) => ({ km: c.run.distanceKm, date: c.date })),
+    ...params.freeRunList.map((f) => ({ km: f.run.distanceKm, date: f.date })),
+  ];
+  const longest = allRuns.reduce<{ km: number; date: string } | null>(
+    (best, r) => (best === null || r.km > best.km ? r : best),
+    null,
+  );
+  const longestFromFreeRun =
+    longest !== null &&
+    params.freeRunList.some(
+      (f) => f.run.distanceKm === longest.km && f.date === longest.date,
+    );
+
   console.log('\n' + '═'.repeat(72));
   console.log('  VALORES ESPERADOS — confira contra plan_retrospectives');
   console.log('═'.repeat(72));
@@ -674,16 +691,37 @@ function printOracle(params: {
   console.log(`  total_distance_km           esperado:  ${round1(planKm + freeKm)}`);
   console.log(`  total_runs_in_period        esperado:  ${params.completed.length + params.freeRunList.length}`);
   console.log(`  total_workouts_completed    esperado:  ${params.completed.length}`);
+  if (longest) {
+    console.log(`  longest_run_km              esperado:  ${longest.km}`);
+    console.log(`  longest_run_date            esperado:  ${longest.date}`);
+  }
   console.log('  ' + '─'.repeat(68));
 
   console.log(`
   ⚠️  plan_distance_completed_km NÃO pode incluir os ${round1(freeKm)} km livres.
       Se incluir, o defeito D1 da Fase 1A voltou.
+`);
 
-  SQL de conferência:
+  if (longest) {
+    console.log(
+      longestFromFreeRun
+        ? `  ✅ O recorde (${longest.km} km) veio de uma CORRIDA LIVRE — é o caso que\n` +
+            `      importa: longest_run_km conta plano E livre, ao contrário de\n` +
+            `      plan_distance_completed_km. Se vier ${round1(
+              Math.max(...params.completed.map((c) => c.run.distanceKm), 0),
+            )} km (o maior do plano),\n` +
+            `      o escopo do recorde foi estreitado por engano.\n`
+        : `  ℹ️  O recorde (${longest.km} km) veio de um treino do plano. Para exercitar\n` +
+            `      o escopo do recorde, rode com --free-run-km MAIOR que o maior\n` +
+            `      treino do plano — aí o recorde tem que vir da corrida livre.\n`,
+    );
+  }
+
+  console.log(`  SQL de conferência:
 
     SELECT plan_distance_completed_km, free_run_distance_km, total_distance_km,
            total_runs_in_period, total_workouts_completed, total_distance_planned_km,
+           longest_run_km, longest_run_date,
            distance_vs_goal_percent, completion_rate, frequency_vs_goal_percent,
            plan_window_start, plan_window_end
       FROM plan_retrospectives

@@ -128,3 +128,52 @@ function weeksIn(startStr: string, endStr: string): number {
   const days = daysBetweenInclusive(startStr, endStr);
   return Math.max(1, Math.ceil(days / 7));
 }
+
+/** Uma corrida executada, na forma mínima que o recorde precisa. */
+export interface RunRow {
+  /** ISO timestamp (UTC) — `activities.start_date`. */
+  start_date: string;
+  /** METROS — `activities.distance`. */
+  distance: number | string | null;
+}
+
+export interface LongestRun {
+  /** Km, 2 casas. `0` quando não houve corrida. */
+  km: number;
+  /** Dia em São Paulo (YYYY-MM-DD). `null` quando não houve corrida. */
+  date: string | null;
+}
+
+/**
+ * Maior corrida ÚNICA de um conjunto — o clímax da retrospectiva.
+ *
+ * Escopo é responsabilidade do CHAMADOR: passe todas as corridas da janela
+ * (plano + livres). Recorde é conquista pessoal, não medida de aderência —
+ * quem bateu o recorde numa corrida livre bateu o recorde do mesmo jeito. Isso
+ * o diferencia de `plan_distance_completed_km`, que é plano-only de propósito.
+ *
+ * Em empate, vence a MAIS ANTIGA: foi nela que a marca foi atingida primeiro.
+ */
+export function findLongestRun(runs: RunRow[]): LongestRun {
+  let bestMeters = 0;
+  let bestIso: string | null = null;
+
+  for (const r of runs) {
+    const meters = Number(r.distance) || 0;
+    if (meters <= 0) continue;
+    if (
+      meters > bestMeters ||
+      (meters === bestMeters && bestIso !== null && r.start_date < bestIso)
+    ) {
+      bestMeters = meters;
+      bestIso = r.start_date;
+    }
+  }
+
+  if (bestMeters <= 0 || bestIso === null) return { km: 0, date: null };
+
+  return {
+    km: Math.round((bestMeters / 1000) * 100) / 100,
+    date: toSaoPauloDateStr(bestIso),
+  };
+}

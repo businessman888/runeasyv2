@@ -195,6 +195,45 @@ describe('RetrospectiveService', () => {
       expect(m.planDistanceCompletedKm).toBe(5);
     });
 
+    it('o recorde do ciclo conta a CORRIDA LIVRE quando ela é a maior', async () => {
+      // Escopo do recorde é deliberadamente diferente do da aderência: os
+      // treinos do plano vão até 5 km, a corrida livre fez 15 km. O clímax dos
+      // stories tem que mostrar 15 — esconder seria mentir por tecnicismo.
+      await build({
+        training_plans: [
+          { created_at: '2026-06-01T12:00:00Z', duration_weeks: 4, frequency_per_week: 3 },
+        ],
+        workouts: twelvePlannedSixDone(),
+        activities: [
+          { start_date: '2026-06-05T10:00:00Z', distance: 5000 },
+          { start_date: '2026-06-20T18:00:00Z', distance: 15000 }, // livre
+        ],
+        readiness_history: [],
+      });
+
+      const m = await (service as any).calculateMetrics('user-1', 'plan-1');
+
+      expect(m.longestRunKm).toBe(15);
+      expect(m.longestRunDate).toBe('2026-06-20');
+      // A aderência continua plano-only — os dois escopos coexistem.
+      expect(m.planDistanceCompletedKm).toBe(30);
+    });
+
+    it('sem corridas no período, o recorde é 0/null (card de clímax some)', async () => {
+      await build({
+        training_plans: [
+          { created_at: '2026-06-01T12:00:00Z', duration_weeks: 4, frequency_per_week: 3 },
+        ],
+        workouts: twelvePlannedSixDone(),
+        activities: [],
+        readiness_history: [],
+      });
+
+      const m = await (service as any).calculateMetrics('user-1', 'plan-1');
+      expect(m.longestRunKm).toBe(0);
+      expect(m.longestRunDate).toBeNull();
+    });
+
     it('deriva o pace dos treinos do plano, não das activities', async () => {
       await build({
         training_plans: [

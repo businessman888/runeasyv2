@@ -1,71 +1,87 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
     StyleSheet,
-    ScrollView,
-    TouchableOpacity,
+    Pressable,
     ActivityIndicator,
-    Share,
+    useWindowDimensions,
+    Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { ScreenContainer } from '../components/ScreenContainer';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+    runOnJS,
+} from 'react-native-reanimated';
+import { captureRef } from 'react-native-view-shot';
 
+import { ScreenContainer } from '../components/ScreenContainer';
 import { BASE_API_URL } from '../config/api.config';
 import { authedFetch } from '../services/apiClient';
 import * as Storage from '../utils/storage';
+import { colors, fonts } from '../theme';
+import { openSystemShareSheet } from './sharing/utils/shareHandlers';
 
-interface RetrospectiveData {
-    id: string;
-    /** Total corrido no período — INCLUI corrida livre. Não é aderência. */
-    totalDistanceKm: number;
-    /** Km executados DENTRO do plano. Numerador de distanceVsGoalPercent. */
-    planDistanceCompletedKm: number;
-    /** Soma do planejado. Denominador de distanceVsGoalPercent. */
-    totalDistancePlannedKm: number;
-    freeRunDistanceKm: number;
-    totalRunsInPeriod: number;
-    totalWorkoutsCompleted: number;
-    totalWorkoutsPlanned: number;
-    avgPaceSeconds: number;
-    avgPaceFormatted: string;
-    /** Pace-alvo do plano, formatado ("m:ss" ou "—"). */
-    targetPaceFormatted: string;
-    completionRate: number;
-    distanceVsGoalPercent: number;
-    paceVsGoalPercent: number;
-    /** Cadência semanal vs. a declarada — distinta de completionRate. */
-    frequencyVsGoalPercent: number;
-    frequencyActualPerWeek: number;
-    frequencyTargetPerWeek: number;
-    aiInsights: string;
-    suggestedNextGoal: string;
-    suggestedNextGoalType: string;
-}
+import { gradientForCard, CLIMAX_CARD_INDEX, storyType } from './retrospective/storyTheme';
+import { StoryProgressBar } from './retrospective/StoryProgressBar';
+import {
+    StoryCardShell,
+    CardOpening,
+    CardVolume,
+    CardConsistency,
+    CardPace,
+    CardFun,
+    CardClimax,
+    CardNextGoal,
+    type NextGoalOption,
+} from './retrospective/StoryCards';
+import { ShareSummaryCard } from './retrospective/ShareSummaryCard';
+import type { RetrospectiveData } from './retrospective/types';
 
-const COLORS = {
-    background: '#0E0E1F',
-    cardBg: '#1A1A2E',
-    cardBgLight: 'rgba(0, 212, 255, 0.08)',
-    cyanPrimary: '#00D4FF',
-    textPrimary: '#EBEBF5',
-    textSecondary: 'rgba(235, 235, 245, 0.6)',
-    success: '#32CD32',
-    warning: '#FFC400',
-    dark: '#15152A',
-};
+/**
+ * Retrospectiva de fim de ciclo em formato STORIES (Fase 1B).
+ *
+ * ── NAVEGAÇÃO ─────────────────────────────────────────────────────────────────
+ *
+ * Padrão do Instagram, de propósito: barra segmentada no topo, toque na metade
+ * direita avança, na esquerda volta, swipe horizontal também. Reinventar a
+ * navegação de stories seria custo de aprendizado sem ganho — o usuário já sabe
+ * operar isto.
+ *
+ * NÃO há autoplay por tempo. Os cards têm números para ler e comparar; um timer
+ * empurraria o usuário para fora do card antes de ele terminar.
+ *
+ * ── OS NÚMEROS ────────────────────────────────────────────────────────────────
+ *
+ * Nada é calculado aqui. Todos os valores vêm prontos da retrospectiva (Fase
+ * 1A/1B), inclusive os dois escopos que não se misturam — aderência ao plano e
+ * total corrido. Ver `retrospective/types.ts`.
+ */
+
+const TOTAL_CARDS = 7;
 
 export function RetrospectiveScreen() {
     const navigation = useNavigation();
     const insets = useSafeAreaInsets();
+    const { width } = useWindowDimensions();
+
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState<RetrospectiveData | null>(null);
-    const [accepting, setAccepting] = useState(false);
+    const [index, setIndex] = useState(0);
+    const [sharing, setSharing] = useState(false);
+
+    // Ref do card VISÍVEL — o share por card captura exatamente o que está na tela.
+    const cardRef = useRef<View>(null);
+    // Ref do compilado, renderizado fora do viewport e capturado sob demanda.
+    const summaryRef = useRef<View>(null);
 
     useEffect(() => {
-        loadRetrospective();
+        void loadRetrospective();
     }, []);
 
     const loadRetrospective = async () => {
@@ -73,14 +89,12 @@ export function RetrospectiveScreen() {
             const userId = await Storage.getItemAsync('user_id');
             if (!userId) return;
 
-            const response = await authedFetch(`${BASE_API_URL}/training/retrospective/latest`, {
-                headers: { 'x-user-id': userId },
-            });
+            const response = await authedFetch(
+                `${BASE_API_URL}/training/retrospective/latest`,
+                { headers: { 'x-user-id': userId } },
+            );
             const result = await response.json();
-
-            if (result.hasRetrospective) {
-                setData(result.retrospective);
-            }
+            if (result.hasRetrospective) setData(result.retrospective);
         } catch (error) {
             console.error('Failed to load retrospective:', error);
         } finally {
@@ -88,50 +102,99 @@ export function RetrospectiveScreen() {
         }
     };
 
-    const handleShare = async () => {
-        if (!data) return;
-        try {
-            await Share.share({
-                message: `🏃 Completei meu ciclo de treino no RunEasy!\n\n📏 ${data.totalDistanceKm}km percorridos\n⏱️ Pace médio: ${data.avgPaceFormatted}/km\n✅ ${data.completionRate}% dos treinos completados\n\n#RunEasy #Corrida`,
-            });
-        } catch (error) {
-            console.error('Share failed:', error);
-        }
-    };
+    // ── Navegação ─────────────────────────────────────────────────────────────
 
-    const handleAcceptSuggestion = async () => {
-        if (!data) return;
-        setAccepting(true);
-        try {
-            const userId = await Storage.getItemAsync('user_id');
-            await authedFetch(`${BASE_API_URL}/training/retrospective/${data.id}/accept`, {
-                method: 'POST',
-                headers: { 'x-user-id': userId || '' },
-            });
-            // Success! The plan is already generated.
-            // Navigate back to Home (MainTabs) to see the new workout
-            (navigation as any).reset({
-                index: 0,
-                routes: [{ name: 'MainTabs' }],
-            });
-        } catch (error) {
-            console.error('Failed to accept:', error);
-        } finally {
-            setAccepting(false);
-        }
-    };
+    const goTo = useCallback((next: number) => {
+        setIndex((prev) => {
+            const clamped = Math.max(0, Math.min(TOTAL_CARDS - 1, next));
+            return clamped === prev ? prev : clamped;
+        });
+    }, []);
 
-    const handleCustomize = () => {
-        if (!data) return;
-        (navigation as any).navigate('CustomizeGoal', { retrospectiveId: data.id });
-    };
+    const advance = useCallback(() => goTo(indexRef.current + 1), [goTo]);
+    const rewind = useCallback(() => goTo(indexRef.current - 1), [goTo]);
+
+    // Espelho do índice para os callbacks do gesto, que não re-criam a cada render.
+    const indexRef = useRef(0);
+    useEffect(() => {
+        indexRef.current = index;
+    }, [index]);
+
+    const translateX = useSharedValue(0);
+
+    const swipe = Gesture.Pan()
+        .activeOffsetX([-20, 20])
+        .onUpdate((e) => {
+            translateX.value = e.translationX * 0.35; // resistência
+        })
+        .onEnd((e) => {
+            if (e.translationX < -60) runOnJS(advance)();
+            else if (e.translationX > 60) runOnJS(rewind)();
+            translateX.value = withSpring(0, { damping: 20, stiffness: 200 });
+        });
+
+    const cardAnimStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: translateX.value }],
+    }));
+
+    // ── Compartilhar ──────────────────────────────────────────────────────────
+
+    const shareView = useCallback(
+        async (ref: React.RefObject<View | null>, label: string) => {
+            if (!ref.current || sharing) return;
+            setSharing(true);
+            try {
+                const uri = await captureRef(ref, {
+                    format: 'png',
+                    quality: 1,
+                    result: 'tmpfile',
+                });
+                await openSystemShareSheet(uri);
+            } catch {
+                Alert.alert('Erro', `Não deu para gerar a imagem ${label}.`);
+            } finally {
+                setSharing(false);
+            }
+        },
+        [sharing],
+    );
+
+    const shareCurrentCard = useCallback(
+        () => shareView(cardRef, 'deste card'),
+        [shareView],
+    );
+    const shareSummary = useCallback(
+        () => shareView(summaryRef, 'do resumo'),
+        [shareView],
+    );
+
+    // ── Próxima meta ──────────────────────────────────────────────────────────
+    //
+    // Lista de opções, não um botão fixo. A Fase 5 acrescenta a meta de
+    // pace/tempo empurrando outro item aqui — o card não presume "meta =
+    // distância" em lugar nenhum.
+    const nextGoalOptions: NextGoalOption[] = React.useMemo(() => {
+        if (!data) return [];
+        return [
+            {
+                kind: 'distance',
+                label: 'Definir próxima meta',
+                description: 'Escolher uma nova distância e montar o próximo plano',
+                onPress: () =>
+                    (navigation as any).navigate('CustomizeGoal', {
+                        retrospectiveId: data.id,
+                    }),
+            },
+        ];
+    }, [data, navigation]);
+
+    // ── Estados ───────────────────────────────────────────────────────────────
 
     if (loading) {
         return (
             <ScreenContainer>
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={COLORS.cyanPrimary} />
-                    <Text style={styles.loadingText}>Carregando retrospectiva...</Text>
+                <View style={styles.stateContainer}>
+                    <ActivityIndicator size="large" color={colors.primary} />
                 </View>
             </ScreenContainer>
         );
@@ -140,484 +203,218 @@ export function RetrospectiveScreen() {
     if (!data) {
         return (
             <ScreenContainer>
-                <View style={styles.emptyContainer}>
-                    <MaterialCommunityIcons name="trophy-outline" size={64} color={COLORS.textSecondary} />
-                    <Text style={styles.emptyText}>Nenhuma retrospectiva disponível</Text>
-                    <Text style={styles.emptySubtext}>
-                        Complete seu primeiro ciclo de treino para ver sua retrospectiva!
+                <View style={styles.stateContainer}>
+                    <Ionicons
+                        name="documents-outline"
+                        size={44}
+                        color={colors.textMuted}
+                    />
+                    <Text style={styles.emptyTitle}>Nenhuma retrospectiva ainda</Text>
+                    <Text style={styles.emptyBody}>
+                        Ela fica pronta quando você concluir um ciclo de treino.
                     </Text>
+                    <Pressable
+                        onPress={() => navigation.goBack()}
+                        style={styles.emptyBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel="Voltar"
+                    >
+                        <Text style={styles.emptyBtnText}>Voltar</Text>
+                    </Pressable>
                 </View>
             </ScreenContainer>
         );
     }
 
-    const distanceGoalMet = data.distanceVsGoalPercent >= 100;
-    const distanceDiff = data.distanceVsGoalPercent - 100;
-    const paceDiff = data.paceVsGoalPercent - 100;
+    const gradient = gradientForCard(index);
+    const isLastCard = index === TOTAL_CARDS - 1;
 
     return (
         <ScreenContainer>
-            <ScrollView
-                style={styles.container}
-                contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
-                showsVerticalScrollIndicator={false}
-            >
-                {/* Header */}
+            <View style={[styles.root, { paddingTop: insets.top + 8 }]}>
+                <StoryProgressBar
+                    total={TOTAL_CARDS}
+                    current={index}
+                    accent={gradient.accent}
+                />
+
                 <View style={styles.header}>
-                    <TouchableOpacity
+                    <Text style={styles.brand}>Retrospectiva</Text>
+                    <Pressable
                         onPress={() => navigation.goBack()}
-                        style={styles.backButton}
+                        hitSlop={12}
+                        style={styles.closeBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel="Fechar retrospectiva"
                     >
-                        <Ionicons name="chevron-back" size={28} color={COLORS.textPrimary} />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Retrospectiva</Text>
-                    <TouchableOpacity onPress={handleShare} style={styles.shareButton}>
-                        <Feather name="share-2" size={22} color={COLORS.textPrimary} />
-                    </TouchableOpacity>
+                        <Ionicons name="close" size={24} color={colors.textLight} />
+                    </Pressable>
                 </View>
 
-                {/* Success Card */}
-                <View style={styles.successCard}>
-                    <View style={styles.badgeContainer}>
-                        <MaterialCommunityIcons name="trophy" size={16} color={COLORS.cyanPrimary} />
-                        <Text style={styles.badgeText}>
-                            {distanceGoalMet ? 'META BATIDA' : 'CICLO CONCLUÍDO'}
-                        </Text>
-                    </View>
-                    <Text style={styles.successTitle}>Ciclo concluído!</Text>
-                    <Text style={styles.successSubtitle}>
-                        {distanceGoalMet
-                            ? `Você superou as expectativas! Sua meta foi batida com maestria!`
-                            : `Parabéns por completar seu ciclo de treino!`
-                        }
-                    </Text>
-
-                    {/* Progress Bar */}
-                    <View style={styles.progressContainer}>
-                        <View style={styles.progressBarBg}>
-                            <View
-                                style={[
-                                    styles.progressBarFill,
-                                    { width: `${Math.min(data.completionRate, 100)}%` }
-                                ]}
-                            />
+                <GestureDetector gesture={swipe}>
+                    <Animated.View style={[styles.stage, cardAnimStyle]}>
+                        {/* A ref de captura envolve só o card — o share sai sem a
+                            barra de progresso nem o header. */}
+                        <View ref={cardRef} collapsable={false} style={styles.captureArea}>
+                            <StoryCardShell gradient={gradient} onShare={shareCurrentCard}>
+                                {renderCard(index, data, nextGoalOptions)}
+                            </StoryCardShell>
                         </View>
-                        <Text style={styles.progressText}>{data.completionRate}%</Text>
-                    </View>
-                </View>
 
-                {/* Performance Section */}
-                <Text style={styles.sectionTitle}>Performance</Text>
-
-                <View style={styles.metricsRow}>
-                    {/* Distance Card */}
-                    <View style={styles.metricCard}>
-                        <View style={styles.metricHeader}>
-                            <Text style={styles.metricLabel}>Distância</Text>
-                            <MaterialCommunityIcons
-                                name="map-marker-distance"
-                                size={20}
-                                color={COLORS.cyanPrimary}
-                            />
-                        </View>
-                        <Text style={styles.metricValue}>
-                            {data.totalDistanceKm}<Text style={styles.metricUnit}>km</Text>
-                        </Text>
-                        <View style={styles.metricDivider} />
-                        {/* A meta vem direto do backend. Antes era reconstruída
-                            dividindo o total pelo percentual — o que dava NaN/
-                            Infinity quando o percentual era 0 e, desde que o
-                            percentual passou a ter numerador só do plano,
-                            devolveria uma meta inflada. */}
-                        <Text style={styles.metricComparison}>
-                            Meta: {data.totalDistancePlannedKm}km{' '}
-                            <Text style={distanceDiff >= 0 ? styles.positive : styles.negative}>
-                                ({distanceDiff >= 0 ? '+' : ''}{distanceDiff}%)
-                            </Text>
-                        </Text>
-
-                    </View>
-
-                    {/* Pace Card */}
-                    <View style={styles.metricCard}>
-                        <View style={styles.metricHeader}>
-                            <Text style={styles.metricLabel}>Pace Médio</Text>
-                            <MaterialCommunityIcons
-                                name="speedometer"
-                                size={20}
-                                color={COLORS.cyanPrimary}
-                            />
-                        </View>
-                        <Text style={styles.metricValue}>
-                            {data.avgPaceFormatted}<Text style={styles.metricUnit}>/km</Text>
-                        </Text>
-                        <View style={styles.metricDivider} />
-                        {/* O pace-alvo real do plano. Era um "5:30" hardcoded —
-                            o backend já calculava targetPaceSeconds e o
-                            descartava antes de responder. */}
-                        <Text style={styles.metricComparison}>
-                            Meta: {data.targetPaceFormatted}{' '}
-                            <Text style={paceDiff >= 0 ? styles.positive : styles.negative}>
-                                ({paceDiff >= 0 ? '+' : ''}{paceDiff}%)
-                            </Text>
-                        </Text>
-
-                    </View>
-                </View>
-
-                {/* Frequency Card */}
-                <View style={styles.frequencyCard}>
-                    <View style={styles.frequencyLeft}>
-                        <Text style={styles.metricLabel}>Frequência Semanal</Text>
-                        {/* Valor e delta agora são a MESMA métrica. Antes o
-                            valor era completionRate (conclusão por sessão) e o
-                            delta vinha de frequencyVsGoalPercent — que, por sua
-                            vez, era uma cópia literal de completionRate no
-                            backend, então o delta era sempre completionRate-100. */}
-                        <Text style={styles.frequencyValue}>
-                            {data.frequencyActualPerWeek}/sem{' '}
-                            <Text style={styles.frequencyDiff}>
-                                de {data.frequencyTargetPerWeek} ({data.frequencyVsGoalPercent}%)
-                            </Text>
-                        </Text>
-                    </View>
-                    <View style={styles.frequencyBars}>
-                        {[1, 2, 3, 4].map((_, i) => (
-                            <View
-                                key={i}
-                                style={[
-                                    styles.frequencyBar,
-                                    { height: 20 + (i * 12), opacity: 0.4 + (i * 0.2) }
-                                ]}
-                            />
-                        ))}
-                    </View>
-                </View>
-
-                {/* AI Insights Card */}
-                <View style={styles.insightsCard}>
-                    <View style={styles.insightsHeader}>
-                        <MaterialCommunityIcons
-                            name="lightbulb-on"
-                            size={24}
-                            color={COLORS.cyanPrimary}
+                        {/* Zonas de toque: metade esquerda volta, direita avança.
+                            Ficam ABAIXO do botão de share na ordem de render, então
+                            não engolem o toque dele. */}
+                        <Pressable
+                            style={[styles.tapZone, { left: 0, width: width * 0.3 }]}
+                            onPress={rewind}
+                            accessibilityRole="button"
+                            accessibilityLabel="Card anterior"
                         />
-                        <Text style={styles.insightsTitle}>Insights do Treinador IA</Text>
-                    </View>
-                    <Text style={styles.insightsText}>{data.aiInsights}</Text>
-                </View>
+                        <Pressable
+                            style={[styles.tapZone, { right: 0, width: width * 0.3 }]}
+                            onPress={advance}
+                            accessibilityRole="button"
+                            accessibilityLabel="Próximo card"
+                        />
+                    </Animated.View>
+                </GestureDetector>
 
-                {/* Next Goal Section */}
-                <View style={styles.nextGoalSection}>
-                    <Text style={styles.nextGoalLabel}>Próxima Meta Sugerida</Text>
-                    <Text style={styles.nextGoalValue}>{data.suggestedNextGoal}</Text>
-                    <Text style={styles.nextGoalSubtext}>Baseado no seu progresso atual</Text>
-
-                    <TouchableOpacity
-                        style={styles.acceptButton}
-                        onPress={handleAcceptSuggestion}
-                        disabled={accepting}
+                {/* O compartilhamento do compilado só faz sentido no fim do arco. */}
+                {isLastCard && (
+                    <Pressable
+                        onPress={shareSummary}
+                        style={styles.summaryShareBtn}
+                        disabled={sharing}
+                        accessibilityRole="button"
+                        accessibilityLabel="Compartilhar resumo do ciclo"
+                        accessibilityState={{ busy: sharing }}
                     >
-                        {accepting ? (
-                            <ActivityIndicator color={COLORS.dark} />
-                        ) : (
-                            <Text style={styles.acceptButtonText}>Aceitar Sugestão do Treinador</Text>
-                        )}
-                    </TouchableOpacity>
+                        <Ionicons name="share-outline" size={18} color={colors.textLight} />
+                        <Text style={styles.summaryShareText}>Compartilhar resumo</Text>
+                    </Pressable>
+                )}
+            </View>
 
-                    <TouchableOpacity
-                        style={styles.customizeButton}
-                        onPress={handleCustomize}
-                    >
-                        <Text style={styles.customizeButtonText}>Personalizar Novas Metas</Text>
-                    </TouchableOpacity>
-                </View>
-            </ScrollView>
+            {/* Fora do viewport: existe só para ser capturado. */}
+            <View style={styles.offscreen} pointerEvents="none">
+                <ShareSummaryCard ref={summaryRef} data={data} />
+            </View>
         </ScreenContainer>
     );
 }
 
+function renderCard(
+    index: number,
+    data: RetrospectiveData,
+    nextGoalOptions: NextGoalOption[],
+) {
+    switch (index) {
+        case 0:
+            return <CardOpening data={data} />;
+        case 1:
+            return <CardVolume data={data} />;
+        case 2:
+            return <CardConsistency data={data} />;
+        case 3:
+            return <CardPace data={data} />;
+        case 4:
+            return <CardFun data={data} />;
+        case CLIMAX_CARD_INDEX:
+            return <CardClimax data={data} />;
+        default:
+            return <CardNextGoal data={data} options={nextGoalOptions} />;
+    }
+}
+
 const styles = StyleSheet.create({
-    container: {
+    root: {
         flex: 1,
-        paddingHorizontal: 16,
-    },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    loadingText: {
-        marginTop: 16,
-        color: COLORS.textSecondary,
-        fontSize: 16,
-    },
-    emptyContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 32,
-    },
-    emptyText: {
-        marginTop: 16,
-        color: COLORS.textPrimary,
-        fontSize: 18,
-        fontWeight: '600',
-    },
-    emptySubtext: {
-        marginTop: 8,
-        color: COLORS.textSecondary,
-        fontSize: 14,
-        textAlign: 'center',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingVertical: 16,
-        marginTop: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
     },
-    backButton: {
+    brand: {
+        fontFamily: fonts.semibold,
+        fontSize: 15,
+        color: 'rgba(235,235,245,0.65)',
+    },
+    closeBtn: {
         width: 44,
         height: 44,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: COLORS.textPrimary,
-    },
-    shareButton: {
-        width: 44,
-        height: 44,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    successCard: {
-        backgroundColor: COLORS.cardBg,
-        borderRadius: 16,
-        padding: 20,
-        marginBottom: 24,
-        borderWidth: 1,
-        borderColor: 'rgba(0, 212, 255, 0.2)',
-    },
-    badgeContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0, 212, 255, 0.15)',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 20,
-        alignSelf: 'flex-start',
-        marginBottom: 12,
-    },
-    badgeText: {
-        color: COLORS.cyanPrimary,
-        fontSize: 12,
-        fontWeight: '700',
-        marginLeft: 6,
-    },
-    successTitle: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: COLORS.textPrimary,
-        marginBottom: 8,
-    },
-    successSubtitle: {
-        fontSize: 14,
-        color: COLORS.textSecondary,
-        lineHeight: 20,
-        marginBottom: 16,
-    },
-    progressContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    progressBarBg: {
-        flex: 1,
-        height: 8,
-        backgroundColor: 'rgba(0, 212, 255, 0.2)',
-        borderRadius: 4,
-        marginRight: 12,
-    },
-    progressBarFill: {
-        height: '100%',
-        backgroundColor: COLORS.cyanPrimary,
-        borderRadius: 4,
-    },
-    progressText: {
-        color: COLORS.cyanPrimary,
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: COLORS.textPrimary,
-        marginBottom: 16,
-    },
-    metricsRow: {
-        flexDirection: 'row',
-        gap: 12,
-        marginBottom: 12,
-    },
-    metricCard: {
-        flex: 1,
-        backgroundColor: COLORS.cardBg,
-        borderRadius: 16,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)',
-    },
-    metricHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    metricLabel: {
-        fontSize: 14,
-        color: COLORS.textSecondary,
-    },
-    metricValue: {
-        fontSize: 32,
-        fontWeight: '700',
-        color: COLORS.cyanPrimary,
-    },
-    metricUnit: {
-        fontSize: 16,
-        fontWeight: '500',
-    },
-    metricDivider: {
-        height: 3,
-        backgroundColor: COLORS.cyanPrimary,
-        borderRadius: 2,
-        marginVertical: 12,
-        width: '60%',
-    },
-    metricComparison: {
-        fontSize: 12,
-        color: COLORS.textSecondary,
-    },
-    positive: {
-        color: COLORS.success,
-    },
-    negative: {
-        color: COLORS.warning,
-    },
-
-    frequencyCard: {
-        backgroundColor: COLORS.cardBg,
-        borderRadius: 16,
-        padding: 16,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)',
-    },
-    frequencyLeft: {
-        flex: 1,
-    },
-    frequencyValue: {
-        fontSize: 28,
-        fontWeight: '700',
-        color: COLORS.cyanPrimary,
-        marginTop: 4,
-    },
-    frequencyDiff: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: COLORS.success,
-    },
-    frequencyBars: {
-        flexDirection: 'row',
         alignItems: 'flex-end',
-        gap: 6,
+        justifyContent: 'center',
     },
-    frequencyBar: {
-        width: 16,
-        backgroundColor: COLORS.cyanPrimary,
-        borderRadius: 4,
+    stage: {
+        flex: 1,
+        paddingHorizontal: 16,
+        paddingBottom: 16,
     },
-    insightsCard: {
-        backgroundColor: COLORS.cardBgLight,
-        borderRadius: 16,
-        padding: 20,
-        marginBottom: 24,
-        borderWidth: 1,
-        borderColor: 'rgba(0, 212, 255, 0.3)',
+    captureArea: {
+        flex: 1,
+        borderRadius: 28,
+        overflow: 'hidden',
     },
-    insightsHeader: {
+    tapZone: {
+        position: 'absolute',
+        top: 0,
+        bottom: 80, // libera o canto do botão de share
+    },
+    summaryShareBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 12,
+        justifyContent: 'center',
+        gap: 8,
+        marginHorizontal: 16,
+        marginBottom: 16,
+        minHeight: 48,
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: 'rgba(235,235,245,0.18)',
+        backgroundColor: 'rgba(255,255,255,0.06)',
     },
-    insightsTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: COLORS.cyanPrimary,
-        marginLeft: 10,
+    summaryShareText: {
+        fontFamily: fonts.semibold,
+        fontSize: 15,
+        color: colors.textLight,
     },
-    insightsText: {
-        fontSize: 14,
-        color: COLORS.textPrimary,
-        lineHeight: 22,
+    offscreen: {
+        position: 'absolute',
+        left: -9999,
+        top: -9999,
+        opacity: 0,
     },
-    nextGoalSection: {
-        backgroundColor: COLORS.cardBg,
-        borderRadius: 20,
-        padding: 24,
+    stateContainer: {
+        flex: 1,
         alignItems: 'center',
-        marginBottom: 24,
+        justifyContent: 'center',
+        gap: 12,
+        paddingHorizontal: 32,
     },
-    nextGoalLabel: {
-        fontSize: 14,
-        color: COLORS.textSecondary,
-        marginBottom: 8,
-    },
-    nextGoalValue: {
-        fontSize: 28,
-        fontWeight: '700',
-        color: COLORS.cyanPrimary,
+    emptyTitle: {
+        ...storyType.title,
+        fontSize: 20,
         textAlign: 'center',
     },
-    nextGoalSubtext: {
-        fontSize: 12,
-        color: COLORS.textSecondary,
-        marginTop: 8,
-        marginBottom: 24,
+    emptyBody: {
+        ...storyType.body,
+        fontSize: 15,
+        textAlign: 'center',
     },
-    acceptButton: {
-        backgroundColor: COLORS.cyanPrimary,
-        borderRadius: 15,
-        paddingVertical: 16,
+    emptyBtn: {
+        marginTop: 16,
+        minHeight: 48,
+        justifyContent: 'center',
         paddingHorizontal: 32,
-        width: '100%',
-        alignItems: 'center',
-        marginBottom: 12,
+        borderRadius: 24,
+        backgroundColor: colors.primary,
     },
-    acceptButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: COLORS.dark,
-    },
-    customizeButton: {
-        borderWidth: 1,
-        borderColor: COLORS.cyanPrimary,
-        borderRadius: 15,
-        paddingVertical: 16,
-        paddingHorizontal: 32,
-        width: '100%',
-        alignItems: 'center',
-    },
-    customizeButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: COLORS.cyanPrimary,
+    emptyBtnText: {
+        fontFamily: fonts.bold,
+        fontSize: 15,
+        color: colors.background,
     },
 });
-
-export default RetrospectiveScreen;

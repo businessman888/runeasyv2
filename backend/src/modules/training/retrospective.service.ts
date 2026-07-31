@@ -6,7 +6,11 @@ import { TrainingService } from './training.service';
 import { TrainingPlanRequest } from './training-ai.service';
 import { AIRouterService, AI_FEATURES } from '../../common/ai';
 import { paceValueToSecondsPerKm } from '../../common/pace-calculator';
-import { derivePlanWindow, isPlanFinished } from './helpers/plan-window.helper';
+import {
+  derivePlanWindow,
+  isPlanFinished,
+  findLongestRun,
+} from './helpers/plan-window.helper';
 import { toSaoPauloDateStr } from './wellness/helpers/streak.helper';
 
 /**
@@ -55,6 +59,18 @@ export interface RetrospectiveMetrics {
   totalRunsInPeriod: number;
   freeRunDistanceKm: number;
 
+  /**
+   * Maior distância de UMA ÚNICA corrida no ciclo — o clímax da retrospectiva.
+   *
+   * Escopo deliberadamente DIFERENTE do resto do bloco de aderência: conta
+   * TODAS as corridas da janela, do plano e livres. Recorde é conquista
+   * pessoal, não medida de cumprimento de plano — quem bateu o recorde numa
+   * corrida livre bateu o recorde do mesmo jeito.
+   */
+  longestRunKm: number;
+  /** Dia (São Paulo) do recorde. `null` quando não houve corrida no período. */
+  longestRunDate: string | null;
+
   // ── Contexto ──
   avgReadinessScore: number;
   readinessCheckIns: number;
@@ -92,6 +108,9 @@ export interface Retrospective {
   planDistanceCompletedKm: number;
   freeRunDistanceKm: number;
   totalRunsInPeriod: number;
+  /** Maior corrida única do ciclo (plano OU livre) — o clímax dos stories. */
+  longestRunKm: number;
+  longestRunDate: string | null;
   frequencyActualPerWeek: number;
   frequencyTargetPerWeek: number;
   planWindowStart: string | null;
@@ -107,11 +126,25 @@ export interface Retrospective {
   suggestedNextGoal: string;
   suggestedNextGoalType: string;
 
+  /** Rótulo PT-BR da meta do ciclo ("10 Km", "Meia Maratona", nome da prova). */
+  planGoalLabel: string | null;
+  /** Duração do plano em semanas — contexto do card de abertura. */
+  planDurationWeeks: number | null;
+
   // Status
   status: 'pending' | 'processing' | 'completed' | 'failed';
   createdAt: string;
   processedAt: string | null;
 }
+
+/** Rótulos PT-BR das metas de distância. Espelha os labels do TrainingAIService. */
+const GOAL_LABELS: Record<string, string> = {
+  '5k': '5 Km',
+  '10k': '10 Km',
+  half_marathon: 'Meia Maratona',
+  marathon: 'Maratona',
+  general_fitness: 'Condicionamento',
+};
 
 export interface CustomizePlanDto {
   distance_goal: string;
@@ -328,6 +361,8 @@ export class RetrospectiveService {
           total_distance_km: metrics.totalDistanceKm,
           total_runs_in_period: metrics.totalRunsInPeriod,
           free_run_distance_km: metrics.freeRunDistanceKm,
+          longest_run_km: metrics.longestRunKm,
+          longest_run_date: metrics.longestRunDate,
           // Aderência ao plano
           total_distance_planned_km: metrics.totalDistancePlannedKm,
           plan_distance_completed_km: metrics.planDistanceCompletedKm,
@@ -525,6 +560,10 @@ export class RetrospectiveService {
       totalDistanceKm - planDistanceCompletedKm,
     );
 
+    // Recorde do ciclo — a maior corrida ÚNICA. Sai do mesmo array já
+    // carregado (zero query extra) e cobre plano + corrida livre de propósito.
+    const longest = findLongestRun(activities);
+
     // ── Contexto ────────────────────────────────────────────────────────────
     const { data: readinessHistory } = await supabase
       .from('readiness_history')
@@ -594,6 +633,8 @@ export class RetrospectiveService {
       totalDistanceKm: Math.round(totalDistanceKm * 10) / 10,
       totalRunsInPeriod: activities.length,
       freeRunDistanceKm: Math.round(freeRunDistanceKm * 10) / 10,
+      longestRunKm: longest.km,
+      longestRunDate: longest.date,
       avgReadinessScore: Math.round(avgReadinessScore * 10) / 10,
       readinessCheckIns: readinessHistory?.length || 0,
       planWindowStart: window.startStr,
@@ -686,6 +727,7 @@ ADERÊNCIA AO PLANO:
 TOTAL CORRIDO NO PERÍODO (inclui corridas livres, fora do plano):
 - Distância Total: ${metrics.totalDistanceKm}km em ${metrics.totalRunsInPeriod} corridas
 - Fora do plano: ${metrics.freeRunDistanceKm}km
+- Maior corrida única: ${metrics.longestRunKm}km${metrics.longestRunDate ? ` (em ${metrics.longestRunDate})` : ''}
 
 - Score Médio de Prontidão: ${metrics.avgReadinessScore}/100 (${metrics.readinessCheckIns} check-ins)
 
@@ -768,9 +810,14 @@ Responda APENAS com JSON.`;
   async getLatestRetrospective(userId: string): Promise<Retrospective | null> {
     const supabase = this.supabaseService.getClient();
 
+    // Embed do plano (FK plan_retrospectives_plan_id_fkey) numa query só. O card
+    // de abertura dos stories precisa da META e da DURAÇÃO do ciclo, que vivem
+    // em `training_plans` — sem isso ele não tem o que contextualizar.
     const { data, error } = await supabase
       .from('plan_retrospectives')
-      .select('*')
+      .select(
+        '*, training_plans(goal, goal_type, race_name, race_distance, duration_weeks)',
+      )
       .eq('user_id', userId)
       .eq('status', 'completed')
       .order('created_at', { ascending: false })
@@ -1139,6 +1186,17 @@ Responda APENAS com JSON.`;
    */
   private mapToRetrospective(data: any): Retrospective {
     const num = (v: unknown): number => Number(v) || 0;
+
+    // `training_plans` só vem quando a query pediu o embed (getLatestRetrospective).
+    // No caminho de geração é `undefined`, e os campos ficam null — a UI degrada.
+    const plan = data.training_plans ?? null;
+    const goalLabel = plan
+      ? plan.goal_type === 'race' && plan.race_name
+        ? plan.race_name
+        : (GOAL_LABELS[plan.goal] ??
+          (plan.race_distance ? `${plan.race_distance} Km` : null))
+      : null;
+
     return {
       id: data.id,
       userId: data.user_id,
@@ -1147,6 +1205,8 @@ Responda APENAS com JSON.`;
       totalDistanceKm: num(data.total_distance_km),
       totalRunsInPeriod: num(data.total_runs_in_period),
       freeRunDistanceKm: num(data.free_run_distance_km),
+      longestRunKm: num(data.longest_run_km),
+      longestRunDate: data.longest_run_date ?? null,
       // Aderência ao plano
       totalDistancePlannedKm: num(data.total_distance_planned_km),
       planDistanceCompletedKm: num(data.plan_distance_completed_km),
@@ -1166,6 +1226,8 @@ Responda APENAS com JSON.`;
       aiInsights: data.ai_insights,
       suggestedNextGoal: data.suggested_next_goal,
       suggestedNextGoalType: data.suggested_next_goal_type,
+      planGoalLabel: goalLabel,
+      planDurationWeeks: plan?.duration_weeks ?? null,
       status: data.status,
       createdAt: data.created_at,
       processedAt: data.processed_at,
