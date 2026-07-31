@@ -22,7 +22,9 @@
     "qa:ai-cost-audit": "ts-node scripts/ai-cost-audit.ts",
     "qa:sim-revenuecat": "ts-node scripts/sim-revenuecat.ts",
     "qa:sim-revenuecat:staging": "ts-node scripts/sim-revenuecat.ts --env staging",
-    "qa:sim-revenuecat:prod": "ts-node scripts/sim-revenuecat.ts --env production"
+    "qa:sim-revenuecat:prod": "ts-node scripts/sim-revenuecat.ts --env production",
+    "qa:sim-workouts": "ts-node scripts/sim-workouts.ts",
+    "qa:sim-workouts:retro-1a": "ts-node scripts/sim-workouts.ts --env staging --completions 5 --free-runs 1 --free-run-km 8 --rpe --generate-retrospective"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
@@ -82,6 +84,10 @@
       "ts"
     ],
     "rootDir": "src",
+    "roots": [
+      "<rootDir>",
+      "<rootDir>/../scripts"
+    ],
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
