@@ -461,19 +461,38 @@ async function main() {
   console.log(`✅ Tester é Pro (plan=${sub.plan}, status=${sub.status})`);
 
   // ── 3. Plano ativo + treinos ──────────────────────────────────────────────
-  const overview = await httpJson<PlanOverview>(
-    `${apiBaseUrl}/api/training/plan/overview`,
-    { label: 'Busca do plano ativo', headers: authHeaders },
-  );
+  //
+  // Só busca o plano quando há o que fazer com ele. A geração da retrospectiva
+  // marca `training_plans.status = 'completed'`, e aí `/plan/overview` passa a
+  // devolver 404 — buscar incondicionalmente fazia
+  // `--completions 0 --generate-retrospective` (o caso de "só gera a retro,
+  // os treinos já estão lá") morrer num 404 que nada tinha a ver com a
+  // retrospectiva.
+  const needsPlan = completions > 0 || freeRuns > 0;
 
-  const allWorkouts = overview.weeks
-    .flatMap((w) => w.workouts)
-    .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
-  const pending = allWorkouts.filter((w) => w.status === 'pending');
+  let planId = '(sem plano carregado)';
+  let allWorkouts: PlanWorkout[] = [];
+  let pending: PlanWorkout[] = [];
 
-  console.log(
-    `✅ Plano ${overview.overview.plan_id} — ${allWorkouts.length} treinos, ${pending.length} pendentes\n`,
-  );
+  if (needsPlan) {
+    const overview = await httpJson<PlanOverview>(
+      `${apiBaseUrl}/api/training/plan/overview`,
+      { label: 'Busca do plano ativo', headers: authHeaders },
+    );
+    planId = overview.overview.plan_id;
+    allWorkouts = overview.weeks
+      .flatMap((w) => w.workouts)
+      .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
+    pending = allWorkouts.filter((w) => w.status === 'pending');
+
+    console.log(
+      `✅ Plano ${planId} — ${allWorkouts.length} treinos, ${pending.length} pendentes\n`,
+    );
+  } else {
+    console.log(
+      `ℹ️  Nada a concluir (--completions 0, --free-runs 0) — pulando a busca do plano.\n`,
+    );
+  }
 
   if (pending.length < completions) {
     console.warn(
@@ -625,7 +644,7 @@ async function main() {
     );
   }
 
-  printOracle({ completed, freeRunList, retroId, planId: overview.overview.plan_id });
+  printOracle({ completed, freeRunList, retroId, planId });
 }
 
 function fmtPace(sec: number): string {
