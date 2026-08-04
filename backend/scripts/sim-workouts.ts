@@ -226,6 +226,29 @@ export function toStartedAt(dateStr: string, hour = 7): string {
   return `${dateStr}T${hh}:00:00-03:00`;
 }
 
+/** Hoje em São Paulo (YYYY-MM-DD) — a mesma referência que o backend usa. */
+export function saoPauloTodayStr(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
+/**
+ * A semana já fechou em relação a hoje? Espelha `isPlanFinished` do backend.
+ *
+ * O insight semanal só existe para semana FECHADA (`week_end < hoje`), e um
+ * plano recém-gerado tem TODAS as semanas no futuro — `resolvePlanStartDate`
+ * clampa o início para >= hoje. Sem este aviso, o roteiro de "tester novo"
+ * conclui os treinos e só descobre o problema no fim, num `no_eligible_week`
+ * que parece bug do backend.
+ */
+export function isWeekClosed(weekEndStr: string, todayStr: string): boolean {
+  return weekEndStr < todayStr;
+}
+
 /**
  * Rota GPS sintética: uma linha reta partindo de um ponto, com espaçamento
  * temporal coerente com a duração. Só é usada com `--gps`.
@@ -557,7 +580,15 @@ async function main() {
         wk.workouts.map((w) => ({ ...w, week_number: wk.week_number })),
       )
       .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
-    pending = allWorkouts.filter((w) => w.status === 'pending');
+    // `missed` também entra: um plano com datas no passado (cenário de tester
+    // novo, cujo plano foi recuado para ter semana fechada) tem os pendentes
+    // vencidos carimbados como `missed` assim que alguém abre a agenda no app
+    // — `getScheduleWithStatus` faz isso para dono Pro. O backend aceita
+    // concluir um `missed` sem ressalva; só o filtro daqui os escondia, e o
+    // resultado era "0 pendentes" num plano cheio de treinos por concluir.
+    pending = allWorkouts.filter(
+      (w) => w.status === 'pending' || w.status === 'missed',
+    );
 
     console.log(
       `✅ Plano ${planId} — ${allWorkouts.length} treinos, ${pending.length} pendentes\n`,
@@ -571,11 +602,34 @@ async function main() {
       weekPlannedKm = ctx.plannedKm;
       weekPlannedCount = ctx.plannedCount;
 
+      const todayStr = saoPauloTodayStr();
+      const closed = isWeekClosed(weekEndStr, todayStr);
+
       console.log(
         `🎯 Semana ${targetWeek}: ${weekStartStr} a ${weekEndStr} — ` +
           `${weekPlannedCount} treinos (${round1(weekPlannedKm)} km), ` +
-          `${pending.length} pendentes\n`,
+          `${pending.length} a concluir  ${closed ? '[FECHADA]' : '[EM ANDAMENTO]'}\n`,
       );
+
+      // Aviso ANTES de escrever qualquer coisa. Sem ele, o roteiro de tester
+      // novo conclui os treinos e só falha no fim, num `no_eligible_week` que
+      // parece bug do backend em vez de calendário.
+      if (!closed && args['generate-weekly-insight'] === true) {
+        console.warn(
+          `⚠️  A semana ${targetWeek} termina em ${weekEndStr} e hoje é ${todayStr} —\n` +
+            `    ela ainda NÃO fechou, então o insight vai responder\n` +
+            `    'no_eligible_week'. O insight semanal só existe para semana\n` +
+            `    encerrada (week_end < hoje), e isso é a regra certa.\n\n` +
+            `    Plano recém-gerado tem TODAS as semanas no futuro:\n` +
+            `    resolvePlanStartDate clampa o início para >= hoje.\n\n` +
+            `    Para ter semana fechada num tester novo, recue o plano ANTES de\n` +
+            `    concluir qualquer treino (múltiplo de 7 preserva os dias):\n\n` +
+            `      select shift_pending_workouts('<plan_id>', -14);\n\n` +
+            `    Não existe caminho por endpoint para isso: a re-âncora só move\n` +
+            `    para FRENTE. As conclusões seguem passando pelos endpoints reais\n` +
+            `    — o SQL só arruma o calendário.\n`,
+        );
+      }
     }
   } else {
     console.log(

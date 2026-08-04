@@ -3,6 +3,7 @@ import {
   buildSyntheticRun,
   buildSyntheticRoute,
   buildWeekContext,
+  isWeekClosed,
   makeExternalId,
   makeRng,
   parseArgs,
@@ -383,6 +384,18 @@ describe('buildWeekContext', () => {
     const ctx = buildWeekContext(desordenado, 2);
     expect(ctx.startStr).toBe('2026-06-08');
     expect(ctx.endStr).toBe('2026-06-12');
+  });
+
+  it('isWeekClosed espelha isPlanFinished do backend', () => {
+    const ctx = buildWeekContext(PLAN, 2); // termina em 2026-06-12
+
+    // week_end é inclusivo: no próprio dia do último treino ainda corre.
+    expect(isWeekClosed(ctx.endStr, '2026-06-12')).toBe(false);
+    expect(isWeekClosed(ctx.endStr, '2026-06-13')).toBe(true);
+
+    // O caso que motiva o aviso: plano recém-gerado começa hoje, então toda
+    // semana está no futuro e nenhuma é elegível para insight.
+    expect(isWeekClosed('2026-08-10', '2026-08-04')).toBe(false);
   });
 
   it('FALHA ALTO quando a semana não existe, listando as disponíveis', () => {
