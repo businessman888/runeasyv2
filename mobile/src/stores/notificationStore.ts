@@ -4,7 +4,10 @@ import * as Storage from '../utils/storage';
 import { authedFetch } from '../services/apiClient';
 
 // Notification types matching backend
-export type NotificationType = 'recovery_analysis' | 'workout_sync' | 'achievement' | 'reminder' | 'system';
+// `weekly_insight` (Fase 2A) é o insight de fim de semana do plano. Type próprio
+// e não 'recovery_analysis' reusado, para a lista e o filtro conseguirem
+// distingui-lo da retrospectiva de fim de ciclo.
+export type NotificationType = 'recovery_analysis' | 'weekly_insight' | 'workout_sync' | 'achievement' | 'reminder' | 'system';
 
 export interface AppNotification {
     id: string;

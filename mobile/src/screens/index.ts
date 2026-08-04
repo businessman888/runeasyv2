@@ -24,6 +24,7 @@ export * from './SupportScreen';
 export * from './DeviceConnectScreen';
 export * from './DeviceReadMoreScreen';
 export * from './RetrospectiveScreen';
+export * from './weekly-insight/WeeklyInsightScreen';
 export * from './CustomizeGoalScreen';
 export * from './ManualWorkoutConfigScreen';
 export * from './PrePaywallScreen';

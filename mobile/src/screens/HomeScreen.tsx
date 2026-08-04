@@ -40,6 +40,9 @@ import { GlassTeaseOverlay } from '../components/upgrade/GlassTeaseOverlay';
 import { ProCtaButton } from '../components/upgrade/ProCtaButton';
 import { ProTeaseBadge } from '../components/upgrade/ProTeaseBadge';
 import { PlanGeneratingOverlay } from '../components/loading/PlanGeneratingOverlay';
+import { WeeklyInsightCard } from '../components/insight/WeeklyInsightCard';
+import { WeeklyInsightEntry } from '../components/insight/WeeklyInsightEntry';
+import { useWeeklyInsightStore } from '../stores/weeklyInsightStore';
 import type { WorkoutData } from '../components/WorkoutCard';
 
 import { BASE_API_URL } from '../config/api.config';
@@ -140,6 +143,9 @@ export function HomeScreen({ navigation }: any) {
     const [recoveryTimeLeft, setRecoveryTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 });
     const [recoveryProgress, setRecoveryProgress] = useState(0);
     const [retrospectiveReady, setRetrospectiveReady] = useState(false);
+    // A busca é feita pelo <WeeklyInsightEntry/> logo abaixo — aqui só lemos o
+    // resultado, para o card e o modal compartilharem uma única requisição.
+    const weeklyInsight = useWeeklyInsightStore((s) => s.latest);
 
     // Plan generation overlay — driven by the shared gate hook (reads
     // trainingStore.generationStatus + polls while focused, independent of the
@@ -697,6 +703,17 @@ export function HomeScreen({ navigation }: any) {
                     </View>
                 )}
 
+                {/* Insight semanal — card persistente. Independe de `seen_at`:
+                    é a rede de segurança de quem fechou o modal sem abrir. */}
+                {weeklyInsight && (
+                    <WeeklyInsightCard
+                        insight={weeklyInsight}
+                        unread={weeklyInsight.seen_at === null}
+                        onPress={() => navigation.navigate('WeeklyInsight')}
+                        style={styles.weeklyInsightCard}
+                    />
+                )}
+
                 {/* Retrospective Card - Show when ready */}
                 {retrospectiveReady && (
                     <TouchableOpacity
@@ -1040,6 +1057,14 @@ export function HomeScreen({ navigation }: any) {
                     canRetry={planGenRetries < 3}
                 />
             )}
+
+            {/*
+              Insight semanal: busca o dado (para o card acima e para o modal) e
+              abre a folha quando há semana nova não vista. Montado na home
+              porque é a primeira tela após os gates de auth/onboarding — não
+              precisa replicar essas condições.
+            */}
+            <WeeklyInsightEntry />
         </ScreenContainer >
     );
 }
@@ -1536,6 +1561,9 @@ const styles = StyleSheet.create({
         color: '#EBEBF5',
     },
     // Retrospective Card
+    weeklyInsightCard: {
+        marginBottom: spacing.md,
+    },
     retrospectiveCard: {
         backgroundColor: 'rgba(0, 212, 255, 0.08)',
         borderRadius: borderRadius.lg,

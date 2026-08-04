@@ -38,6 +38,7 @@ import {
     DeviceConnectScreen,
     DeviceReadMoreScreen,
     RetrospectiveScreen,
+    WeeklyInsightScreen,
     CustomizeGoalScreen,
     ManualWorkoutConfigScreen,
     RunningScreen,
@@ -391,6 +392,14 @@ export function AppNavigator() {
                         <Stack.Screen
                             name="Retrospective"
                             component={RetrospectiveScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'card',
+                            }}
+                        />
+                        <Stack.Screen
+                            name="WeeklyInsight"
+                            component={WeeklyInsightScreen}
                             options={{
                                 headerShown: false,
                                 presentation: 'card',

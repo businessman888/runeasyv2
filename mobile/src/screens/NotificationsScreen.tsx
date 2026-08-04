@@ -49,6 +49,9 @@ type DisplayType = 'insight' | 'workout' | 'achievement' | 'reminder';
 function mapNotificationType(type: NotificationType): DisplayType {
     switch (type) {
         case 'recovery_analysis':
+        // Fase 2B: o insight semanal entra no mesmo card destacado e no filtro
+        // "insights" — é conteúdo analítico, irmão da retrospectiva.
+        case 'weekly_insight':
             return 'insight';
         case 'workout_sync':
             return 'workout';
