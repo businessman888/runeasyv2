@@ -703,11 +703,18 @@ export class TrainingService {
    *   (available_days) — the calendar never gets scrambled.
    * - Completed/skipped workouts are untouched; nothing is marked as done.
    *
+   * @param reclaimFromDate  (Fase 2B) Data YYYY-MM-DD a partir da qual TODA
+   *   sessão não concluída volta a contar como "restante", mesmo estando antes
+   *   da fronteira de progresso. Usado por "repetir semana", que precisa trazer
+   *   de volta as sessões perdidas NO MEIO da semana repetida. Omitir preserva
+   *   o comportamento original (só o que vem depois do último dia treinado).
+   *
    * Returns { shifted, deltaDays } for logging/tests.
    */
   async reanchorRemainingWorkoutsToToday(
     userId: string,
     planId: string,
+    reclaimFromDate?: string,
   ): Promise<{ shifted: number; deltaDays: number }> {
     const { data: rows, error } = await this.supabaseService
       .from('workouts')
@@ -733,10 +740,24 @@ export class TrainingService {
       >((max, w) => (max === null || w.scheduled_date > max ? w.scheduled_date : max), null);
 
     // The part of the plan still to run: non-completed sessions after the frontier.
+    //
+    // `reclaimFromDate` ABRE a fronteira a partir de uma data (Fase 2B,
+    // "repetir semana"). Sem ele, repetir uma semana em que a pessoa treinou
+    // SEGUNDA e QUARTA e faltou TERÇA deixaria a terça para trás — a fronteira
+    // seria quarta e a terça é anterior a ela. E o resultado dependeria de o
+    // usuário ter aberto a agenda: `getScheduleWithStatus` carimba `missed` nos
+    // vencidos de um Pro, e o RPC só desloca linhas `pending` — então a mesma
+    // ação produziria calendários diferentes.
+    //
+    // Quem chama sem o parâmetro (o webhook do RevenueCat) mantém o
+    // comportamento original: só o que vem DEPOIS do último dia treinado.
+    const includeFrom = (w: WorkoutRow): boolean => {
+      if (reclaimFromDate && w.scheduled_date >= reclaimFromDate) return true;
+      return frontier === null || w.scheduled_date > frontier;
+    };
+
     const remaining = all.filter(
-      (w) =>
-        (w.status === 'pending' || w.status === 'missed') &&
-        (frontier === null || w.scheduled_date > frontier),
+      (w) => (w.status === 'pending' || w.status === 'missed') && includeFrom(w),
     );
     if (remaining.length === 0) {
       return { shifted: 0, deltaDays: 0 };

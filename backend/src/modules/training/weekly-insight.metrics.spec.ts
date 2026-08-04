@@ -4,6 +4,7 @@ import { WeeklyInsightService } from './weekly-insight.service';
 import { SupabaseService } from '../../database';
 import { NotificationService } from '../notifications/notification.service';
 import { AIRouterService } from '../../common/ai';
+import { TrainingService } from './training.service';
 import { PlanWeekWindow } from './helpers/plan-window.helper';
 
 /**
@@ -105,6 +106,10 @@ describe('WeeklyInsightService — métricas da semana', () => {
         WeeklyInsightService,
         { provide: SupabaseService, useValue: mock },
         { provide: ConfigService, useValue: { get: jest.fn() } },
+        {
+          provide: TrainingService,
+          useValue: { reanchorRemainingWorkoutsToToday: jest.fn() },
+        },
         {
           provide: NotificationService,
           useValue: {

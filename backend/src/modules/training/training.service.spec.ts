@@ -332,5 +332,66 @@ describe('TrainingService', () => {
       expect(rpc).not.toHaveBeenCalled();
       expect(result).toEqual({ shifted: 0, deltaDays: 0 });
     });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Fase 2B — `reclaimFromDate` ("repetir semana")
+    // ─────────────────────────────────────────────────────────────────────────
+
+    it('reclaimFromDate RECUPERA a sessão perdida no meio da semana repetida', async () => {
+      // O defeito que isto trava: numa semana em que a pessoa treinou SEGUNDA e
+      // QUARTA e faltou TERÇA, a fronteira de progresso é QUARTA — e a terça,
+      // sendo anterior, ficaria para trás. Repetir a semana perderia justamente
+      // uma das sessões que ela precisa refazer.
+      const { rpc, inFn } = setup([
+        { id: 'seg', scheduled_date: '2000-01-03', status: 'completed' },
+        { id: 'ter', scheduled_date: '2000-01-04', status: 'missed' },
+        { id: 'qua', scheduled_date: '2000-01-05', status: 'completed' },
+        { id: 'sex', scheduled_date: '2000-01-07', status: 'missed' },
+      ]);
+
+      const result = await service.reanchorRemainingWorkoutsToToday(
+        'user-1',
+        'plan-1',
+        '2000-01-03', // week_start da semana repetida
+      );
+
+      // TERÇA entra junto de SEXTA — é isso que o parâmetro existe para fazer.
+      expect(inFn).toHaveBeenCalledWith('id', ['ter', 'sex']);
+      expect(rpc).toHaveBeenCalledTimes(1);
+      expect(result.deltaDays % 7).toBe(0);
+    });
+
+    it('SEM reclaimFromDate a mesma semana perde a terça (comportamento do webhook)', async () => {
+      // Contraprova do teste acima: quem chama sem o parâmetro — o webhook do
+      // RevenueCat — mantém a fronteira, e é assim que tem que ser lá.
+      const { inFn } = setup([
+        { id: 'seg', scheduled_date: '2000-01-03', status: 'completed' },
+        { id: 'ter', scheduled_date: '2000-01-04', status: 'missed' },
+        { id: 'qua', scheduled_date: '2000-01-05', status: 'completed' },
+        { id: 'sex', scheduled_date: '2000-01-07', status: 'missed' },
+      ]);
+
+      await service.reanchorRemainingWorkoutsToToday('user-1', 'plan-1');
+
+      expect(inFn).toHaveBeenCalledWith('id', ['sex']);
+    });
+
+    it('reclaimFromDate não ressuscita sessão de ANTES da janela pedida', async () => {
+      // A abertura da fronteira é limitada à semana repetida — uma falta de um
+      // ciclo anterior continua sendo uma falta.
+      const { inFn } = setup([
+        { id: 'antiga', scheduled_date: '2000-01-01', status: 'missed' },
+        { id: 'ter', scheduled_date: '2000-01-04', status: 'missed' },
+        { id: 'qua', scheduled_date: '2000-01-05', status: 'completed' },
+      ]);
+
+      await service.reanchorRemainingWorkoutsToToday(
+        'user-1',
+        'plan-1',
+        '2000-01-03',
+      );
+
+      expect(inFn).toHaveBeenCalledWith('id', ['ter']);
+    });
   });
 });

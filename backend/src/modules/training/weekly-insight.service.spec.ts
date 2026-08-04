@@ -4,6 +4,7 @@ import { WeeklyInsightService } from './weekly-insight.service';
 import { SupabaseService } from '../../database';
 import { NotificationService } from '../notifications/notification.service';
 import { AIRouterService } from '../../common/ai';
+import { TrainingService } from './training.service';
 
 /**
  * Fase 2A — gatilho, dedupe, falha e notificação do insight semanal.
@@ -54,22 +55,19 @@ function buildStatefulMock(seed: Record<string, Row[]>) {
     };
 
     const chain: Record<string, unknown> = {};
-    const passthrough = [
-      'gte',
-      'lte',
-      'gt',
-      'lt',
-      'in',
-      'is',
-      'not',
-      'or',
-      'order',
-      'limit',
-    ];
+    const passthrough = ['gte', 'lte', 'gt', 'lt', 'in', 'not', 'or', 'order', 'limit'];
     for (const m of passthrough) chain[m] = jest.fn(() => chain);
 
     chain.select = jest.fn(() => chain);
     chain.eq = jest.fn((col: string, val: unknown) => {
+      filters.push([col, val]);
+      return chain;
+    });
+    // `.is()` precisa filtrar de verdade, não ser passthrough: é ele que dá a
+    // idempotência de `markSeen` (`.is('seen_at', null)` deixa de casar depois
+    // do primeiro carimbo). Como passthrough, o teste de idempotência passaria
+    // por acidente — validando o mock, não o código.
+    chain.is = jest.fn((col: string, val: unknown) => {
       filters.push([col, val]);
       return chain;
     });
@@ -147,6 +145,7 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
     sendPushNotification: jest.Mock;
   };
   let aiRouter: { isAvailable: boolean; call: jest.Mock };
+  let trainingService: { reanchorRemainingWorkoutsToToday: jest.Mock };
 
   const build = async (
     seed: Record<string, Row[]>,
@@ -159,11 +158,17 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
       sendPushNotification: jest.fn().mockResolvedValue(true),
     };
     aiRouter = { isAvailable: false, call: jest.fn() };
+    trainingService = {
+      reanchorRemainingWorkoutsToToday: jest
+        .fn()
+        .mockResolvedValue({ shifted: 0, deltaDays: 0 }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         WeeklyInsightService,
         { provide: SupabaseService, useValue: built.mock },
+        { provide: TrainingService, useValue: trainingService },
         {
           provide: ConfigService,
           useValue: {
@@ -499,6 +504,219 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
         generated: false,
         reason: 'no_active_plan',
       });
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Fase 2B — "visto" e aplicação do reajuste.
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('markSeen / getUnseen', () => {
+    const seedInsight = (over: Row = {}): Row => ({
+      id: 'wi-1',
+      user_id: 'user-1',
+      plan_id: 'plan-1',
+      week_number: 2,
+      week_start: '2026-06-08',
+      status: 'completed',
+      seen_at: null,
+      adjustment_applied_at: null,
+      suggested_adjustment: { code: 'manter', class: 'none' },
+      ...over,
+    });
+
+    it('getUnseen devolve o insight não visto', async () => {
+      await build(seedPlan({ plan_week_insights: [seedInsight()] }));
+      const row = await service.getUnseen('user-1');
+      expect(row?.id).toBe('wi-1');
+    });
+
+    it('markSeen carimba e vira idempotente', async () => {
+      await build(seedPlan({ plan_week_insights: [seedInsight()] }));
+
+      expect(await service.markSeen('user-1', 'wi-1')).toBe(true);
+      expect(tables.plan_week_insights[0].seen_at).toBeTruthy();
+
+      // Segunda chamada não acha linha com seen_at nulo → false, sem erro.
+      expect(await service.markSeen('user-1', 'wi-1')).toBe(false);
+    });
+
+    it('markSeen filtra por user_id — id vazado não carimba o insight alheio', async () => {
+      await build(seedPlan({ plan_week_insights: [seedInsight()] }));
+
+      expect(await service.markSeen('outro-user', 'wi-1')).toBe(false);
+      expect(tables.plan_week_insights[0].seen_at).toBeNull();
+    });
+  });
+
+  describe('applyScheduleAdjustment', () => {
+    const insightWith = (
+      adjustment: Record<string, unknown>,
+      over: Row = {},
+    ): Row => ({
+      id: 'wi-1',
+      user_id: 'user-1',
+      plan_id: 'plan-1',
+      week_number: 2,
+      week_start: '2026-06-08',
+      status: 'completed',
+      seen_at: null,
+      adjustment_applied_at: null,
+      suggested_adjustment: adjustment,
+      ...over,
+    });
+
+    it('aplica adiar_semana e carimba adjustment_applied_at', async () => {
+      await build(
+        seedPlan({
+          plan_week_insights: [
+            insightWith({ code: 'adiar_semana', class: 'schedule' }),
+          ],
+        }),
+      );
+      trainingService.reanchorRemainingWorkoutsToToday.mockResolvedValue({
+        shifted: 9,
+        deltaDays: 7,
+      });
+
+      const r = await service.applyScheduleAdjustment('user-1', 'wi-1');
+
+      expect(r).toMatchObject({ applied: true, shifted: 9, deltaDays: 7 });
+      expect(tables.plan_week_insights[0].adjustment_applied_at).toBeTruthy();
+    });
+
+    it('adiar_semana NÃO passa reclaimFromDate — a semana está zerada', async () => {
+      await build(
+        seedPlan({
+          plan_week_insights: [
+            insightWith({ code: 'adiar_semana', class: 'schedule' }),
+          ],
+        }),
+      );
+      trainingService.reanchorRemainingWorkoutsToToday.mockResolvedValue({
+        shifted: 5,
+        deltaDays: 7,
+      });
+
+      await service.applyScheduleAdjustment('user-1', 'wi-1');
+
+      expect(
+        trainingService.reanchorRemainingWorkoutsToToday,
+      ).toHaveBeenCalledWith('user-1', 'plan-1', undefined);
+    });
+
+    it('repetir_semana ABRE a fronteira no início da semana repetida', async () => {
+      // O ponto do teste: sem `reclaimFromDate`, uma sessão perdida na TERÇA de
+      // uma semana em que a QUARTA foi cumprida ficaria para trás — a fronteira
+      // de progresso seria quarta, e a terça é anterior a ela.
+      await build(
+        seedPlan({
+          plan_week_insights: [
+            insightWith(
+              { code: 'repetir_semana', class: 'schedule' },
+              { week_start: '2026-06-08' },
+            ),
+          ],
+        }),
+      );
+      trainingService.reanchorRemainingWorkoutsToToday.mockResolvedValue({
+        shifted: 7,
+        deltaDays: 14,
+      });
+
+      await service.applyScheduleAdjustment('user-1', 'wi-1');
+
+      expect(
+        trainingService.reanchorRemainingWorkoutsToToday,
+      ).toHaveBeenCalledWith('user-1', 'plan-1', '2026-06-08');
+    });
+
+    it('RECUSA a classe prescription — mexer no volume é Fase 6', async () => {
+      await build(
+        seedPlan({
+          plan_week_insights: [
+            insightWith({ code: 'aliviar_ritmo', class: 'prescription' }),
+          ],
+        }),
+      );
+
+      const r = await service.applyScheduleAdjustment('user-1', 'wi-1');
+
+      expect(r).toMatchObject({
+        applied: false,
+        reason: 'not_actionable',
+        code: 'aliviar_ritmo',
+      });
+      expect(
+        trainingService.reanchorRemainingWorkoutsToToday,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('recusa manter (classe none)', async () => {
+      await build(
+        seedPlan({
+          plan_week_insights: [insightWith({ code: 'manter', class: 'none' })],
+        }),
+      );
+      const r = await service.applyScheduleAdjustment('user-1', 'wi-1');
+      expect(r.reason).toBe('not_actionable');
+    });
+
+    it('TRAVA o toque duplo — já aplicado não re-ancora de novo', async () => {
+      // Sem esta trava, dois toques empurrariam o plano DUAS semanas.
+      await build(
+        seedPlan({
+          plan_week_insights: [
+            insightWith(
+              { code: 'adiar_semana', class: 'schedule' },
+              { adjustment_applied_at: '2026-06-20T10:00:00Z' },
+            ),
+          ],
+        }),
+      );
+
+      const r = await service.applyScheduleAdjustment('user-1', 'wi-1');
+
+      expect(r).toMatchObject({ applied: false, reason: 'already_applied' });
+      expect(
+        trainingService.reanchorRemainingWorkoutsToToday,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('não carimba quando não havia o que mover', async () => {
+      // O plano já retoma no futuro. Deixar sem carimbo permite tentar de novo.
+      await build(
+        seedPlan({
+          plan_week_insights: [
+            insightWith({ code: 'adiar_semana', class: 'schedule' }),
+          ],
+        }),
+      );
+      trainingService.reanchorRemainingWorkoutsToToday.mockResolvedValue({
+        shifted: 0,
+        deltaDays: 0,
+      });
+
+      const r = await service.applyScheduleAdjustment('user-1', 'wi-1');
+
+      expect(r).toMatchObject({ applied: false, reason: 'nothing_to_shift' });
+      expect(tables.plan_week_insights[0].adjustment_applied_at).toBeNull();
+    });
+
+    it('insight de outro usuário não é aplicável', async () => {
+      await build(
+        seedPlan({
+          plan_week_insights: [
+            insightWith({ code: 'adiar_semana', class: 'schedule' }),
+          ],
+        }),
+      );
+
+      const r = await service.applyScheduleAdjustment('outro-user', 'wi-1');
+
+      expect(r).toMatchObject({ applied: false, reason: 'not_found' });
+      expect(
+        trainingService.reanchorRemainingWorkoutsToToday,
+      ).not.toHaveBeenCalled();
     });
   });
 

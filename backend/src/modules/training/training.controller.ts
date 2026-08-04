@@ -1239,6 +1239,62 @@ export class TrainingController {
   }
 
   /**
+   * Insight `completed` ainda NÃO visto — o gatilho do modal de entrada.
+   *
+   * Separado de `/latest` de propósito: o card persistente da home usa `/latest`
+   * (aparece sempre), o modal usa este (aparece uma vez).
+   */
+  @Get('weekly-insight/unseen')
+  @UseGuards(ProGuard)
+  async getUnseenWeeklyInsight(@User('id') userId: string) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+
+    const insight = await this.weeklyInsightService.getUnseen(userId);
+    return { insight, hasUnseen: insight !== null };
+  }
+
+  /**
+   * Marca o insight como visto. Idempotente: uma segunda chamada devolve
+   * `updated: false` sem erro.
+   */
+  @Patch('weekly-insight/:id/seen')
+  @UseGuards(ProGuard)
+  async markWeeklyInsightSeen(
+    @User('id') userId: string,
+    @Param('id') insightId: string,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+
+    const updated = await this.weeklyInsightService.markSeen(userId, insightId);
+    return { updated };
+  }
+
+  /**
+   * Aplica o reajuste sugerido — SÓ da classe `schedule` (adiar/repetir semana).
+   *
+   * Re-ancora o plano a partir de hoje, em semanas inteiras, preservando o dia
+   * da semana. A classe `prescription` é recusada com `not_actionable`: mexer em
+   * volume/pace prescritos é Fase 6, e o app nunca deve oferecer um botão que
+   * contradiz o plano que ele mesmo mostra.
+   */
+  @Post('weekly-insight/:id/apply')
+  @UseGuards(ProGuard)
+  async applyWeeklyInsightAdjustment(
+    @User('id') userId: string,
+    @Param('id') insightId: string,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+
+    return this.weeklyInsightService.applyScheduleAdjustment(userId, insightId);
+  }
+
+  /**
    * Gera o insight da última semana FECHADA e elegível do plano ativo.
    *
    * Existe para validação em staging e para recuperar de uma falha do cron.

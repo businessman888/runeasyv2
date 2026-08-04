@@ -2,6 +2,7 @@ import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../../database';
 import { NotificationService } from '../notifications/notification.service';
+import { TrainingService } from './training.service';
 import { AIRouterService, AI_FEATURES } from '../../common/ai';
 import { paceValueToSecondsPerKm } from '../../common/pace-calculator';
 import {
@@ -106,6 +107,8 @@ export interface WeeklyInsightRow {
   created_at: string;
   processed_at: string | null;
   notified_at: string | null;
+  seen_at: string | null;
+  adjustment_applied_at: string | null;
 }
 
 export interface ZoneBucket {
@@ -189,6 +192,10 @@ export class WeeklyInsightService {
     private readonly configService: ConfigService,
     @Inject(forwardRef(() => NotificationService))
     private readonly notificationService: NotificationService,
+    // forwardRef: TrainingService injeta RetrospectiveService, que vive no mesmo
+    // módulo — o ciclo é resolvido do mesmo jeito que a retrospectiva faz.
+    @Inject(forwardRef(() => TrainingService))
+    private readonly trainingService: TrainingService,
     private readonly aiRouter: AIRouterService,
   ) {}
 
@@ -1246,6 +1253,155 @@ Escreva a narrativa explicando o que aconteceu na semana e por que essa é a rec
       weekNumber: eligible.weekNumber,
       insightId: insight?.id ?? null,
       reason: insight ? undefined : 'generation_failed',
+    };
+  }
+
+  /** Marca o insight como visto — desliga o modal de entrada, mantém o card. */
+  async markSeen(userId: string, insightId: string): Promise<boolean> {
+    const { data, error } = await this.supabaseService
+      .getClient()
+      .from('plan_week_insights')
+      .update({ seen_at: new Date().toISOString() })
+      .eq('id', insightId)
+      // Filtrar por user_id no próprio UPDATE — sem isso, um id vazado
+      // permitiria carimbar o insight de outra pessoa.
+      .eq('user_id', userId)
+      .is('seen_at', null)
+      .select('id');
+
+    if (error) {
+      this.logger.warn(`[WeeklyInsight] markSeen falhou: ${error.message}`);
+      return false;
+    }
+    // Zero linhas = já estava visto (ou não é dele). Idempotente de propósito.
+    return Array.isArray(data) && data.length > 0;
+  }
+
+  /** Último insight `completed` ainda NÃO visto — o gatilho do modal. */
+  async getUnseen(userId: string): Promise<WeeklyInsightRow | null> {
+    const { data, error } = await this.supabaseService
+      .getClient()
+      .from('plan_week_insights')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'completed')
+      .is('seen_at', null)
+      .order('week_end', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      this.logger.warn(`[WeeklyInsight] getUnseen falhou: ${error.message}`);
+      return null;
+    }
+    return (data as WeeklyInsightRow | null) ?? null;
+  }
+
+  /**
+   * Aplica o reajuste de CLASSE `schedule` — re-ancora o plano a partir de hoje.
+   *
+   * ── POR QUE SÓ `schedule` ─────────────────────────────────────────────────
+   *
+   * `schedule` mexe só em data/status, e `plan_json` não guarda nem uma nem
+   * outra — não há o que dessincronizar. `prescription` mexeria em volume/pace
+   * prescritos, que seria o primeiro write a divergir `plan_json` de `workouts`;
+   * isso é Fase 6. Este método RECUSA `prescription`, e não é defensivo por
+   * excesso de zelo: é a diferença entre um conselho e uma cirurgia.
+   *
+   * ── REPETIR × ADIAR ───────────────────────────────────────────────────────
+   *
+   * `repetir_semana` passa `week_start` como `reclaimFromDate`, porque a semana
+   * repetida tem treinos concluídos NO MEIO dela: sem abrir a fronteira, uma
+   * sessão perdida na terça ficaria para trás quando a quarta foi cumprida.
+   * `adiar_semana` só dispara em semana zerada, onde a fronteira já está na
+   * semana anterior e tudo entra naturalmente.
+   */
+  async applyScheduleAdjustment(
+    userId: string,
+    insightId: string,
+  ): Promise<{
+    applied: boolean;
+    reason?: string;
+    code?: string;
+    shifted?: number;
+    deltaDays?: number;
+  }> {
+    const supabase = this.supabaseService.getClient();
+
+    const { data: row } = await supabase
+      .from('plan_week_insights')
+      .select(
+        'id, plan_id, user_id, week_start, week_number, status, suggested_adjustment, adjustment_applied_at',
+      )
+      .eq('id', insightId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const insight = row as
+      | (Pick<
+          WeeklyInsightRow,
+          'id' | 'plan_id' | 'week_start' | 'week_number' | 'status'
+        > & {
+          suggested_adjustment: SuggestedAdjustment | null;
+          adjustment_applied_at: string | null;
+        })
+      | null;
+
+    if (!insight) return { applied: false, reason: 'not_found' };
+    if (insight.status !== 'completed') {
+      return { applied: false, reason: 'not_completed' };
+    }
+    if (insight.adjustment_applied_at) {
+      // Trava de idempotência: a ação move o calendário inteiro, e um segundo
+      // toque empurraria o plano mais uma semana.
+      return { applied: false, reason: 'already_applied' };
+    }
+
+    const adjustment = insight.suggested_adjustment;
+    if (!adjustment || adjustment.class !== 'schedule') {
+      return {
+        applied: false,
+        reason: 'not_actionable',
+        code: adjustment?.code,
+      };
+    }
+
+    // Repetir precisa reabrir a fronteira na semana repetida; adiar não.
+    const reclaimFrom =
+      adjustment.code === 'repetir_semana' ? insight.week_start : undefined;
+
+    const result = await this.trainingService.reanchorRemainingWorkoutsToToday(
+      userId,
+      insight.plan_id,
+      reclaimFrom,
+    );
+
+    if (result.shifted === 0) {
+      // Nada a mover: o plano já retoma no futuro. Não carimba, para o usuário
+      // poder tentar de novo quando a situação mudar.
+      return {
+        applied: false,
+        reason: 'nothing_to_shift',
+        code: adjustment.code,
+        shifted: 0,
+        deltaDays: result.deltaDays,
+      };
+    }
+
+    await supabase
+      .from('plan_week_insights')
+      .update({ adjustment_applied_at: new Date().toISOString() })
+      .eq('id', insightId);
+
+    this.logger.log(
+      `[WeeklyInsight] ${adjustment.code} aplicado no plano ${insight.plan_id}: ${result.shifted} treino(s) +${result.deltaDays}d`,
+    );
+
+    return {
+      applied: true,
+      code: adjustment.code,
+      shifted: result.shifted,
+      deltaDays: result.deltaDays,
     };
   }
 
