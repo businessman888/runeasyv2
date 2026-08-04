@@ -14,6 +14,7 @@ export const AI_FEATURES = {
   READINESS: 'readiness',
   RETROSPECTIVE: 'retrospective',
   WORKOUT_BRIEFING_DEEP_DIVE: 'workout_briefing_deep_dive',
+  WEEKLY_INSIGHT: 'weekly_insight',
 } as const;
 
 // Tier definitions
@@ -32,6 +33,10 @@ export const FEATURE_TIER_MAP: Record<string, AITier> = {
   [AI_FEATURES.FEEDBACK]: AITier.EFFICIENCY,
   [AI_FEATURES.READINESS]: AITier.EFFICIENCY,
   [AI_FEATURES.WORKOUT_BRIEFING_DEEP_DIVE]: AITier.EFFICIENCY,
+  // EFFICIENCY de propósito: o insight semanal roda ~12x por ciclo (vs 1 da
+  // retrospectiva), e a IA aqui só NARRA — métricas e reajuste já vêm
+  // decididos por regra determinística. Não há raciocínio a delegar.
+  [AI_FEATURES.WEEKLY_INSIGHT]: AITier.EFFICIENCY,
 };
 
 // Tier-to-model mapping

@@ -12,6 +12,7 @@ import {
   findLongestRun,
 } from './helpers/plan-window.helper';
 import { toSaoPauloDateStr } from './wellness/helpers/streak.helper';
+import { resolveTargetFrequency } from './wellness/helpers/metrics.helper';
 
 /**
  * Métricas do ciclo, em DOIS blocos que nunca se somam.
@@ -340,7 +341,10 @@ export class RetrospectiveService {
       .single();
 
     if (createError || !retro) {
-      this.logger.error('[Retrospective] Failed to create record:', createError);
+      this.logger.error(
+        '[Retrospective] Failed to create record:',
+        createError,
+      );
       return null;
     }
 
@@ -606,7 +610,7 @@ export class RetrospectiveService {
         ? Math.round((totalWorkoutsCompleted / window.weeks) * 100) / 100
         : 0;
 
-    const frequencyTargetPerWeek = this.resolveTargetFrequency(
+    const frequencyTargetPerWeek = resolveTargetFrequency(
       plan?.frequency_per_week,
       totalWorkoutsPlanned,
       window.weeks,
@@ -662,24 +666,6 @@ export class RetrospectiveService {
       return sum + 360;
     }, 0);
     return Math.round(pacesSum / workouts.length);
-  }
-
-  /**
-   * Frequência-alvo (treinos/semana). `training_plans.frequency_per_week` é a
-   * fonte primária — é preenchida em toda criação de plano e representa o
-   * compromisso daquele ciclo. Último recurso: derivar do próprio plano, o que
-   * nunca devolve 0 e evita divisão por zero no percentual.
-   */
-  private resolveTargetFrequency(
-    planFrequency: number | null | undefined,
-    totalWorkoutsPlanned: number,
-    weeks: number,
-  ): number {
-    if (planFrequency && planFrequency > 0) return planFrequency;
-    if (totalWorkoutsPlanned > 0 && weeks > 0) {
-      return Math.round((totalWorkoutsPlanned / weeks) * 100) / 100;
-    }
-    return 0;
   }
 
   /**
@@ -1272,7 +1258,9 @@ Responda APENAS com JSON.`;
       );
 
       if (!created) {
-        this.logger.warn('[Retrospective] Failed to create notification record');
+        this.logger.warn(
+          '[Retrospective] Failed to create notification record',
+        );
       } else {
         this.logger.log('[Retrospective] Notification record created');
       }

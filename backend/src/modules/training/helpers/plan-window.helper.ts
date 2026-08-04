@@ -114,14 +114,132 @@ export function derivePlanWindow(
 }
 
 /**
- * O plano já terminou em relação a `todayStr`?
+ * O plano — ou UMA SEMANA dele — já terminou em relação a `todayStr`?
  *
- * `endStr` é inclusivo — o plano só está encerrado no dia SEGUINTE ao último
- * treino. Enquanto houver treino agendado para hoje ou para o futuro, o ciclo
- * está em andamento e a retrospectiva não deve disparar.
+ * `endStr` é inclusivo, então o período só está encerrado no dia SEGUINTE ao
+ * último treino. Enquanto houver treino agendado para hoje ou para o futuro, o
+ * ciclo está em andamento e a retrospectiva não deve disparar.
+ *
+ * O parâmetro é estrutural (`{ endStr }`) de propósito: serve tanto para
+ * `PlanWindow` (plano inteiro, retrospectiva) quanto para `PlanWeekWindow`
+ * (semana, insight semanal). É literalmente a mesma pergunta em outra escala.
  */
-export function isPlanFinished(window: PlanWindow, todayStr: string): boolean {
+export function isPlanFinished(
+  window: { endStr: string },
+  todayStr: string,
+): boolean {
   return window.endStr < todayStr;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Semanas do plano
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Fronteiras de UMA semana do plano.
+ *
+ * Mesma ideia de `PlanWindow`, uma escala abaixo: a semana N vai do primeiro ao
+ * último `scheduled_date` dos treinos com `week_number = N`. E pelo mesmo
+ * motivo — é a única fronteira que `shift_pending_workouts` não consegue
+ * dessincronizar, porque é derivada exatamente da coluna que ela move.
+ */
+export interface PlanWeekWindow {
+  weekNumber: number;
+  /** YYYY-MM-DD, inclusivo. */
+  startStr: string;
+  /** YYYY-MM-DD, inclusivo. */
+  endStr: string;
+  /**
+   * `'workouts'` = derivada de treinos reais, a única fronteira mensurável.
+   * `'fallback'` = semana declarada em `duration_weeks` que ainda não tem treino
+   * hidratado; existe só para a UI renderizar um período coerente.
+   *
+   * ⚠️ QUEM MEDE ALGO DEVE IGNORAR `'fallback'`: uma semana sem treino não tem
+   * aderência, nem volume, nem zona — gerar insight para ela produziria uma
+   * linha de zeros que não significa nada.
+   */
+  source: 'workouts' | 'fallback';
+}
+
+interface WeekRow {
+  week_number?: number | null;
+  scheduled_date?: string | null;
+}
+
+/**
+ * Deriva as fronteiras de TODAS as semanas de um plano.
+ *
+ * Função PURA — o chamador traz os treinos já lidos. Isso a torna testável sem
+ * mock e permite ao insight semanal reusar o array de workouts que ele já
+ * carregou, sem query por semana.
+ *
+ * ── POR QUE ISTO EXISTE ───────────────────────────────────────────────────────
+ *
+ * Esta lógica vivia enterrada dentro de `getPlanOverview`, um método de 200+
+ * linhas que também monta DTOs de UI — inalcançável de fora. O insight semanal
+ * precisa exatamente das mesmas fronteiras, e duas derivações independentes
+ * acabariam discordando (a tela de Metas destacando uma semana e o insight
+ * medindo outra).
+ *
+ * A extração também conserta um bug de fuso: a versão antiga comparava
+ * `new Date(startDate + 'T00:00:00')` — interpretado na TZ do PROCESSO, que em
+ * Railway é UTC — com um "hoje" de São Paulo. Aqui tudo é string `YYYY-MM-DD`,
+ * que é ordenável lexicograficamente e não tem fuso.
+ *
+ * @param workouts  Treinos do plano (`week_number` + `scheduled_date`).
+ * @param fallback  `created_at` do plano e `duration_weeks`, para completar as
+ *                  semanas declaradas que ainda não têm treino. Omitir quando
+ *                  só interessam as semanas mensuráveis.
+ */
+export function derivePlanWeeks(
+  workouts: WeekRow[],
+  fallback?: { createdAt: string; totalWeeks: number },
+): PlanWeekWindow[] {
+  const byWeek = new Map<number, { min: string; max: string }>();
+
+  for (const w of workouts) {
+    const wn = w.week_number;
+    const date = w.scheduled_date;
+    if (typeof wn !== 'number' || !Number.isFinite(wn)) continue;
+    if (typeof date !== 'string' || date.length < 10) continue;
+
+    const current = byWeek.get(wn);
+    if (!current) {
+      byWeek.set(wn, { min: date, max: date });
+      continue;
+    }
+    // Comparação lexicográfica basta: YYYY-MM-DD é ordenável como string.
+    if (date < current.min) current.min = date;
+    if (date > current.max) current.max = date;
+  }
+
+  const weeks: PlanWeekWindow[] = [];
+  for (const [weekNumber, range] of byWeek) {
+    weeks.push({
+      weekNumber,
+      startStr: range.min,
+      endStr: range.max,
+      source: 'workouts',
+    });
+  }
+
+  // Semanas declaradas em `duration_weeks` que não têm nenhum treino ainda
+  // (geração parcial, ou plano que falhou no meio). Só a UI as consome.
+  if (fallback && fallback.totalWeeks > 0) {
+    const planStartStr = toSaoPauloDateStr(fallback.createdAt);
+    for (let wn = 1; wn <= fallback.totalWeeks; wn++) {
+      if (byWeek.has(wn)) continue;
+      const startStr = addDaysStr(planStartStr, (wn - 1) * 7);
+      weeks.push({
+        weekNumber: wn,
+        startStr,
+        endStr: addDaysStr(startStr, 6),
+        source: 'fallback',
+      });
+    }
+  }
+
+  return weeks.sort((a, b) => a.weekNumber - b.weekNumber);
 }
 
 function weeksIn(startStr: string, endStr: string): number {

@@ -33,6 +33,10 @@
  * Flags:
  *   --env <name>            local | staging | production   (default: staging)
  *   --completions N         quantos treinos PENDENTES do plano concluir (default 5)
+ *   --week N                restringe as conclusões (e as corridas livres) à
+ *                           SEMANA N do plano. Sem a flag, pega os pendentes em
+ *                           ordem de data, atravessando semanas — o que serve
+ *                           para a retrospectiva mas não para o insight semanal.
  *   --completion-ratio R    fração da distância prescrita a cumprir (default 1.0).
  *                           0.8 simula quem corre menos; 1.2, quem corre mais.
  *   --free-runs M           quantas corridas livres registrar (default 0)
@@ -43,6 +47,10 @@
  *   --gps                   gera rota GPS sintética (default: sem rota — ver nota)
  *   --seed S                semente do gerador, para runs reprodutíveis
  *   --generate-retrospective  dispara POST /training/retrospective/generate no fim
+ *   --generate-weekly-insight dispara POST /training/weekly-insight/generate no fim.
+ *                           Gera a ÚLTIMA semana FECHADA e elegível — ou seja, a
+ *                           semana escolhida em --week precisa já ter terminado
+ *                           (week_end < hoje) e não pode ser a última do plano.
  *   --dry-run               imprime o que faria, sem chamar nada que escreva
  *   --i-know-this-is-production   destrava o alvo de produção (NÃO use)
  *
@@ -312,11 +320,59 @@ interface PlanWorkout {
   status: 'pending' | 'completed' | 'skipped' | 'missed';
   type: string;
   title: string;
+  /** Preenchido pelo script a partir do bloco `weeks[]` do overview. */
+  week_number?: number;
 }
 
 interface PlanOverview {
   overview: { plan_id: string; end_date: string; total_weeks: number };
   weeks: Array<{ week_number: number; workouts: PlanWorkout[] }>;
+}
+
+export interface WeekContext {
+  /** Primeiro `scheduled_date` da semana (a fronteira que o backend deriva). */
+  startStr: string;
+  /** Último `scheduled_date` da semana. */
+  endStr: string;
+  /** Σ distance_km prescrito — o denominador de `distance_vs_goal_percent`. */
+  plannedKm: number;
+  plannedCount: number;
+}
+
+/**
+ * Fronteiras e totais prescritos da semana N — espelha o que `derivePlanWeeks`
+ * faz no backend (MIN/MAX de `scheduled_date` por `week_number`), para o oráculo
+ * poder prever a linha de `plan_week_insights` sem consultar o banco.
+ *
+ * Falha ALTO quando a semana não existe: rodar `--week 9` num plano de 4 semanas
+ * concluiria zero treinos e imprimiria um oráculo de zeros — parecendo bug do
+ * backend em vez de erro de invocação.
+ */
+export function buildWeekContext(
+  workouts: PlanWorkout[],
+  targetWeek: number,
+): WeekContext {
+  const inWeek = workouts
+    .filter((w) => w.week_number === targetWeek)
+    .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
+
+  if (inWeek.length === 0) {
+    const disponiveis = Array.from(
+      new Set(workouts.map((w) => w.week_number)),
+    )
+      .filter((n): n is number => typeof n === 'number')
+      .sort((a, b) => a - b);
+    throw new Error(
+      `--week ${targetWeek} não existe neste plano. Semanas disponíveis: ${disponiveis.join(', ') || '(nenhuma)'}`,
+    );
+  }
+
+  return {
+    startStr: inWeek[0].scheduled_date,
+    endStr: inWeek[inWeek.length - 1].scheduled_date,
+    plannedKm: inWeek.reduce((s, w) => s + (w.distance_km || 0), 0),
+    plannedCount: inWeek.length,
+  };
 }
 
 // ── HTTP ─────────────────────────────────────────────────────────────────────
@@ -410,6 +466,13 @@ async function main() {
   }
 
   const completions = num(args.completions, 5);
+  // `null` = sem escopo de semana (comportamento original: pendentes em ordem
+  // de data, atravessando semanas).
+  const targetWeek =
+    typeof args.week === 'string' ? num(args.week, NaN) : null;
+  if (targetWeek != null && !Number.isFinite(targetWeek)) {
+    throw new Error('--week precisa de um número (ex.: --week 2)');
+  }
   const completionRatio = num(args['completion-ratio'], 1.0);
   const freeRuns = num(args['free-runs'], 0);
   const freeRunKm = num(args['free-run-km'], 8);
@@ -474,20 +537,46 @@ async function main() {
   let allWorkouts: PlanWorkout[] = [];
   let pending: PlanWorkout[] = [];
 
+  // Contexto da semana alvo (--week), usado para escopar as corridas livres e
+  // para o oráculo saber o denominador da aderência da semana.
+  let weekStartStr: string | null = null;
+  let weekEndStr: string | null = null;
+  let weekPlannedKm = 0;
+  let weekPlannedCount = 0;
+
   if (needsPlan) {
     const overview = await httpJson<PlanOverview>(
       `${apiBaseUrl}/api/training/plan/overview`,
       { label: 'Busca do plano ativo', headers: authHeaders },
     );
     planId = overview.overview.plan_id;
+    // Carrega `week_number` do bloco pai — o DTO de treino não o traz, e é o
+    // que `--week` precisa para escopar por semana do plano.
     allWorkouts = overview.weeks
-      .flatMap((w) => w.workouts)
+      .flatMap((wk) =>
+        wk.workouts.map((w) => ({ ...w, week_number: wk.week_number })),
+      )
       .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
     pending = allWorkouts.filter((w) => w.status === 'pending');
 
     console.log(
       `✅ Plano ${planId} — ${allWorkouts.length} treinos, ${pending.length} pendentes\n`,
     );
+
+    if (targetWeek != null) {
+      const ctx = buildWeekContext(allWorkouts, targetWeek);
+      pending = pending.filter((w) => w.week_number === targetWeek);
+      weekStartStr = ctx.startStr;
+      weekEndStr = ctx.endStr;
+      weekPlannedKm = ctx.plannedKm;
+      weekPlannedCount = ctx.plannedCount;
+
+      console.log(
+        `🎯 Semana ${targetWeek}: ${weekStartStr} a ${weekEndStr} — ` +
+          `${weekPlannedCount} treinos (${round1(weekPlannedKm)} km), ` +
+          `${pending.length} pendentes\n`,
+      );
+    }
   } else {
     console.log(
       `ℹ️  Nada a concluir (--completions 0, --free-runs 0) — pulando a busca do plano.\n`,
@@ -576,7 +665,14 @@ async function main() {
     rpe: number | null;
   }> = [];
 
-  const windowDates = allWorkouts.map((w) => w.scheduled_date);
+  // Com --week, as livres têm que cair DENTRO da semana alvo: o insight filtra
+  // `activities` pelas fronteiras daquela semana, e uma livre fora dela não
+  // apareceria no "total corrido" — o contraste com a aderência sumiria.
+  const windowDates = (
+    targetWeek != null
+      ? allWorkouts.filter((w) => w.week_number === targetWeek)
+      : allWorkouts
+  ).map((w) => w.scheduled_date);
   for (let i = 0; i < freeRuns; i++) {
     // Espalha as corridas livres pela janela em vez de empilhar no mesmo dia.
     const date =
@@ -644,7 +740,48 @@ async function main() {
     );
   }
 
-  printOracle({ completed, freeRunList, retroId, planId });
+  // ── 7. Insight semanal (opcional) ─────────────────────────────────────────
+  let weeklyInsight: {
+    generated: boolean;
+    weekNumber: number | null;
+    insightId: string | null;
+    reason?: string;
+  } | null = null;
+
+  if (args['generate-weekly-insight'] === true && !dryRun) {
+    weeklyInsight = await httpJson<NonNullable<typeof weeklyInsight>>(
+      `${apiBaseUrl}/api/training/weekly-insight/generate`,
+      {
+        label: 'Geração do insight semanal',
+        method: 'POST',
+        headers: authHeaders,
+      },
+    );
+
+    if (weeklyInsight.generated) {
+      console.log(
+        `\n✅ Insight da semana ${weeklyInsight.weekNumber}: ${weeklyInsight.insightId}`,
+      );
+    } else {
+      console.warn(
+        `\n⚠️  Nenhum insight gerado (motivo: ${weeklyInsight.reason}).\n` +
+          reasonHint(weeklyInsight.reason),
+      );
+    }
+  }
+
+  printOracle({
+    completed,
+    freeRunList,
+    retroId,
+    planId,
+    targetWeek,
+    weekStartStr,
+    weekEndStr,
+    weekPlannedKm,
+    weekPlannedCount,
+    weeklyInsight,
+  });
 }
 
 function fmtPace(sec: number): string {
@@ -657,15 +794,141 @@ function fmtPace(sec: number): string {
  * O ORÁCULO. Imprime os valores que a retrospectiva DEVE produzir, para
  * conferência direta contra a linha de `plan_retrospectives`.
  */
+function round1(v: number): number {
+  return Math.round(v * 10) / 10;
+}
+
+/** Por que o backend recusou gerar o insight — e o que fazer a respeito. */
+function reasonHint(reason: string | undefined): string {
+  switch (reason) {
+    case 'no_eligible_week':
+      return (
+        '      A semana precisa (a) já ter FECHADO — o último treino dela tem que\n' +
+        '      ser anterior a hoje; (b) NÃO ser a última do plano, que é coberta\n' +
+        '      pela retrospectiva; (c) fechar em data >= WEEKLY_INSIGHT_START_DATE;\n' +
+        '      e (d) ainda não ter linha em plan_week_insights.'
+      );
+    case 'no_active_plan':
+      return '      O tester não tem plano ativo — a retrospectiva pode tê-lo concluído.';
+    case 'no_workouts':
+      return '      O plano ativo não tem treinos com scheduled_date.';
+    case 'generation_failed':
+      return '      A linha ficou com status=failed. Confira os logs do backend.';
+    default:
+      return '';
+  }
+}
+
+/**
+ * O ORÁCULO SEMANAL. Só é impresso com --week, porque sem escopo de semana os
+ * números do plano inteiro não dizem nada sobre uma linha de plan_week_insights.
+ */
+function printWeeklyOracle(params: {
+  targetWeek: number;
+  weekStartStr: string | null;
+  weekEndStr: string | null;
+  weekPlannedKm: number;
+  weekPlannedCount: number;
+  completed: Array<{ date: string; run: SyntheticRun }>;
+  freeRunList: Array<{ date: string; run: SyntheticRun }>;
+  weeklyInsight: { generated: boolean; weekNumber: number | null } | null;
+  planId: string;
+}) {
+  const planKm = params.completed.reduce((s, c) => s + c.run.distanceKm, 0);
+  const freeKm = params.freeRunList.reduce((s, f) => s + f.run.distanceKm, 0);
+
+  // Denominador do executionRatio: o PRESCRITO só dos treinos concluídos.
+  // Como o harness aplica --completion-ratio uniformemente, o ratio esperado é
+  // o próprio completion-ratio (×100).
+  const completedCount = params.completed.length;
+  const completionRate = params.weekPlannedCount
+    ? Math.round((completedCount / params.weekPlannedCount) * 100)
+    : 0;
+  const distanceVsGoal = params.weekPlannedKm
+    ? Math.round((planKm / params.weekPlannedKm) * 100)
+    : 0;
+  const distinctDays = new Set(params.completed.map((c) => c.date)).size;
+
+  console.log('\n' + '═'.repeat(72));
+  console.log(`  SEMANA ${params.targetWeek} — confira contra plan_week_insights`);
+  console.log('═'.repeat(72));
+  console.log(`
+  week_start / week_end        esperado:  ${params.weekStartStr} .. ${params.weekEndStr}
+  planned_workouts             esperado:  ${params.weekPlannedCount}
+  completed_workouts           esperado:  ${completedCount}
+  completion_rate              esperado:  ${completionRate}%
+  planned_distance_km          esperado:  ${round1(params.weekPlannedKm)}
+  completed_distance_km        esperado:  ${round1(planKm)}   ← SEM os livres
+  distance_vs_goal_percent     esperado:  ${distanceVsGoal}%
+  frequency_actual_days        esperado:  ${distinctDays}   ← dias, não treinos
+  total_distance_km            esperado:  ${round1(planKm + freeKm)}   ← COM os livres
+  free_run_distance_km         esperado:  ${round1(freeKm)}
+  total_runs_in_period         esperado:  ${completedCount + params.freeRunList.length}`);
+
+  console.log(`
+  ⚠️  completed_distance_km NÃO pode incluir os ${round1(freeKm)} km livres.
+      Somar os dois é contar a mesma corrida duas vezes.
+
+  SQL de conferência:
+
+    SELECT week_number, week_start, week_end,
+           planned_workouts, completed_workouts, completion_rate,
+           execution_ratio_percent, planned_distance_km, completed_distance_km,
+           distance_vs_goal_percent, frequency_actual_days, frequency_target_days,
+           total_distance_km, free_run_distance_km, total_runs_in_period,
+           suggested_adjustment, zone_distribution, intensity_adherence,
+           status, processed_at, notified_at, left(ai_narrative, 200) AS narrativa
+      FROM plan_week_insights
+     WHERE plan_id = '${params.planId}' AND week_number = ${params.targetWeek};
+
+    -- Exatamente 1 notificação:
+    SELECT type, title, metadata->>'weekNumber' AS semana, created_at
+      FROM notifications
+     WHERE type = 'weekly_insight' AND created_at > now() - interval '15 minutes';
+`);
+
+  if (params.weeklyInsight?.generated) {
+    console.log(
+      `  ℹ️  O backend gerou a semana ${params.weeklyInsight.weekNumber}. Se não for ${params.targetWeek},\n` +
+        `      ele escolheu outra semana elegível — o gatilho manual pega a ÚLTIMA\n` +
+        `      fechada sem insight, que pode não ser a que você acabou de preencher.\n`,
+    );
+  }
+}
+
 function printOracle(params: {
   completed: Array<{ id: string; date: string; run: SyntheticRun; externalId: string; rpe: number | null }>;
   freeRunList: Array<{ date: string; run: SyntheticRun; externalId: string; rpe: number | null }>;
   retroId: string | null;
   planId: string;
+  targetWeek?: number | null;
+  weekStartStr?: string | null;
+  weekEndStr?: string | null;
+  weekPlannedKm?: number;
+  weekPlannedCount?: number;
+  weeklyInsight?: {
+    generated: boolean;
+    weekNumber: number | null;
+    insightId: string | null;
+    reason?: string;
+  } | null;
 }) {
+  if (params.targetWeek != null) {
+    printWeeklyOracle({
+      targetWeek: params.targetWeek,
+      weekStartStr: params.weekStartStr ?? null,
+      weekEndStr: params.weekEndStr ?? null,
+      weekPlannedKm: params.weekPlannedKm ?? 0,
+      weekPlannedCount: params.weekPlannedCount ?? 0,
+      completed: params.completed,
+      freeRunList: params.freeRunList,
+      weeklyInsight: params.weeklyInsight ?? null,
+      planId: params.planId,
+    });
+  }
+
   const planKm = params.completed.reduce((s, c) => s + c.run.distanceKm, 0);
   const freeKm = params.freeRunList.reduce((s, f) => s + f.run.distanceKm, 0);
-  const round1 = (v: number) => Math.round(v * 10) / 10;
 
   // Recorde esperado: a maior corrida ÚNICA entre TODAS as geradas (plano E
   // livre). O escopo é de propósito diferente do de aderência — se a corrida

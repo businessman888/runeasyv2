@@ -2,6 +2,7 @@ import {
   assertNotProduction,
   buildSyntheticRun,
   buildSyntheticRoute,
+  buildWeekContext,
   makeExternalId,
   makeRng,
   parseArgs,
@@ -319,5 +320,75 @@ describe('parseArgs', () => {
 
   it('trata --rpe 8 como valor, não como flag', () => {
     expect(parseArgs(['--rpe', '8']).rpe).toBe('8');
+  });
+
+  it('lê --week e --generate-weekly-insight (Fase 2A)', () => {
+    const args = parseArgs(['--week', '2', '--generate-weekly-insight']);
+    expect(args.week).toBe('2');
+    expect(args['generate-weekly-insight']).toBe(true);
+  });
+});
+
+/**
+ * Fase 2A — escopo por semana do plano.
+ *
+ * Espelha o que `derivePlanWeeks` faz no backend (MIN/MAX de `scheduled_date`
+ * por `week_number`), para o oráculo prever a linha de `plan_week_insights`.
+ */
+describe('buildWeekContext', () => {
+  const w = (
+    week_number: number,
+    scheduled_date: string,
+    distance_km: number,
+  ) => ({
+    id: `w-${week_number}-${scheduled_date}`,
+    scheduled_date,
+    distance_km,
+    status: 'pending' as const,
+    type: 'easy_run',
+    title: 'Rodagem Leve',
+    week_number,
+  });
+
+  const PLAN = [
+    w(1, '2026-06-01', 4),
+    w(1, '2026-06-03', 5),
+    w(2, '2026-06-08', 5),
+    w(2, '2026-06-10', 6),
+    w(2, '2026-06-12', 5),
+    w(3, '2026-06-15', 7),
+  ];
+
+  it('deriva fronteiras e totais da semana pedida', () => {
+    expect(buildWeekContext(PLAN, 2)).toEqual({
+      startStr: '2026-06-08',
+      endStr: '2026-06-12',
+      plannedKm: 16,
+      plannedCount: 3,
+    });
+  });
+
+  it('não vaza treino de outra semana para o denominador', () => {
+    const ctx = buildWeekContext(PLAN, 1);
+    expect(ctx.plannedCount).toBe(2);
+    expect(ctx.plannedKm).toBe(9);
+  });
+
+  it('ordena por data antes de tirar MIN/MAX', () => {
+    const desordenado = [
+      w(2, '2026-06-12', 5),
+      w(2, '2026-06-08', 5),
+      w(2, '2026-06-10', 6),
+    ];
+    const ctx = buildWeekContext(desordenado, 2);
+    expect(ctx.startStr).toBe('2026-06-08');
+    expect(ctx.endStr).toBe('2026-06-12');
+  });
+
+  it('FALHA ALTO quando a semana não existe, listando as disponíveis', () => {
+    // Silenciar aqui seria pior: concluiria zero treinos e imprimiria um
+    // oráculo de zeros, parecendo bug do backend em vez de erro de invocação.
+    expect(() => buildWeekContext(PLAN, 9)).toThrow(/--week 9 não existe/);
+    expect(() => buildWeekContext(PLAN, 9)).toThrow(/1, 2, 3/);
   });
 });

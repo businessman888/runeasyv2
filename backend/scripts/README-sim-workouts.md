@@ -78,6 +78,42 @@ anexa RPE aleatório e dispara a retrospectiva.
 A corrida livre é o que torna o defeito D1 testável — sem ela, aderência e total dariam o
 mesmo número e o bug passaria despercebido.
 
+### Cenário de validação da Fase 2A (insight semanal)
+
+```bash
+npm run qa:sim-workouts:week-2a
+```
+
+Equivale a `--env staging --week 2 --completions 3 --completion-ratio 1.0 --free-runs 1
+--free-run-km 6 --rpe --generate-weekly-insight`: conclui **3 treinos da semana 2** com a
+distância cheia, registra 1 corrida livre **dentro da janela daquela semana**, e dispara a
+geração do insight.
+
+`--week` existe porque sem ele o script pega os pendentes em ordem de data, atravessando
+semanas — o que serve para a retrospectiva (escopo = plano inteiro) mas não para o insight
+semanal, cujo escopo é uma semana só.
+
+**Pré-condições que o backend exige** (senão ele responde `no_eligible_week`):
+
+1. A semana já **fechou** — o último treino dela é anterior a hoje.
+2. Não é a **última** semana do plano (essa é coberta pela retrospectiva).
+3. Ela fecha em data `>= WEEKLY_INSIGHT_START_DATE` (o cutoff sem-backfill).
+4. Ainda não existe linha em `plan_week_insights` para ela.
+
+**O sinal que importa:** `suggested_adjustment.code` = `manter`. Três de cinco treinos com
+a distância cheia significa que o atleta faltou, mas cumpriu o que fez — sugerir
+`reduzir_volume` aí seria o conselho errado, porque o volume não foi o problema.
+
+Os outros dois casos-chave:
+
+```bash
+# Ausência severa → repetir_semana, classe schedule (não reduzir_volume)
+npm run qa:sim-workouts -- --week 2 --completions 1 --generate-weekly-insight
+
+# O cue central: correu os fáceis rápido demais → aliviar_ritmo
+npm run qa:sim-workouts -- --week 2 --completions 5 --pace 250 --generate-weekly-insight
+```
+
 ### Outros exemplos
 
 ```bash
@@ -103,6 +139,7 @@ npm run qa:sim-workouts -- --completions 3 --gps
 |---|---|---|
 | `--env` | `staging` | `local` \| `staging` \| `production` |
 | `--completions N` | 5 | Quantos treinos **pendentes** do plano concluir |
+| `--week N` | — | Restringe conclusões **e corridas livres** à semana N do plano |
 | `--completion-ratio R` | 1.0 | Fração da distância prescrita (0.8 = corre menos) |
 | `--free-runs M` | 0 | Quantas corridas livres registrar |
 | `--free-run-km K` | 8 | Distância de cada corrida livre |
@@ -112,6 +149,7 @@ npm run qa:sim-workouts -- --completions 3 --gps
 | `--gps` | off | Gera rota GPS sintética |
 | `--seed S` | aleatória | Semente, para runs reprodutíveis |
 | `--generate-retrospective` | off | Dispara a retrospectiva no fim |
+| `--generate-weekly-insight` | off | Dispara o insight da última semana fechada elegível |
 | `--dry-run` | off | Imprime o que faria, sem escrever |
 
 ## Idempotência
@@ -140,6 +178,23 @@ script → comparar com a linha de `plan_retrospectives`.
 **O sinal que importa:** `plan_distance_completed_km` **não** pode incluir os km da
 corrida livre. Se incluir, o defeito D1 da Fase 1A voltou.
 
+Com `--week`, sai um **oráculo semanal** no lugar, para conferir contra
+`plan_week_insights`:
+
+```
+  planned_workouts             esperado:  5
+  completed_workouts           esperado:  3
+  completion_rate              esperado:  60%
+  completed_distance_km        esperado:  15   ← SEM os livres
+  frequency_actual_days        esperado:  3    ← dias, não treinos
+  total_distance_km            esperado:  21   ← COM os livres
+  free_run_distance_km         esperado:  6
+```
+
+Note `frequency_actual_days`: são **dias distintos**, não contagem de treinos. Dois
+treinos no mesmo dia contam 1, porque a meta do onboarding é "quantos dias por semana
+você pode treinar".
+
 ## Nota sobre GPS
 
 Por padrão as conclusões vão com `route_points: []`. Isso **não** é uma simplificação
@@ -154,8 +209,7 @@ job de enriquecimento de elevação (Mapbox Terrain-DEM), que faz chamada extern
 
 Este harness **não é descartável**. As fases seguintes o chamam com outros parâmetros:
 
-- **Fase 2 (insight semanal)** — `--completions` cobrindo semanas específicas do plano,
-  com `--completion-ratio` variado para gerar aderência desigual entre semanas.
+- ~~**Fase 2 (insight semanal)**~~ — **feito**: `--week` + `--generate-weekly-insight`.
 - **Fase 4 (mensal/mesociclo)** — volume maior, ~4 semanas de conclusões.
 - **Fase 7 (carga interna / sRPE)** — `--rpe` obrigatório, com `--seed` fixa para séries
   de carga reprodutíveis entre execuções.

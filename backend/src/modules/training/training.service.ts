@@ -25,6 +25,8 @@ import {
   WeekPhase,
 } from './dto/plan-overview.dto';
 import { formatPaceRangeLabel } from '../../common/pace-calculator';
+import { derivePlanWeeks, addDaysStr } from './helpers/plan-window.helper';
+import { toSaoPauloDateStr } from './wellness/helpers/streak.helper';
 
 // Generation status types
 export type GenerationStatus = 'partial' | 'generating' | 'complete' | 'failed';
@@ -335,7 +337,8 @@ export class TrainingService {
           title: `DIA DA PROVA — ${onboardingData.raceName ?? 'Sua prova'}`,
           distance_km: onboardingData.raceDistance ?? null,
           instructions_json: [],
-          objective: 'Dia da sua prova! Aquecimento leve, hidratação e foco. 🏁',
+          objective:
+            'Dia da sua prova! Aquecimento leve, hidratação e foco. 🏁',
           tips: ['Aquecimento de 10 min', 'Hidrate-se bem'],
           status: 'pending',
           is_race_day: true,
@@ -487,7 +490,10 @@ export class TrainingService {
    * ganha um dia próprio. Rede de segurança pra dados antigos e chamadas fora do
    * app; a validação preferredDays.length===daysPerWeek fica no onboarding (mobile).
    */
-  private buildDistinctDaySchedule(baseDays: number[], count: number): number[] {
+  private buildDistinctDaySchedule(
+    baseDays: number[],
+    count: number,
+  ): number[] {
     const result = baseDays.slice(0, count);
     const used = new Set(result);
     // Preenche dias livres começando após o último escolhido (espalha em vez de
@@ -722,11 +728,9 @@ export class TrainingService {
     // Progress frontier: last completed/skipped day (null if none yet).
     const frontier = all
       .filter((w) => w.status === 'completed' || w.status === 'skipped')
-      .reduce<string | null>(
-        (max, w) =>
-          max === null || w.scheduled_date > max ? w.scheduled_date : max,
-        null,
-      );
+      .reduce<
+        string | null
+      >((max, w) => (max === null || w.scheduled_date > max ? w.scheduled_date : max), null);
 
     // The part of the plan still to run: non-completed sessions after the frontier.
     const remaining = all.filter(
@@ -1197,7 +1201,11 @@ export class TrainingService {
       payload.route_points.length > 1
     ) {
       try {
-        await this.elevationQueue.add('enrich', { activityId }, { delay: 1500 });
+        await this.elevationQueue.add(
+          'enrich',
+          { activityId },
+          { delay: 1500 },
+        );
       } catch (enqueueErr) {
         this.logger.warn(
           `[completeWorkout] failed to enqueue elevation enrichment for activity ${activityId}: ${(enqueueErr as Error).message}`,
@@ -1671,7 +1679,11 @@ export class TrainingService {
   async generateWorkoutBriefing(
     userId: string,
     workoutId: string,
-  ): Promise<{ content: string; athlete_level: string | null; created_at: string }> {
+  ): Promise<{
+    content: string;
+    athlete_level: string | null;
+    created_at: string;
+  }> {
     // 1. Idempotency — return the persisted briefing if it already exists.
     const { data: existing } = await this.supabaseService
       .from('workout_briefings')
@@ -2052,7 +2064,9 @@ Gere o briefing aprofundado agora.`;
   async getPlanOverview(
     userId: string,
   ): Promise<PlanOverviewResponseDto | null> {
-    const { date: today, dateStr: todayStr } = this.getSaoPauloToday();
+    // Só o `dateStr`: desde a extração de `derivePlanWeeks` toda comparação de
+    // fronteira aqui é entre strings YYYY-MM-DD.
+    const { dateStr: todayStr } = this.getSaoPauloToday();
     const dowLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 
     const [planRes, workoutsRes] = await Promise.all([
@@ -2100,10 +2114,16 @@ Gere o briefing aprofundado agora.`;
 
     const totalWeeks: number =
       plan.duration_weeks ?? generatedWeeks.length ?? 0;
-    const planStart = new Date(plan.created_at);
-    planStart.setHours(0, 0, 0, 0);
-    const planEnd = new Date(planStart);
-    planEnd.setDate(planEnd.getDate() + totalWeeks * 7 - 1);
+
+    // Datas do plano como strings YYYY-MM-DD em São Paulo. A versão anterior
+    // usava `new Date(created_at)` + `setHours(0,0,0,0)`, que zera na TZ do
+    // PROCESSO (UTC no Railway) — o dia saía deslocado para quem criou o plano
+    // à noite. `toSaoPauloDateStr` + `addDaysStr` não têm fuso nenhum.
+    const planStartStr = toSaoPauloDateStr(plan.created_at);
+    const planEndStr = addDaysStr(
+      planStartStr,
+      Math.max(totalWeeks * 7 - 1, 0),
+    );
 
     const phaseLabelMap: Record<string, string> = {
       base: 'base',
@@ -2120,11 +2140,25 @@ Gere o briefing aprofundado agora.`;
       workoutsByWeek.get(wn).push(w);
     }
 
+    // Fronteiras derivadas por `derivePlanWeeks` (plan-window.helper.ts), a
+    // mesma função que o insight semanal consome — assim a semana que a tela
+    // destaca e a semana que o insight mede são a MESMA por construção, não por
+    // coincidência de duas derivações paralelas.
+    //
+    // O `fallback` completa as semanas declaradas em `duration_weeks` que ainda
+    // não têm treino, que a UI precisa renderizar. Quem MEDE algo ignora essas.
+    const derivedWeeks = derivePlanWeeks(
+      workouts,
+      totalWeeks > 0 ? { createdAt: plan.created_at, totalWeeks } : undefined,
+    );
+    const windowByWeek = new Map(derivedWeeks.map((w) => [w.weekNumber, w]));
+
+    // A fase pode existir no plan_json para uma semana sem nenhum treino — daí
+    // a união com as chaves derivadas.
     const weekNumbers = new Set<number>([
-      ...Array.from(workoutsByWeek.keys()),
-      ...Array.from(phaseByWeek.keys()),
+      ...windowByWeek.keys(),
+      ...phaseByWeek.keys(),
     ]);
-    for (let i = 1; i <= totalWeeks; i++) weekNumbers.add(i);
 
     const sortedWeekNumbers = Array.from(weekNumbers).sort((a, b) => a - b);
 
@@ -2135,27 +2169,12 @@ Gere o briefing aprofundado agora.`;
         (wkWorkouts[0]?.metadata?.week_phase as WeekPhase | undefined) ??
         'base';
 
-      // Derived week boundaries: prefer actual scheduled_dates; fall back
-      // to plan-relative calculation so unhydrated future weeks still
-      // render a coherent period in the UI.
-      let startDate: string;
-      let endDate: string;
-      if (wkWorkouts.length > 0) {
-        const dates = wkWorkouts
-          .map((w) => w.scheduled_date)
-          .filter(Boolean)
-          .sort();
-        startDate = dates[0] ?? '';
-        endDate = dates[dates.length - 1] ?? startDate;
-      }
-      if (!wkWorkouts.length || !startDate) {
-        const ws = new Date(planStart);
-        ws.setDate(ws.getDate() + (weekNumber - 1) * 7);
-        const we = new Date(ws);
-        we.setDate(we.getDate() + 6);
-        startDate = ws.toISOString().split('T')[0];
-        endDate = we.toISOString().split('T')[0];
-      }
+      const win = windowByWeek.get(weekNumber);
+      // Último recurso: semana que só existe no plan_json (sem treino e fora de
+      // duration_weeks). Deriva do início do plano em São Paulo, sem `Date`.
+      const startDate =
+        win?.startStr ?? addDaysStr(planStartStr, (weekNumber - 1) * 7);
+      const endDate = win?.endStr ?? addDaysStr(startDate, 6);
 
       const completedWorkouts = wkWorkouts.filter(
         (w) => w.status === 'completed',
@@ -2163,9 +2182,11 @@ Gere o briefing aprofundado agora.`;
 
       const totalWorkouts = wkWorkouts.length;
 
-      const weekEnd = new Date(endDate + 'T00:00:00');
-      const weekStart = new Date(startDate + 'T00:00:00');
-      const isCurrent = today >= weekStart && today <= weekEnd;
+      // Comparação de strings YYYY-MM-DD contra o "hoje" de São Paulo. A versão
+      // antiga fazia `new Date(startDate + 'T00:00:00')`, que o V8 interpreta na
+      // TZ do PROCESSO — UTC no Railway — e comparava com um hoje de São Paulo:
+      // perto da meia-noite a semana destacada saía errada.
+      const isCurrent = todayStr >= startDate && todayStr <= endDate;
 
       const workoutDtos: PlanWorkoutDto[] = wkWorkouts.map((w) => {
         const dow = w.scheduled_date
@@ -2247,7 +2268,7 @@ Gere o briefing aprofundado agora.`;
         plan_id: plan.id,
         title,
         target_distance: targetDistance,
-        end_date: planEnd.toISOString().split('T')[0],
+        end_date: planEndStr,
         total_weeks: totalWeeks,
         completed_weeks: completedWeeks,
         current_week: currentWeek,

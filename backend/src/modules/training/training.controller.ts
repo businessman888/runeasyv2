@@ -23,6 +23,7 @@ import {
   CustomizePlanDto,
 } from './retrospective.service';
 import { TrainingAIService } from './training-ai.service';
+import { WeeklyInsightService } from './weekly-insight.service';
 import { SupabaseService } from '../../database';
 import { User } from '../../common/decorators';
 import { ProGuard } from '../../common/guards/pro.guard';
@@ -105,6 +106,7 @@ export class TrainingController {
   constructor(
     private readonly trainingService: TrainingService,
     private readonly retrospectiveService: RetrospectiveService,
+    private readonly weeklyInsightService: WeeklyInsightService,
     private readonly supabaseService: SupabaseService,
     private readonly usersService: UsersService,
     private readonly gamificationService: GamificationService,
@@ -334,7 +336,7 @@ export class TrainingController {
         recentDistanceKm: dto.recent_distance ?? null,
         targetWeeks:
           dto.goal_type === 'race' && weeksUntil(dto.race_date)
-            ? (weeksUntil(dto.race_date) as number)
+            ? weeksUntil(dto.race_date)
             : dto.target_weeks,
         limitations: dto.limitations,
         preferredDays: selectedDays,
@@ -732,10 +734,7 @@ export class TrainingController {
    * Get plan generation status (for polling during background generation)
    */
   @Get('plan/:id/status')
-  async getPlanStatus(
-    @User('id') userId: string,
-    @Param('id') planId: string,
-  ) {
+  async getPlanStatus(@User('id') userId: string, @Param('id') planId: string) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
@@ -841,10 +840,7 @@ export class TrainingController {
    * Get workout details
    */
   @Get('workouts/:id')
-  async getWorkout(
-    @User('id') userId: string,
-    @Param('id') workoutId: string,
-  ) {
+  async getWorkout(@User('id') userId: string, @Param('id') workoutId: string) {
     if (!userId) {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
@@ -1223,6 +1219,41 @@ export class TrainingController {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  /**
+   * Último insight semanal concluído do usuário.
+   *
+   * Fino de propósito: devolve a linha crua de `plan_week_insights`, o que
+   * deixa a Fase 2B (a tela) puramente mobile.
+   */
+  @Get('weekly-insight/latest')
+  @UseGuards(ProGuard)
+  async getLatestWeeklyInsight(@User('id') userId: string) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+
+    const insight = await this.weeklyInsightService.getLatest(userId);
+    return { insight, hasInsight: insight !== null };
+  }
+
+  /**
+   * Gera o insight da última semana FECHADA e elegível do plano ativo.
+   *
+   * Existe para validação em staging e para recuperar de uma falha do cron.
+   * Aplica exatamente as mesmas regras dele — última semana do plano suprimida
+   * (a retrospectiva cobre), cutoff de ativação e dedupe por linha.
+   */
+  @Post('weekly-insight/generate')
+  @UseGuards(ProGuard)
+  async manuallyGenerateWeeklyInsight(@User('id') userId: string) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+
+    this.logger.log(`[WeeklyInsight] Gatilho manual para user ${userId}`);
+    return this.weeklyInsightService.generateLatestClosedWeek(userId);
   }
 
   /**

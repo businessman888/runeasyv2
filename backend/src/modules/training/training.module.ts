@@ -6,6 +6,7 @@ import { TrainingAIService } from './training-ai.service';
 import { TrainingController } from './training.controller';
 import { TrainingSchedulerService } from './training-scheduler.service';
 import { RetrospectiveService } from './retrospective.service';
+import { WeeklyInsightService } from './weekly-insight.service';
 import { WellnessController } from './wellness/wellness.controller';
 import { WellnessService } from './wellness/wellness.service';
 import { NotificationModule } from '../notifications';
@@ -48,8 +49,14 @@ import { FeedbackModule } from '../feedback/feedback.module';
     TrainingAIService,
     TrainingSchedulerService,
     RetrospectiveService,
+    WeeklyInsightService,
     WellnessService,
   ],
-  exports: [TrainingService, TrainingAIService, RetrospectiveService],
+  exports: [
+    TrainingService,
+    TrainingAIService,
+    RetrospectiveService,
+    WeeklyInsightService,
+  ],
 })
 export class TrainingModule {}

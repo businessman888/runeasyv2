@@ -1,5 +1,6 @@
 import {
   derivePlanWindow,
+  derivePlanWeeks,
   isPlanFinished,
   addDaysStr,
   daysBetweenInclusive,
@@ -53,8 +54,12 @@ describe('derivePlanWindow', () => {
     });
 
     it('conta semanas por dias corridos, com piso de 1', () => {
-      expect(derivePlanWindow(PLAN, ['2026-06-01', '2026-06-28']).weeks).toBe(4);
-      expect(derivePlanWindow(PLAN, ['2026-06-01', '2026-06-07']).weeks).toBe(1);
+      expect(derivePlanWindow(PLAN, ['2026-06-01', '2026-06-28']).weeks).toBe(
+        4,
+      );
+      expect(derivePlanWindow(PLAN, ['2026-06-01', '2026-06-07']).weeks).toBe(
+        1,
+      );
       // Um único treino ainda é uma semana, não zero (evita divisão por zero
       // no cálculo de frequência).
       expect(derivePlanWindow(PLAN, ['2026-06-01']).weeks).toBe(1);
@@ -213,6 +218,128 @@ describe('findLongestRun', () => {
       { start_date: '2026-06-02T10:00:00Z', distance: null },
     ]);
     expect(r).toEqual({ km: 0, date: null });
+  });
+});
+
+/**
+ * Fase 2A — fronteiras por SEMANA do plano.
+ *
+ * Mesma ideia de `derivePlanWindow`, uma escala abaixo. Extraída de dentro de
+ * `getPlanOverview`, onde estava inalcançável — e onde comparava
+ * `new Date(startDate + 'T00:00:00')` (TZ do PROCESSO, UTC no Railway) com um
+ * "hoje" de São Paulo, deslocando a semana destacada perto da meia-noite.
+ */
+describe('derivePlanWeeks', () => {
+  const wk = (week_number: number | null, scheduled_date: string | null) => ({
+    week_number,
+    scheduled_date,
+  });
+
+  it('deriva MIN/MAX de scheduled_date por week_number', () => {
+    const weeks = derivePlanWeeks([
+      wk(1, '2026-06-03'),
+      wk(1, '2026-06-01'),
+      wk(1, '2026-06-05'),
+      wk(2, '2026-06-10'),
+      wk(2, '2026-06-08'),
+    ]);
+
+    expect(weeks).toEqual([
+      {
+        weekNumber: 1,
+        startStr: '2026-06-01',
+        endStr: '2026-06-05',
+        source: 'workouts',
+      },
+      {
+        weekNumber: 2,
+        startStr: '2026-06-08',
+        endStr: '2026-06-10',
+        source: 'workouts',
+      },
+    ]);
+  });
+
+  it('devolve ordenado por weekNumber mesmo com entrada fora de ordem', () => {
+    const weeks = derivePlanWeeks([
+      wk(3, '2026-06-15'),
+      wk(1, '2026-06-01'),
+      wk(2, '2026-06-08'),
+    ]);
+    expect(weeks.map((w) => w.weekNumber)).toEqual([1, 2, 3]);
+  });
+
+  it('ACOMPANHA A RE-ÂNCORA — semana deslocada +14d move as duas fronteiras', () => {
+    const original = derivePlanWeeks([
+      wk(2, '2026-06-08'),
+      wk(2, '2026-06-12'),
+    ]);
+    const shifted = derivePlanWeeks([wk(2, '2026-06-22'), wk(2, '2026-06-26')]);
+
+    expect(original[0].endStr).toBe('2026-06-12');
+    expect(shifted[0].startStr).toBe('2026-06-22');
+    expect(shifted[0].endStr).toBe('2026-06-26');
+  });
+
+  it('ignora linhas sem week_number ou sem scheduled_date', () => {
+    // Corrida livre grava `week_number: null` — não pode virar uma "semana".
+    const weeks = derivePlanWeeks([
+      wk(null, '2026-06-03'),
+      wk(1, null),
+      wk(1, '2026-06-01'),
+    ]);
+    expect(weeks).toHaveLength(1);
+    expect(weeks[0]).toMatchObject({ weekNumber: 1, startStr: '2026-06-01' });
+  });
+
+  it('sem fallback, devolve só as semanas que têm treino', () => {
+    const weeks = derivePlanWeeks([wk(1, '2026-06-01')]);
+    expect(weeks).toHaveLength(1);
+  });
+
+  describe('fallback (semanas declaradas sem treino hidratado)', () => {
+    it('completa as semanas faltantes a partir de created_at', () => {
+      const weeks = derivePlanWeeks(
+        [wk(1, '2026-06-01'), wk(1, '2026-06-05')],
+        {
+          createdAt: '2026-06-01T12:00:00Z',
+          totalWeeks: 3,
+        },
+      );
+
+      expect(weeks.map((w) => w.weekNumber)).toEqual([1, 2, 3]);
+      // A semana 1 tem treino: vence o MIN/MAX, não o fallback.
+      expect(weeks[0]).toMatchObject({
+        endStr: '2026-06-05',
+        source: 'workouts',
+      });
+      expect(weeks[1]).toEqual({
+        weekNumber: 2,
+        startStr: '2026-06-08',
+        endStr: '2026-06-14',
+        source: 'fallback',
+      });
+      expect(weeks[2].source).toBe('fallback');
+    });
+
+    it('resolve created_at no dia de SÃO PAULO, não em UTC', () => {
+      // 2026-03-01T02:00:00Z = 2026-02-28 23:00 em São Paulo.
+      const weeks = derivePlanWeeks([], {
+        createdAt: '2026-03-01T02:00:00Z',
+        totalWeeks: 1,
+      });
+      expect(weeks[0].startStr).toBe('2026-02-28');
+      expect(weeks[0].endStr).toBe('2026-03-06');
+    });
+  });
+
+  it('isPlanFinished serve como predicado de SEMANA FECHADA', () => {
+    const [week] = derivePlanWeeks([wk(1, '2026-06-01'), wk(1, '2026-06-07')]);
+
+    // endStr é inclusivo: no próprio dia do último treino a semana ainda corre.
+    expect(isPlanFinished(week, '2026-06-07')).toBe(false);
+    expect(isPlanFinished(week, '2026-06-08')).toBe(true);
+    expect(isPlanFinished(week, '2026-06-01')).toBe(false);
   });
 });
 

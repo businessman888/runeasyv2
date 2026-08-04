@@ -3,6 +3,7 @@ import { TrainingSchedulerService } from './training-scheduler.service';
 import { SupabaseService } from '../../database/supabase.service';
 import { NotificationService } from '../notifications/notification.service';
 import { RetrospectiveService } from './retrospective.service';
+import { WeeklyInsightService } from './weekly-insight.service';
 
 /**
  * Fase 1A — trava do disparo ÚNICO de notificação de retrospectiva.
@@ -26,6 +27,7 @@ describe('TrainingSchedulerService — retrospectiva', () => {
     sendPushNotification: jest.Mock;
   };
   let retrospectiveService: { checkForCompletedPlans: jest.Mock };
+  let weeklyInsightService: { checkForClosedPlanWeeks: jest.Mock };
 
   beforeEach(async () => {
     notificationService = {
@@ -39,6 +41,13 @@ describe('TrainingSchedulerService — retrospectiva', () => {
         { userId: 'user-2', retroId: 'retro-2' },
       ]),
     };
+    weeklyInsightService = {
+      // Duas semanas fechadas no mesmo ciclo do cron.
+      checkForClosedPlanWeeks: jest.fn().mockResolvedValue([
+        { userId: 'user-1', insightId: 'wi-1', weekNumber: 2 },
+        { userId: 'user-2', insightId: 'wi-2', weekNumber: 3 },
+      ]),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -46,6 +55,7 @@ describe('TrainingSchedulerService — retrospectiva', () => {
         { provide: SupabaseService, useValue: { getClient: jest.fn() } },
         { provide: NotificationService, useValue: notificationService },
         { provide: RetrospectiveService, useValue: retrospectiveService },
+        { provide: WeeklyInsightService, useValue: weeklyInsightService },
       ],
     }).compile();
 
@@ -54,7 +64,9 @@ describe('TrainingSchedulerService — retrospectiva', () => {
 
   it('delega a varredura ao RetrospectiveService', async () => {
     await service.checkForCompletedPlans();
-    expect(retrospectiveService.checkForCompletedPlans).toHaveBeenCalledTimes(1);
+    expect(retrospectiveService.checkForCompletedPlans).toHaveBeenCalledTimes(
+      1,
+    );
   });
 
   it('NÃO envia notificação — o service é o dono do disparo', async () => {
@@ -76,5 +88,33 @@ describe('TrainingSchedulerService — retrospectiva', () => {
       new Error('db down'),
     );
     await expect(service.checkForCompletedPlans()).resolves.toBeUndefined();
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Fase 2A — o insight semanal herda a MESMA regra de dono único. Estes testes
+  // existem para que a introdução de um envio de notificação aqui quebre a
+  // suíte, do mesmo jeito que a reintrodução do de retrospectiva quebraria.
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('insight semanal', () => {
+    it('delega a varredura ao WeeklyInsightService', async () => {
+      await service.checkForClosedPlanWeeks();
+      expect(
+        weeklyInsightService.checkForClosedPlanWeeks,
+      ).toHaveBeenCalledTimes(1);
+    });
+
+    it('NÃO envia notificação — o service é o dono do disparo', async () => {
+      await service.checkForClosedPlanWeeks();
+
+      expect(notificationService.createNotification).not.toHaveBeenCalled();
+      expect(notificationService.sendPushNotification).not.toHaveBeenCalled();
+    });
+
+    it('não derruba o cron quando a varredura falha', async () => {
+      weeklyInsightService.checkForClosedPlanWeeks.mockRejectedValue(
+        new Error('db down'),
+      );
+      await expect(service.checkForClosedPlanWeeks()).resolves.toBeUndefined();
+    });
   });
 });

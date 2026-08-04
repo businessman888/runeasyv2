@@ -28,6 +28,18 @@ export type NotificationType =
   | 'workout_sync'
   | 'achievement'
   | 'reminder'
+  /**
+   * Insight de fim de semana do plano (Fase 2A). Type próprio, e não
+   * 'recovery_analysis' reusado, para que a lista e o filtro do app consigam
+   * distinguir o insight semanal da retrospectiva de fim de ciclo.
+   *
+   * ⚠️ O mobile ainda não mapeia este type: `mapNotificationType` em
+   * NotificationsScreen.tsx cai no `default` e renderiza como lembrete. A linha
+   * no switch é Fase 2B, junto com a tela — o bloco de mobile está represado
+   * para uma build EAS única. A coluna `notifications.type` é varchar sem CHECK,
+   * então o banco aceita desde já.
+   */
+  | 'weekly_insight'
   | 'system';
 
 export interface AppNotification {

@@ -27,6 +27,12 @@ import {
   saoPauloTodayStr,
   toSaoPauloDateStr,
 } from './helpers/streak.helper';
+import {
+  buildMetric,
+  sparkline7,
+  weightedAvgPaceSeconds,
+  round2,
+} from './helpers/metrics.helper';
 import { paceValueToSecondsPerKm } from '../../../common/pace-calculator';
 
 const SAO_PAULO_OFFSET_HOURS = -3;
@@ -394,18 +400,11 @@ export class WellnessService {
     const sum = (arr: ActivityRow[], pick: (a: ActivityRow) => number) =>
       arr.reduce((acc, a) => acc + (pick(a) || 0), 0);
 
-    // Pace médio ponderado pela distância, em segundos/km. `paceValueToSecondsPerKm`
-    // normaliza linhas legadas em decimal min/km para a unidade canônica.
-    const avgWeighted = (arr: ActivityRow[]): number => {
-      const totalDist = sum(arr, (a) => a.distance || 0);
-      if (totalDist <= 0) return 0;
-      const weightedPace = arr.reduce((acc, a) => {
-        const paceSec = paceValueToSecondsPerKm(a.average_pace);
-        if (paceSec == null || !a.distance) return acc;
-        return acc + paceSec * a.distance;
-      }, 0);
-      return weightedPace / totalDist;
-    };
+    // `buildMetric`, `sparkline7` e `weightedAvgPaceSeconds` moraram aqui como
+    // métodos privados até a Fase 2A; foram promovidos para metrics.helper.ts
+    // porque o insight semanal precisa da mesma matemática com outra janela.
+    const weekStartStr = toSaoPauloDateStr(currentWeek.start.toISOString());
+    const avgWeighted = weightedAvgPaceSeconds;
 
     const distanceCurr = sum(
       currentActivities,
@@ -432,93 +431,53 @@ export class WellnessService {
     const elevPrev = sum(previousActivities, (a) => a.elevation_gain || 0);
 
     return {
-      distance: this.buildMetric(
+      distance: buildMetric(
         round2(distanceCurr),
         round2(distancePrev),
-        this.sparkline7(
+        sparkline7(
           currentActivities,
-          currentWeek.start,
+          weekStartStr,
           (a) => (a.distance || 0) / 1000,
         ),
       ),
-      frequency: this.buildMetric(
+      frequency: buildMetric(
         freqCurr,
         freqPrev,
-        this.sparkline7(currentActivities, currentWeek.start, () => 1),
+        sparkline7(currentActivities, weekStartStr, () => 1),
       ),
-      pace: this.buildMetric(
+      pace: buildMetric(
         Math.round(paceCurr),
         Math.round(pacePrev),
-        this.sparkline7(
+        sparkline7(
           currentActivities,
-          currentWeek.start,
+          weekStartStr,
           (a) => paceValueToSecondsPerKm(a.average_pace) ?? 0,
         ),
       ),
-      duration: this.buildMetric(
+      duration: buildMetric(
         Math.round(durCurr),
         Math.round(durPrev),
-        this.sparkline7(
+        sparkline7(
           currentActivities,
-          currentWeek.start,
+          weekStartStr,
           (a) => (a.moving_time || 0) / 60,
         ),
       ),
-      calories: this.buildMetric(
+      calories: buildMetric(
         Math.round(calCurr),
         Math.round(calPrev),
-        this.sparkline7(
-          currentActivities,
-          currentWeek.start,
-          (a) => a.calories || 0,
-        ),
+        sparkline7(currentActivities, weekStartStr, (a) => a.calories || 0),
       ),
-      elevation: this.buildMetric(
+      elevation: buildMetric(
         Math.round(elevCurr),
         Math.round(elevPrev),
-        this.sparkline7(
+        sparkline7(
           currentActivities,
-          currentWeek.start,
+          weekStartStr,
           (a) => a.elevation_gain || 0,
         ),
       ),
     };
-  }
-
-  private buildMetric(
-    value: number,
-    prevValue: number,
-    sparkline: number[],
-  ): PerformanceMetricDto {
-    let deltaPct: number | null = null;
-    if (prevValue > 0) {
-      deltaPct = Math.round(((value - prevValue) / prevValue) * 1000) / 10;
-    }
-    return { value, prevValue, deltaPct, sparkline };
-  }
-
-  private sparkline7(
-    activities: ActivityRow[],
-    weekStart: Date,
-    pick: (a: ActivityRow) => number,
-  ): number[] {
-    const buckets = [0, 0, 0, 0, 0, 0, 0];
-    for (const a of activities) {
-      const aDate = new Date(a.start_date);
-      const aSpStr = toSaoPauloDateStr(a.start_date);
-      const wsStr = toSaoPauloDateStr(weekStart.toISOString());
-      const diffDays = Math.floor(
-        (Date.parse(aSpStr) - Date.parse(wsStr)) / (1000 * 60 * 60 * 24),
-      );
-      if (diffDays >= 0 && diffDays < 7) {
-        buckets[diffDays] += pick(a);
-      } else {
-        // safety net: bucket by raw weekday if scheduling drift
-        const wd = aDate.getUTCDay();
-        if (wd >= 0 && wd < 7) buckets[wd] += pick(a);
-      }
-    }
-    return buckets.map((v) => round2(v));
   }
 
   private buildOverviewBlock(
@@ -722,8 +681,4 @@ export class WellnessService {
       lastActivityDate: result.lastActivityDate,
     };
   }
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
 }

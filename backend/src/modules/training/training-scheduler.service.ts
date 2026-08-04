@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { SupabaseService } from '../../database/supabase.service';
 import { NotificationService } from '../notifications/notification.service';
 import { RetrospectiveService } from './retrospective.service';
+import { WeeklyInsightService } from './weekly-insight.service';
 
 @Injectable()
 export class TrainingSchedulerService {
@@ -13,6 +14,7 @@ export class TrainingSchedulerService {
     private readonly supabaseService: SupabaseService,
     private readonly notificationService: NotificationService,
     private readonly retrospectiveService: RetrospectiveService,
+    private readonly weeklyInsightService: WeeklyInsightService,
   ) {}
 
   /**
@@ -220,5 +222,42 @@ export class TrainingSchedulerService {
   async triggerRetrospectiveCheck() {
     this.logger.log('Manually triggering retrospective check...');
     await this.checkForCompletedPlans();
+  }
+
+  /**
+   * Gera o insight de toda SEMANA DO PLANO que fechou e ainda não tem um.
+   * Roda à meia-noite de São Paulo, junto do check de retrospectiva.
+   *
+   * ⚠️ NÃO ENVIE NOTIFICAÇÃO DAQUI, pelo mesmo motivo da retrospectiva:
+   * `WeeklyInsightService` é o dono do envio, porque o endpoint manual
+   * `POST /training/weekly-insight/generate` chama a geração direto, sem passar
+   * por este cron.
+   *
+   * A dedupe também NÃO é o `sentReminders` acima: é `SELECT` +
+   * `UNIQUE (plan_id, week_number)` no banco, que sobrevive a restart e a
+   * múltiplas réplicas.
+   */
+  @Cron('0 0 * * *', {
+    name: 'weekly-insight-check',
+    timeZone: 'America/Sao_Paulo',
+  })
+  async checkForClosedPlanWeeks() {
+    this.logger.log('[WeeklyInsight Cron] Starting (midnight São Paulo)');
+
+    try {
+      const generated =
+        await this.weeklyInsightService.checkForClosedPlanWeeks();
+      this.logger.log(
+        `[WeeklyInsight Cron] Completed, generated ${generated.length} insight(s)`,
+      );
+    } catch (error) {
+      this.logger.error('[WeeklyInsight Cron] Failed:', error);
+    }
+  }
+
+  /** Manual trigger for weekly insight check (testing) */
+  async triggerWeeklyInsightCheck() {
+    this.logger.log('Manually triggering weekly insight check...');
+    await this.checkForClosedPlanWeeks();
   }
 }
