@@ -1,74 +1,152 @@
 import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
-import { RadarChart } from 'react-native-gifted-charts';
+import Svg, { Polygon, Line, Text as SvgText, Circle } from 'react-native-svg';
+import Animated, {
+    useAnimatedProps,
+    useAnimatedStyle,
+} from 'react-native-reanimated';
 import { colors, typography, spacing, borderRadius, fonts } from '../../../theme';
-import { ZONE_COLORS } from '../../../theme/zoneColors';
+import { SectionHeader } from './SectionHeader';
+import { useEnterAnimation } from '../hooks/useEnterAnimation';
 import type { ZoneBucket } from '../../../types/weeklyInsight.types';
 
 /**
- * ZONAS PRESCRITAS × EXECUTADAS — radar de dois polígonos.
+ * DISTRIBUIÇÃO DE ZONAS — radar desenhado à mão em SVG.
  *
- * `RadarChart` vem da `react-native-gifted-charts`, a mesma lib do
- * `EvolutionChart` do Wellness — nenhuma dependência nova.
+ * ── POR QUE NÃO O RadarChart DA LIB ──────────────────────────────────────────
+ *
+ * A `react-native-gifted-charts` tem um `RadarChart`, e a primeira versão desta
+ * tela o usava. Três motivos para desenhar à mão:
+ *
+ *  1. A animação dela roda no timing PRÓPRIO e não entra na coreografia de
+ *     stagger da tela. Com todo o resto revelando em onda, um radar animando
+ *     fora de compasso fica pior que um radar estático.
+ *  2. `labelsPositionOffset` é grosseiro demais para garantir que Z1–Z5 não
+ *     encostem na borda (o `radius` dela é fixo em `center * 0.8`).
+ *  3. O `gridConfig` default preenche cada nível concêntrico — é a origem dos
+ *     "pentágonos brancos" que deixavam o gráfico com cara de não-estilizado.
+ *
+ * Um radar são dois polígonos e cinco rótulos. O app já desenha SVG à mão no
+ * `Sparkline`, então isto não introduz um padrão novo.
  *
  * ── POR QUE NORMALIZAR PARA % ────────────────────────────────────────────────
  *
- * Os dados chegam em km por zona, e um plano típico é esmagadoramente Z1 (em
- * produção, 88 de 120 treinos). Em valor absoluto o radar viraria uma agulha
- * apontando para Z1, com as outras quatro pontas coladas no centro — bonito e
- * ilegível. Normalizando cada série pelo PRÓPRIO total, os dois polígonos
- * passam a descrever FORMA (a distribuição do esforço), que é o que a
- * comparação prescrito × executado quer mostrar.
+ * Os dados vêm em km, e um plano típico é esmagadoramente Z1 (em produção, 88 de
+ * 120 treinos). Em valor absoluto o radar viraria uma agulha apontando para Z1
+ * com as outras quatro pontas coladas no centro. Normalizado pelo total de cada
+ * série, ele compara FORMA — a distribuição do esforço.
  *
- * Consequência a manter em mente: o radar não diz "correu menos", diz "correu
- * diferente". O volume absoluto está no `VolumeComparison`, logo acima.
- *
- * ── ZONA SEM DADO ────────────────────────────────────────────────────────────
- *
- * Se não houve nenhum treino concluído, o polígono de executado seria um ponto
- * no centro — o componente cai para um estado vazio explícito em vez de
- * desenhar um radar degenerado.
+ * Consequência a manter em mente: este gráfico não diz "correu menos", diz
+ * "correu diferente". A magnitude está no gráfico de volume, acima.
  */
 
 const ZONES = ['Z1', 'Z2', 'Z3', 'Z4', 'Z5'] as const;
+type ZoneKey = (typeof ZONES)[number];
+
+const AnimatedPolygon = Animated.createAnimatedComponent(Polygon);
+
+/** Anéis do grid, como fração do raio. Três bastam para dar régua sem poluir. */
+const GRID_RINGS = [1, 0.66, 0.33];
+/** Folga entre o polígono e os rótulos — o que impedia Z1–Z5 de encostar. */
+const LABEL_GAP = 22;
 
 interface ZonesRadarProps {
     prescribed: Record<string, ZoneBucket>;
     executed: Record<string, ZoneBucket>;
+    index?: number;
 }
 
-function toPercentSeries(buckets: Record<string, ZoneBucket>): {
-    series: number[];
+interface Series {
+    /** Fração 0..1 por zona, normalizada pelo total da própria série. */
+    scales: number[];
+    /** Percentual inteiro por zona, para a leitura numérica. */
+    percents: number[];
     total: number;
-} {
-    const values = ZONES.map((z) => Number(buckets?.[z]?.km ?? 0));
-    const total = values.reduce((s, v) => s + v, 0);
-    if (total <= 0) return { series: ZONES.map(() => 0), total: 0 };
+}
+
+function toSeries(buckets: Record<string, ZoneBucket> | undefined): Series {
+    const km = ZONES.map((z) => Number(buckets?.[z]?.km ?? 0));
+    const total = km.reduce((s, v) => s + v, 0);
+    if (total <= 0) {
+        return { scales: ZONES.map(() => 0), percents: ZONES.map(() => 0), total: 0 };
+    }
+    const fractions = km.map((v) => v / total);
+    // Escala pelo MAIOR valor da série, não pelo total: com 5 eixos, uma zona a
+    // 60% do total ocuparia só 60% do raio e o polígono ficaria minúsculo.
+    const max = Math.max(...fractions, 0.0001);
     return {
-        series: values.map((v) => Math.round((v / total) * 100)),
+        scales: fractions.map((f) => f / max),
+        percents: fractions.map((f) => Math.round(f * 100)),
         total,
     };
+}
+
+/** Vértice i de um pentágono, começando no topo e girando no sentido horário. */
+function vertex(cx: number, cy: number, r: number, i: number, scale: number) {
+    const angle = (-90 + i * (360 / ZONES.length)) * (Math.PI / 180);
+    return {
+        x: cx + r * scale * Math.cos(angle),
+        y: cy + r * scale * Math.sin(angle),
+    };
+}
+
+function pointsOf(cx: number, cy: number, r: number, scales: number[]): string {
+    return scales
+        .map((s, i) => {
+            const { x, y } = vertex(cx, cy, r, i, s);
+            return `${x.toFixed(1)},${y.toFixed(1)}`;
+        })
+        .join(' ');
 }
 
 export const ZonesRadar = memo(function ZonesRadar({
     prescribed,
     executed,
+    index = 5,
 }: ZonesRadarProps) {
-    const { width } = useWindowDimensions();
-    // Mesma disciplina do EvolutionChart: reativo a rotação, capado para não
-    // estourar a coluna em tablet.
-    const chartSize = Math.min(width - spacing.base * 2 - spacing.lg * 2, 300);
+    const { width: windowWidth } = useWindowDimensions();
+    const progress = useEnterAnimation(index);
 
-    const pres = useMemo(() => toPercentSeries(prescribed), [prescribed]);
-    const exec = useMemo(() => toPercentSeries(executed), [executed]);
+    const pres = useMemo(() => toSeries(prescribed), [prescribed]);
+    const exec = useMemo(() => toSeries(executed), [executed]);
 
-    const hasExecuted = exec.total > 0;
+    const size = Math.min(windowWidth - spacing.base * 2 - spacing.lg * 2, 300);
+    const cx = size / 2;
+    const cy = size / 2;
+    // O raio precisa deixar espaço para os rótulos FORA do polígono — é isso que
+    // resolvia a queixa de "labels ilegíveis/cortadas".
+    const radius = size / 2 - LABEL_GAP - 8;
+
+    const containerStyle = useAnimatedStyle(() => ({
+        opacity: progress.value,
+    }));
+
+    // O polígono "cresce do centro": cada vértice interpola de 0 até seu valor.
+    const execAnimatedProps = useAnimatedProps(() => ({
+        points: pointsOf(
+            cx,
+            cy,
+            radius,
+            exec.scales.map((s) => s * progress.value),
+        ),
+    }));
+
+    const presAnimatedProps = useAnimatedProps(() => ({
+        points: pointsOf(
+            cx,
+            cy,
+            radius,
+            pres.scales.map((s) => s * progress.value),
+        ),
+    }));
+
     const hasPrescribed = pres.total > 0;
+    const hasExecuted = exec.total > 0;
 
     if (!hasPrescribed) {
         return (
             <View style={styles.section}>
-                <Text style={styles.heading}>Distribuição de zonas</Text>
+                <SectionHeader eyebrow="Intensidade" title="Distribuição de zonas" />
                 <View style={styles.emptyCard}>
                     <Text style={styles.emptyTitle}>Sem zonas prescritas</Text>
                     <Text style={styles.emptyText}>
@@ -79,109 +157,167 @@ export const ZonesRadar = memo(function ZonesRadar({
         );
     }
 
-    // Escala comum: o maior percentual entre as duas séries, arredondado para
-    // cima. Sem isso a lib normaliza cada polígono por si e a comparação some.
-    const maxValue = Math.max(...pres.series, ...exec.series, 10);
-
     return (
         <View style={styles.section}>
-            <Text style={styles.heading}>Distribuição de zonas</Text>
+            <SectionHeader
+                eyebrow="Intensidade"
+                title="Distribuição de zonas"
+                note="proporção"
+            />
 
-            <View style={styles.card}>
+            <Animated.View style={[styles.card, containerStyle]}>
                 <View style={styles.chartWrap}>
-                    <RadarChart
-                        // Prescrito primeiro (embaixo), executado por cima.
-                        dataSet={hasExecuted ? [pres.series, exec.series] : [pres.series]}
-                        labels={[...ZONES]}
-                        maxValue={maxValue}
-                        chartSize={chartSize}
-                        noOfSections={4}
-                        hideAsterLines={false}
-                        polygonConfigArray={
-                            hasExecuted
-                                ? [
-                                      {
-                                          fill: 'rgba(255,255,255,0.06)',
-                                          stroke: 'rgba(255,255,255,0.35)',
-                                          strokeWidth: 1.5,
-                                      },
-                                      {
-                                          fill: 'rgba(0,212,255,0.22)',
-                                          stroke: colors.primary,
-                                          strokeWidth: 2,
-                                      },
-                                  ]
-                                : [
-                                      {
-                                          fill: 'rgba(255,255,255,0.06)',
-                                          stroke: 'rgba(255,255,255,0.35)',
-                                          strokeWidth: 1.5,
-                                      },
-                                  ]
-                        }
-                        gridConfig={{
-                            stroke: 'rgba(255,255,255,0.08)',
-                            strokeWidth: 1,
-                        }}
-                        asterLinesConfig={{ stroke: 'rgba(255,255,255,0.08)' }}
-                        labelConfig={{
-                            stroke: colors.textSecondary,
-                            fontSize: 11,
-                            fontFamily: fonts.semibold,
-                            fontWeight: '600',
-                        }}
-                        hideLabels={false}
-                    />
+                    <Svg width={size} height={size}>
+                        {/* Grid: anéis recessivos, SEM fill — o fill default da
+                            lib era exatamente o "pentágono branco". */}
+                        {GRID_RINGS.map((ring) => (
+                            <Polygon
+                                key={`ring-${ring}`}
+                                points={pointsOf(
+                                    cx,
+                                    cy,
+                                    radius,
+                                    ZONES.map(() => ring),
+                                )}
+                                fill="none"
+                                stroke="rgba(255,255,255,0.07)"
+                                strokeWidth={1}
+                            />
+                        ))}
+
+                        {/* Eixos do centro a cada vértice. */}
+                        {ZONES.map((z, i) => {
+                            const { x, y } = vertex(cx, cy, radius, i, 1);
+                            return (
+                                <Line
+                                    key={`axis-${z}`}
+                                    x1={cx}
+                                    y1={cy}
+                                    x2={x}
+                                    y2={y}
+                                    stroke="rgba(255,255,255,0.06)"
+                                    strokeWidth={1}
+                                />
+                            );
+                        })}
+
+                        {/* PRESCRITO — o alvo: tracejado, sem preenchimento. */}
+                        <AnimatedPolygon
+                            animatedProps={presAnimatedProps}
+                            fill="none"
+                            stroke="rgba(255,255,255,0.30)"
+                            strokeWidth={1.5}
+                            strokeDasharray="5,4"
+                        />
+
+                        {/* EXECUTADO — ciano preenchido, a série protagonista. */}
+                        {hasExecuted && (
+                            <AnimatedPolygon
+                                animatedProps={execAnimatedProps}
+                                fill="rgba(0,212,255,0.22)"
+                                stroke={colors.primary}
+                                strokeWidth={2}
+                                strokeLinejoin="round"
+                            />
+                        )}
+
+                        {/* Vértices do executado, para o polígono ter articulação. */}
+                        {hasExecuted &&
+                            exec.scales.map((s, i) => {
+                                const { x, y } = vertex(cx, cy, radius, i, s);
+                                return (
+                                    <Circle
+                                        key={`dot-${i}`}
+                                        cx={x}
+                                        cy={y}
+                                        r={2.5}
+                                        fill={colors.primary}
+                                    />
+                                );
+                            })}
+
+                        {/* Rótulos FORA do polígono, com folga. `fontWeight` sem
+                            depender só de `fontFamily`: fonte customizada em
+                            <Text> de SVG é frágil no Android, e o peso garante
+                            legibilidade mesmo se a família não resolver. */}
+                        {ZONES.map((z, i) => {
+                            const { x, y } = vertex(
+                                cx,
+                                cy,
+                                radius + LABEL_GAP,
+                                i,
+                                1,
+                            );
+                            return (
+                                <SvgText
+                                    key={`label-${z}`}
+                                    x={x}
+                                    y={y}
+                                    fill={colors.textLight}
+                                    fontSize={12}
+                                    fontWeight="700"
+                                    textAnchor="middle"
+                                    alignmentBaseline="middle"
+                                >
+                                    {z}
+                                </SvgText>
+                            );
+                        })}
+                    </Svg>
                 </View>
 
                 <View style={styles.legend}>
-                    <LegendDot
-                        color="rgba(255,255,255,0.45)"
-                        label="Prescrito"
-                    />
-                    {hasExecuted ? (
-                        <LegendDot color={colors.primary} label="Executado" />
-                    ) : (
-                        <Text style={styles.legendEmpty}>
-                            Nenhum treino concluído nesta semana
-                        </Text>
-                    )}
+                    <LegendItem color={colors.primary} label="Executado" filled />
+                    <LegendItem color="rgba(255,255,255,0.35)" label="Prescrito" dashed />
                 </View>
 
-                {/* A leitura em números, para quem quer o dado exato — e porque
-                    forma sozinha não comunica magnitude. */}
-                {hasExecuted && (
+                {hasExecuted ? (
                     <View style={styles.rows}>
                         {ZONES.map((z, i) => {
-                            const p = pres.series[i];
-                            const e = exec.series[i];
+                            const p = pres.percents[i];
+                            const e = exec.percents[i];
                             if (p === 0 && e === 0) return null;
                             return (
                                 <View key={z} style={styles.row}>
-                                    <View
-                                        style={[
-                                            styles.zoneDot,
-                                            { backgroundColor: ZONE_COLORS[z] },
-                                        ]}
-                                    />
                                     <Text style={styles.zoneCode}>{z}</Text>
-                                    <Text style={styles.zoneCompare}>
-                                        {p}% → {e}%
-                                    </Text>
+                                    <Text style={styles.zonePres}>{p}%</Text>
+                                    <Text style={styles.zoneArrow}>→</Text>
+                                    <Text style={styles.zoneExec}>{e}%</Text>
                                 </View>
                             );
                         })}
                     </View>
+                ) : (
+                    <Text style={styles.noExec}>
+                        Nenhum treino concluído nesta semana
+                    </Text>
                 )}
-            </View>
+            </Animated.View>
         </View>
     );
 });
 
-function LegendDot({ color, label }: { color: string; label: string }) {
+function LegendItem({
+    color,
+    label,
+    filled,
+    dashed,
+}: {
+    color: string;
+    label: string;
+    filled?: boolean;
+    dashed?: boolean;
+}) {
     return (
         <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: color }]} />
+            <View
+                style={[
+                    styles.legendSwatch,
+                    { borderColor: color },
+                    filled ? { backgroundColor: 'rgba(0,212,255,0.22)' } : null,
+                    dashed ? styles.legendDashed : null,
+                ]}
+            />
             <Text style={styles.legendText}>{label}</Text>
         </View>
     );
@@ -189,17 +325,12 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 
 const styles = StyleSheet.create({
     section: { gap: spacing.md },
-    heading: {
-        fontFamily: fonts.bold,
-        fontSize: typography.fontSizes.xl,
-        color: colors.text,
-    },
     card: {
         backgroundColor: colors.card,
         borderRadius: borderRadius['2xl'],
-        padding: spacing.lg,
         borderWidth: 1,
         borderColor: colors.border,
+        padding: spacing.lg,
         gap: spacing.md,
     },
     chartWrap: { alignItems: 'center' },
@@ -207,45 +338,62 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'center',
         gap: spacing.lg,
-        flexWrap: 'wrap',
     },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    legendDot: { width: 10, height: 10, borderRadius: 5 },
+    legendSwatch: {
+        width: 14,
+        height: 10,
+        borderRadius: 3,
+        borderWidth: 1.5,
+    },
+    legendDashed: { borderStyle: 'dashed' },
     legendText: {
         fontFamily: fonts.medium,
         fontSize: typography.fontSizes.xs,
         color: colors.textSecondary,
     },
-    legendEmpty: {
-        fontFamily: fonts.medium,
-        fontSize: typography.fontSizes.xs,
-        color: colors.textMuted,
-    },
     rows: {
-        gap: 6,
+        gap: 5,
         paddingTop: spacing.sm,
         borderTopWidth: StyleSheet.hairlineWidth,
         borderTopColor: colors.border,
     },
-    row: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-    zoneDot: { width: 8, height: 8, borderRadius: 4 },
+    row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     zoneCode: {
         width: 26,
         fontFamily: fonts.bold,
         fontSize: typography.fontSizes.xs,
         color: colors.textLight,
     },
-    zoneCompare: {
+    zonePres: {
+        width: 40,
+        textAlign: 'right',
         fontFamily: fonts.medium,
         fontSize: typography.fontSizes.xs,
-        color: colors.textSecondary,
+        color: colors.textMuted,
+    },
+    zoneArrow: {
+        fontFamily: fonts.regular,
+        fontSize: typography.fontSizes.xs,
+        color: colors.textMuted,
+    },
+    zoneExec: {
+        fontFamily: fonts.bold,
+        fontSize: typography.fontSizes.xs,
+        color: colors.primary,
+    },
+    noExec: {
+        fontFamily: fonts.medium,
+        fontSize: typography.fontSizes.xs,
+        color: colors.textMuted,
+        textAlign: 'center',
     },
     emptyCard: {
         backgroundColor: colors.card,
         borderRadius: borderRadius['2xl'],
-        padding: spacing.xl,
         borderWidth: 1,
         borderColor: colors.border,
+        padding: spacing.xl,
         alignItems: 'center',
         gap: spacing.xs,
     },

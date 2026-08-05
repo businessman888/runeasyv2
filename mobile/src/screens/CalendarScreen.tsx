@@ -31,8 +31,6 @@ import { usePlanGenerationGate } from '../hooks/usePlanGenerationGate';
 import { SegmentedTabs } from '../components/ui/SegmentedTabs';
 import { AgendaCalendar, type CalendarViewMode } from '../components/calendar/AgendaCalendar';
 import { StatsPeriodCard } from '../components/calendar/StatsPeriodCard';
-import { WeeklyInsightCard } from '../components/insight/WeeklyInsightCard';
-import { useWeeklyInsightStore } from '../stores/weeklyInsightStore';
 import type { CalendarDayStatus } from '../components/calendar/DayIndicator';
 import { startOfDay, toLocalDateStr } from '../components/calendar/useCalendarGrid';
 import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
@@ -153,9 +151,6 @@ const SCOPE_TABS: { key: 'plan' | 'activity'; label: string }[] = [
 // WorkoutData / WorkoutBlock agora vêm de utils/workoutTransform (fonte única).
 
 export function CalendarScreen({ navigation }: any) {
-    // Só leitura: quem busca é o <WeeklyInsightEntry/> montado na home, e a
-    // store tem TTL de 5 min — o calendário não dispara requisição própria.
-    const weeklyInsight = useWeeklyInsightStore((s) => s.latest);
     const { workouts: rawWorkouts, fetchWorkouts, fetchUpcomingWorkouts, plan, fetchPlan, generationStatus, checkPlanStatus, schedule: rawSchedule, fetchSchedule, isLoading: isTrainingLoading } = useTrainingStore();
     const { isProUser } = useProFeature();
     const { scope, setScope } = useWorkoutScopeStore();
@@ -581,19 +576,6 @@ export function CalendarScreen({ navigation }: any) {
                     onChange={setScope}
                     style={styles.scopeTabs}
                 />
-
-                {/* Insight semanal — mesma rede de segurança da home. Fica acima
-                    das estatísticas porque a semana fechada é o contexto que
-                    explica os números logo abaixo. */}
-                {weeklyInsight && (
-                    <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.md }}>
-                        <WeeklyInsightCard
-                            insight={weeklyInsight}
-                            unread={weeklyInsight.seen_at === null}
-                            onPress={() => navigation.navigate('WeeklyInsight' as never)}
-                        />
-                    </View>
-                )}
 
                 <Text style={styles.sectionTitle}>Estatísticas</Text>
                 {/* Stats card — Distância/Tempo/Freq + gráfico, escopado por período

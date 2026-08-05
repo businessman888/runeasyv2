@@ -1,8 +1,11 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { colors, typography, spacing, borderRadius, fonts } from '../../../theme';
 import { ZONE_COLORS } from '../../../theme/zoneColors';
+import { SectionHeader } from './SectionHeader';
+import { useEnterAnimation } from '../hooks/useEnterAnimation';
 import { formatPace, describeIntensityDelta } from '../format';
 import type { IntensityBucket, Zone } from '../../../types/weeklyInsight.types';
 
@@ -26,17 +29,25 @@ const TOLERANCE_SEC = 15;
 
 interface IntensityCardProps {
     intensity: Partial<Record<Zone, IntensityBucket>>;
+    index?: number;
 }
 
 export const IntensityCard = memo(function IntensityCard({
     intensity,
+    index = 4,
 }: IntensityCardProps) {
+    const progress = useEnterAnimation(index);
     const zones = ZONE_ORDER.filter((z) => (intensity?.[z]?.n ?? 0) > 0);
+
+    const containerStyle = useAnimatedStyle(() => ({
+        opacity: progress.value,
+        transform: [{ translateY: (1 - progress.value) * 12 }],
+    }));
 
     if (zones.length === 0) {
         return (
             <View style={styles.section}>
-                <Text style={styles.heading}>Ritmo prescrito × executado</Text>
+                <SectionHeader eyebrow="Ritmo" title="Alvo × executado" />
                 <View style={styles.emptyCard}>
                     <Text style={styles.emptyTitle}>Sem comparação disponível</Text>
                     <Text style={styles.emptyText}>
@@ -50,9 +61,9 @@ export const IntensityCard = memo(function IntensityCard({
 
     return (
         <View style={styles.section}>
-            <Text style={styles.heading}>Ritmo prescrito × executado</Text>
+            <SectionHeader eyebrow="Ritmo" title="Alvo × executado" note="min/km" />
 
-            <View style={styles.card}>
+            <Animated.View style={[styles.card, containerStyle]}>
                 {zones.map((z) => {
                     const b = intensity[z]!;
                     const isEasy = EASY_ZONES.includes(z);
@@ -113,7 +124,7 @@ export const IntensityCard = memo(function IntensityCard({
                         </View>
                     );
                 })}
-            </View>
+            </Animated.View>
         </View>
     );
 });
@@ -147,11 +158,6 @@ function PaceCell({
 
 const styles = StyleSheet.create({
     section: { gap: spacing.md },
-    heading: {
-        fontFamily: fonts.bold,
-        fontSize: typography.fontSizes.xl,
-        color: colors.text,
-    },
     card: {
         backgroundColor: colors.card,
         borderRadius: borderRadius['2xl'],

@@ -23,18 +23,22 @@ import type { SuggestedAdjustment } from '../../../types/weeklyInsight.types';
  *
  * Duas formas visuais, governadas pela CLASSE do enum (decidida no backend):
  *
- *   `schedule`     → botão SÓLIDO ciano. Toca e o calendário se reorganiza.
- *   `prescription` → card de orientação, SEM nada tocável.
+ *   `schedule`     → CIANO, com botão SÓLIDO. Toca e o calendário se reorganiza.
+ *   `prescription` → ÂMBAR, sem nada tocável. É uma dica de execução.
  *
  * A distinção é reforçada por três canais independentes, não só por cor — cor
  * sozinha não comunica estado (HIG, e também acessibilidade): o **selo**
- * ("Ação disponível" × "Dica da semana"), a **borda** (acento × neutra) e a
+ * ("Ação disponível" × "Dica da semana"), a **moldura** (ciano × âmbar) e a
  * **presença do botão**. Um card de conselho não tem nenhum alvo de toque, então
  * é impossível tocar esperando ação e não receber nada.
  *
- * A moldura de acento fica reservada ao card acionável de propósito: o app
- * inteiro usa ciano para "isto é interativo", e diluir isso num card que não faz
- * nada treinaria a pessoa a desconfiar do ciano em todo lugar.
+ * ── POR QUE ÂMBAR NO CONSELHO (e não cinza) ──────────────────────────────────
+ *
+ * O ciano é a cor de "isto é interativo" em todo o app. Dar cinza ao conselho o
+ * fazia desaparecer no meio dos outros cards; dar ciano o faria parecer
+ * clicável. O âmbar resolve os dois: ganha presença sem herdar a promessa de
+ * toque, e passa a significar "dica" de forma consistente — o mesmo papel que o
+ * badge "rápido demais" já tem no card de intensidade.
  */
 
 interface AdjustmentTrayProps {
@@ -116,22 +120,30 @@ export const AdjustmentTray = memo(function AdjustmentTray({
         );
     }
 
+    const accent = actionable ? colors.primary : colors.accent;
+
     return (
-        <View style={[styles.card, actionable ? styles.cardAction : styles.cardNeutral]}>
+        <View
+            style={[styles.card, actionable ? styles.cardAction : styles.cardAdvice]}
+        >
             <View style={styles.header}>
-                <Ionicons
-                    name={copy.icon as keyof typeof Ionicons.glyphMap}
-                    size={18}
-                    color={actionable ? colors.primary : colors.textSecondary}
-                />
-                <Text
+                <View
                     style={[
-                        styles.badge,
-                        { color: actionable ? colors.primary : colors.textSecondary },
+                        styles.iconWrap,
+                        {
+                            backgroundColor: actionable
+                                ? 'rgba(0,212,255,0.14)'
+                                : 'rgba(245,158,11,0.16)',
+                        },
                     ]}
                 >
-                    {copy.badge}
-                </Text>
+                    <Ionicons
+                        name={copy.icon as keyof typeof Ionicons.glyphMap}
+                        size={15}
+                        color={accent}
+                    />
+                </View>
+                <Text style={[styles.badge, { color: accent }]}>{copy.badge}</Text>
             </View>
 
             <Text style={styles.title}>{copy.title}</Text>
@@ -188,10 +200,14 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         gap: spacing.sm,
     },
-    // Moldura de acento: reservada ao que É tocável.
+    // Ciano = tocável. Âmbar = dica. Cinza = nada a fazer.
     cardAction: {
         borderColor: 'rgba(0,212,255,0.35)',
         backgroundColor: 'rgba(0,212,255,0.05)',
+    },
+    cardAdvice: {
+        borderColor: 'rgba(245,158,11,0.32)',
+        backgroundColor: 'rgba(245,158,11,0.05)',
     },
     cardNeutral: {
         borderColor: colors.border,
@@ -200,6 +216,13 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.xs,
+    },
+    iconWrap: {
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     badge: {
         fontFamily: fonts.bold,

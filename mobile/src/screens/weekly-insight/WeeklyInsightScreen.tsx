@@ -5,43 +5,61 @@ import {
     StyleSheet,
     ScrollView,
     Pressable,
-    ActivityIndicator,
     RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 
 import { ScreenContainer } from '../../components/ScreenContainer';
-import { PerformanceCard } from '../../components/wellness/PerformanceCard';
 import { colors, typography, spacing, borderRadius, fonts } from '../../theme';
 import { useWeeklyInsightStore } from '../../stores/weeklyInsightStore';
-import { formatWeekRange, formatPace, formatKm } from './format';
+import { useTrainingStore } from '../../stores/trainingStore';
+import { formatWeekRange } from './format';
+import { useWeeklySeries } from './hooks/useWeeklySeries';
 
-import { AdherenceBlock } from './components/AdherenceBlock';
+import { CoachCallout } from './components/CoachCallout';
+import { HeroStats } from './components/HeroStats';
+import { WeeklyProgressChart } from './components/WeeklyProgressChart';
 import { VolumeComparison } from './components/VolumeComparison';
 import { IntensityCard } from './components/IntensityCard';
 import { ZonesRadar } from './components/ZonesRadar';
 import { AdjustmentTray } from './components/AdjustmentTray';
+import { InsightSkeleton } from './components/InsightSkeleton';
 
 /**
  * INSIGHT SEMANAL — o dashboard da semana do plano.
  *
  * Diferente da retrospectiva (stories de celebração, fim de ciclo), esta tela é
- * ANALÍTICA e RECORRENTE: o corredor a vê toda semana, então nada de
- * espetáculo. A composição segue a tela de Wellness — cabeçalho de seção, cards
- * com a mesma moldura, números grandes e gráficos calmos.
+ * ANALÍTICA e RECORRENTE: o corredor a vê toda semana, então nada de espetáculo.
  *
- * ── ORDEM DE LEITURA ─────────────────────────────────────────────────────────
+ * ── A HIERARQUIA ─────────────────────────────────────────────────────────────
  *
- * 1. Narrativa do coach — o fio condutor, uma frase que amarra o resto
- * 2. Os dois números da aderência (nunca somados)
- * 3. A bandeja de reajuste — o que fazer a respeito (a peça central, ALTA na
- *    tela de propósito: é a ação, não um apêndice depois dos gráficos)
- * 4. Volume prescrito × executado
- * 5. Ritmo prescrito × executado
- * 6. Distribuição de zonas
- * 7. Comparação com a semana anterior
+ * A primeira versão era uma pilha de nove cards do mesmo cinza — o olho entrava
+ * e não sabia onde pousar, que é exatamente o que faz um dashboard parecer um
+ * formulário. Agora há um BLOCO HERÓI no topo (voz do coach + os três números,
+ * com o do plano em ciano) e, abaixo dele, seções com identidade própria.
+ *
+ * A bandeja de reajuste fecha a tela de propósito: ela é a conclusão do que os
+ * gráficos mostraram, e lida depois deles faz sentido narrativo — "foi assim,
+ * portanto faça isto".
+ *
+ * ── A COREOGRAFIA ────────────────────────────────────────────────────────────
+ *
+ * Cada seção recebe um índice e revela com ~45ms de atraso em cascata
+ * (`useEnterAnimation`). Os índices abaixo são a ordem de leitura — mudá-los
+ * muda a onda.
  */
+
+// Ordem da cascata. Explícita para a coreografia ser legível de um lugar só.
+const IDX = {
+    coach: 0,
+    stats: 1,
+    progress: 2,
+    volume: 3,
+    intensity: 4,
+    zones: 5,
+    tray: 6,
+} as const;
 
 export function WeeklyInsightScreen() {
     const navigation = useNavigation();
@@ -49,9 +67,18 @@ export function WeeklyInsightScreen() {
     const { latest, loading, error, applying, fetch, markSeen, applyAdjustment } =
         useWeeklyInsightStore();
 
+    // A trajetória vem do plano, não do insight — e a tela pode ser aberta
+    // direto pela notificação, sem a home ter carregado o overview antes.
+    const fetchPlanOverview = useTrainingStore((s) => s.fetchPlanOverview);
+    const series = useWeeklySeries();
+
     useEffect(() => {
         void fetch();
     }, [fetch]);
+
+    useEffect(() => {
+        if (!series.hasData) void fetchPlanOverview();
+    }, [series.hasData, fetchPlanOverview]);
 
     // Abrir a tela É ter visto — desliga o modal de entrada. O card persistente
     // continua, porque ele serve para reler.
@@ -68,17 +95,16 @@ export function WeeklyInsightScreen() {
 
     const onRefresh = useCallback(() => {
         void fetch(true);
-    }, [fetch]);
+        void fetchPlanOverview();
+    }, [fetch, fetchPlanOverview]);
 
     // ── Estados de UI ────────────────────────────────────────────────────────
 
     if (loading && !latest) {
         return (
             <ScreenContainer>
-                <Header onBack={() => navigation.goBack()} subtitle="" />
-                <View style={styles.centered}>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                </View>
+                <Header onBack={() => navigation.goBack()} />
+                <InsightSkeleton />
             </ScreenContainer>
         );
     }
@@ -86,7 +112,7 @@ export function WeeklyInsightScreen() {
     if (error && !latest) {
         return (
             <ScreenContainer>
-                <Header onBack={() => navigation.goBack()} subtitle="" />
+                <Header onBack={() => navigation.goBack()} />
                 <View style={styles.centered}>
                     <Ionicons
                         name="cloud-offline-outline"
@@ -111,7 +137,7 @@ export function WeeklyInsightScreen() {
     if (!latest) {
         return (
             <ScreenContainer>
-                <Header onBack={() => navigation.goBack()} subtitle="" />
+                <Header onBack={() => navigation.goBack()} />
                 <View style={styles.centered}>
                     <Ionicons
                         name="bar-chart-outline"
@@ -128,7 +154,6 @@ export function WeeklyInsightScreen() {
         );
     }
 
-    const deltas = latest.metrics_deltas ?? {};
     const zones = latest.zone_distribution;
 
     return (
@@ -137,11 +162,10 @@ export function WeeklyInsightScreen() {
                 onBack={() => navigation.goBack()}
                 subtitle={formatWeekRange(latest.week_start, latest.week_end)}
                 week={latest.week_number}
+                totalWeeks={series.totalWeeks}
             />
 
             <ScrollView
-                // `ScreenContainer` já aplica o safe-area inferior; aqui é só a
-                // folga de leitura no fim do scroll.
                 contentContainerStyle={styles.content}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
@@ -152,22 +176,48 @@ export function WeeklyInsightScreen() {
                     />
                 }
             >
-                {/* 1. O fio condutor */}
+                {/* ── HERÓI ── */}
                 {!!latest.ai_narrative && (
-                    <View style={styles.narrativeCard}>
-                        <Ionicons
-                            name="chatbubble-ellipses-outline"
-                            size={18}
-                            color={colors.primary}
-                        />
-                        <Text style={styles.narrative}>{latest.ai_narrative}</Text>
-                    </View>
+                    <CoachCallout
+                        narrative={latest.ai_narrative}
+                        index={IDX.coach}
+                    />
                 )}
 
-                {/* 2. Os dois números */}
-                <AdherenceBlock insight={latest} />
+                <HeroStats insight={latest} index={IDX.stats} />
 
-                {/* 3. O que fazer a respeito */}
+                {/* ── A TRAJETÓRIA ── */}
+                <WeeklyProgressChart
+                    points={series.points}
+                    currentWeek={series.currentWeek || latest.week_number}
+                    totalWeeks={series.totalWeeks}
+                    index={IDX.progress}
+                />
+
+                {/* ── A SEMANA EM DETALHE ── */}
+                <VolumeComparison
+                    plannedKm={latest.planned_distance_km ?? 0}
+                    completedKm={latest.completed_distance_km ?? 0}
+                    totalKm={latest.total_distance_km ?? 0}
+                    freeRunKm={latest.free_run_distance_km ?? 0}
+                    executionRatio={latest.execution_ratio_percent}
+                    index={IDX.volume}
+                />
+
+                <IntensityCard
+                    intensity={latest.intensity_adherence ?? {}}
+                    index={IDX.intensity}
+                />
+
+                {zones && (
+                    <ZonesRadar
+                        prescribed={zones.prescribed ?? {}}
+                        executed={zones.executed ?? {}}
+                        index={IDX.zones}
+                    />
+                )}
+
+                {/* ── A CONCLUSÃO: o que fazer a respeito ── */}
                 {latest.suggested_adjustment && (
                     <AdjustmentTray
                         adjustment={latest.suggested_adjustment}
@@ -176,70 +226,6 @@ export function WeeklyInsightScreen() {
                         onApply={handleApply}
                     />
                 )}
-
-                {/* 4-6. Os gráficos */}
-                <VolumeComparison
-                    plannedKm={latest.planned_distance_km ?? 0}
-                    completedKm={latest.completed_distance_km ?? 0}
-                    totalKm={latest.total_distance_km ?? 0}
-                    freeRunKm={latest.free_run_distance_km ?? 0}
-                />
-
-                <IntensityCard intensity={latest.intensity_adherence ?? {}} />
-
-                {zones && (
-                    <ZonesRadar
-                        prescribed={zones.prescribed ?? {}}
-                        executed={zones.executed ?? {}}
-                    />
-                )}
-
-                {/* 7. Semana anterior — reusa o card do Wellness, inclusive o
-                    tratamento de deltaPct null (sem base de comparação). */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHead}>
-                        <Text style={styles.heading}>Comparado à semana anterior</Text>
-                    </View>
-                    <View style={styles.grid}>
-                        {deltas.distance && (
-                            <PerformanceCard
-                                label="Distância"
-                                value={formatKm(deltas.distance.value)}
-                                unit=" km"
-                                deltaPct={deltas.distance.deltaPct}
-                                sparkline={deltas.distance.sparkline}
-                            />
-                        )}
-                        {deltas.frequency && (
-                            <PerformanceCard
-                                label="Corridas"
-                                value={String(deltas.frequency.value)}
-                                deltaPct={deltas.frequency.deltaPct}
-                                sparkline={deltas.frequency.sparkline}
-                            />
-                        )}
-                        {deltas.pace && (
-                            <PerformanceCard
-                                label="Pace"
-                                value={formatPace(deltas.pace.value)}
-                                unit="/km"
-                                deltaPct={deltas.pace.deltaPct}
-                                sparkline={deltas.pace.sparkline}
-                                // Pace menor é melhor — inverte a cor do delta.
-                                invertDelta
-                            />
-                        )}
-                        {deltas.duration && (
-                            <PerformanceCard
-                                label="Tempo"
-                                value={String(deltas.duration.value)}
-                                unit=" min"
-                                deltaPct={deltas.duration.deltaPct}
-                                sparkline={deltas.duration.sparkline}
-                            />
-                        )}
-                    </View>
-                </View>
             </ScrollView>
         </ScreenContainer>
     );
@@ -249,11 +235,21 @@ function Header({
     onBack,
     subtitle,
     week,
+    totalWeeks,
 }: {
     onBack: () => void;
-    subtitle: string;
+    subtitle?: string;
     week?: number;
+    totalWeeks?: number;
 }) {
+    // "Semana 3 de 12" — o "de N" é a informação de contexto mais barata da
+    // tela, e ela faltava por completo.
+    const title = week
+        ? totalWeeks && totalWeeks > 0
+            ? `Semana ${week} de ${totalWeeks}`
+            : `Semana ${week}`
+        : 'Insight semanal';
+
     return (
         <View style={styles.header}>
             <Pressable
@@ -266,9 +262,7 @@ function Header({
                 <Ionicons name="chevron-back" size={24} color={colors.text} />
             </Pressable>
             <View style={styles.headerText}>
-                <Text style={styles.title}>
-                    {week ? `Semana ${week}` : 'Insight semanal'}
-                </Text>
+                <Text style={styles.title}>{title}</Text>
                 {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
             </View>
             {/* Espelha a largura do botão para o título ficar óptico ao centro. */}
@@ -288,7 +282,7 @@ const styles = StyleSheet.create({
     headerText: { flex: 1, alignItems: 'center' },
     title: {
         fontFamily: fonts.bold,
-        fontSize: typography.fontSizes.xl,
+        fontSize: typography.fontSizes.lg,
         color: colors.text,
     },
     subtitle: {
@@ -299,36 +293,8 @@ const styles = StyleSheet.create({
     content: {
         paddingHorizontal: spacing.base,
         paddingBottom: spacing['3xl'],
+        // Respiro entre blocos — o "cramped = cheap" do checklist.
         gap: spacing.xl,
-    },
-    narrativeCard: {
-        flexDirection: 'row',
-        gap: spacing.sm,
-        backgroundColor: 'rgba(0,212,255,0.06)',
-        borderRadius: borderRadius['2xl'],
-        borderWidth: 1,
-        borderColor: 'rgba(0,212,255,0.16)',
-        padding: spacing.lg,
-    },
-    narrative: {
-        flex: 1,
-        fontFamily: fonts.medium,
-        fontSize: typography.fontSizes.md,
-        lineHeight: 22,
-        color: colors.textLight,
-    },
-    section: { gap: spacing.md },
-    sectionHead: { flexDirection: 'row', justifyContent: 'space-between' },
-    heading: {
-        fontFamily: fonts.bold,
-        fontSize: typography.fontSizes.xl,
-        color: colors.text,
-    },
-    grid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        gap: spacing.md,
     },
     centered: {
         flex: 1,
