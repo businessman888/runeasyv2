@@ -2,7 +2,10 @@ import React, { useCallback, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { WeeklyInsightSheet } from './WeeklyInsightSheet';
-import { useWeeklyInsightStore } from '../../stores/weeklyInsightStore';
+import {
+    useWeeklyInsightStore,
+    selectUnseen,
+} from '../../stores/weeklyInsightStore';
 
 /**
  * Orquestra a ENTRADA do insight semanal: busca o dado e decide se o modal
@@ -17,18 +20,24 @@ import { useWeeklyInsightStore } from '../../stores/weeklyInsightStore';
  *
  * ── QUANDO O MODAL APARECE ───────────────────────────────────────────────────
  *
- * Só quando existe insight `completed` com `seen_at` nulo E o modal ainda não
- * foi dispensado nesta sessão. Duas travas em camadas diferentes de propósito:
+ * Só quando a semana fechada MAIS RECENTE ainda não foi vista E o modal não foi
+ * dispensado nesta sessão. Duas travas em camadas diferentes de propósito:
  * `seen_at` é permanente e vale entre aparelhos; `modalDismissedThisSession` é
  * local e evita que o modal volte ao navegar de volta para a home no mesmo uso.
+ *
+ * Semana ANTIGA não vista não reabre o modal — ela é histórico. Antes disso, o
+ * app buscava "o mais recente entre os não vistos" e, com a semana 2 já lida,
+ * voltava para a semana 1 zerada mostrando 0 km como novidade.
  */
 
 type Nav = NativeStackNavigationProp<Record<string, undefined>>;
 
 export function WeeklyInsightEntry() {
     const navigation = useNavigation<Nav>();
-    const { unseen, modalDismissedThisSession, fetch, dismissModal, markSeen } =
+    const { latest, modalDismissedThisSession, fetch, dismissModal, markSeen } =
         useWeeklyInsightStore();
+
+    const unseen = selectUnseen(latest);
 
     useEffect(() => {
         void fetch();

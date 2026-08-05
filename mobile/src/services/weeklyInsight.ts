@@ -33,14 +33,16 @@ async function getOrNull(path: string, key: string): Promise<WeeklyInsight | nul
     return (json[key] as WeeklyInsight | null) ?? null;
 }
 
-/** Último insight concluído — alimenta o CARD persistente e a tela. */
+/**
+ * Último insight concluído — alimenta o CARD, a TELA e o MODAL.
+ *
+ * Uma seleção só, de propósito. Havia um `/unseen` separado que buscava o mais
+ * recente ENTRE OS NÃO VISTOS, e isso trazia de volta uma semana antiga zerada
+ * depois que a recente já tinha sido lida. Com a mesma linha alimentando os
+ * três, card e modal não têm como discordar.
+ */
 export function getLatestWeeklyInsight(): Promise<WeeklyInsight | null> {
     return getOrNull('weekly-insight/latest', 'insight');
-}
-
-/** Último insight concluído ainda NÃO visto — alimenta o MODAL de entrada. */
-export function getUnseenWeeklyInsight(): Promise<WeeklyInsight | null> {
-    return getOrNull('weekly-insight/unseen', 'insight');
 }
 
 /**

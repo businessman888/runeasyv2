@@ -1143,7 +1143,24 @@ Escreva a narrativa explicando o que aconteceu na semana e por que essa é a rec
   // Leitura + gatilho manual
   // ──────────────────────────────────────────────────────────────────────────
 
-  /** Último insight concluído do usuário. Consumido pela tela (Fase 2B). */
+  /**
+   * Último insight concluído — a ÚNICA seleção que o app usa.
+   *
+   * ── POR QUE NÃO EXISTE UM "getUnseen" ────────────────────────────────────
+   *
+   * Existia, e produzia um bug: ele buscava o mais recente ENTRE OS NÃO VISTOS.
+   * Com a semana 2 já lida e a semana 1 (zerada) nunca aberta, o modal voltava
+   * para a semana 1 — mostrando 0 km como se fosse novidade.
+   *
+   * A regra certa é "a semana fechada mais recente, e o modal só aparece se ELA
+   * ainda não foi vista". Semana antiga não vista é histórico, não notificação.
+   * Como isso é uma pergunta sobre a MESMA linha que o card já usa, o app
+   * deriva de `seen_at` daqui em vez de pedir uma segunda seleção — assim card
+   * e modal não têm como discordar.
+   *
+   * Ordena por `week_end` e não por `week_number`: entre planos diferentes o
+   * número reinicia, a data não.
+   */
   async getLatest(userId: string): Promise<WeeklyInsightRow | null> {
     const { data, error } = await this.supabaseService
       .getClient()
@@ -1275,26 +1292,6 @@ Escreva a narrativa explicando o que aconteceu na semana e por que essa é a rec
     }
     // Zero linhas = já estava visto (ou não é dele). Idempotente de propósito.
     return Array.isArray(data) && data.length > 0;
-  }
-
-  /** Último insight `completed` ainda NÃO visto — o gatilho do modal. */
-  async getUnseen(userId: string): Promise<WeeklyInsightRow | null> {
-    const { data, error } = await this.supabaseService
-      .getClient()
-      .from('plan_week_insights')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('status', 'completed')
-      .is('seen_at', null)
-      .order('week_end', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
-      this.logger.warn(`[WeeklyInsight] getUnseen falhou: ${error.message}`);
-      return null;
-    }
-    return (data as WeeklyInsightRow | null) ?? null;
   }
 
   /**

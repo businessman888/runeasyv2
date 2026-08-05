@@ -1,10 +1,7 @@
 import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import Svg, { Polygon, Line, Text as SvgText, Circle } from 'react-native-svg';
-import Animated, {
-    useAnimatedProps,
-    useAnimatedStyle,
-} from 'react-native-reanimated';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { colors, typography, spacing, borderRadius, fonts } from '../../../theme';
 import { SectionHeader } from './SectionHeader';
 import { useEnterAnimation } from '../hooks/useEnterAnimation';
@@ -41,9 +38,6 @@ import type { ZoneBucket } from '../../../types/weeklyInsight.types';
  */
 
 const ZONES = ['Z1', 'Z2', 'Z3', 'Z4', 'Z5'] as const;
-type ZoneKey = (typeof ZONES)[number];
-
-const AnimatedPolygon = Animated.createAnimatedComponent(Polygon);
 
 /** Anéis do grid, como fração do raio. Três bastam para dar régua sem poluir. */
 const GRID_RINGS = [1, 0.66, 0.33];
@@ -117,27 +111,48 @@ export const ZonesRadar = memo(function ZonesRadar({
     // resolvia a queixa de "labels ilegíveis/cortadas".
     const radius = size / 2 - LABEL_GAP - 8;
 
+    /**
+     * ── POR QUE O POLÍGONO É ESTÁTICO ────────────────────────────────────────
+     *
+     * A primeira versão animava os PONTOS: um `useAnimatedProps` recalculava
+     * `pointsOf(...)` a cada frame para o radar "crescer do centro". Isso
+     * quebrava em runtime —
+     *
+     *   [Worklets] Tried to synchronously call a non-worklet function
+     *   `pointsOf` on the UI thread.
+     *
+     * — porque o corpo de `useAnimatedProps` roda na UI thread, e ali só é
+     * possível chamar worklets. `pointsOf` é função JS comum.
+     *
+     * Dava para marcá-la (e tudo que ela chama) com `'worklet'`, mas isso deixa
+     * uma armadilha permanente: qualquer helper novo que entrasse na cadeia
+     * quebraria a tela de novo, em runtime, longe daqui.
+     *
+     * A geometria vira `useMemo` (roda uma vez, em JS) e a ENTRADA é do
+     * container: opacity + um scale sutil, que já é uma animação de estilo
+     * comum e não precisa de worklet nenhum. Visualmente o radar continua
+     * surgindo com a onda do stagger.
+     */
+    const geometry = useMemo(
+        () => ({
+            grid: GRID_RINGS.map((ring) =>
+                pointsOf(cx, cy, radius, ZONES.map(() => ring)),
+            ),
+            axes: ZONES.map((_, i) => vertex(cx, cy, radius, i, 1)),
+            prescribed: pointsOf(cx, cy, radius, pres.scales),
+            executed: pointsOf(cx, cy, radius, exec.scales),
+            dots: exec.scales.map((s, i) => vertex(cx, cy, radius, i, s)),
+            labels: ZONES.map((_, i) =>
+                vertex(cx, cy, radius + LABEL_GAP, i, 1),
+            ),
+        }),
+        [cx, cy, radius, pres.scales, exec.scales],
+    );
+
     const containerStyle = useAnimatedStyle(() => ({
         opacity: progress.value,
-    }));
-
-    // O polígono "cresce do centro": cada vértice interpola de 0 até seu valor.
-    const execAnimatedProps = useAnimatedProps(() => ({
-        points: pointsOf(
-            cx,
-            cy,
-            radius,
-            exec.scales.map((s) => s * progress.value),
-        ),
-    }));
-
-    const presAnimatedProps = useAnimatedProps(() => ({
-        points: pointsOf(
-            cx,
-            cy,
-            radius,
-            pres.scales.map((s) => s * progress.value),
-        ),
+        // 0.94 → 1: sugere o "crescer" sem tocar na geometria.
+        transform: [{ scale: 0.94 + progress.value * 0.06 }],
     }));
 
     const hasPrescribed = pres.total > 0;
@@ -170,15 +185,10 @@ export const ZonesRadar = memo(function ZonesRadar({
                     <Svg width={size} height={size}>
                         {/* Grid: anéis recessivos, SEM fill — o fill default da
                             lib era exatamente o "pentágono branco". */}
-                        {GRID_RINGS.map((ring) => (
+                        {geometry.grid.map((points, i) => (
                             <Polygon
-                                key={`ring-${ring}`}
-                                points={pointsOf(
-                                    cx,
-                                    cy,
-                                    radius,
-                                    ZONES.map(() => ring),
-                                )}
+                                key={`ring-${i}`}
+                                points={points}
                                 fill="none"
                                 stroke="rgba(255,255,255,0.07)"
                                 strokeWidth={1}
@@ -186,24 +196,21 @@ export const ZonesRadar = memo(function ZonesRadar({
                         ))}
 
                         {/* Eixos do centro a cada vértice. */}
-                        {ZONES.map((z, i) => {
-                            const { x, y } = vertex(cx, cy, radius, i, 1);
-                            return (
-                                <Line
-                                    key={`axis-${z}`}
-                                    x1={cx}
-                                    y1={cy}
-                                    x2={x}
-                                    y2={y}
-                                    stroke="rgba(255,255,255,0.06)"
-                                    strokeWidth={1}
-                                />
-                            );
-                        })}
+                        {geometry.axes.map((p, i) => (
+                            <Line
+                                key={`axis-${ZONES[i]}`}
+                                x1={cx}
+                                y1={cy}
+                                x2={p.x}
+                                y2={p.y}
+                                stroke="rgba(255,255,255,0.06)"
+                                strokeWidth={1}
+                            />
+                        ))}
 
                         {/* PRESCRITO — o alvo: tracejado, sem preenchimento. */}
-                        <AnimatedPolygon
-                            animatedProps={presAnimatedProps}
+                        <Polygon
+                            points={geometry.prescribed}
                             fill="none"
                             stroke="rgba(255,255,255,0.30)"
                             strokeWidth={1.5}
@@ -212,8 +219,8 @@ export const ZonesRadar = memo(function ZonesRadar({
 
                         {/* EXECUTADO — ciano preenchido, a série protagonista. */}
                         {hasExecuted && (
-                            <AnimatedPolygon
-                                animatedProps={execAnimatedProps}
+                            <Polygon
+                                points={geometry.executed}
                                 fill="rgba(0,212,255,0.22)"
                                 stroke={colors.primary}
                                 strokeWidth={2}
@@ -223,46 +230,34 @@ export const ZonesRadar = memo(function ZonesRadar({
 
                         {/* Vértices do executado, para o polígono ter articulação. */}
                         {hasExecuted &&
-                            exec.scales.map((s, i) => {
-                                const { x, y } = vertex(cx, cy, radius, i, s);
-                                return (
-                                    <Circle
-                                        key={`dot-${i}`}
-                                        cx={x}
-                                        cy={y}
-                                        r={2.5}
-                                        fill={colors.primary}
-                                    />
-                                );
-                            })}
+                            geometry.dots.map((p, i) => (
+                                <Circle
+                                    key={`dot-${i}`}
+                                    cx={p.x}
+                                    cy={p.y}
+                                    r={2.5}
+                                    fill={colors.primary}
+                                />
+                            ))}
 
                         {/* Rótulos FORA do polígono, com folga. `fontWeight` sem
                             depender só de `fontFamily`: fonte customizada em
                             <Text> de SVG é frágil no Android, e o peso garante
                             legibilidade mesmo se a família não resolver. */}
-                        {ZONES.map((z, i) => {
-                            const { x, y } = vertex(
-                                cx,
-                                cy,
-                                radius + LABEL_GAP,
-                                i,
-                                1,
-                            );
-                            return (
-                                <SvgText
-                                    key={`label-${z}`}
-                                    x={x}
-                                    y={y}
-                                    fill={colors.textLight}
-                                    fontSize={12}
-                                    fontWeight="700"
-                                    textAnchor="middle"
-                                    alignmentBaseline="middle"
-                                >
-                                    {z}
-                                </SvgText>
-                            );
-                        })}
+                        {geometry.labels.map((p, i) => (
+                            <SvgText
+                                key={`label-${ZONES[i]}`}
+                                x={p.x}
+                                y={p.y}
+                                fill={colors.textLight}
+                                fontSize={12}
+                                fontWeight="700"
+                                textAnchor="middle"
+                                alignmentBaseline="middle"
+                            >
+                                {ZONES[i]}
+                            </SvgText>
+                        ))}
                     </Svg>
                 </View>
 

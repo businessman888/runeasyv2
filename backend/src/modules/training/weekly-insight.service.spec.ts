@@ -510,13 +510,14 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
   // ───────────────────────────────────────────────────────────────────────────
   // Fase 2B — "visto" e aplicação do reajuste.
   // ───────────────────────────────────────────────────────────────────────────
-  describe('markSeen / getUnseen', () => {
+  describe('markSeen / getLatest', () => {
     const seedInsight = (over: Row = {}): Row => ({
       id: 'wi-1',
       user_id: 'user-1',
       plan_id: 'plan-1',
       week_number: 2,
       week_start: '2026-06-08',
+      week_end: '2026-06-14',
       status: 'completed',
       seen_at: null,
       adjustment_applied_at: null,
@@ -524,10 +525,32 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
       ...over,
     });
 
-    it('getUnseen devolve o insight não visto', async () => {
+    it('getLatest devolve o insight do usuário', async () => {
       await build(seedPlan({ plan_week_insights: [seedInsight()] }));
-      const row = await service.getUnseen('user-1');
+      const row = await service.getLatest('user-1');
       expect(row?.id).toBe('wi-1');
+    });
+
+    it('getLatest NÃO filtra por seen_at — semana já vista continua vindo', async () => {
+      // É o que sustenta o card persistente: ele existe justamente para reler o
+      // insight depois de fechado. Quem decide sobre o MODAL é o app, olhando
+      // `seen_at` desta mesma linha.
+      //
+      // A regressão que isto trava: existia um `getUnseen` que buscava "o mais
+      // recente ENTRE OS NÃO VISTOS". Com a semana 2 lida e a semana 1 (zerada)
+      // nunca aberta, ele trazia a semana 1 de volta e o modal exibia 0 km como
+      // se fosse novidade. Semana antiga não vista é histórico, não notificação.
+      await build(
+        seedPlan({
+          plan_week_insights: [
+            seedInsight({ seen_at: '2026-06-15T10:00:00Z' }),
+          ],
+        }),
+      );
+
+      const row = await service.getLatest('user-1');
+      expect(row?.id).toBe('wi-1');
+      expect(row?.seen_at).toBeTruthy();
     });
 
     it('markSeen carimba e vira idempotente', async () => {

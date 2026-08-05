@@ -1239,23 +1239,6 @@ export class TrainingController {
   }
 
   /**
-   * Insight `completed` ainda NÃO visto — o gatilho do modal de entrada.
-   *
-   * Separado de `/latest` de propósito: o card persistente da home usa `/latest`
-   * (aparece sempre), o modal usa este (aparece uma vez).
-   */
-  @Get('weekly-insight/unseen')
-  @UseGuards(ProGuard)
-  async getUnseenWeeklyInsight(@User('id') userId: string) {
-    if (!userId) {
-      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
-    }
-
-    const insight = await this.weeklyInsightService.getUnseen(userId);
-    return { insight, hasUnseen: insight !== null };
-  }
-
-  /**
    * Marca o insight como visto. Idempotente: uma segunda chamada devolve
    * `updated: false` sem erro.
    */

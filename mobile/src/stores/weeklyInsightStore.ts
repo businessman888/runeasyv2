@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import {
     getLatestWeeklyInsight,
-    getUnseenWeeklyInsight,
     markWeeklyInsightSeen,
     applyWeeklyInsightAdjustment,
 } from '../services/weeklyInsight';
@@ -13,19 +12,26 @@ import type {
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 /**
- * ── DUAS PERGUNTAS DIFERENTES ────────────────────────────────────────────────
+ * ── UMA LINHA, TRÊS CONSUMIDORES ─────────────────────────────────────────────
  *
- * `latest` alimenta o CARD persistente e a tela — aparece sempre que existe um
- * insight, mesmo já lido.
- * `unseen` alimenta o MODAL de entrada — dispara uma vez e some, senão a pessoa
- * aprende a fechar o modal no reflexo, sem ler.
+ * `latest` é a semana fechada MAIS RECENTE, e alimenta o card persistente, a
+ * tela e o modal. O modal só aparece quando ESSA linha ainda não foi vista
+ * (`seen_at === null`) — ver `selectUnseen`.
  *
- * São dois campos e não um com flag porque o card não pode desaparecer quando o
- * modal é fechado: ele É a rede de segurança de quem fechou sem abrir.
+ * ── O BUG QUE ISTO CORRIGE ───────────────────────────────────────────────────
+ *
+ * Antes havia um segundo campo `unseen`, vindo de uma consulta própria que
+ * pegava o mais recente ENTRE OS NÃO VISTOS. Com a semana 2 já lida e a semana 1
+ * (zerada, do recuo de teste) nunca aberta, o modal voltava para a semana 1 e
+ * exibia 0 km como se fosse novidade.
+ *
+ * Semana antiga não vista é HISTÓRICO, não notificação. Derivando do `latest`, o
+ * card e o modal passam a falar da mesma linha — a discordância entre os dois
+ * deixa de ser possível por construção, não por disciplina.
  */
 interface WeeklyInsightState {
+    /** A semana fechada mais recente. `null` quando ainda não há nenhuma. */
     latest: WeeklyInsight | null;
-    unseen: WeeklyInsight | null;
     loading: boolean;
     error: string | null;
     lastFetchedAt: number | null;
@@ -40,9 +46,20 @@ interface WeeklyInsightState {
     reset: () => void;
 }
 
+/**
+ * O insight que o MODAL deve mostrar — ou `null` para não mostrar nada.
+ *
+ * Só a semana mais recente entra. Se ela já foi vista, o modal não aparece,
+ * mesmo que existam semanas anteriores nunca abertas.
+ */
+export function selectUnseen(
+    latest: WeeklyInsight | null,
+): WeeklyInsight | null {
+    return latest && latest.seen_at === null ? latest : null;
+}
+
 export const useWeeklyInsightStore = create<WeeklyInsightState>((set, get) => ({
     latest: null,
-    unseen: null,
     loading: false,
     error: null,
     lastFetchedAt: null,
@@ -58,13 +75,8 @@ export const useWeeklyInsightStore = create<WeeklyInsightState>((set, get) => ({
 
         set({ loading: true, error: null });
         try {
-            // Em paralelo: são duas queries independentes e a tela precisa das
-            // duas na abertura.
-            const [latest, unseen] = await Promise.all([
-                getLatestWeeklyInsight(),
-                getUnseenWeeklyInsight(),
-            ]);
-            set({ latest, unseen, loading: false, lastFetchedAt: Date.now() });
+            const latest = await getLatestWeeklyInsight();
+            set({ latest, loading: false, lastFetchedAt: Date.now() });
         } catch (err: unknown) {
             // Preserva o que já havia — a tela continua mostrando dado velho em
             // vez de piscar para vazio numa falha de rede.
@@ -81,10 +93,10 @@ export const useWeeklyInsightStore = create<WeeklyInsightState>((set, get) => ({
     dismissModal: () => set({ modalDismissedThisSession: true }),
 
     markSeen: async (insightId: string) => {
-        // Otimista: some com o modal na hora. O carimbo no servidor é
-        // best-effort — se falhar, o pior caso é o modal voltar uma vez.
+        // Otimista: carimba `seen_at` na hora, e o modal some por consequência
+        // (`selectUnseen` deixa de casar). O write no servidor é best-effort —
+        // se falhar, o pior caso é o modal voltar uma vez.
         set((s) => ({
-            unseen: null,
             modalDismissedThisSession: true,
             latest:
                 s.latest && s.latest.id === insightId
@@ -121,7 +133,6 @@ export const useWeeklyInsightStore = create<WeeklyInsightState>((set, get) => ({
     reset: () =>
         set({
             latest: null,
-            unseen: null,
             loading: false,
             error: null,
             lastFetchedAt: null,
