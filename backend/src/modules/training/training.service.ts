@@ -983,6 +983,19 @@ export class TrainingService {
       payload.environment === 'treadmill' ? 'treadmill' : 'outdoor';
     const isTreadmill = environment === 'treadmill';
 
+    /**
+     * Corrida FABRICADA pelo harness de QA (`scripts/sim-workouts.ts`).
+     *
+     * O prefixo `sim_` já existia como carimbo de "dado inventado" no banco;
+     * aqui ele passa a ter uma consequência: pular o enriquecimento de
+     * elevação. É o único ponto do fluxo em que dado sintético custa dinheiro
+     * de verdade (Mapbox Terrain-DEM). Todo o resto do caminho de conclusão
+     * roda idêntico — é justamente o que dá valor ao harness.
+     */
+    const isSyntheticRun =
+      typeof payload.external_id === 'string' &&
+      payload.external_id.startsWith('sim_');
+
     // Compute distance and geojson using Turf JS
     let turfDistanceLimit = 0;
     let routeWKT = null;
@@ -1225,9 +1238,15 @@ export class TrainingService {
     // outdoor runs — independent of plan/free. Async + best-effort: RunSummary
     // shows GPS altitude immediately and the DEM-corrected profile on re-open
     // once this job has run. Non-blocking; never fails the completion.
+    //
+    // EXCETO rota sintética do harness (`external_id` com prefixo `sim_`, o
+    // carimbo que o `sim-workouts.ts` usa para marcar dado fabricado). Corrigir
+    // a altimetria de um traçado inventado gasta cota do Mapbox e latência para
+    // enriquecer terreno que não existe — e nenhuma validação lê o resultado.
     if (
       activityId &&
       !isTreadmill &&
+      !isSyntheticRun &&
       payload.route_points &&
       payload.route_points.length > 1
     ) {

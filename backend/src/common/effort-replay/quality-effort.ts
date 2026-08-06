@@ -59,16 +59,23 @@ export interface QualityEffort {
  *
  * Silêncio é melhor que um número inventado: este valor vai mexer no plano.
  */
+export function isQualityEffortStep(step: {
+  zone: string | null;
+  kind: string;
+  paceMin: number;
+}): boolean {
+  return (
+    step.zone != null &&
+    QUALITY_ZONES.has(step.zone) &&
+    EFFORT_KINDS.has(step.kind) &&
+    step.paceMin > 0
+  );
+}
+
 export function summarizeQualityEffort(
   steps: ReplayedStep[],
 ): QualityEffort | null {
-  const quality = steps.filter(
-    (s) =>
-      s.zone != null &&
-      QUALITY_ZONES.has(s.zone) &&
-      EFFORT_KINDS.has(s.kind) &&
-      s.paceMin > 0,
-  );
+  const quality = steps.filter(isQualityEffortStep);
   if (quality.length === 0) return null;
 
   let prescribedKm = 0;

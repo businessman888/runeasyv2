@@ -45,6 +45,12 @@
  *   --jitter P              variação aleatória de pace, 0..1 (default 0.05 = ±5%)
  *   --rpe [N]               anexa RPE. Sem valor = aleatório 1–10; com valor = fixo.
  *   --gps                   gera rota GPS sintética (default: sem rota — ver nota)
+ *   --quality-ratio R       com --gps: multiplicador do pace-alvo NAS SUB-ETAPAS
+ *                           DE QUALIDADE (Z3/Z4/Z5). 0.92 = tiros 8% mais
+ *                           rápidos que o prescrito; 1.0 = em cima do alvo;
+ *                           1.10 = 10% mais lentos. Aquecimento, trote e volta à
+ *                           calma ficam sempre no pace-alvo deles. É esta flag
+ *                           que dirige a reestimativa de VDOT (Fase 3).
  *   --seed S                semente do gerador, para runs reprodutíveis
  *   --generate-retrospective  dispara POST /training/retrospective/generate no fim
  *   --generate-weekly-insight dispara POST /training/weekly-insight/generate no fim.
@@ -65,11 +71,24 @@
  * simplificação desonesta: é a forma real de uma corrida de esteira e de toda
  * importação de HealthKit/Health Connect sem rota. O backend trata o caso
  * (`total_distance_meters` é autoritativo sobre o cálculo por GPS). Use `--gps`
- * quando precisar exercitar splits/altimetria — mas saiba que isso enfileira o
- * job de enriquecimento de elevação (Mapbox Terrain-DEM), que faz chamada externa.
+ * quando precisar exercitar splits, altimetria ou a reestimativa de VDOT.
+ *
+ * Com `--gps`, a rota é GUIADA PELA PRESCRIÇÃO (`buildStructuredRoute`): cada
+ * sub-etapa é percorrida no pace-alvo dela, e `--quality-ratio` desloca só os
+ * tiros. Consequência: para um treino com GPS, quem manda no pace é o
+ * `instructions_json`, não `--pace` — que segue governando o caminho SEM rota e
+ * as corridas livres. O resumo impresso mostra os dois, para não haver surpresa.
+ *
+ * O enriquecimento de elevação (Mapbox Terrain-DEM) NÃO dispara para estas
+ * corridas: `completeWorkout` pula o job quando o `external_id` tem o prefixo
+ * `sim_`. Corrigir altimetria de terreno inventado gastaria cota externa à toa.
  */
 
 import * as path from 'path';
+import {
+  buildEffortSteps,
+  isQualityEffortStep,
+} from '../src/common/effort-replay';
 import * as dotenv from 'dotenv';
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
@@ -249,6 +268,148 @@ export function isWeekClosed(weekEndStr: string, todayStr: string): boolean {
   return weekEndStr < todayStr;
 }
 
+// ── Rota guiada pela PRESCRIÇÃO (Fase 3) ─────────────────────────────────────
+
+export interface RoutePoint {
+  latitude: number;
+  longitude: number;
+  altitude: number;
+  timestamp: number;
+  speed: number;
+  accuracy: number;
+}
+
+export interface StructuredRoute {
+  points: RoutePoint[];
+  distanceMeters: number;
+  durationSeconds: number;
+  /** Sub-etapas de qualidade encontradas — 0 significa "nada a medir". */
+  qualitySteps: number;
+  /** Pace-alvo médio das sub-etapas de qualidade (s/km), antes do ratio. */
+  targetQualityPace: number | null;
+}
+
+/**
+ * Metros por grau na MESMA esfera do haversine do `effort-replay`
+ * (R = 6 371 000 m). Usar o valor WGS84 (111 320) faria a rota medir ~0,1 % a
+ * menos do que o gerador pretendeu — pequeno, mas é viés sistemático numa
+ * medição cuja margem de decisão é de 15 s/km.
+ */
+const M_PER_DEG = (6371000 * Math.PI) / 180;
+
+/** Espaçamento entre pontos. O `locationTask` filtra a ≥10 m — é o real. */
+const ROUTE_STEP_METERS = 10;
+
+/**
+ * Rota sintética guiada pelo `instructions_json` do treino.
+ *
+ * ── POR QUE ESTA FUNÇÃO EXISTE ───────────────────────────────────────────────
+ *
+ * `buildSyntheticRoute` (abaixo) é uma rampa de velocidade CONSTANTE. Para
+ * agregados isso basta, mas para a Fase 3 é ativamente enganoso: com pace
+ * uniforme, o pace de toda sub-etapa vira a média do treino, então os tiros de
+ * um intervalado apareceriam ~120 s/km mais lentos que o alvo de Z4 — com
+ * consistência perfeita. A regra de reestimativa leria isso como evidência
+ * sólida e BAIXARIA o VDOT de um atleta que executou o treino corretamente.
+ *
+ * Aqui cada sub-etapa é percorrida no pace-alvo DELA (o centro da faixa
+ * prescrita), e só as de qualidade (Z3/Z4/Z5) recebem `qualityRatio` — que é
+ * exatamente o desvio que a regra mede. Aquecimento, trote de recuperação e
+ * volta à calma ficam no alvo: quem varia é o esforço, como na vida real.
+ *
+ * ── O QUE ISTO NÃO VALIDA ────────────────────────────────────────────────────
+ *
+ * A expansão dos segmentos é COMPARTILHADA com o replay (`buildEffortSteps`),
+ * então o harness não pega um erro que esteja nela — quem guarda isso é o teste
+ * de paridade contra o `segmentEngine` do mobile. O que o harness valida é o
+ * encanamento: a rota persiste, o cron dispara, a regra decide, os paces
+ * futuros são reescritos e os briefings caem.
+ *
+ * Sem jitter, de propósito: os três casos de validação (sobe / não move / desce)
+ * precisam ser determinísticos, e ruído de ±5 % em cima de uma margem de
+ * 15 s/km trocaria o veredito por sorteio.
+ *
+ * Devolve `null` quando não há prescrição utilizável (walk/run grava
+ * `pace_min: 0`) — o chamador cai na rota uniforme, que é o certo ali.
+ */
+export function buildStructuredRoute(params: {
+  instructionsJson: unknown;
+  startedAtMs: number;
+  qualityRatio: number;
+}): StructuredRoute | null {
+  const steps = buildEffortSteps(params.instructionsJson);
+  if (steps.length === 0) return null;
+
+  const points: RoutePoint[] = [];
+  const startLat = -23.55; // ~São Paulo
+  const startLng = -46.63;
+
+  let cumulativeM = 0;
+  let elapsedMs = 0;
+  let qualitySteps = 0;
+  let qualityPaceSum = 0;
+
+  const push = (distM: number, tMs: number, speed: number): void => {
+    points.push({
+      latitude: startLat + distM / M_PER_DEG,
+      longitude: startLng,
+      altitude: 760,
+      timestamp: params.startedAtMs + Math.round(tMs),
+      speed,
+      accuracy: 5,
+    });
+  };
+
+  push(0, 0, 0);
+
+  for (const step of steps) {
+    // Alvo = centro da faixa. É o pace que a prescrição comunica; as bordas
+    // existem como tolerância de execução, não como intenção.
+    const targetPace =
+      step.paceMax > 0 ? (step.paceMin + step.paceMax) / 2 : step.paceMin;
+    if (!Number.isFinite(targetPace) || targetPace <= 0) continue;
+
+    const isQuality = isQualityEffortStep(step);
+    if (isQuality) {
+      qualitySteps += 1;
+      qualityPaceSum += targetPace;
+    }
+    const pace = targetPace * (isQuality ? params.qualityRatio : 1);
+
+    // Sub-etapa por distância traz o alvo em metros; por tempo, deriva a
+    // distância do pace que será corrido (não do prescrito) — é assim que um
+    // trote de "90 s" cobre menos chão quando o atleta vai devagar.
+    const distanceM =
+      step.metric === 'distance'
+        ? step.target
+        : (step.target / 1000 / pace) * 1000;
+    if (distanceM <= 0) continue;
+
+    const speed = 1000 / pace; // m/s
+    const n = Math.max(1, Math.round(distanceM / ROUTE_STEP_METERS));
+
+    for (let i = 1; i <= n; i++) {
+      const segM = (distanceM * i) / n;
+      push(cumulativeM + segM, elapsedMs + (segM / 1000) * pace * 1000, speed);
+    }
+
+    cumulativeM += distanceM;
+    elapsedMs += (distanceM / 1000) * pace * 1000;
+  }
+
+  if (points.length < 2 || cumulativeM <= 0) return null;
+
+  return {
+    points,
+    distanceMeters: Math.round(cumulativeM),
+    durationSeconds: Math.round(elapsedMs / 1000),
+    qualitySteps,
+    targetQualityPace: qualitySteps
+      ? Math.round(qualityPaceSum / qualitySteps)
+      : null,
+  };
+}
+
 /**
  * Rota GPS sintética: uma linha reta partindo de um ponto, com espaçamento
  * temporal coerente com a duração. Só é usada com `--gps`.
@@ -279,7 +440,8 @@ export function buildSyntheticRoute(params: {
       latitude: startLat + totalDegLat * f,
       longitude: startLng,
       altitude: 760,
-      timestamp: params.startedAtMs + Math.round(params.durationSeconds * f * 1000),
+      timestamp:
+        params.startedAtMs + Math.round(params.durationSeconds * f * 1000),
       speed,
       accuracy: 5,
     };
@@ -343,6 +505,12 @@ interface PlanWorkout {
   status: 'pending' | 'completed' | 'skipped' | 'missed';
   type: string;
   title: string;
+  /**
+   * Segmentos prescritos. É daqui que a rota estruturada (`--gps`) tira o
+   * pace-alvo de cada sub-etapa — sem isso a rota seria uniforme e os tiros
+   * apareceriam lentos.
+   */
+  instructions_json?: unknown;
   /** Preenchido pelo script a partir do bloco `weeks[]` do overview. */
   week_number?: number;
 }
@@ -380,9 +548,7 @@ export function buildWeekContext(
     .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
 
   if (inWeek.length === 0) {
-    const disponiveis = Array.from(
-      new Set(workouts.map((w) => w.week_number)),
-    )
+    const disponiveis = Array.from(new Set(workouts.map((w) => w.week_number)))
       .filter((n): n is number => typeof n === 'number')
       .sort((a, b) => a - b);
     throw new Error(
@@ -448,8 +614,7 @@ async function main() {
   const env = resolveEnv(args.env);
   const target = ENVIRONMENTS[env];
 
-  const apiBaseUrl =
-    typeof args.api === 'string' ? args.api : target.url;
+  const apiBaseUrl = typeof args.api === 'string' ? args.api : target.url;
 
   // SEM fallback para SUPABASE_URL quando o alvo é staging. O `.env` deste repo
   // aponta para o Supabase de PRODUÇÃO, então um fallback silencioso faria
@@ -491,8 +656,7 @@ async function main() {
   const completions = num(args.completions, 5);
   // `null` = sem escopo de semana (comportamento original: pendentes em ordem
   // de data, atravessando semanas).
-  const targetWeek =
-    typeof args.week === 'string' ? num(args.week, NaN) : null;
+  const targetWeek = typeof args.week === 'string' ? num(args.week, NaN) : null;
   if (targetWeek != null && !Number.isFinite(targetWeek)) {
     throw new Error('--week precisa de um número (ex.: --week 2)');
   }
@@ -503,12 +667,21 @@ async function main() {
   const jitter = num(args.jitter, 0.05);
   const seed = num(args.seed, Date.now() % 2147483647);
   const withGps = args.gps === true;
+  // 1.0 = executar exatamente no alvo. <1 mais rápido, >1 mais lento.
+  const qualityRatio = num(args['quality-ratio'], 1.0);
   const dryRun = args['dry-run'] === true;
   const rng = makeRng(seed);
 
   console.log(`\n🏃 Simulador de treinos — RunEasy`);
   console.log(`   env=${env}  api=${apiBaseUrl}`);
-  console.log(`   seed=${seed}${dryRun ? '  [DRY RUN]' : ''}\n`);
+  console.log(`   seed=${seed}${dryRun ? '  [DRY RUN]' : ''}`);
+  // Com rota, quem manda no pace é a prescrição — imprimir os dois evita a
+  // conclusão errada de que `--pace` foi ignorado por bug.
+  console.log(
+    withGps
+      ? `   gps=on  quality-ratio=${qualityRatio}  (pace por sub-etapa vem do plano; --pace ${basePace} vale p/ corridas livres)\n`
+      : `   gps=off  pace=${basePace}s/km  (sem rota: o replay de qualidade da Fase 3 não tem o que medir)\n`,
+  );
 
   // ── 1. Login ──────────────────────────────────────────────────────────────
   const { accessToken, userId } = await signIn({
@@ -654,7 +827,7 @@ async function main() {
   }> = [];
 
   for (const w of toComplete) {
-    const run = buildSyntheticRun({
+    let run = buildSyntheticRun({
       distanceKm: (w.distance_km || 5) * completionRatio,
       basePaceSecondsPerKm: basePace,
       jitter,
@@ -664,15 +837,43 @@ async function main() {
     const startedAt = toStartedAt(w.scheduled_date);
     const rpe = resolveRpe(args.rpe, rng);
 
+    // Rota guiada pela prescrição. Cai para a rota uniforme quando o treino não
+    // tem pace prescrito utilizável (walk/run grava `pace_min: 0`).
+    const structured = withGps
+      ? buildStructuredRoute({
+          instructionsJson: w.instructions_json,
+          startedAtMs: new Date(startedAt).getTime(),
+          qualityRatio,
+        })
+      : null;
+
+    let routePoints: unknown[] = [];
+    if (structured) {
+      routePoints = structured.points;
+      // Agregados DERIVADOS da rota: se `duration_seconds` viesse do
+      // `buildSyntheticRun` e os pontos de outro lugar, o
+      // `pace_seconds_per_km` gravado no treino contradiria o que o replay
+      // mede nos mesmos pontos — e a validação estaria comparando duas
+      // ficções diferentes.
+      run = {
+        distanceKm: Math.round((structured.distanceMeters / 1000) * 100) / 100,
+        distanceMeters: structured.distanceMeters,
+        durationSeconds: structured.durationSeconds,
+        derivedPaceSecondsPerKm: Math.round(
+          structured.durationSeconds / (structured.distanceMeters / 1000),
+        ),
+      };
+    } else if (withGps) {
+      routePoints = buildSyntheticRoute({
+        distanceMeters: run.distanceMeters,
+        durationSeconds: run.durationSeconds,
+        startedAtMs: new Date(startedAt).getTime(),
+      });
+    }
+
     const payload: Record<string, unknown> = {
       // Sem GPS por padrão — `total_distance_meters` é autoritativo no backend.
-      route_points: withGps
-        ? buildSyntheticRoute({
-            distanceMeters: run.distanceMeters,
-            durationSeconds: run.durationSeconds,
-            startedAtMs: new Date(startedAt).getTime(),
-          })
-        : [],
+      route_points: routePoints,
       total_distance_meters: run.distanceMeters,
       duration_seconds: run.durationSeconds,
       started_at: startedAt,
@@ -684,9 +885,20 @@ async function main() {
       ...(rpe != null ? { rpe } : {}),
     };
 
+    // Só o que a Fase 3 vai medir merece destaque no log: sem isto, um plano
+    // legado (intervalado achatado, sem bloco `repeat`) passaria calado e o
+    // VDOT pareceria "não ter disparado por bug".
+    const qualityNote = structured?.qualitySteps
+      ? ` · ${structured.qualitySteps} sub-etapa(s) de qualidade @ ${fmtPace(
+          Math.round(structured.targetQualityPace * qualityRatio),
+        )}/km (alvo ${fmtPace(structured.targetQualityPace)})`
+      : withGps
+        ? ' · sem bloco de qualidade medível'
+        : '';
+
     if (dryRun) {
       console.log(
-        `   [dry] ${w.scheduled_date} ${w.title} → ${run.distanceKm}km em ${run.durationSeconds}s (${fmtPace(run.derivedPaceSecondsPerKm)}/km)${rpe ? ` RPE ${rpe}` : ''}`,
+        `   [dry] ${w.scheduled_date} ${w.title} → ${run.distanceKm}km em ${run.durationSeconds}s (${fmtPace(run.derivedPaceSecondsPerKm)}/km)${rpe ? ` RPE ${rpe}` : ''}${qualityNote}`,
       );
     } else {
       await httpJson(`${apiBaseUrl}/api/training/workouts/${w.id}/complete`, {
@@ -696,7 +908,7 @@ async function main() {
         body: JSON.stringify(payload),
       });
       console.log(
-        `   ✔ ${w.scheduled_date} ${w.title} → ${run.distanceKm}km ${fmtPace(run.derivedPaceSecondsPerKm)}/km${rpe ? ` RPE ${rpe}` : ''}`,
+        `   ✔ ${w.scheduled_date} ${w.title} → ${run.distanceKm}km ${fmtPace(run.derivedPaceSecondsPerKm)}/km${rpe ? ` RPE ${rpe}` : ''}${qualityNote}`,
       );
     }
     completed.push({
@@ -730,15 +942,19 @@ async function main() {
   for (let i = 0; i < freeRuns; i++) {
     // Espalha as corridas livres pela janela em vez de empilhar no mesmo dia.
     const date =
-      windowDates[Math.floor(((i + 1) / (freeRuns + 1)) * windowDates.length)] ??
-      windowDates[0];
+      windowDates[
+        Math.floor(((i + 1) / (freeRuns + 1)) * windowDates.length)
+      ] ?? windowDates[0];
     const run = buildSyntheticRun({
       distanceKm: freeRunKm,
       basePaceSecondsPerKm: basePace,
       jitter,
       rng,
     });
-    const externalId = makeExternalId('free', `${userId.slice(0, 8)}_${date}_${i}`);
+    const externalId = makeExternalId(
+      'free',
+      `${userId.slice(0, 8)}_${date}_${i}`,
+    );
     const startedAt = toStartedAt(date, 18); // fim de tarde
     const rpe = resolveRpe(args.rpe, rng);
 
@@ -904,7 +1120,9 @@ function printWeeklyOracle(params: {
   const distinctDays = new Set(params.completed.map((c) => c.date)).size;
 
   console.log('\n' + '═'.repeat(72));
-  console.log(`  SEMANA ${params.targetWeek} — confira contra plan_week_insights`);
+  console.log(
+    `  SEMANA ${params.targetWeek} — confira contra plan_week_insights`,
+  );
   console.log('═'.repeat(72));
   console.log(`
   week_start / week_end        esperado:  ${params.weekStartStr} .. ${params.weekEndStr}
@@ -951,8 +1169,19 @@ function printWeeklyOracle(params: {
 }
 
 function printOracle(params: {
-  completed: Array<{ id: string; date: string; run: SyntheticRun; externalId: string; rpe: number | null }>;
-  freeRunList: Array<{ date: string; run: SyntheticRun; externalId: string; rpe: number | null }>;
+  completed: Array<{
+    id: string;
+    date: string;
+    run: SyntheticRun;
+    externalId: string;
+    rpe: number | null;
+  }>;
+  freeRunList: Array<{
+    date: string;
+    run: SyntheticRun;
+    externalId: string;
+    rpe: number | null;
+  }>;
   retroId: string | null;
   planId: string;
   targetWeek?: number | null;
@@ -1024,9 +1253,15 @@ function printOracle(params: {
   console.log('\n  ' + '─'.repeat(68));
   console.log(`  plan_distance_completed_km  esperado:  ${round1(planKm)}`);
   console.log(`  free_run_distance_km        esperado:  ${round1(freeKm)}`);
-  console.log(`  total_distance_km           esperado:  ${round1(planKm + freeKm)}`);
-  console.log(`  total_runs_in_period        esperado:  ${params.completed.length + params.freeRunList.length}`);
-  console.log(`  total_workouts_completed    esperado:  ${params.completed.length}`);
+  console.log(
+    `  total_distance_km           esperado:  ${round1(planKm + freeKm)}`,
+  );
+  console.log(
+    `  total_runs_in_period        esperado:  ${params.completed.length + params.freeRunList.length}`,
+  );
+  console.log(
+    `  total_workouts_completed    esperado:  ${params.completed.length}`,
+  );
   if (longest) {
     console.log(`  longest_run_km              esperado:  ${longest.km}`);
     console.log(`  longest_run_date            esperado:  ${longest.date}`);

@@ -2,6 +2,7 @@ import {
   assertNotProduction,
   buildSyntheticRun,
   buildSyntheticRoute,
+  buildStructuredRoute,
   buildWeekContext,
   isWeekClosed,
   makeExternalId,
@@ -13,6 +14,12 @@ import {
   PRODUCTION_SUPABASE_REF,
   ENVIRONMENTS,
 } from './sim-workouts';
+import {
+  buildEffortSteps,
+  replaySteps,
+  normalizePoints,
+  summarizeQualityEffort,
+} from '../src/common/effort-replay';
 
 /**
  * Harness de simulação de treinos.
@@ -308,9 +315,11 @@ describe('buildSyntheticRoute', () => {
 describe('parseArgs', () => {
   it('lê valores e flags booleanas', () => {
     const args = parseArgs([
-      '--completions', '5',
+      '--completions',
+      '5',
       '--rpe',
-      '--free-runs', '2',
+      '--free-runs',
+      '2',
       '--generate-retrospective',
     ]);
     expect(args.completions).toBe('5');
@@ -403,5 +412,155 @@ describe('buildWeekContext', () => {
     // oráculo de zeros, parecendo bug do backend em vez de erro de invocação.
     expect(() => buildWeekContext(PLAN, 9)).toThrow(/--week 9 não existe/);
     expect(() => buildWeekContext(PLAN, 9)).toThrow(/1, 2, 3/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('buildStructuredRoute — a rota que a Fase 3 mede', () => {
+  /** Intervalado estruturado: 1 km Z1 + 4×(500 m Z4 / 200 m Z1) + 1 km Z1. */
+  const intervalado = () => [
+    {
+      type: 'warmup',
+      zone: 'Z1',
+      distance_km: 1,
+      pace_min: 393,
+      pace_max: 434,
+    },
+    {
+      type: 'repeat',
+      reps: 4,
+      zone: 'Z4',
+      work: { distance_km: 0.5, pace_min: 297, pace_max: 313, zone: 'Z4' },
+      recovery: { distance_km: 0.2, pace_min: 393, pace_max: 434, zone: 'Z1' },
+    },
+    {
+      type: 'cooldown',
+      zone: 'Z1',
+      distance_km: 1,
+      pace_min: 393,
+      pace_max: 434,
+    },
+  ];
+
+  const START = new Date('2026-06-10T07:00:00-03:00').getTime();
+
+  const build = (qualityRatio: number) =>
+    buildStructuredRoute({
+      instructionsJson: intervalado(),
+      startedAtMs: START,
+      qualityRatio,
+    });
+
+  /**
+   * O teste-título: injetar um ratio conhecido e exigir que o REPLAY o meça de
+   * volta.
+   *
+   * Fecha o ciclo que a fase inteira depende — gerador → endpoint → pontos
+   * persistidos → replay → regra. Se o gerador e o replay discordarem sobre
+   * onde um tiro começa e termina, este número sai errado e a validação no
+   * harness estaria medindo o próprio harness.
+   *
+   * A tolerância é de 3% porque a fronteira de sub-etapa só pode cair num ponto
+   * de GPS (~10 m): cada tiro herda até uma amostra de trote. É a mesma
+   * precisão declarada em `effort-replay.spec.ts`.
+   */
+  it.each([
+    [0.9, 'mais rápido que o alvo'],
+    [1.0, 'em cima do alvo'],
+    [1.1, 'mais lento que o alvo'],
+  ])('ratio %s (%s) volta pelo replay', (ratio) => {
+    const route = build(ratio);
+    expect(route).not.toBeNull();
+
+    const steps = buildEffortSteps(intervalado());
+    const effort = summarizeQualityEffort(
+      replaySteps(steps, normalizePoints(route!.points)),
+    );
+
+    expect(effort).not.toBeNull();
+    const alvo = route!.targetQualityPace as number;
+    const medido = effort!.paceSecPerKm / alvo;
+    expect(medido).toBeCloseTo(ratio, 1);
+    expect(Math.abs(medido - ratio)).toBeLessThan(0.03);
+  });
+
+  it('só os TIROS mudam — aquecimento e trote ficam no alvo', () => {
+    const alvo = build(1.0)!;
+    const rapido = build(0.85)!;
+
+    // O treino inteiro encurta em tempo, mas a distância é a mesma: o ratio
+    // mexe no ritmo do esforço, não no volume prescrito.
+    expect(rapido.distanceMeters).toBe(alvo.distanceMeters);
+    expect(rapido.durationSeconds).toBeLessThan(alvo.durationSeconds);
+
+    // E encurta MENOS que 15%: só 2 dos 6 km são de qualidade.
+    const reducao = 1 - rapido.durationSeconds / alvo.durationSeconds;
+    expect(reducao).toBeGreaterThan(0);
+    expect(reducao).toBeLessThan(0.15);
+  });
+
+  it('a densidade é de ~10 m, não 60 pontos fixos', () => {
+    const route = build(1.0)!;
+
+    // O treino tem 4,8 km (1 + 4×0,7 + 1), então ~480 pontos a cada 10 m.
+    // Com os 60 fixos da rota uniforme, um tiro de 500 m teria 5 amostras e a
+    // contaminação de fronteira viraria ~20% do bloco.
+    expect(route.distanceMeters).toBe(4800);
+    expect(route.points.length).toBeGreaterThan(450);
+    expect(route.points.length).toBeLessThan(520);
+    expect(route.qualitySteps).toBe(4);
+  });
+
+  it('agregados DERIVAM da rota — o pace gravado bate com o medido', () => {
+    const route = build(1.0)!;
+    const paceAgregado = route.durationSeconds / (route.distanceMeters / 1000);
+
+    // Reconstrói o pace pelos próprios pontos, como o backend faria.
+    const pts = route.points;
+    const dtSec = (pts[pts.length - 1].timestamp - pts[0].timestamp) / 1000;
+    expect(Math.abs(dtSec - route.durationSeconds)).toBeLessThanOrEqual(1);
+    expect(paceAgregado).toBeGreaterThan(300); // média puxada pelo trote Z1
+  });
+
+  it('walk/run (pace_min 0) não gera rota — o chamador cai na uniforme', () => {
+    expect(
+      buildStructuredRoute({
+        instructionsJson: [
+          {
+            type: 'repeat',
+            reps: 6,
+            zone: 'Z1',
+            work: { duration_seconds: 90, pace_min: 0, pace_max: 0 },
+            recovery: { duration_seconds: 150, pace_min: 0, pace_max: 0 },
+          },
+        ],
+        startedAtMs: START,
+        qualityRatio: 1,
+      }),
+    ).toBeNull();
+  });
+
+  it('treino contínuo sem qualidade gera rota, mas nada a medir', () => {
+    const route = buildStructuredRoute({
+      instructionsJson: [
+        {
+          type: 'main',
+          zone: 'Z1',
+          distance_km: 6,
+          pace_min: 393,
+          pace_max: 434,
+        },
+      ],
+      startedAtMs: START,
+      qualityRatio: 0.8,
+    });
+
+    expect(route).not.toBeNull();
+    expect(route!.qualitySteps).toBe(0);
+    // O ratio NÃO vaza para um easy: Z1 fica fora da reestimativa por decisão
+    // de produto, e o gerador tem de respeitar a mesma fronteira.
+    const paceMedio = route!.durationSeconds / (route!.distanceMeters / 1000);
+    expect(paceMedio).toBeCloseTo((393 + 434) / 2, 0);
   });
 });
