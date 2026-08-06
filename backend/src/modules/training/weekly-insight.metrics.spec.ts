@@ -501,15 +501,29 @@ describe('WeeklyInsightService — métricas da semana', () => {
       expect(m.easyRunsTooFast).toBe(0);
     });
 
+    /**
+     * Forma REAL do walk/run, copiada de um plano de produção: um `repeat` com
+     * `work`/`recovery` por TEMPO e `pace_min: 0` (a pessoa não tem VDOT, então
+     * a geração de propósito não inventa pace).
+     */
+    const walkRun = () => [
+      {
+        type: 'repeat',
+        reps: 6,
+        zone: 'Z1',
+        work: { duration_seconds: 90, pace_min: 0, pace_max: 0 },
+        recovery: { duration_seconds: 150, pace_min: 0, pace_max: 0 },
+      },
+    ];
+
     it('walk/run (pace_min 0) fica de fora — não havia pace prescrito', async () => {
       await build({ activities: [] });
 
-      const expected = service.expectedPaceForWorkout({
-        instructions_json: [
-          { type: 'repeat', distance_km: 3, pace_min: 0, zone: 'Z1' },
-        ],
-      } as never);
-      expect(expected).toBeNull();
+      expect(
+        service.expectedPaceForWorkout({
+          instructions_json: walkRun(),
+        } as never),
+      ).toBeNull();
 
       const m = await service.buildPlanWeekMetrics(
         'user-1',
@@ -520,9 +534,7 @@ describe('WeeklyInsightService — métricas da semana', () => {
             status: 'completed',
             distance_run: 3,
             pace_seconds_per_km: 400,
-            instructions_json: [
-              { type: 'repeat', distance_km: 3, pace_min: 0, zone: 'Z1' },
-            ],
+            instructions_json: walkRun(),
           }),
         ],
         3,
@@ -532,22 +544,114 @@ describe('WeeklyInsightService — métricas da semana', () => {
       expect(m.easyRunsMeasured).toBe(0);
     });
 
-    it('lê o pace de repeat.work num intervalado', async () => {
+    /**
+     * Intervalado ESTRUTURADO, na forma que a geração produz hoje: o miolo é um
+     * `type: 'repeat'` com `work`/`recovery` aninhados e `reps` — sem
+     * `distance_km` nem `pace_min` no topo do bloco.
+     *
+     * ── A REGRESSÃO QUE ESTE TESTE PRENDE ────────────────────────────────────
+     *
+     * Até 2026-08-06 a função procurava `seg.repeat.work` (chave que o schema
+     * NUNCA produziu) e exigia `distance_km` no topo do bloco. Como um `repeat`
+     * não tem nenhum dos dois, o miolo de qualidade inteiro era descartado e
+     * sobravam só o aquecimento e a volta à calma — ambos Z1. O pace esperado de
+     * um intervalado saía IDÊNTICO ao de uma rodagem leve, e a aderência de
+     * Z4/Z5 media o esforço duro com régua de easy. Para a reestimativa de VDOT
+     * isso é o pior viés possível: o atleta parece esmagar os alvos de qualidade
+     * quando apenas cumpriu o treino.
+     *
+     * O teste antigo passava porque testava uma forma INVENTADA
+     * (`{ type: 'repeat', distance_km: 2, repeat: { work: {...} } }`) — ele
+     * congelava a leitura errada em vez de pegá-la.
+     */
+    const intervaladoEstruturado = () => [
+      { type: 'warmup', zone: 'Z1', distance_km: 2, pace_min: 459 },
+      {
+        type: 'repeat',
+        reps: 5,
+        zone: 'Z4',
+        work: { distance_km: 0.5, pace_min: 348, zone: 'Z4' },
+        recovery: { duration_seconds: 90, pace_min: 459, zone: 'Z1' },
+      },
+      { type: 'cooldown', zone: 'Z1', distance_km: 2, pace_min: 459 },
+    ];
+
+    it('intervalado estruturado: o bloco de qualidade ENTRA no ponderado', async () => {
       await build({ activities: [] });
 
       const expected = service.expectedPaceForWorkout({
+        instructions_json: intervaladoEstruturado(),
+      } as never);
+
+      // Σtempo ÷ Σdistância, com o sub-bloco por TEMPO convertido pelo próprio
+      // pace prescrito:
+      //   warmup    2 km   @459  →  2.000 km,  918 s
+      //   work    5×0,5 km @348  →  2.500 km,  870 s
+      //   recovery 5×90 s  @459  →  0.980 km,  450 s   (90/459 km por rep)
+      //   cooldown  2 km   @459  →  2.000 km,  918 s
+      //   3156 ÷ 7,480 = 422
+      expect(expected).toBe(422);
+
+      // A trava de verdade: NÃO pode ser o esperado de um easy equivalente.
+      const easy = service.expectedPaceForWorkout({
         instructions_json: [
-          { type: 'warmup', distance_km: 2, pace_min: 400 },
-          {
-            type: 'repeat',
-            distance_km: 2,
-            repeat: { work: { pace_min: 240 } },
-          },
+          { type: 'main', zone: 'Z1', distance_km: 6, pace_min: 459 },
+        ],
+      } as never);
+      expect(easy).toBe(459);
+      expect(expected).not.toBe(easy);
+
+      // E tem de cair ENTRE o pace do tiro e o do trote — é a definição de um
+      // ponderado que enxerga as duas partes do treino.
+      expect(expected).toBeGreaterThan(348);
+      expect(expected).toBeLessThan(459);
+    });
+
+    it('a aderência de Z4 usa o esperado do TIRO, não o do aquecimento', async () => {
+      await build({ activities: [] });
+
+      const m = await service.buildPlanWeekMetrics(
+        'user-1',
+        WEEK,
+        null,
+        [
+          planWorkout({
+            metadata: { zone: 'Z4' },
+            status: 'completed',
+            distance_run: 7.5,
+            time_run_seconds: 3200,
+            // Corrida inteira a 427 s/km: praticamente em cima dos 422
+            // prescritos. Com o bug, o esperado era 459 e este atleta aparecia
+            // 32 s/km RÁPIDO DEMAIS — sem ter feito nada além do combinado.
+            pace_seconds_per_km: 427,
+            instructions_json: intervaladoEstruturado(),
+          }),
+        ],
+        3,
+      );
+
+      expect(m.intensityAdherence.Z4).toEqual({
+        n: 1,
+        avgExpectedSec: 422,
+        avgActualSec: 427,
+        avgDeltaSec: 5, // positivo = ligeiramente mais lento que o alvo
+        fasterCount: 0, // e NÃO conta como rápido demais
+      });
+    });
+
+    it('reps ausente conta como 1 — mesma convenção do motor que executa', async () => {
+      await build({ activities: [] });
+
+      // `segmentEngine.buildSegSteps` faz `Math.max(1, Math.round(reps || 1))`.
+      // Se as duas contagens divergirem, o esperado descreve um treino que não
+      // é o que o app mandou correr.
+      const expected = service.expectedPaceForWorkout({
+        instructions_json: [
+          { type: 'repeat', work: { distance_km: 2, pace_min: 300 } },
         ],
       } as never);
 
-      // (400×2 + 240×2) / 4 = 320
-      expect(expected).toBe(320);
+      expect(expected).toBe(300);
     });
   });
 

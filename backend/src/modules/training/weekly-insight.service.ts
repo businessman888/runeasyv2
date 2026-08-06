@@ -880,6 +880,34 @@ export class WeeklyInsightService {
    * FORA do numerador e do denominador. Um treino sem nenhum segmento
    * aproveitável devolve `null` e não entra na agregação — é correto: não havia
    * pace prescrito para comparar.
+   *
+   * ── OS DOIS FORMATOS DE SEGMENTO ──────────────────────────────────────────
+   *
+   * `instructions_json` tem duas formas, e a geração escolhe pelo tipo do treino
+   * (ver o schema em `training-ai.service.ts`):
+   *
+   *   simples  { type: 'warmup'|'main'|'cooldown', distance_km OU duration_seconds,
+   *              pace_min, pace_max, zone }
+   *   repeat   { type: 'repeat', reps: N,
+   *              work:     { distance_km OU duration_seconds, pace_min, ... },
+   *              recovery: { distance_km OU duration_seconds, pace_min, ... } }
+   *
+   * O `repeat` NÃO tem `distance_km` nem `pace_min` no topo — eles vivem dentro
+   * de `work`/`recovery`, e valem `reps` vezes cada. Até 2026-08-06 esta função
+   * procurava `seg.repeat.work` (chave que o schema nunca produziu) e exigia
+   * `distance_km` no topo do bloco: o resultado era o MIOLO DE QUALIDADE INTEIRO
+   * ser descartado, sobrando só aquecimento e volta à calma. Um intervalado
+   * estruturado saía com pace esperado idêntico ao de uma rodagem leve, e a
+   * aderência de Z4/Z5 media o esforço duro com régua de easy.
+   *
+   * ── DISTÂNCIA × TEMPO ─────────────────────────────────────────────────────
+   *
+   * Todo sub-bloco tem EXATAMENTE um entre `distance_km` e `duration_seconds`.
+   * O ponderado é sempre Σtempo ÷ Σdistância; um sub-bloco por tempo entra
+   * convertendo com o próprio pace prescrito (90 s a 7:39/km = 0,196 km). Sem
+   * isso, as recuperações e os aquecimentos por tempo — que o prompt PREFERE —
+   * sumiriam do denominador, e o esperado ficaria mais rápido que a corrida que
+   * ele descreve, justo na direção que faz o atleta parecer melhor do que foi.
    */
   expectedPaceForWorkout(w: WorkoutRow): number | null {
     const segments = Array.isArray(w.instructions_json)
@@ -887,26 +915,48 @@ export class WeeklyInsightService {
       : [];
     if (segments.length === 0) return null;
 
-    let weighted = 0;
+    let seconds = 0;
     let distance = 0;
 
+    /** Acumula um sub-bloco `times` vezes. Sem pace utilizável, não entra. */
+    const addEffort = (raw: unknown, times = 1): void => {
+      if (!raw || typeof raw !== 'object') return;
+      const effort = raw as Record<string, unknown>;
+
+      const paceSec = paceValueToSecondsPerKm(
+        effort.pace_min as number | undefined,
+      );
+      if (paceSec == null || paceSec <= 0) return;
+
+      const km = num(effort.distance_km as number | string | null);
+      if (km > 0) {
+        distance += km * times;
+        seconds += km * paceSec * times;
+        return;
+      }
+
+      const sec = num(effort.duration_seconds as number | string | null);
+      if (sec > 0) {
+        distance += (sec / paceSec) * times;
+        seconds += sec * times;
+      }
+    };
+
     for (const seg of segments) {
-      const segKm = num(seg.distance_km as number | string | null);
-      if (segKm <= 0) continue;
-
-      // Num intervalado o bloco de trabalho fica aninhado em `repeat.work`.
-      const repeat = seg.repeat as { work?: { pace_min?: number } } | undefined;
-      const rawPace =
-        (seg.pace_min as number | undefined) ?? repeat?.work?.pace_min;
-      const paceSec = paceValueToSecondsPerKm(rawPace);
-      if (paceSec == null || paceSec <= 0) continue;
-
-      weighted += paceSec * segKm;
-      distance += segKm;
+      if (seg.type === 'repeat') {
+        // `Math.max(1, ...)` espelha `segmentEngine.buildSegSteps` no mobile —
+        // o motor que EXECUTA o treino. As duas contagens de reps têm de ser a
+        // mesma, senão o esperado descreve um treino diferente do realizado.
+        const reps = Math.max(1, Math.round(num(seg.reps as number) || 1));
+        addEffort(seg.work, reps);
+        addEffort(seg.recovery, reps);
+        continue;
+      }
+      addEffort(seg);
     }
 
     if (distance <= 0) return null;
-    return Math.round(weighted / distance);
+    return Math.round(seconds / distance);
   }
 
   /** Pace esperado médio da semana (ponderado pelos treinos concluídos). */
