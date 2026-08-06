@@ -17,6 +17,7 @@ import {
 import { GamificationService } from '../gamification/gamification.service';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { FeedbackAIService } from '../feedback/feedback-ai.service';
+import { VdotService } from './vdot.service';
 import { AiQuotaService, AIRouterService, AI_FEATURES } from '../../common/ai';
 import {
   PlanOverviewResponseDto,
@@ -71,6 +72,9 @@ export class TrainingService {
     // Owns the ai_feedbacks lifecycle (processing/completed/failed/skipped).
     @Inject(forwardRef(() => FeedbackAIService))
     private readonly feedbackAIService: FeedbackAIService,
+    // Persiste o VDOT que gerou o plano (Fase 3) — sem isso a reestimativa
+    // não tem ponto de partida.
+    private readonly vdotService: VdotService,
   ) {}
 
   /**
@@ -324,6 +328,11 @@ export class TrainingService {
           }
         }
       }
+
+      // STEP 3b: persiste o VDOT que prescreveu estes paces (Fase 3). Sem isto
+      // a reestimativa não tem de onde partir. Best-effort de propósito — o
+      // plano já está válido e não deve falhar por causa de um recurso novo.
+      await this.vdotService.seedForPlan(userId, planId, fullPlan.vdot);
 
       // STEP 4 (race goal only): insert the special race-day workout on the
       // race date. The AI is instructed NOT to create a workout that day.
@@ -757,7 +766,8 @@ export class TrainingService {
     };
 
     const remaining = all.filter(
-      (w) => (w.status === 'pending' || w.status === 'missed') && includeFrom(w),
+      (w) =>
+        (w.status === 'pending' || w.status === 'missed') && includeFrom(w),
     );
     if (remaining.length === 0) {
       return { shifted: 0, deltaDays: 0 };

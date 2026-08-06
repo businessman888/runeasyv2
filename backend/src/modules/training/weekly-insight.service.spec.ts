@@ -4,6 +4,7 @@ import { WeeklyInsightService } from './weekly-insight.service';
 import { SupabaseService } from '../../database';
 import { NotificationService } from '../notifications/notification.service';
 import { AIRouterService } from '../../common/ai';
+import { VdotService } from './vdot.service';
 import { TrainingService } from './training.service';
 
 /**
@@ -55,7 +56,17 @@ function buildStatefulMock(seed: Record<string, Row[]>) {
     };
 
     const chain: Record<string, unknown> = {};
-    const passthrough = ['gte', 'lte', 'gt', 'lt', 'in', 'not', 'or', 'order', 'limit'];
+    const passthrough = [
+      'gte',
+      'lte',
+      'gt',
+      'lt',
+      'in',
+      'not',
+      'or',
+      'order',
+      'limit',
+    ];
     for (const m of passthrough) chain[m] = jest.fn(() => chain);
 
     chain.select = jest.fn(() => chain);
@@ -145,6 +156,7 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
     sendPushNotification: jest.Mock;
   };
   let aiRouter: { isAvailable: boolean; call: jest.Mock };
+  let vdotService: { reestimateForPlan: jest.Mock };
   let trainingService: { reanchorRemainingWorkoutsToToday: jest.Mock };
 
   const build = async (
@@ -158,6 +170,9 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
       sendPushNotification: jest.fn().mockResolvedValue(true),
     };
     aiRouter = { isAvailable: false, call: jest.fn() };
+    // Fase 3: por padrão "nenhuma mudança de VDOT" — o caso da imensa maioria
+    // das semanas. Testes que exercitam a reestimativa sobrescrevem.
+    vdotService = { reestimateForPlan: jest.fn().mockResolvedValue(null) };
     trainingService = {
       reanchorRemainingWorkoutsToToday: jest
         .fn()
@@ -181,6 +196,7 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
         },
         { provide: NotificationService, useValue: notificationService },
         { provide: AIRouterService, useValue: aiRouter },
+        { provide: VdotService, useValue: vdotService },
       ],
     }).compile();
 

@@ -7,6 +7,7 @@ import { GamificationService } from '../gamification/gamification.service';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { AiQuotaService, AIRouterService } from '../../common/ai';
 import { FeedbackAIService } from '../feedback/feedback-ai.service';
+import { VdotService } from './vdot.service';
 
 describe('TrainingService', () => {
   let service: TrainingService;
@@ -116,7 +117,15 @@ describe('TrainingService', () => {
         // enqueueGeneration (pós-treino); mockado para não subir fila real.
         {
           provide: FeedbackAIService,
-          useValue: { enqueueGeneration: jest.fn().mockResolvedValue(undefined) },
+          useValue: {
+            enqueueGeneration: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        // Fase 3: o TrainingService só semeia o VDOT do plano recém-gerado.
+        // Best-effort por construção, então o mock nunca falha.
+        {
+          provide: VdotService,
+          useValue: { seedForPlan: jest.fn().mockResolvedValue(undefined) },
         },
       ],
     }).compile();
@@ -239,7 +248,9 @@ describe('TrainingService', () => {
       ).resolvePlanStartDate(s);
 
     it('keeps a future start date untouched', () => {
-      expect(resolve('2999-01-01').toISOString().slice(0, 10)).toBe('2999-01-01');
+      expect(resolve('2999-01-01').toISOString().slice(0, 10)).toBe(
+        '2999-01-01',
+      );
     });
 
     it('clamps a past start date to today (== the null/today result)', () => {
@@ -284,7 +295,10 @@ describe('TrainingService', () => {
       expect(inFn).toHaveBeenCalledWith('id', ['w1']);
       // ...then shifted by a whole number of weeks (preserves the weekday).
       expect(rpc).toHaveBeenCalledTimes(1);
-      const args = rpc.mock.calls[0][1] as { p_plan_id: string; p_days: number };
+      const args = rpc.mock.calls[0][1] as {
+        p_plan_id: string;
+        p_days: number;
+      };
       expect(args.p_plan_id).toBe('plan-1');
       expect(args.p_days).toBeGreaterThan(0);
       expect(args.p_days % 7).toBe(0);

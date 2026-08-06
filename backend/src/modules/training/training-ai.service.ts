@@ -3,6 +3,7 @@ import { AIRouterService, AI_FEATURES } from '../../common/ai';
 import {
   PaceCalculatorService,
   TrainingZone,
+  applyZonePacesToSegments,
 } from '../../common/pace-calculator';
 import {
   VolumePlannerService,
@@ -19,10 +20,7 @@ import {
   RACE_WARNING_INCREASE_THRESHOLD,
 } from '../../common/volume-planner';
 import { selectArchetypeKey } from '../../common/archetype';
-import {
-  PlanPreviewDto,
-  PreviewViabilityDto,
-} from './dto/plan-preview.dto';
+import { PlanPreviewDto, PreviewViabilityDto } from './dto/plan-preview.dto';
 
 export interface TrainingPlanRequest {
   goal: string;
@@ -222,6 +220,16 @@ export interface GeneratedPlan {
   // Viabilidade da meta (Fase B) — registro no plan_json; a Fase C consome a
   // função pura VolumePlannerService.assessViability antes de gerar o plano.
   viability?: PlanViability;
+  /**
+   * VDOT que prescreveu os paces deste plano (Fase 3).
+   *
+   * Até a Fase 3 este número era calculado, usado e descartado — não havia como
+   * saber qual VDOT gerou um plano. Devolvê-lo aqui é o que permite ao
+   * `TrainingService` semeá-lo em `training_plans.vdot_current`, de onde a
+   * reestimativa parte. Ausente no protocolo caminhada/corrida, que não tem
+   * pace prescrito.
+   */
+  vdot?: number;
 }
 
 @Injectable()
@@ -608,8 +616,7 @@ Responda APENAS com o JSON contendo as semanas 2 até ${request.targetWeeks}.`;
 
   /** Race-specific periodization block appended to the user prompt. */
   private buildRacePromptBlock(request: TrainingPlanRequest): string {
-    const weeks =
-      request.raceWeeksUntil ?? request.targetWeeks ?? 0;
+    const weeks = request.raceWeeksUntil ?? request.targetWeeks ?? 0;
     const distance = request.raceDistance ?? request.recentDistanceKm ?? 10;
     const { base, build, peak, taper } = this.calculateRacePhases(
       weeks,
@@ -930,6 +937,11 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
       // assessViability já é chamável sem gerar plano).
       result.data.viability = viability;
 
+      // O VDOT que acabou de prescrever cada pace. Antes da Fase 3 ele morria
+      // aqui; agora sobe para o TrainingService semear `vdot_current`, que é o
+      // ponto de partida da reestimativa.
+      result.data.vdot = vdot;
+
       return result.data;
     } catch (error) {
       this.logger.error('[FullPlan] Failed to generate training plan', error);
@@ -945,26 +957,12 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
    */
   private applyDeterministicPaces(plan: GeneratedPlan, vdot: number): void {
     const ranges = this.paceCalculator.getZonePaceRangesSeconds(vdot);
-    const setEffort = (
-      effort: { pace_min?: number; pace_max?: number; zone?: TrainingZone },
-      zone?: TrainingZone,
-    ): void => {
-      if (!effort || typeof effort !== 'object') return;
-      const range = ranges[zone as TrainingZone] ?? ranges.Z1;
-      effort.pace_min = range.min; // segundos/km — mais rápido
-      effort.pace_max = range.max; // segundos/km — mais lento
-    };
-
     for (const week of plan.weeks ?? []) {
       for (const workout of week.workouts ?? []) {
-        for (const seg of workout.segments ?? []) {
-          if (seg.type === 'repeat') {
-            setEffort(seg.work, seg.work?.zone ?? seg.zone);
-            setEffort(seg.recovery, seg.recovery?.zone ?? seg.zone);
-          } else {
-            setEffort(seg, seg.zone);
-          }
-        }
+        // Mesma função que a reestimativa da Fase 3 usa para reescrever os
+        // paces quando o VDOT muda — se as duas divergissem, um plano gerado e
+        // um plano reajustado prescreveriam paces diferentes p/ o mesmo VDOT.
+        applyZonePacesToSegments(workout.segments, ranges);
       }
     }
   }
@@ -1186,7 +1184,11 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
     // `distributeWeek` só marca qualidade em build/peak — então este treino é
     // easy (ou o longão, quando daysPerWeek === 1).
     const slot: WorkoutSlot = week1.workouts[0];
-    const type = slot.isLong ? 'long_run' : slot.isQuality ? 'tempo' : 'easy_run';
+    const type = slot.isLong
+      ? 'long_run'
+      : slot.isQuality
+        ? 'tempo'
+        : 'easy_run';
     const zone: TrainingZone = slot.isQuality && !slot.isLong ? 'Z3' : 'Z1';
 
     const vdot = this.resolveVDOT(
@@ -1299,9 +1301,10 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
         : undefined;
       const easies = workouts.filter((w) => w !== longWo && w !== qualityWo);
 
-      const longDist = longSlot ? longSlot.distanceKm : this.r1(weekTotal * 0.3);
-      const qualityDist =
-        qualitySlot && qualityWo ? qualitySlot.distanceKm : 0;
+      const longDist = longSlot
+        ? longSlot.distanceKm
+        : this.r1(weekTotal * 0.3);
+      const qualityDist = qualitySlot && qualityWo ? qualitySlot.distanceKm : 0;
       const remVol = Math.max(weekTotal - longDist - qualityDist, 0);
       // easy nunca excede o longão (mantém o longão como o mais longo mesmo com
       // poucos treinos); o total pode ficar levemente abaixo nesse caso extremo.
@@ -1320,7 +1323,11 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
       results.push({
         wo: longWo,
         slot: longTargetSlot,
-        achieved: this.reconcileWorkoutDistance(longWo, longDist, longTargetSlot),
+        achieved: this.reconcileWorkoutDistance(
+          longWo,
+          longDist,
+          longTargetSlot,
+        ),
         isEasy: false,
       });
       if (qualityWo && qualitySlot) {
@@ -1437,7 +1444,10 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
   }
 
   /** Reescala os segmentos simples (por distância) para somarem `targetKm`. */
-  private scaleSimpleSegments(segs: GeneratedSegment[], targetKm: number): void {
+  private scaleSimpleSegments(
+    segs: GeneratedSegment[],
+    targetKm: number,
+  ): void {
     const simple = segs.filter(
       (s): s is SimpleSegment =>
         s.type !== 'repeat' && s.distance_km != null && s.distance_km > 0,
@@ -1449,17 +1459,18 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
       return;
     }
     const factor = targetKm / sum;
-    for (const s of simple) s.distance_km = this.r1((s.distance_km as number) * factor);
+    for (const s of simple)
+      s.distance_km = this.r1((s.distance_km as number) * factor);
   }
 
   /** Distribui `fillKm` entre warmup/cooldown simples (metade/metade, com piso). */
   private setWarmupCooldown(segs: GeneratedSegment[], fillKm: number): void {
-    const warm = segs.find(
-      (s) => s.type === 'warmup',
-    ) as SimpleSegment | undefined;
-    const cool = segs.find(
-      (s) => s.type === 'cooldown',
-    ) as SimpleSegment | undefined;
+    const warm = segs.find((s) => s.type === 'warmup') as
+      | SimpleSegment
+      | undefined;
+    const cool = segs.find((s) => s.type === 'cooldown') as
+      | SimpleSegment
+      | undefined;
     if (warm && cool) {
       warm.distance_km = this.r1(Math.max(fillKm * 0.5, MIN_WARMUP_KM));
       cool.distance_km = this.r1(Math.max(fillKm * 0.5, MIN_COOLDOWN_KM));

@@ -116,13 +116,15 @@ export class PaceCalculatorService {
    * conservadores e ajustáveis — a Fase 4 (alertas) pode refiná-los. Zonas mais
    * intensas usam banda mais estreita (execução exige precisão).
    */
-  private readonly ZONE_TOLERANCE_SEC: Record<'Z2' | 'Z3' | 'Z4' | 'Z5', number> =
-    {
-      Z2: 10, // marathon
-      Z3: 8, // threshold
-      Z4: 8, // interval
-      Z5: 10, // repetition
-    };
+  private readonly ZONE_TOLERANCE_SEC: Record<
+    'Z2' | 'Z3' | 'Z4' | 'Z5',
+    number
+  > = {
+    Z2: 10, // marathon
+    Z3: 8, // threshold
+    Z4: 8, // interval
+    Z5: 10, // repetition
+  };
 
   /**
    * Faixa-alvo de pace por zona, em SEGUNDOS/KM inteiros (min = mais rápido,
@@ -153,6 +155,56 @@ export class PaceCalculatorService {
 
   vdotForBeginner(): number {
     return this.BEGINNER_VDOT;
+  }
+
+  /** Limites do modelo, para quem precisa clampear um VDOT reestimado. */
+  get bounds(): { min: number; max: number } {
+    return { min: this.MIN_VDOT, max: this.MAX_VDOT };
+  }
+
+  /**
+   * INVERSO de `getZonePaceRangesSeconds`: dado um pace REAL executado numa
+   * zona, qual VDOT teria prescrito exatamente aquele pace?
+   *
+   * Não existe uma segunda tabela nem uma fórmula invertida — a busca roda sobre
+   * a MESMA função forward, então o inverso não pode divergir da prescrição por
+   * construção. É válido porque `getZonePaceRangesSeconds` é estritamente
+   * monotônica em `vdot` (VDOT maior ⇒ pace menor), invariante travado em
+   * `pace-calculator.spec.ts`.
+   *
+   * O alvo é o CENTRO da faixa da zona: é o pace que a prescrição realmente
+   * comunica, e as bordas existem só como tolerância de execução.
+   *
+   * Uso previsto: registrar no histórico "o esforço deste treino equivale a um
+   * VDOT de 41,3". NÃO é o número para o qual o VDOT salta — a reestimativa anda
+   * em passos pequenos, porque um treino excepcional não é uma capacidade nova.
+   */
+  impliedVdotForZonePace(zone: TrainingZone, paceSeconds: number): number {
+    if (!Number.isFinite(paceSeconds) || paceSeconds <= 0) {
+      return this.BEGINNER_VDOT;
+    }
+
+    const centerAt = (vdot: number): number => {
+      const range = this.getZonePaceRangesSeconds(vdot)[zone];
+      return (range.min + range.max) / 2;
+    };
+
+    // Fora do domínio modelado, devolve o extremo — mesma política do clamp.
+    if (paceSeconds >= centerAt(this.MIN_VDOT)) return this.MIN_VDOT;
+    if (paceSeconds <= centerAt(this.MAX_VDOT)) return this.MAX_VDOT;
+
+    // Busca binária até 0,1 de VDOT (a resolução do clamp).
+    let lo = this.MIN_VDOT;
+    let hi = this.MAX_VDOT;
+    while (hi - lo > 0.1) {
+      const mid = (lo + hi) / 2;
+      if (centerAt(mid) > paceSeconds) {
+        lo = mid; // ainda lento demais → precisa de VDOT maior
+      } else {
+        hi = mid;
+      }
+    }
+    return Math.round(((lo + hi) / 2) * 10) / 10;
   }
 
   private clamp(vdot: number): number {

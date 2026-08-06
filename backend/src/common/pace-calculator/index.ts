@@ -12,3 +12,4 @@ export {
   formatPaceLabel,
   formatPaceRangeLabel,
 } from './pace-format';
+export { applyZonePacesToSegments } from './apply-zone-paces';

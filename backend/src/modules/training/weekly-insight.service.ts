@@ -17,6 +17,7 @@ import {
   EASY_PACE_TOLERANCE_SEC,
 } from './helpers/weekly-adjustment';
 import { toSaoPauloDateStr } from './wellness/helpers/streak.helper';
+import { VdotService, VdotChange } from './vdot.service';
 import {
   buildMetric,
   sparkline7,
@@ -197,6 +198,9 @@ export class WeeklyInsightService {
     @Inject(forwardRef(() => TrainingService))
     private readonly trainingService: TrainingService,
     private readonly aiRouter: AIRouterService,
+    // Reestimativa de VDOT (Fase 3): roda no fecho de cada semana do plano e,
+    // quando move, já deixa os paces futuros reescritos antes da narrativa.
+    private readonly vdotService: VdotService,
   ) {}
 
   /** Cutoff de ativação (YYYY-MM-DD). Semanas fechadas antes disso são ignoradas. */
@@ -464,10 +468,33 @@ export class WeeklyInsightService {
         easyRunsTooFast: metrics.easyRunsTooFast,
       });
 
+      // ── Reestimativa de VDOT (Fase 3) ────────────────────────────────────
+      //
+      // Roda ANTES da narrativa de propósito: quando o VDOT se move, os paces
+      // dos treinos futuros JÁ foram reescritos, e a narrativa pode anunciar
+      // um ajuste que de fato existe. A ordem inversa faria o coach prometer
+      // algo que só aconteceria depois.
+      //
+      // Best-effort: falha aqui não derruba o insight. A semana continua sendo
+      // resumida; só não há ajuste de pace para contar.
+      let vdotChange: VdotChange | null = null;
+      try {
+        vdotChange = await this.vdotService.reestimateForPlan(
+          userId,
+          planId,
+          week.weekNumber,
+        );
+      } catch (error) {
+        this.logger.warn(
+          `[WeeklyInsight] Reestimativa de VDOT falhou p/ plano ${planId}: ${String(error)}`,
+        );
+      }
+
       const narrative = await this.generateNarrative(
         userId,
         metrics,
         adjustment,
+        vdotChange,
       );
 
       const isZeroWeek =
@@ -1039,9 +1066,10 @@ export class WeeklyInsightService {
     userId: string,
     metrics: PlanWeekMetrics,
     adjustment: SuggestedAdjustment,
+    vdotChange: VdotChange | null = null,
   ): Promise<string> {
     if (!this.aiRouter.isAvailable)
-      return this.fallbackNarrative(metrics, adjustment);
+      return this.fallbackNarrative(metrics, adjustment, vdotChange);
 
     const systemPrompt = `Você é um treinador de corrida da RunEasy comentando UMA semana de treino.
 
@@ -1049,6 +1077,7 @@ REGRAS INVIOLÁVEIS:
 - Os números e a recomendação abaixo JÁ ESTÃO DECIDIDOS. Você NÃO recalcula, NÃO contradiz e NÃO propõe outra recomendação.
 - Cite pelo menos dois números reais que recebeu.
 - 2 a 3 frases, segunda pessoa, português do Brasil, tom direto e sem bajulação.
+- Se houver AJUSTE DE RITMO, mencione-o em UMA frase como algo JÁ FEITO ("ajustei", não "vou ajustar") — os paces dos próximos treinos já foram reescritos.
 - Responda APENAS com JSON válido: {"narrative": "..."}`;
 
     const zonesLine = Object.entries(metrics.intensityAdherence)
@@ -1073,7 +1102,7 @@ RITMO POR ZONA:
   ${zonesLine || '(sem treino com pace prescrito e executado)'}
 
 RECOMENDAÇÃO JÁ DECIDIDA: ${ADJUSTMENT_LABELS[adjustment.code]} (motivo: ${adjustment.reason})
-
+${vdotChangeBlock(vdotChange)}
 Escreva a narrativa explicando o que aconteceu na semana e por que essa é a recomendação.`;
 
     try {
@@ -1100,13 +1129,14 @@ Escreva a narrativa explicando o que aconteceu na semana e por que essa é a rec
       this.logger.error('[WeeklyInsight] Narrativa via IA falhou:', err);
     }
 
-    return this.fallbackNarrative(metrics, adjustment);
+    return this.fallbackNarrative(metrics, adjustment, vdotChange);
   }
 
   /** Texto determinístico — mesmos números, sem rede. */
   private fallbackNarrative(
     metrics: PlanWeekMetrics,
     adjustment: SuggestedAdjustment,
+    vdotChange: VdotChange | null = null,
   ): string {
     const parts: string[] = [];
 
@@ -1129,6 +1159,10 @@ Escreva a narrativa explicando o que aconteceu na semana e por que essa é a rec
     parts.push(
       `Sugestão para a próxima: ${ADJUSTMENT_LABELS[adjustment.code]}.`,
     );
+
+    if (vdotChange) {
+      parts.push(vdotFallbackSentence(vdotChange));
+    }
     return parts.join(' ');
   }
 
@@ -1475,6 +1509,35 @@ Escreva a narrativa explicando o que aconteceu na semana e por que essa é a rec
 }
 
 // ── Utilitários locais ───────────────────────────────────────────────────────
+
+/**
+ * Bloco de VDOT injetado no prompt da narrativa.
+ *
+ * A IA recebe a mudança JÁ APLICADA e os números que a justificaram — ela não
+ * decide nada, só encontra as palavras. É a mesma disciplina do reajuste
+ * semanal: o cálculo é do backend, a voz é do Haiku.
+ */
+function vdotChangeBlock(change: VdotChange | null): string {
+  if (!change) return '';
+  const verbo = change.direction === 'up' ? 'subiu' : 'baixou';
+  const efeito =
+    change.direction === 'up'
+      ? 'os paces dos próximos treinos ficaram um pouco mais rápidos'
+      : 'os paces dos próximos treinos ficaram um pouco mais leves';
+  return `
+AJUSTE DE RITMO JÁ APLICADO:
+- Seu nível estimado ${verbo} (${change.reason}).
+- ${change.workoutsRepriced} treino(s) futuro(s) já foram reajustados: ${efeito}.
+- NÃO cite "VDOT" nem o número — fale de evolução/ajuste de ritmo, em linguagem de corredor.
+`;
+}
+
+/** Mesma frase, sem rede — usada quando a IA está indisponível. */
+function vdotFallbackSentence(change: VdotChange): string {
+  return change.direction === 'up'
+    ? `Seus treinos de qualidade mostraram evolução: ajustei o ritmo de ${change.workoutsRepriced} treino(s) à frente.`
+    : `Seus treinos de qualidade vieram acima do alvo: aliviei o ritmo de ${change.workoutsRepriced} treino(s) à frente.`;
+}
 
 function num(v: number | string | null | undefined): number {
   const n = Number(v);

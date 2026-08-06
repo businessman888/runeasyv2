@@ -4,6 +4,7 @@ import { WeeklyInsightService } from './weekly-insight.service';
 import { SupabaseService } from '../../database';
 import { NotificationService } from '../notifications/notification.service';
 import { AIRouterService } from '../../common/ai';
+import { VdotService } from './vdot.service';
 import { TrainingService } from './training.service';
 import { PlanWeekWindow } from './helpers/plan-window.helper';
 
@@ -121,6 +122,11 @@ describe('WeeklyInsightService — métricas da semana', () => {
         {
           provide: AIRouterService,
           useValue: { isAvailable: false, call: jest.fn() },
+        },
+        // Este arquivo mede MÉTRICAS; a reestimativa de VDOT tem spec própria.
+        {
+          provide: VdotService,
+          useValue: { reestimateForPlan: jest.fn().mockResolvedValue(null) },
         },
       ],
     }).compile();
