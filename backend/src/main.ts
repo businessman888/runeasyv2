@@ -1,10 +1,12 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import compression from 'compression';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { BODY_SIZE_LIMIT } from './common/config/body-limit';
 
 async function bootstrap() {
   console.log('[Bootstrap] ========================================');
@@ -18,11 +20,21 @@ async function bootstrap() {
 
   try {
     console.log('[Bootstrap] Criando aplicação NestJS...');
-    const app = await NestFactory.create(AppModule, {
+    const app = await NestFactory.create<NestExpressApplication>(AppModule, {
       logger: ['error', 'warn', 'log'],
       rawBody: true, // Required for webhook signature verification
     });
     console.log('[Bootstrap] Aplicação NestJS criada com sucesso!');
+
+    // Teto do corpo da requisição. O default do body-parser (100 KB) rejeitava
+    // a conclusão de QUALQUER corrida ao ar livre acima de ~6,5 km — a rota GPS
+    // vai inteira no payload. Ver o racional e as medições em body-limit.ts.
+    //
+    // Reaplicar o parser aqui preserva o `rawBody` acima (é o caminho oficial
+    // do Nest para os dois juntos), que a verificação de assinatura do webhook
+    // do RevenueCat precisa.
+    app.useBodyParser('json', { limit: BODY_SIZE_LIMIT });
+    app.useBodyParser('urlencoded', { limit: BODY_SIZE_LIMIT, extended: true });
 
     // Security headers + response compression.
     app.use(helmet());
