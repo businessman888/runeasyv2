@@ -26,6 +26,14 @@
 	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.oytotec.runeasy</string>
+	<!-- OBRIGATÓRIO para usar HKWorkoutSession no watchOS. Sem esta chave o
+	     sistema não concede a sessão de treino: startActivity() não leva a
+	     sessão a .running e beginCollection() nunca retorna, travando a tela
+	     de tracking em "Preparando…". Ver AUDITORIA-apple-watch.md §3.5. -->
+	<key>WKBackgroundModes</key>
+	<array>
+		<string>workout-processing</string>
+	</array>
 	<key>NSHealthShareUsageDescription</key>
 	<string>RunEasy precisa ler dados de saúde no Apple Watch para mostrar frequência cardíaca durante a corrida.</string>
 	<key>NSHealthUpdateUsageDescription</key>

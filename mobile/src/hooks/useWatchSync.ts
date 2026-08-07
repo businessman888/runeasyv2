@@ -13,15 +13,20 @@
 
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
+import { onWatchRequest } from '../services/appleWatch';
+import { useProFeature } from './useProFeature';
 import { useTrainingStore, type ScheduleDay } from '../stores/trainingStore';
 import { useAuthStore, getDisplayName, getAvatarUrl } from '../stores/authStore';
 import { useGamificationStore } from '../stores/gamificationStore';
 import { useAppleWatchStore } from '../stores/appleWatchStore';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
+import { useFeedbackStore, type LatestActivityData } from '../stores/feedbackStore';
 import type {
     TodayWorkoutForWatch,
     WeekStatsForWatch,
     NextWorkoutForWatch,
+    ActivityForWatch,
+    RunResultForWatch,
 } from '../services/appleWatch';
 
 function mapWorkoutType(t: string | undefined | null): TodayWorkoutForWatch['type'] {
@@ -160,19 +165,114 @@ function buildTodayWorkout(today: ScheduleDay | null): TodayWorkoutForWatch | nu
     };
 }
 
+/** "5:42" a partir de segundos por km. Vazio quando não há pace válido. */
+function formatPace(secondsPerKm: number | null | undefined): string {
+    if (!secondsPerKm || !Number.isFinite(secondsPerKm) || secondsPerKm <= 0) return '';
+    const m = Math.floor(secondsPerKm / 60);
+    const s = Math.round(secondsPerKm % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Atividades avulsas de hoje — espelha o filtro da aba Atividades da Home
+ * (HomeScreen: rawWorkouts filtrado por data + source, manual antes de free).
+ * Deliberadamente NÃO gated por Pro: corrida livre é gratuita.
+ */
+function buildTodayActivities(workouts: unknown[]): ActivityForWatch[] {
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+        now.getDate(),
+    ).padStart(2, '0')}`;
+    const rank = (s?: string | null) => (s === 'manual' ? 0 : s === 'free' ? 1 : 2);
+
+    return (workouts as any[])
+        .filter(
+            (w) =>
+                w?.scheduled_date === todayStr &&
+                (w?.source === 'manual' || w?.source === 'free'),
+        )
+        .sort((a, b) => rank(a?.source) - rank(b?.source))
+        .map((w) => {
+            const distanceKm = typeof w.distance_km === 'number' ? w.distance_km : 0;
+            const durationSeconds =
+                typeof w.duration_seconds === 'number' ? w.duration_seconds : null;
+            // Pace derivado quando o registro não traz o valor pronto.
+            const paceSeconds =
+                w.avg_pace_seconds_per_km ??
+                (durationSeconds && distanceKm > 0 ? durationSeconds / distanceKm : null);
+            return {
+                id: String(w.id),
+                source: w.source === 'manual' ? 'manual' : 'free',
+                title:
+                    w.title?.trim() ||
+                    (w.source === 'manual' ? 'Treino Manual' : 'Corrida Livre'),
+                status: w.status === 'completed' ? 'completed' : 'pending',
+                distanceKm,
+                durationSeconds,
+                pace: formatPace(paceSeconds),
+            } satisfies ActivityForWatch;
+        });
+}
+
+/**
+ * Mapeia o resultado do feedbackStore para o formato enxuto do Watch.
+ * Descarta feedback/strengths/improvements de propósito — são textos longos
+ * que estourariam o applicationContext e não são renderizáveis no relógio.
+ */
+function buildRunResult(
+    data: LatestActivityData | null,
+    scope: 'plan' | 'activity',
+): RunResultForWatch | null {
+    const a = data?.activity;
+    if (!a) return null;
+    const distanceKm = typeof a.distance === 'number' ? a.distance / 1000 : Number(a.distance_km) || 0;
+    return {
+        activityId: a.id,
+        scope,
+        title: data?.workout_title?.trim() || a.name?.trim() || 'Corrida',
+        dateLabel: a.date_label ?? '',
+        distanceKm,
+        durationSeconds: a.moving_time ?? 0,
+        pace: a.formatted_pace || formatPace(a.average_pace),
+        avgHeartRate: a.average_heartrate ?? null,
+    };
+}
+
 export function useWatchSync() {
     const today = useTrainingStore((s) => s.today);
     const schedule = useTrainingStore((s) => s.schedule);
+    // Ungated: alimenta a aba Atividades do Watch (corrida livre é gratuita).
+    const rawWorkouts = useTrainingStore((s) => s.workouts);
     const user = useAuthStore((s) => s.user);
     const stats = useGamificationStore((s) => s.stats);
+    const latestPlanActivity = useFeedbackStore((s) => s.latestPlanActivity);
+    const latestActivityResultData = useFeedbackStore((s) => s.latestActivityResult);
     const sendContextToWatch = useAppleWatchStore((s) => s.sendContextToWatch);
+    const resendLastContext = useAppleWatchStore((s) => s.resendLastContext);
     const isPaired = useAppleWatchStore((s) => s.isPaired);
+    // Este hook roda dentro do SuperwallProvider (App.tsx → WatchSyncManager),
+    // então pode abrir o fluxo de upgrade a pedido do relógio.
+    const { openUpgrade } = useProFeature();
     // Source of truth for plan visibility. Already incorporates the DevMenu
     // override, so toggling "Forçar Free" propagates to the Watch on the next
     // schedule rebuild without any extra wiring.
     const isProUser = useSubscriptionStore((s) => s.isProUser);
 
     const lastSentRef = useRef<string | null>(null);
+
+    // Pedidos vindos do relógio. Só chegam com este app em execução — o Watch
+    // trata a ausência de resposta como "não alcançável" e mostra fallback.
+    useEffect(() => {
+        if (Platform.OS !== 'ios') return;
+        return onWatchRequest((type) => {
+            if (type === 'request_refresh') {
+                resendLastContext();
+            } else if (type === 'open_paywall') {
+                console.log('[useWatchSync] Watch pediu o paywall — abrindo no iPhone');
+                openUpgrade();
+            }
+        });
+    }, [resendLastContext, openUpgrade]);
 
     useEffect(() => {
         if (Platform.OS !== 'ios') return;
@@ -200,7 +300,27 @@ export function useWatchSync() {
         );
         const nextWorkout = findNextWorkout(effectiveSchedule);
 
-        const ctx = { userName, avatarUrl, todayWorkout, weekStats, nextWorkout };
+        // Atividades avulsas NÃO passam pelo gate — corrida livre é gratuita e
+        // a Home também as lê de rawWorkouts sem gating.
+        const todayActivities = buildTodayActivities(rawWorkouts ?? []);
+
+        // Resultado de treino do PLANO é gated: no mobile o Free nunca vê
+        // análise de plano, nem com plan-activity órfã. Resultado de atividade
+        // avulsa é sempre visível.
+        const latestPlanResult = isProUser ? buildRunResult(latestPlanActivity, 'plan') : null;
+        const latestActivityResult = buildRunResult(latestActivityResultData, 'activity');
+
+        const ctx = {
+            userName,
+            avatarUrl,
+            isPro: isProUser,
+            todayWorkout,
+            weekStats,
+            nextWorkout,
+            todayActivities,
+            latestPlanResult,
+            latestActivityResult,
+        };
         const cacheKey = JSON.stringify(ctx);
         if (lastSentRef.current === cacheKey) return;
         lastSentRef.current = cacheKey;
@@ -216,6 +336,20 @@ export function useWatchSync() {
             workoutId: todayWorkout?.id ?? null,
             weekStats,
             nextWorkout,
+            activities: todayActivities.length,
+            planResult: latestPlanResult ? '✓' : '–',
+            activityResult: latestActivityResult ? '✓' : '–',
         });
-    }, [today, schedule, user, stats, isPaired, isProUser, sendContextToWatch]);
+    }, [
+        today,
+        schedule,
+        rawWorkouts,
+        user,
+        stats,
+        isPaired,
+        isProUser,
+        latestPlanActivity,
+        latestActivityResultData,
+        sendContextToWatch,
+    ]);
 }

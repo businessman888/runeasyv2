@@ -135,6 +135,10 @@ export function HomeScreen({ navigation }: any) {
     const syncHealthKitRecent = useHealthKitStore((s) => s.syncRecentIfConnected);
     const healthKitLastSyncedCount = useHealthKitStore((s) => s.lastSyncedCount);
     const clearHealthKitSyncedCount = useHealthKitStore((s) => s.clearLastSyncedCount);
+    // Alimentam o convite de conexão: a sync do Apple Health é opt-in e estava
+    // enterrada em Dispositivos, sem nenhuma pista na Home.
+    const healthKitAvailable = useHealthKitStore((s) => s.isAvailable);
+    const healthKitConnected = useHealthKitStore((s) => s.isConnected);
     // Android-only Health Connect counterparts; both stores no-op on the
     // other platform so the Promise.all stays platform-agnostic.
     const initializeHealthConnect = useHealthConnectStore((s) => s.initialize);
@@ -701,6 +705,29 @@ export function HomeScreen({ navigation }: any) {
                                 : `${healthKitLastSyncedCount} novas corridas sincronizadas do Apple Health`}
                         </Text>
                     </View>
+                )}
+
+                {/* Convite pra conectar o Apple Health. Sem isto, treinos feitos
+                    no app nativo do Apple Watch nunca chegam ao RunEasy — a sync
+                    existe e funciona, mas fica desligada e sem nenhum sinal na
+                    UI de que existe um botão a apertar. Ver AUDITORIA §P4. */}
+                {healthKitAvailable && !healthKitConnected && (
+                    <TouchableOpacity
+                        style={styles.healthKitConnectBanner}
+                        activeOpacity={0.8}
+                        onPress={() =>
+                            // `apple` é o provider do HealthKit (o `appleWatch` é
+                            // o companion app via WatchConnectivity, outro fluxo).
+                            navigation.navigate('DeviceConnect', { provider: 'apple' })
+                        }
+                    >
+                        <Ionicons name="watch-outline" size={18} color={colors.primary} />
+                        <Text style={styles.healthKitConnectBannerText}>
+                            Treina pelo app da Apple no relógio? Conecte a Saúde para
+                            importar essas corridas.
+                        </Text>
+                        <Ionicons name="chevron-forward" size={16} color="rgba(235,235,245,0.6)" />
+                    </TouchableOpacity>
                 )}
 
                 {/* Insight semanal — card persistente. Independe de `seen_at`:
@@ -1553,6 +1580,25 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         paddingHorizontal: spacing.md,
         marginBottom: spacing.md,
+    },
+    healthKitConnectBanner: {
+        flexDirection: 'row' as const,
+        alignItems: 'center' as const,
+        gap: 8,
+        backgroundColor: 'rgba(0, 212, 255, 0.08)',
+        borderRadius: borderRadius.lg,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 212, 255, 0.25)',
+        paddingVertical: 10,
+        paddingHorizontal: spacing.md,
+        marginBottom: spacing.md,
+    },
+    healthKitConnectBannerText: {
+        flex: 1,
+        fontSize: 12,
+        fontWeight: '500' as const,
+        color: '#EBEBF5',
+        lineHeight: 17,
     },
     healthKitBannerText: {
         flex: 1,

@@ -1,6 +1,12 @@
 import Foundation
 import WatchConnectivity
 import Combine
+import os
+
+private let bridgeLog = Logger(
+    subsystem: "com.oytotec.runeasy.watchkitapp",
+    category: "bridge"
+)
 
 /// Bridge WatchConnectivity entre o Apple Watch e o iPhone.
 /// - iPhone → Watch: `applicationContext` com contexto unificado (user, workout, stats, next)
@@ -15,10 +21,21 @@ final class PhoneBridge: NSObject, ObservableObject {
     @Published var avatarUrl: String?
     @Published var weekStats: WeekStats = .zero
     @Published var nextWorkout: NextWorkoutInfo?
+    /// Tier do usuário. Sinal de RENDERIZAÇÃO: decide entre UpgradeProCard e
+    /// RestDayCard, que antes eram indistinguíveis (ambos vinham como
+    /// `today_rest`). O filtro de dados continua no iPhone.
+    @Published var isPro: Bool = true
+    @Published var todayActivities: [ActivityForWatch] = []
+    @Published var latestPlanResult: RunResultForWatch?
+    @Published var latestActivityResult: RunResultForWatch?
     @Published var isReachable: Bool = false
     @Published var pendingTransfers: Int = 0
     @Published var lastSentAt: Date?
     @Published var lastError: String?
+    /// Já recebemos ao menos um contexto do iPhone? Distingue "sem treino hoje"
+    /// de "nunca sincronizou" na UI.
+    @Published var hasReceivedContext: Bool = false
+    @Published var lastContextAt: Date?
 
     private let session: WCSession?
 
@@ -69,6 +86,44 @@ final class PhoneBridge: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Requests (Watch → iPhone, sob demanda)
+
+    /// Pede ao iPhone o contexto atualizado.
+    ///
+    /// `sendMessage` só entrega com o app do iPhone EM EXECUÇÃO. Diferente de
+    /// `transferUserInfo`, não há fila nem retry — por isso todo call site
+    /// precisa lidar com `false` (não entregue) em vez de assumir sucesso.
+    @discardableResult
+    func requestRefresh() -> Bool {
+        sendRequest(type: "request_refresh")
+    }
+
+    /// Pede ao iPhone para abrir o fluxo de upgrade (o Superwall não roda no
+    /// watchOS, então o paywall só existe do outro lado).
+    @discardableResult
+    func requestOpenPaywall() -> Bool {
+        sendRequest(type: "open_paywall")
+    }
+
+    private func sendRequest(type: String) -> Bool {
+        guard let session, session.activationState == .activated, session.isReachable else {
+            bridgeLog.info("request \(type, privacy: .public) abortado — iPhone não alcançável")
+            return false
+        }
+        session.sendMessage(
+            ["type": type],
+            replyHandler: { _ in
+                bridgeLog.info("request \(type, privacy: .public) confirmado pelo iPhone")
+            },
+            errorHandler: { error in
+                bridgeLog.error(
+                    "request \(type, privacy: .public) falhou: \(error.localizedDescription, privacy: .public)"
+                )
+            }
+        )
+        return true
+    }
+
     // MARK: - Receive (iPhone → Watch)
 
     private func handleReceived(_ context: [String: Any]) {
@@ -92,14 +147,40 @@ final class PhoneBridge: NSObject, ObservableObject {
             // explicit null → limpa
             avatarUrl = nil
         }
+        if let pro = context["is_pro"] as? Bool {
+            isPro = pro
+        }
         if let statsDict = context["week_stats"] as? [String: Any] {
-            weekStats = decodeWeekStats(statsDict) ?? weekStats
+            weekStats = decode(WeekStats.self, from: statsDict, label: "week_stats") ?? weekStats
         }
         if let nextDict = context["next_workout"] as? [String: Any] {
-            nextWorkout = decodeNextWorkout(nextDict)
+            nextWorkout = decode(NextWorkoutInfo.self, from: nextDict, label: "next_workout")
         } else if context.keys.contains("next_workout") {
             nextWorkout = nil
         }
+        if let activities = context["today_activities"] as? [[String: Any]] {
+            todayActivities = activities.compactMap {
+                decode(ActivityForWatch.self, from: $0, label: "activity")
+            }
+        } else if context.keys.contains("today_activities") {
+            todayActivities = []
+        }
+        if let planDict = context["latest_plan_result"] as? [String: Any] {
+            latestPlanResult = decode(RunResultForWatch.self, from: planDict, label: "latest_plan_result")
+        } else if context.keys.contains("latest_plan_result") {
+            latestPlanResult = nil
+        }
+        if let actDict = context["latest_activity_result"] as? [String: Any] {
+            latestActivityResult = decode(RunResultForWatch.self, from: actDict, label: "latest_activity_result")
+        } else if context.keys.contains("latest_activity_result") {
+            latestActivityResult = nil
+        }
+
+        hasReceivedContext = true
+        lastContextAt = Date()
+        bridgeLog.info(
+            "contexto recebido: pro=\(self.isPro, privacy: .public) workout=\(self.todayWorkout != nil, privacy: .public) atividades=\(self.todayActivities.count, privacy: .public)"
+        )
     }
 
     private func handleTodayWorkout(_ rawPayload: Any?) {
@@ -116,22 +197,24 @@ final class PhoneBridge: NSObject, ObservableObject {
         }
     }
 
-    private func decodeWeekStats(_ dict: [String: Any]) -> WeekStats? {
+    /// Decode genérico com log de erro explícito.
+    ///
+    /// Antes cada campo tinha seu próprio decoder e o call site fazia
+    /// `decode(...) ?? valorAntigo`, o que tornava uma falha completamente
+    /// invisível — foi assim que o mismatch de CodingKeys do WeekStats passou
+    /// meses zerando os pills do header sem ninguém notar.
+    private func decode<T: Decodable>(
+        _ type: T.Type,
+        from dict: [String: Any],
+        label: String
+    ) -> T? {
         do {
             let data = try JSONSerialization.data(withJSONObject: dict)
-            return try JSONDecoder().decode(WeekStats.self, from: data)
+            return try JSONDecoder().decode(T.self, from: data)
         } catch {
-            print("[PhoneBridge] falha ao decodificar week_stats:", error)
-            return nil
-        }
-    }
-
-    private func decodeNextWorkout(_ dict: [String: Any]) -> NextWorkoutInfo? {
-        do {
-            let data = try JSONSerialization.data(withJSONObject: dict)
-            return try JSONDecoder().decode(NextWorkoutInfo.self, from: data)
-        } catch {
-            print("[PhoneBridge] falha ao decodificar next_workout:", error)
+            bridgeLog.error(
+                "falha ao decodificar \(label, privacy: .public): \(String(describing: error), privacy: .public)"
+            )
             return nil
         }
     }

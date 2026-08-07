@@ -13,13 +13,11 @@ struct WeekStats: Codable, Equatable {
     let restDone: Int
     let restTotal: Int
 
-    enum CodingKeys: String, CodingKey {
-        case streak
-        case workoutsDone   = "workouts_done"
-        case workoutsTotal  = "workouts_total"
-        case restDone       = "rest_done"
-        case restTotal      = "rest_total"
-    }
+    // NÃO adicionar CodingKeys em snake_case aqui. Este payload vem do iPhone
+    // em camelCase (useWatchSync.ts → computeWeekStats) e nunca toca o backend
+    // — ao contrário de CompletedRun, que vai direto pros DTOs do Nest e por
+    // isso usa snake_case. Um CodingKeys snake_case aqui fazia o decode da
+    // struct inteira falhar (keyNotFound), zerando os 3 pills do header.
 }
 
 extension WeekStats {

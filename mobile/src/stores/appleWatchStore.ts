@@ -28,11 +28,15 @@ interface AppleWatchState {
     lastReceivedAt: number | null;
     /** Resultado do último routing pro backend (sucesso ou pending offline) */
     lastRoutingResult: 'success' | 'savedLocally' | null;
+    /** Último contexto enviado — permite reenviar quando o Watch pedir refresh. */
+    lastContext: WatchContext | null;
 
     // actions
     bootstrap: () => Promise<void>;
     sendTodayWorkoutToWatch: (workout: TodayWorkoutForWatch | null, userName: string) => void;
     sendContextToWatch: (ctx: WatchContext) => void;
+    /** Reenvia o último contexto. No-op se nada foi enviado ainda. */
+    resendLastContext: () => void;
     clearLastReceivedRun: () => void;
 }
 
@@ -104,13 +108,14 @@ async function routeCompletedRunToTraining(run: CompletedRunFromWatch): Promise<
     }
 }
 
-export const useAppleWatchStore = create<AppleWatchState>((set, _get) => ({
+export const useAppleWatchStore = create<AppleWatchState>((set, get) => ({
     isPaired: false,
     isInstalled: false,
     isReachable: false,
     lastReceivedRun: null,
     lastReceivedAt: null,
     lastRoutingResult: null,
+    lastContext: null,
 
     bootstrap: async () => {
         if (bootstrapped) return;
@@ -166,6 +171,17 @@ export const useAppleWatchStore = create<AppleWatchState>((set, _get) => ({
     },
 
     sendContextToWatch: (ctx) => {
+        set({ lastContext: ctx });
+        sendWatchContext(ctx);
+    },
+
+    resendLastContext: () => {
+        const ctx = get().lastContext;
+        if (!ctx) {
+            console.log('[AppleWatchStore] resend ignorado — nenhum contexto ainda');
+            return;
+        }
+        console.log('[AppleWatchStore] reenviando contexto a pedido do Watch');
         sendWatchContext(ctx);
     },
 

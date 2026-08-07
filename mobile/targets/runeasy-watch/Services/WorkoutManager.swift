@@ -2,20 +2,54 @@ import Foundation
 import HealthKit
 import CoreLocation
 import Combine
+import os
+
+/// Global de arquivo, não `static` da classe: uma `static let` dentro de uma
+/// classe `@MainActor` herda o isolamento e não pode ser lida dos delegates
+/// `nonisolated` de HealthKit/CoreLocation.
+private let workoutLog = Logger(
+    subsystem: "com.oytotec.runeasy.watchkitapp",
+    category: "workout"
+)
 
 // Orquestra HKWorkoutSession + HKLiveWorkoutBuilder + CLLocationManager + HKWorkoutRouteBuilder.
 // Em simulator (#if targetEnvironment(simulator)), gera dados mock realistas
 // para permitir validação fim-a-fim sem device físico.
+//
+// Fluxo de UI (ver ActiveRunView):
+//   .idle → usuário vê o resumo do treino e o botão de play
+//   .starting → play tocado, sessão iniciando (com watchdog de 12s)
+//   .running → gravando (metrics.isPaused distingue rodando de pausado)
+//   .failed → erro navegável, com "Tentar novamente" e "Voltar"
+//
+// A sessão NUNCA inicia sozinha. Entrar na tela só pede permissão (prepare()).
 @MainActor
 final class WorkoutManager: NSObject, ObservableObject {
 
+    // MARK: - Phase
+
+    enum Phase: Equatable {
+        case idle
+        case starting
+        case running
+        case failed(String)
+        case finished
+    }
+
+    /// Segundos que a sessão tem para sair de `.starting`. Se estourar, o
+    /// usuário recebe uma tela de erro em vez de um spinner infinito — este é
+    /// o escape que faltava quando beginCollection travava (AUDITORIA §3.5).
+    private static let startTimeoutSeconds: Double = 12
+
     // MARK: - Published (consumidos pela View)
 
+    @Published var phase: Phase = .idle
     @Published var metrics = RunMetrics()
     @Published var sessionState: HKWorkoutSessionState = .notStarted
     @Published var hasPermission: Bool = false
     @Published var permissionError: String?
-    @Published var isRunning: Bool = false
+
+    var isRunning: Bool { phase == .running }
 
     // MARK: - HealthKit / GPS
     // Lazy: alguns simulators de watchOS crasham na construção eager de HKHealthStore
@@ -41,6 +75,9 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var workoutId: String?
     private var displayTask: Task<Void, Never>?
     private var simulatorTickTask: Task<Void, Never>?
+    private var watchdogTask: Task<Void, Never>?
+    /// A sessão já começou e queremos pontos de GPS assim que a autorização sair.
+    private var wantsLocationUpdates = false
 
     // Tipos lidos/escritos
     private var typesToShare: Set<HKSampleType> {
@@ -63,55 +100,121 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     // MARK: - Authorization
 
+    /// Chamado ao ENTRAR na tela de tracking. Só pede permissão — não inicia nada.
+    /// Assim o prompt do HealthKit aparece antes do play, e o play fica instantâneo.
+    func prepare() async {
+        workoutLog.info("prepare() phase=\(String(describing: self.phase), privacy: .public)")
+        guard phase == .idle else { return }
+        await requestAuthorization()
+    }
+
     func requestAuthorization() async {
         #if targetEnvironment(simulator)
         // Simulator: bypass total de HK/CL. Mock data não precisa de permissão.
-        print("[WorkoutManager] simulator: skip auth, granted automatically")
+        workoutLog.info("simulator: skip auth, granted automatically")
         hasPermission = true
         permissionError = nil
         return
         #else
         guard HKHealthStore.isHealthDataAvailable() else {
             permissionError = "HealthKit indisponível neste dispositivo."
+            hasPermission = false
             return
         }
         do {
             try await healthStore.requestAuthorization(toShare: typesToShare, read: typesToRead)
-            locationManager.requestWhenInUseAuthorization()
-            hasPermission = true
-            permissionError = nil
+
+            // IMPORTANTE: requestAuthorization NÃO lança quando o usuário nega —
+            // é comportamento documentado da Apple (só lança em erro de config).
+            // Confiar no `try` dava um falso positivo em hasPermission. Por
+            // privacidade só dá pra inspecionar os tipos de ESCRITA; os de
+            // leitura sempre reportam .notDetermined mesmo quando concedidos.
+            let deniedShare = typesToShare.filter {
+                healthStore.authorizationStatus(for: $0) != .sharingAuthorized
+            }
+            if deniedShare.isEmpty {
+                hasPermission = true
+                permissionError = nil
+            } else {
+                hasPermission = false
+                permissionError = "Permita que o RunEasy salve treinos em Ajustes → Privacidade → Saúde."
+                workoutLog.error("share auth negada para \(deniedShare.count, privacy: .public) tipo(s)")
+            }
+
+            // Não-bloqueante: o start de updates acontece no callback de
+            // autorização (locationManagerDidChangeAuthorization), não aqui.
+            // Antes o código assumia permissão concedida na linha seguinte e
+            // chamava startUpdatingLocation antes da resposta → rota vazia.
+            if locationManager.authorizationStatus == .notDetermined {
+                locationManager.requestWhenInUseAuthorization()
+            }
         } catch {
-            permissionError = "Permissão HealthKit negada."
+            permissionError = "Falha ao solicitar permissão de Saúde: \(error.localizedDescription)"
             hasPermission = false
+            workoutLog.error("requestAuthorization erro: \(error.localizedDescription, privacy: .public)")
         }
         #endif
     }
 
     // MARK: - Lifecycle
 
+    /// Disparado pelo botão de play na tela de tracking.
     func startWorkout(workoutId: String?) async {
+        guard phase == .idle || isFailed else {
+            workoutLog.info("startWorkout ignorado, phase=\(String(describing: self.phase), privacy: .public)")
+            return
+        }
+
         self.workoutId = workoutId
         self.startDate = Date()
+        self.phase = .starting
+        workoutLog.info("startWorkout workoutId=\(workoutId ?? "free", privacy: .public)")
 
         #if targetEnvironment(simulator)
-        // Simulator: pula auth + HK + CL. Direto ao mock.
-        print("[WorkoutManager] starting simulated workout (workoutId: \(workoutId ?? "nil"))")
         hasPermission = true
         await startSimulatedWorkout()
         return
         #else
         if !hasPermission {
             await requestAuthorization()
-            guard hasPermission else { return }
+            guard hasPermission else {
+                phase = .failed(permissionError ?? "Permissão de Saúde negada.")
+                return
+            }
         }
         await startRealWorkout()
         #endif
+    }
+
+    private var isFailed: Bool {
+        if case .failed = phase { return true }
+        return false
+    }
+
+    /// Volta ao estado ocioso para o usuário poder tentar de novo sem sair da tela.
+    func reset() {
+        watchdogTask?.cancel(); watchdogTask = nil
+        displayTask?.cancel(); displayTask = nil
+        simulatorTickTask?.cancel(); simulatorTickTask = nil
+        session = nil
+        builder = nil
+        routeBuilder = nil
+        wantsLocationUpdates = false
+        metrics = RunMetrics()
+        routePoints = []
+        heartRateSamples = []
+        sessionState = .notStarted
+        permissionError = nil
+        phase = .idle
+        workoutLog.info("reset() → idle")
     }
 
     private func startRealWorkout() async {
         let config = HKWorkoutConfiguration()
         config.activityType = .running
         config.locationType = .outdoor
+
+        startWatchdog()
 
         do {
             session = try HKWorkoutSession(healthStore: healthStore, configuration: config)
@@ -123,15 +226,37 @@ final class WorkoutManager: NSObject, ObservableObject {
             builder?.delegate = self
 
             let now = startDate ?? Date()
+            workoutLog.info("startActivity…")
             session?.startActivity(with: now)
+            workoutLog.info("beginCollection…")
             try await builder?.beginCollection(at: now)
+            workoutLog.info("beginCollection OK")
 
-            locationManager.startUpdatingLocation()
-            isRunning = true
+            watchdogTask?.cancel(); watchdogTask = nil
+
+            wantsLocationUpdates = true
+            startLocationUpdatesIfAuthorized()
+            phase = .running
             startDisplayTimer()
         } catch {
-            permissionError = "Falha ao iniciar treino: \(error.localizedDescription)"
-            isRunning = false
+            watchdogTask?.cancel(); watchdogTask = nil
+            workoutLog.error("falha ao iniciar: \(error.localizedDescription, privacy: .public)")
+            phase = .failed("Não foi possível iniciar o treino: \(error.localizedDescription)")
+        }
+    }
+
+    /// Rede de segurança: se a sessão não sair de `.starting` dentro do limite,
+    /// entrega uma tela de erro navegável em vez de deixar a UI presa.
+    private func startWatchdog() {
+        watchdogTask?.cancel()
+        watchdogTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.startTimeoutSeconds * 1_000_000_000))
+            guard let self, !Task.isCancelled else { return }
+            guard self.phase == .starting else { return }
+            workoutLog.error("watchdog: sessão presa em .starting por \(Self.startTimeoutSeconds, privacy: .public)s")
+            self.phase = .failed(
+                "O treino não iniciou. Verifique as permissões de Saúde e Localização do RunEasy no Apple Watch."
+            )
         }
     }
 
@@ -170,6 +295,8 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     /// Finaliza a sessão e retorna o payload pronto pra enviar ao iPhone.
     func endWorkout() async -> CompletedRun {
+        watchdogTask?.cancel()
+        watchdogTask = nil
         displayTask?.cancel()
         displayTask = nil
         simulatorTickTask?.cancel()
@@ -185,14 +312,15 @@ final class WorkoutManager: NSObject, ObservableObject {
             try await builder?.endCollection(at: endDate)
             _ = try await builder?.finishWorkout()
         } catch {
-            print("[WorkoutManager] erro ao finalizar: \(error)")
+            workoutLog.error("erro ao finalizar: \(error.localizedDescription, privacy: .public)")
         }
         if session != nil {
             locationManager.stopUpdatingLocation()
         }
+        wantsLocationUpdates = false
         #endif
 
-        isRunning = false
+        phase = .finished
 
         let avgHr = heartRateSamples.isEmpty
             ? nil
@@ -210,10 +338,24 @@ final class WorkoutManager: NSObject, ObservableObject {
             startedAt: ISO8601DateFormatter().string(from: startDate ?? endDate),
             source: "apple_watch"
         )
+        workoutLog.info("endWorkout dist=\(self.metrics.distanceMeters, privacy: .public)m dur=\(self.metrics.elapsedSeconds, privacy: .public)s pts=\(self.routePoints.count, privacy: .public)")
         return payload
     }
 
     // MARK: - Helpers (real device)
+
+    private func startLocationUpdatesIfAuthorized() {
+        #if !targetEnvironment(simulator)
+        guard wantsLocationUpdates else { return }
+        let status = locationManager.authorizationStatus
+        guard status == .authorizedWhenInUse || status == .authorizedAlways else {
+            workoutLog.info("GPS aguardando autorização (status=\(status.rawValue, privacy: .public))")
+            return
+        }
+        locationManager.startUpdatingLocation()
+        workoutLog.info("GPS iniciado")
+        #endif
+    }
 
     private func updateMetrics(from statistics: HKStatistics?) {
         guard let statistics else { return }
@@ -249,8 +391,8 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     #if targetEnvironment(simulator)
     private func startSimulatedWorkout() async {
-        print("[WorkoutManager] startSimulatedWorkout: spinning mock tick")
-        isRunning = true
+        workoutLog.info("startSimulatedWorkout: spinning mock tick")
+        phase = .running
         sessionState = .running
         metrics.isPaused = false
         simulatorTickTask?.cancel()
@@ -275,9 +417,10 @@ final class WorkoutManager: NSObject, ObservableObject {
             let km = metrics.distanceMeters / 1000.0
             metrics.avgPaceSecondsPerKm = Double(metrics.elapsedSeconds) / km
         }
-        // FC oscilando 130–160 BPM
-        let phase = Double(metrics.elapsedSeconds) / 8.0
-        let hr = 145 + Int((sin(phase) * 15).rounded())
+        // FC oscilando 130–160 BPM.
+        // NÃO chamar de `phase`: sombrearia a @Published var phase da classe.
+        let hrPhase = Double(metrics.elapsedSeconds) / 8.0
+        let hr = 145 + Int((sin(hrPhase) * 15).rounded())
         metrics.heartRate = hr
         if hr > metrics.maxHeartRate { metrics.maxHeartRate = hr }
         heartRateSamples.append(hr)
@@ -311,6 +454,7 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
         date: Date
     ) {
         Task { @MainActor in
+            workoutLog.info("session \(fromState.rawValue, privacy: .public) → \(toState.rawValue, privacy: .public)")
             sessionState = toState
             metrics.isPaused = (toState == .paused)
         }
@@ -318,8 +462,11 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
 
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
         Task { @MainActor in
-            permissionError = "Sessão falhou: \(error.localizedDescription)"
-            isRunning = false
+            workoutLog.error("session falhou: \(error.localizedDescription, privacy: .public)")
+            watchdogTask?.cancel()
+            watchdogTask = nil
+            permissionError = error.localizedDescription
+            phase = .failed("A sessão de treino falhou: \(error.localizedDescription)")
         }
     }
 }
@@ -349,6 +496,14 @@ extension WorkoutManager: HKLiveWorkoutBuilderDelegate {
 // MARK: - CLLocationManagerDelegate
 
 extension WorkoutManager: CLLocationManagerDelegate {
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        Task { @MainActor in
+            // A autorização costuma sair DEPOIS do play. Quando sair, liga o GPS
+            // se a sessão já estiver rodando.
+            self.startLocationUpdatesIfAuthorized()
+        }
+    }
+
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         let filtered = locations.filter { $0.horizontalAccuracy >= 0 && $0.horizontalAccuracy < 50 }
         guard !filtered.isEmpty else { return }
@@ -364,6 +519,6 @@ extension WorkoutManager: CLLocationManagerDelegate {
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("[Location] erro: \(error.localizedDescription)")
+        workoutLog.error("GPS erro: \(error.localizedDescription, privacy: .public)")
     }
 }

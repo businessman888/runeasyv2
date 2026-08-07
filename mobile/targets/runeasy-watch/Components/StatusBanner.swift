@@ -47,10 +47,81 @@ struct StatusBanner: View {
     }
 }
 
-#Preview {
+/// Aviso de conectividade na tela inicial.
+///
+/// O PhoneBridge sempre publicou `isReachable` / `pendingTransfers` / `lastError`,
+/// mas nenhuma view consumia — o usuário não tinha como saber que os dados
+/// estavam velhos ou que uma corrida ainda não subiu (AUDITORIA §D5).
+///
+/// Só aparece quando há algo a dizer: em estado normal, nada é renderizado.
+struct ConnectivityBanner: View {
+    let isReachable: Bool
+    let hasReceivedContext: Bool
+    let pendingTransfers: Int
+    /// Retorna false quando o pedido não pôde ser entregue.
+    let onRefresh: () -> Bool
+
+    @State private var isRefreshing = false
+
+    private var message: String? {
+        if pendingTransfers > 0 {
+            return "Corrida pendente de envio ao iPhone"
+        }
+        if !hasReceivedContext {
+            return "Aguardando dados do iPhone"
+        }
+        if !isReachable {
+            return "iPhone fora de alcance — dados podem estar desatualizados"
+        }
+        return nil
+    }
+
+    var body: some View {
+        if let message {
+            Button {
+                isRefreshing = onRefresh()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: pendingTransfers > 0
+                          ? "arrow.triangle.2.circlepath"
+                          : "iphone.slash")
+                        .font(.system(size: 9, weight: .semibold))
+                    Text(isRefreshing ? "Atualizando…" : message)
+                        .font(.system(size: 8, weight: .medium))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: 0)
+                }
+                .foregroundColor(.runEasyWarning)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.runEasyWarning.opacity(0.12))
+                .cornerRadius(8)
+            }
+            .buttonStyle(.plain)
+            .onChange(of: isReachable) { _, reachable in
+                if reachable { isRefreshing = false }
+            }
+        }
+    }
+}
+
+#Preview("Status de corrida") {
     VStack(spacing: 8) {
         StatusBanner(status: .running)
         StatusBanner(status: .paused)
+    }
+    .padding()
+    .background(Color.runEasyNavy)
+}
+
+#Preview("Conectividade") {
+    VStack(spacing: 8) {
+        ConnectivityBanner(isReachable: false, hasReceivedContext: true, pendingTransfers: 0, onRefresh: { false })
+        ConnectivityBanner(isReachable: true, hasReceivedContext: true, pendingTransfers: 1, onRefresh: { true })
+        ConnectivityBanner(isReachable: true, hasReceivedContext: false, pendingTransfers: 0, onRefresh: { true })
     }
     .padding()
     .background(Color.runEasyNavy)

@@ -2,6 +2,10 @@ import SwiftUI
 
 struct RunSummaryView: View {
     let run: CompletedRun
+    /// Transferências ainda na fila do WatchConnectivity. > 0 significa que a
+    /// corrida ainda não chegou ao iPhone — o envio é durável (transferUserInfo
+    /// tem retry automático), mas o usuário precisa saber que está pendente.
+    var pendingTransfers: Int = 0
     let onDone: () -> Void
 
     var body: some View {
@@ -17,6 +21,17 @@ struct RunSummaryView: View {
 
                 PrimaryActionButton("OK") {
                     onDone()
+                }
+
+                if pendingTransfers > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 9, weight: .semibold))
+                        Text("Enviando ao iPhone…")
+                            .font(.system(size: 9, weight: .medium))
+                    }
+                    .foregroundColor(.runEasyWarning)
+                    .multilineTextAlignment(.center)
                 }
 
                 Text("Detalhes completos no iPhone")

@@ -1,12 +1,19 @@
 import SwiftUI
 import WatchKit
 
-/// Tela de corrida ativa — matching Figma node 1074-1239 (running) e 1089-1282 (paused).
-/// Layout single-page:
+/// Tela de tracking do treino no Apple Watch.
+///
+/// Fluxo (o card da Home só ABRE esta tela — não inicia nada):
+///   .idle    → resumo do treino + botão de play grande. Nada é gravado ainda.
+///   .starting→ "Iniciando…" com watchdog de 12s no WorkoutManager
+///   .running → Figma 1074-1239 (rodando) / 1089-1282 (pausado)
+///   .failed  → erro legível com "Tentar novamente" e "Voltar"
+///
+/// Layout do estado rodando:
 ///   - Topo: label "Tempo" + timer grande (cyan quando rodando, amarelo quando pausado)
 ///   - Meio: Distância (esquerda) + Pace (direita) com ícones
 ///   - Base: botões circulares
-///       Rodando → 1 botão cyan (stop = pausar)
+///       Rodando → 1 botão cyan (pausar)
 ///       Pausado → 2 botões (resume outline + finish cyan)
 struct ActiveRunView: View {
     let workout: PlannedWorkout?
@@ -15,50 +22,171 @@ struct ActiveRunView: View {
 
     @StateObject private var workoutManager = WorkoutManager()
     @State private var showStopConfirmation = false
-    @State private var showPermissionError = false
 
     private var metrics: RunMetrics { workoutManager.metrics }
 
+    /// Só trava a saída enquanto há corrida em andamento — nos estados ocioso e
+    /// de erro o usuário precisa conseguir voltar (antes ficava preso em
+    /// "Preparando…" sem botão de voltar).
+    private var lockNavigation: Bool {
+        switch workoutManager.phase {
+        case .running, .starting: return true
+        default: return false
+        }
+    }
+
     var body: some View {
         Group {
-            if workoutManager.isRunning {
+            switch workoutManager.phase {
+            case .idle:
+                idleContent
+            case .starting:
+                startingContent
+            case .running:
                 runningContent
-            } else {
-                loadingContent
+            case .failed(let message):
+                failedContent(message)
+            case .finished:
+                startingContent
             }
         }
         .background(Color.runEasyNavy.ignoresSafeArea())
-        .navigationBarBackButtonHidden(true)
-        .task { await startIfNeeded() }
+        .navigationBarBackButtonHidden(lockNavigation)
+        .task { await workoutManager.prepare() }
         .alert("Finalizar corrida?", isPresented: $showStopConfirmation) {
             Button("Cancelar", role: .cancel) { }
             Button("Finalizar", role: .destructive) { finalize() }
         } message: {
             Text("Você não poderá retomar.")
         }
-        .alert("Permissão necessária", isPresented: $showPermissionError) {
-            Button("OK", role: .cancel) { onCancel() }
-        } message: {
-            Text(workoutManager.permissionError ?? "Permita acesso a Saúde e Localização nas configurações do Apple Watch.")
-        }
-        .onChange(of: workoutManager.permissionError) { _, newValue in
-            if newValue != nil { showPermissionError = true }
+    }
+
+    // MARK: - Idle (pronto para começar)
+
+    private var idleContent: some View {
+        ScrollView {
+            VStack(spacing: 8) {
+                Text(workout?.title ?? "Treino Livre")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.runEasyTextPrimary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+
+                if let workout {
+                    targetsRow(for: workout)
+                }
+
+                CircleIconButton(
+                    icon: "play.fill",
+                    fillColor: .runEasyCyan,
+                    iconColor: .runEasyNavy,
+                    size: 56
+                ) {
+                    start()
+                }
+                .padding(.top, 2)
+
+                Text("Toque para começar")
+                    .font(.system(size: 9))
+                    .foregroundColor(.runEasyText60)
+
+                if let permissionError = workoutManager.permissionError {
+                    Text(permissionError)
+                        .font(.system(size: 8))
+                        .foregroundColor(.runEasyWarning)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 2)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
         }
     }
 
-    // MARK: - States
+    private func targetsRow(for workout: PlannedWorkout) -> some View {
+        HStack(spacing: 10) {
+            if workout.distanceKm > 0 {
+                targetChip(label: "META", value: "\(formatKm(workout.distanceKm)) km")
+            }
+            if !workout.targetPace.isEmpty {
+                targetChip(label: "PACE", value: "\(workout.targetPace)/km")
+            }
+        }
+    }
 
-    private var loadingContent: some View {
+    private func targetChip(label: String, value: String) -> some View {
+        VStack(spacing: 1) {
+            Text(label)
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundColor(.runEasyText60)
+                .tracking(0.3)
+            Text(value)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundColor(.runEasyCyan)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(Color.runEasyCardBg)
+        .cornerRadius(8)
+    }
+
+    private func formatKm(_ km: Double) -> String {
+        if km == km.rounded() { return String(format: "%.0f", km) }
+        return String(format: "%.1f", km)
+    }
+
+    // MARK: - Starting
+
+    private var startingContent: some View {
         VStack(spacing: 8) {
             ProgressView()
                 .controlSize(.large)
                 .tint(.runEasyCyan)
-            Text("Preparando…")
+            Text("Iniciando…")
                 .font(.system(size: 11))
                 .foregroundColor(.runEasyText60)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
+    // MARK: - Failed
+
+    private func failedContent(_ message: String) -> some View {
+        ScrollView {
+            VStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.runEasyWarning)
+                    .padding(.top, 4)
+
+                Text(message)
+                    .font(.system(size: 10))
+                    .foregroundColor(.runEasyTextPrimary)
+                    .multilineTextAlignment(.center)
+
+                PrimaryActionButton("Tentar novamente", icon: "arrow.clockwise") {
+                    workoutManager.reset()
+                    start()
+                }
+
+                PressScaleButton(action: { onCancel() }) {
+                    Text("Voltar")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.runEasyText60)
+                        .frame(maxWidth: .infinity, minHeight: 30)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+        }
+    }
+
+    // MARK: - Running
 
     private var runningContent: some View {
         VStack(spacing: 6) {
@@ -71,8 +199,6 @@ struct ActiveRunView: View {
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-
-    // MARK: - Sections
 
     private var timerSection: some View {
         VStack(spacing: 1) {
@@ -93,8 +219,8 @@ struct ActiveRunView: View {
         HStack(spacing: 4) {
             metricBlock(
                 icon: "figure.run",
-                label: "Distance",
-                value: "\(MetricFormat.distance(metrics.distanceMeters)) Km"
+                label: "Distância",
+                value: "\(MetricFormat.distance(metrics.distanceMeters)) km"
             )
             metricBlock(
                 icon: "stopwatch.fill",
@@ -106,9 +232,8 @@ struct ActiveRunView: View {
 
     private var paceLabel: String {
         let s = metrics.currentPaceSecondsPerKm
-        guard s.isFinite, s > 0 else { return "— Min" }
-        let min = s / 60.0
-        return String(format: "%.1f Min", min)
+        guard s.isFinite, s > 0 else { return "--:--" }
+        return "\(MetricFormat.pace(s))/km"
     }
 
     private func metricBlock(icon: String, label: String, value: String) -> some View {
@@ -190,11 +315,9 @@ struct ActiveRunView: View {
 
     // MARK: - Actions
 
-    private func startIfNeeded() async {
-        guard !workoutManager.isRunning else { return }
-        await workoutManager.requestAuthorization()
-        guard workoutManager.hasPermission else { return }
-        await workoutManager.startWorkout(workoutId: workout?.id)
+    private func start() {
+        WKInterfaceDevice.current().play(.start)
+        Task { await workoutManager.startWorkout(workoutId: workout?.id) }
     }
 
     private func togglePause() {
@@ -256,8 +379,14 @@ private struct PressScaleStyleLocal: ButtonStyle {
     }
 }
 
-#Preview {
+#Preview("Treino do plano") {
     NavigationStack {
         ActiveRunView(workout: .mock, onFinish: { _ in }, onCancel: { })
+    }
+}
+
+#Preview("Treino livre") {
+    NavigationStack {
+        ActiveRunView(workout: nil, onFinish: { _ in }, onCancel: { })
     }
 }

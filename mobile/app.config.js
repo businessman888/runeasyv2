@@ -149,8 +149,12 @@ export default {
         NSHealthUpdateUsageDescription: "Precisamos salvar informações dos seus treinos realizados no RunEasy."
       }
     ],
+    // O target watchOS vive em `targets/runeasy-watch/`. O @bacons/apple-targets
+    // aponta INFOPLIST_FILE e CODE_SIGN_ENTITLEMENTS direto para os arquivos
+    // daquela pasta, então Info.plist e entitlements já entram na build sem
+    // nenhum plugin de cópia. (Havia um `./plugins/withAppleWatch` copiando
+    // para `ios/RunEasyWatch/` — caminho que o build nem consulta. Era no-op.)
     "@bacons/apple-targets",
-    "./plugins/withAppleWatch",
     [
       "./plugins/withGarminConnectIQ",
       { appUuid: "8338c29a-1ddf-40d4-892c-b1a3038a1cf5" }

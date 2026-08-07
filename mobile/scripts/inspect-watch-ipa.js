@@ -3,6 +3,9 @@ const path = require('path');
 const plist = require('plist');
 const bplistParser = require('bplist-parser');
 
+/** Sentinela para checagens de "a chave precisa existir, com qualquer valor". */
+const PRESENT = Symbol('present');
+
 const ROOT = 'C:/Users/marti/AppData/Local/Temp/runeasy-ipa-check/extracted/Payload/RunEasy.app';
 const WATCH_APP = path.join(ROOT, 'Watch/RunEasyWatch.app');
 
@@ -41,12 +44,31 @@ const checks = [
   ['CFBundleIdentifier', 'com.oytotec.runeasy.watchkitapp'],
   ['WKApplication', true],
   ['WKCompanionAppBundleIdentifier', 'com.oytotec.runeasy'],
+  // Obrigatório para usar HKWorkoutSession no watchOS. Sem isto a tela de
+  // tracking trava em "Iniciando…" — foi o bug do teste de 2026-08.
+  // Ver AUDITORIA-apple-watch.md §3.5.
+  ['WKBackgroundModes', ['workout-processing']],
+  // Sem estas strings o app CRASHA ao pedir autorização. Qualquer texto serve,
+  // então usamos PRESENT em vez de um valor exato.
+  ['NSHealthShareUsageDescription', PRESENT],
+  ['NSHealthUpdateUsageDescription', PRESENT],
+  ['NSLocationWhenInUseUsageDescription', PRESENT],
 ];
+let failures = 0;
 checks.forEach(([key, expected]) => {
   const got = watchInfo[key];
-  const ok = JSON.stringify(got) === JSON.stringify(expected);
-  console.log(`${ok ? 'PASS' : 'FAIL'} ${key}: got=${JSON.stringify(got)} expected=${JSON.stringify(expected)}`);
+  const ok =
+    expected === PRESENT
+      ? got !== undefined && got !== null && got !== ''
+      : JSON.stringify(got) === JSON.stringify(expected);
+  if (!ok) failures++;
+  const expectedLabel = expected === PRESENT ? '<presente>' : JSON.stringify(expected);
+  console.log(`${ok ? 'PASS' : 'FAIL'} ${key}: got=${JSON.stringify(got)} expected=${expectedLabel}`);
 });
+if (failures > 0) {
+  console.log(`\n${failures} verificação(ões) FALHARAM — não instale este IPA.`);
+  process.exitCode = 1;
+}
 
 console.log('\n=== Watch app file listing ===');
 fs.readdirSync(WATCH_APP).forEach(f => {

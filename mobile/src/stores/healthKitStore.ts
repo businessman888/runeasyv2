@@ -30,6 +30,13 @@ interface HealthKitState {
     isSyncing: boolean;
     lastSyncedAt: string | null;
     lastSyncedCount: number;
+    /**
+     * Por que a última tentativa de sync não rodou. `notConnected` é o caso
+     * silencioso que fazia treinos do app nativo do Apple Watch nunca
+     * aparecerem: `syncRecentIfConnected` retornava sem log, sem erro e sem UI
+     * quando o usuário nunca conectou o Apple Health. Ver AUDITORIA §P4.
+     */
+    lastSyncSkipReason: 'notConnected' | 'notAvailable' | null;
 
     // Errors
     error: string | null;
@@ -52,6 +59,7 @@ export const useHealthKitStore = create<HealthKitState>((set, get) => ({
     isSyncing: false,
     lastSyncedAt: null,
     lastSyncedCount: 0,
+    lastSyncSkipReason: null,
     error: null,
 
     /** One-shot bootstrap — call once from AppNavigator / HomeScreen mount. */
@@ -209,14 +217,30 @@ export const useHealthKitStore = create<HealthKitState>((set, get) => ({
     async syncRecentIfConnected(days = 7) {
         if (Platform.OS !== 'ios') return;
 
-        const { isConnected, isSyncing } = get();
-        if (!isConnected || isSyncing) return;
+        const { isConnected, isSyncing, isAvailable } = get();
+        if (isSyncing) return;
 
-        set({ isSyncing: true, error: null });
+        // Registrar o motivo em vez de sair calado: era exatamente esta saída
+        // silenciosa que fazia o usuário concluir que o app "não importa"
+        // treinos do Apple Watch, quando na verdade a sync nunca rodou.
+        if (!isConnected) {
+            const reason = isAvailable ? 'notConnected' : 'notAvailable';
+            if (get().lastSyncSkipReason !== reason) {
+                console.log(`[healthKitStore] sync pulada — ${reason}`);
+            }
+            set({ lastSyncSkipReason: reason });
+            return;
+        }
+
+        set({ isSyncing: true, error: null, lastSyncSkipReason: null });
 
         try {
             const activities = await HealthKitManager.fetchRecentRuns(days);
             const result = await HealthKitManager.syncToBackend(activities);
+
+            console.log(
+                `[healthKitStore] sync: ${activities.length} corrida(s) lida(s), ${result.inserted} nova(s)`,
+            );
 
             set({
                 isSyncing: false,

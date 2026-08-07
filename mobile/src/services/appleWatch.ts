@@ -82,6 +82,43 @@ export interface NextWorkoutForWatch {
     date: string;
 }
 
+/**
+ * Atividade avulsa do dia — corrida livre ou treino manual.
+ *
+ * NÃO é gated por Pro: corrida livre é gratuita em todos os planos, então
+ * espelha `HomeScreen.tsx` (aba Atividades), que lê de `rawWorkouts` sem gate.
+ */
+export interface ActivityForWatch {
+    id: string;
+    source: 'free' | 'manual';
+    title: string;
+    status: 'pending' | 'completed';
+    distanceKm: number;
+    /** Segundos. Null enquanto pendente. */
+    durationSeconds?: number | null;
+    /** "6:00" — já formatado pelo iPhone (o Watch só renderiza). */
+    pace?: string;
+}
+
+/**
+ * Resumo da última corrida concluída de um escopo.
+ *
+ * SEM `route_points` e SEM textos de feedback do Coach — ver limite de payload
+ * em `sendWatchContext`. O Watch não renderiza rota nem análise.
+ */
+export interface RunResultForWatch {
+    activityId: string;
+    scope: 'plan' | 'activity';
+    title: string;
+    /** "12/08" — já formatado pelo iPhone. */
+    dateLabel: string;
+    distanceKm: number;
+    durationSeconds: number;
+    /** "5:42" */
+    pace: string;
+    avgHeartRate?: number | null;
+}
+
 // ---------------------------------------------------------------------------
 // Envelope: o Watch envia { type, payload, sent_at } para podermos rotear
 // ---------------------------------------------------------------------------
@@ -92,14 +129,19 @@ interface WatchEnvelope {
     sent_at?: string;
 }
 
+/** Mensagens que o Watch envia sob demanda (só chegam com o iPhone alcançável). */
+export type WatchRequestType = 'request_refresh' | 'open_paywall';
+
 type CompletedRunListener = (run: CompletedRunFromWatch) => void;
 type ReachabilityListener = (reachable: boolean) => void;
 type PairedListener = (paired: boolean) => void;
+type RequestListener = (type: WatchRequestType) => void;
 
 const listeners = {
     completedRun: new Set<CompletedRunListener>(),
     reachability: new Set<ReachabilityListener>(),
     paired: new Set<PairedListener>(),
+    request: new Set<RequestListener>(),
 };
 
 let initialized = false;
@@ -130,6 +172,23 @@ export function initAppleWatch(): void {
         }
     });
 
+    // Pedidos sob demanda do Watch (sendMessage). Só chegam com o app do iPhone
+    // em execução — por isso o Watch sempre precisa de fallback quando não
+    // alcançável, nunca assumir entrega.
+    watchEvents.addListener('message', (message, replyHandler) => {
+        const type = (message as { type?: string })?.type;
+        if (type !== 'request_refresh' && type !== 'open_paywall') return;
+        listeners.request.forEach((cb) => {
+            try {
+                cb(type);
+            } catch (e) {
+                console.warn('[AppleWatch] request listener error:', e);
+            }
+        });
+        // Confirma o recebimento pro Watch poder distinguir "chegou" de "sumiu".
+        replyHandler?.({ ok: true });
+    });
+
     watchEvents.addListener('reachability', (reachable) => {
         listeners.reachability.forEach((cb) => cb(Boolean(reachable)));
     });
@@ -153,28 +212,84 @@ export function initAppleWatch(): void {
 export interface WatchContext {
     userName: string;
     avatarUrl?: string | null;
+    /**
+     * Tier do usuário. É um sinal de RENDERIZAÇÃO, não de filtragem.
+     *
+     * O gate de dados continua no iPhone (`useWatchSync` zera today/schedule
+     * para Free), então o Watch nunca recebe treino de plano que um Free não
+     * poderia ver. `isPro` só diz ao Watch **por que** não há treino — para ele
+     * escolher entre UpgradeProCard e RestDayCard, que antes eram
+     * indistinguíveis.
+     */
+    isPro: boolean;
     todayWorkout: TodayWorkoutForWatch | null;
     weekStats?: WeekStatsForWatch;
     nextWorkout?: NextWorkoutForWatch | null;
+    /** Atividades avulsas de hoje (livre/manual). Truncado em MAX_ACTIVITIES. */
+    todayActivities?: ActivityForWatch[];
+    /** Último resultado de treino do plano. Null para Free (gate no iPhone). */
+    latestPlanResult?: RunResultForWatch | null;
+    /** Último resultado de atividade avulsa. Nunca gated. */
+    latestActivityResult?: RunResultForWatch | null;
+}
+
+/**
+ * `updateApplicationContext` aceita no máximo 262.144 bytes. Estourar lança
+ * WCErrorCodePayloadTooLarge e o contexto INTEIRO é descartado — o Watch
+ * simplesmente para de atualizar, sem erro visível. Como o custo de um payload
+ * grande é silencioso, avisamos bem antes do teto real.
+ */
+const PAYLOAD_WARN_BYTES = 16_000;
+const PAYLOAD_MAX_BYTES = 200_000;
+const MAX_ACTIVITIES = 5;
+
+function byteLength(json: string): number {
+    // TextEncoder existe no Hermes; fallback conservador para ambientes sem ele.
+    if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(json).length;
+    return json.length * 2;
 }
 
 export function sendTodayWorkout(workout: TodayWorkoutForWatch | null, userName: string): void {
-    sendWatchContext({ todayWorkout: workout, userName });
+    sendWatchContext({ todayWorkout: workout, userName, isPro: false });
 }
 
 export function sendWatchContext(ctx: WatchContext): void {
     if (Platform.OS !== 'ios') return;
     try {
         const payloadType = ctx.todayWorkout ? 'today_workout' : 'today_rest';
-        updateApplicationContext({
+        const payload = {
             type: payloadType,
             payload: ctx.todayWorkout ? { ...ctx.todayWorkout } : null,
             user_name: ctx.userName,
             avatar_url: ctx.avatarUrl ?? null,
+            is_pro: ctx.isPro,
             week_stats: ctx.weekStats ?? null,
             next_workout: ctx.nextWorkout ?? null,
+            today_activities: (ctx.todayActivities ?? []).slice(0, MAX_ACTIVITIES),
+            latest_plan_result: ctx.latestPlanResult ?? null,
+            latest_activity_result: ctx.latestActivityResult ?? null,
             sent_at: new Date().toISOString(),
-        });
+        };
+
+        const size = byteLength(JSON.stringify(payload));
+        if (size > PAYLOAD_MAX_BYTES) {
+            // Melhor mandar o essencial do que perder o contexto inteiro.
+            console.error(
+                `[AppleWatch] payload de ${size}B excede o limite — enviando versão reduzida`,
+            );
+            updateApplicationContext({
+                ...payload,
+                today_activities: [],
+                latest_plan_result: null,
+                latest_activity_result: null,
+            });
+            return;
+        }
+        if (__DEV__ && size > PAYLOAD_WARN_BYTES) {
+            console.warn(`[AppleWatch] payload grande: ${size}B (teto 262144B)`);
+        }
+
+        updateApplicationContext(payload);
     } catch (e) {
         console.warn('[AppleWatch] sendWatchContext error:', e);
     }
@@ -197,6 +312,12 @@ export function onReachabilityChange(cb: ReachabilityListener): () => void {
 export function onPairedChange(cb: PairedListener): () => void {
     listeners.paired.add(cb);
     return () => listeners.paired.delete(cb);
+}
+
+/** Assina pedidos vindos do Watch (`request_refresh`, `open_paywall`). */
+export function onWatchRequest(cb: RequestListener): () => void {
+    listeners.request.add(cb);
+    return () => listeners.request.delete(cb);
 }
 
 // ---------------------------------------------------------------------------
