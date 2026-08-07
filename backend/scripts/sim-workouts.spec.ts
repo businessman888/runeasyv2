@@ -461,9 +461,10 @@ describe('buildStructuredRoute — a rota que a Fase 3 mede', () => {
    * onde um tiro começa e termina, este número sai errado e a validação no
    * harness estaria medindo o próprio harness.
    *
-   * A tolerância é de 3% porque a fronteira de sub-etapa só pode cair num ponto
-   * de GPS (~10 m): cada tiro herda até uma amostra de trote. É a mesma
-   * precisão declarada em `effort-replay.spec.ts`.
+   * A tolerância é de 1%: a fronteira é interpolada dentro da amostra que a
+   * cruza, então o recorte é exato a menos de arredondamento. Era 3% enquanto o
+   * replay atribuía amostras inteiras — e mesmo assim escondia uma deriva que
+   * só aparecia com trote por TEMPO.
    */
   it.each([
     [0.9, 'mais rápido que o alvo'],
@@ -481,8 +482,8 @@ describe('buildStructuredRoute — a rota que a Fase 3 mede', () => {
     expect(effort).not.toBeNull();
     const alvo = route!.targetQualityPace as number;
     const medido = effort!.paceSecPerKm / alvo;
-    expect(medido).toBeCloseTo(ratio, 1);
-    expect(Math.abs(medido - ratio)).toBeLessThan(0.03);
+    expect(medido).toBeCloseTo(ratio, 2);
+    expect(Math.abs(medido - ratio)).toBeLessThan(0.01);
   });
 
   it('só os TIROS mudam — aquecimento e trote ficam no alvo', () => {

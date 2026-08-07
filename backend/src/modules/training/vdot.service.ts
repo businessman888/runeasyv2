@@ -74,10 +74,12 @@ export const QUALITY_WINDOW_DAYS = 56;
  * Margem mínima (s/km) ALÉM da faixa prescrita para o treino contar como sinal.
  *
  * A faixa já embute ±8 s/km de tolerância de execução, então 15 aqui significa
- * ~23 s/km de distância do centro. O piso é ditado pelo instrumento: o replay
- * recorta as sub-etapas na granularidade do GPS (~10 m), o que custa até
- * ~10 s/km de contaminação de fronteira — medido em `effort-replay.spec.ts`.
- * Uma margem menor mediria o próprio erro de medição.
+ * ~23 s/km de distância do centro — meio minuto por 2 km de tiro. É uma decisão
+ * de PRODUTO, não um piso de instrumento: o replay interpola a fronteira e mede
+ * o pace dos tiros com erro de ~1 s/km (`effort-replay.spec.ts`), então o
+ * limiar poderia ser bem menor. Ele é alto porque mover o VDOT reescreve o pace
+ * de todo o resto do plano, e execução ligeiramente fora do alvo é normal —
+ * não é evidência de que a capacidade mudou.
  */
 export const MIN_DELTA_SEC_BEYOND_BAND = 15;
 

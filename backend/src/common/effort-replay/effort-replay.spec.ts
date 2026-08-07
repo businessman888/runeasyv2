@@ -1,9 +1,7 @@
 import {
   buildEffortSteps,
   replaySteps,
-  advanceReplayCursor,
   normalizePoints,
-  ReplayCursor,
   ReplayPoint,
   MIN_MOVING_SPEED_MPS,
 } from './effort-replay';
@@ -14,18 +12,19 @@ import {
 } from './quality-effort';
 
 // ── PARIDADE COM O MOBILE ────────────────────────────────────────────────────
-// A cópia backend só se justifica se produzir o MESMO resultado que o motor que
-// roda no aparelho. Importamos o fonte do mobile direto e comparamos — se
-// alguém mexer num lado e esquecer do outro, este arquivo quebra.
+// A EXPANSÃO da timeline é compartilhada com o motor do aparelho, e a cópia só
+// se justifica se produzir o mesmo resultado. Importamos o fonte do mobile
+// direto — se alguém mexer num lado e esquecer do outro, este arquivo quebra.
 //
 // O import atravessa a fronteira do monorepo de propósito: `segmentEngine.ts`
 // não tem dependência de runtime (só importa tipos), então nada de React Native
 // entra no processo do Jest.
-import {
-  buildSegSteps as mobileBuildSegSteps,
-  advanceCursor as mobileAdvanceCursor,
-  type SegCursor,
-} from '../../../../mobile/src/utils/segmentEngine';
+//
+// O CURSOR, por outro lado, é deliberadamente diferente — ver `replaySteps`. O
+// do device responde "em qual tiro o atleta está agora" e reancora na posição
+// real; o daqui recorta o percurso pela prescrição, com fronteira interpolada.
+// Forçá-los a ser iguais foi o que produziu a deriva que este arquivo trava.
+import { buildSegSteps as mobileBuildSegSteps } from '../../../../mobile/src/utils/segmentEngine';
 import { computeSmoothedPaceSeconds as mobileSmoothedPace } from '../../../../mobile/src/utils/livePace';
 
 /**
@@ -40,15 +39,20 @@ function straightLeg(
   stepM = 10,
 ): ReplayPoint[] {
   const points: ReplayPoint[] = [];
-  const n = Math.round(distanceM / stepM);
+  const n = Math.max(1, Math.round(distanceM / stepM));
   for (let i = 1; i <= n; i++) {
+    // A perna cobre EXATAMENTE `distanceM`: os pontos dividem a distância pedida
+    // em n partes, em vez de andar `stepM` fixos e passar do alvo. Com o passo
+    // fixo, uma perna de 196 m virava 200 m e o percurso deixava de casar com a
+    // prescrição — ruído de fixture que se parece com deriva do algoritmo.
+    const segM = (distanceM * i) / n;
     points.push({
       latitude: start.lat,
-      longitude: start.lng + i * stepM * degPerM,
+      longitude: start.lng + segM * degPerM,
       // ms exatos: `metros × (s/km)` já é milissegundos. Arredondar para o
       // segundo (como uma versão anterior fazia) injetava ~2 s/km de ruído de
       // fixture, que é a mesma ordem de grandeza da margem que move o VDOT.
-      timestamp: start.ts + Math.round(i * stepM * paceSecPerKm),
+      timestamp: start.ts + Math.round(segM * paceSecPerKm),
     });
   }
   return points;
@@ -150,42 +154,78 @@ describe('effort-replay — paridade com o motor do mobile', () => {
     );
   });
 
-  it('o cursor fecha as sub-etapas nos MESMOS pontos que o advanceCursor', () => {
-    const blocks = intervalado();
-    const steps = buildEffortSteps(blocks);
-    const mobileSteps = mobileBuildSegSteps(blocks as never);
+  /**
+   * A REGRESSÃO QUE ESTE TESTE PRENDE.
+   *
+   * Até 2026-08-07 o replay usava o cursor do device: atribuía a amostra
+   * INTEIRA ao bloco aberto e reancorava na posição real. Num intervalado com
+   * trote por TEMPO, o erro compunha — os tiros saíam a 285, 295, 308, 328,
+   * 349 e 400 s/km, tendo TODOS sido corridos a 275. Na última volta a janela
+   * do tiro estava sobre o trote.
+   *
+   * O sinal errava na direção mais perigosa para a Fase 3: um atleta que
+   * cumpriu o treino aparecia progressivamente mais lento.
+   */
+  it('NÃO deriva ao longo das repetições, nem com trote por tempo', () => {
+    const blocks = [
+      {
+        type: 'warmup',
+        zone: 'Z1',
+        distance_km: 2,
+        pace_min: 440,
+        pace_max: 480,
+      },
+      {
+        type: 'repeat',
+        reps: 6,
+        zone: 'Z4',
+        work: { distance_km: 0.4, pace_min: 268, pace_max: 282, zone: 'Z4' },
+        // Recuperação por TEMPO — o eixo misto que produzia a deriva.
+        recovery: {
+          duration_seconds: 90,
+          pace_min: 440,
+          pace_max: 480,
+          zone: 'Z1',
+        },
+      },
+      {
+        type: 'cooldown',
+        zone: 'Z1',
+        distance_km: 2,
+        pace_min: 440,
+        pace_max: 480,
+      },
+    ];
+    const TIRO = 275;
+    const TROTE = 460;
+
+    // 90 s de trote a 460 s/km cobrem 195,6 m — é assim que o percurso real
+    // fica, e é o que o replay tem de reencontrar.
+    const troteM = Math.round((90 / TROTE) * 1000);
     const points = chain([
-      { distanceM: 1000, paceSecPerKm: 460 },
-      ...Array.from({ length: 4 }, () => [
-        { distanceM: 500, paceSecPerKm: 348 },
-        { distanceM: 200, paceSecPerKm: 460 },
+      { distanceM: 2000, paceSecPerKm: TROTE },
+      ...Array.from({ length: 6 }, () => [
+        { distanceM: 400, paceSecPerKm: TIRO },
+        { distanceM: troteM, paceSecPerKm: TROTE },
       ]).flat(),
-      { distanceM: 1000, paceSecPerKm: 460 },
+      { distanceM: 2000, paceSecPerKm: TROTE },
     ]);
 
-    // Alimenta os DOIS cursores ponto a ponto, como a locationTask faz durante
-    // a corrida, e exige que estejam na mesma sub-etapa o tempo todo. Comparar
-    // só o estado final esconderia divergências no meio.
-    let mine: ReplayCursor = { idx: 0, startDist: 0, startTs: 0 };
-    let theirs: SegCursor = { idx: 0, startDist: 0, startTs: 0 };
-    let dist = 0;
-    const t0 = points[0].timestamp;
-    const trace: number[] = [];
+    const medidos = replaySteps(buildEffortSteps(blocks), points)
+      .filter((s) => s.kind === 'work')
+      .map((s) => s.actualPaceSecPerKm as number);
 
-    for (let i = 1; i < points.length; i++) {
-      dist += haversine(points[i - 1], points[i]);
-      const ts = points[i].timestamp - t0;
-      mine = advanceReplayCursor(steps, mine, dist, ts);
-      theirs = mobileAdvanceCursor(mobileSteps, theirs, dist, ts).cursor;
-      expect(mine).toEqual(theirs);
-      trace.push(mine.idx);
+    expect(medidos).toHaveLength(6);
+
+    // Cada tiro dentro de 3% do que foi corrido...
+    for (const p of medidos) {
+      expect(Math.abs(p - TIRO) / TIRO).toBeLessThan(0.03);
     }
-
-    // Todos os 8 sub-blocos do miolo (4 tiros + 4 trotes) foram fechados; a
-    // ÚLTIMA sub-etapa fica aberta porque a corrida termina em cima do alvo e
-    // sobra um punhado de metros — comportamento real, idêntico nos dois lados.
-    expect(mine.idx).toBeGreaterThanOrEqual(steps.length - 1);
-    expect(new Set(trace).size).toBeGreaterThanOrEqual(steps.length - 1);
+    // ...e — o que importa — o ÚLTIMO tão preciso quanto o primeiro. É a
+    // ausência de tendência que distingue ruído de deriva.
+    const erroPrimeiro = Math.abs(medidos[0] - TIRO);
+    const erroUltimo = Math.abs(medidos[5] - TIRO);
+    expect(erroUltimo).toBeLessThanOrEqual(erroPrimeiro + 3);
   });
 
   it('o pace medido bate com o do livePace no mesmo trecho', () => {
@@ -305,12 +345,11 @@ describe('quality-effort — o que vira sinal de VDOT', () => {
     expect(effort!.zones).toEqual(['Z4']);
 
     // ── PRECISÃO REAL DA MEDIÇÃO ─────────────────────────────────────────────
-    // A tolerância é 10 s/km, não 1, e isso é uma AFIRMAÇÃO sobre o método, não
-    // frouxidão: a fronteira de cada sub-etapa só pode cair num ponto de GPS
-    // (~10 m), então cada tiro herda até uma amostra de trote. É por isso que
-    // MIN_DELTA_SEC_BEYOND_BAND é 15 — a margem que move o VDOT tem de ficar
-    // acima do ruído do instrumento, senão a reestimativa mede o próprio erro.
-    expect(Math.abs(effort!.paceSecPerKm - 348)).toBeLessThanOrEqual(10);
+    // 2 s/km. A fronteira é INTERPOLADA dentro da amostra que a cruza, então o
+    // recorte não herda trote — o que sobra é só arredondamento. Enquanto o
+    // replay atribuía a amostra inteira, isto era ~10 s/km e a deriva compunha
+    // ao longo das repetições (ver o teste de não-deriva acima).
+    expect(Math.abs(effort!.paceSecPerKm - 348)).toBeLessThanOrEqual(2);
 
     // E o que importa de verdade: está MUITO mais perto do tiro do que do
     // treino inteiro (~430 com aquecimento, trote e volta à calma).

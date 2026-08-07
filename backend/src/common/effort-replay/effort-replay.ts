@@ -213,62 +213,32 @@ export function normalizePoints(raw: unknown): ReplayPoint[] {
   return points;
 }
 
-export interface ReplayCursor {
-  idx: number;
-  /** Metros acumulados no início da sub-etapa ativa. */
-  startDist: number;
-  /** Milissegundos desde a largada no início da sub-etapa ativa. */
-  startTs: number;
-}
-
 /**
- * Avança o cursor sobre as sub-etapas já concluídas.
+ * Caminha os pontos GPS e devolve cada sub-etapa com a distância e o tempo EM
+ * MOVIMENTO que couberam nela.
  *
- * Porte 1:1 de `segmentEngine.advanceCursor` do mobile — mesma assinatura,
- * mesma condição de fechamento, mesmo tratamento de alvo zerado. É ESTA função
- * que o teste de paridade compara ponto a ponto com a do device: enquanto as
- * duas concordarem, backend e aparelho recortam o treino nos mesmos limites.
- */
-export function advanceReplayCursor(
-  steps: EffortStep[],
-  cursor: ReplayCursor,
-  currentDist: number,
-  currentTs: number,
-): ReplayCursor {
-  let { idx, startDist, startTs } = cursor;
-
-  while (idx < steps.length) {
-    const step = steps[idx];
-    const progress =
-      step.metric === 'distance'
-        ? currentDist - startDist
-        : currentTs - startTs;
-    if (step.target <= 0 || progress >= step.target) {
-      idx += 1;
-      startDist = currentDist;
-      startTs = currentTs;
-      continue;
-    }
-    break;
-  }
-
-  return { idx, startDist, startTs };
-}
-
-/**
- * Caminha os pontos GPS avançando o cursor sobre as sub-etapas, e devolve cada
- * uma com a distância e o tempo EM MOVIMENTO que couberam nela.
+ * ── FRONTEIRA INTERPOLADA (e por que não é o cursor do device) ───────────────
+ *
+ * `segmentEngine.advanceCursor`, no aparelho, responde "em qual tiro o atleta
+ * está AGORA" — e para isso reancora na posição real dele a cada bloco que
+ * fecha. É o certo para o coach de áudio, e é impreciso de propósito.
+ *
+ * Medir exige outra coisa. Atribuindo a amostra inteira ao bloco que estava
+ * aberto, a fronteira só pode cair de 10 em 10 m, e o erro COMPÕE quando os
+ * eixos se misturam: um tiro por distância fecha ~10 m além do alvo, o trote
+ * por TEMPO seguinte roda 90 s a partir dali e termina ainda mais adiante, o
+ * tiro seguinte começa mais tarde ainda. Medido num 6×400 m com trote por
+ * tempo, os tiros saíam a 285, 295, 308, 328, 349 e 400 s/km — todos corridos
+ * a 275. Na última volta a janela do "tiro" estava inteiramente sobre o trote.
+ *
+ * A correção é dividir a amostra que CRUZA a fronteira, em vez de atribuí-la
+ * inteira: cada bloco recebe exatamente a fração de distância e de tempo que
+ * lhe cabe. A única aproximação que sobra é velocidade constante DENTRO de uma
+ * amostra — a ~10 m de espaçamento, irrelevante.
  *
  * Trechos parados (abaixo de `MIN_MOVING_SPEED_MPS`) continuam avançando o eixo
- * TEMPO — o cronômetro da prova não para — mas ficam fora do pace, exatamente
- * como no `livePace`.
- *
- * ── PRECISÃO ─────────────────────────────────────────────────────────────────
- *
- * O recorte tem a granularidade do GPS: os pontos vêm a cada ~10 m, então uma
- * fronteira de sub-etapa cai no meio de um trecho e ele inteiro é creditado à
- * sub-etapa que estava aberta. Num tiro de 500 m isso é ≤2% de contaminação —
- * ordem de grandeza abaixo da margem que move o VDOT, e por isso aceitável.
+ * TEMPO — o cronômetro da prova não para — mas ficam fora do pace, como no
+ * `livePace`.
  */
 export function replaySteps(
   steps: EffortStep[],
@@ -282,11 +252,12 @@ export function replaySteps(
   }));
   if (steps.length === 0 || points.length < 2) return out;
 
-  const t0 = points[0].timestamp;
-  let cursor: ReplayCursor = { idx: 0, startDist: 0, startTs: 0 };
-  let cumulativeM = 0;
+  let idx = 0;
+  // Quanto do alvo da sub-etapa ativa já foi consumido, no eixo dela.
+  let progressM = 0;
+  let progressMs = 0;
 
-  for (let i = 1; i < points.length && cursor.idx < steps.length; i++) {
+  for (let i = 1; i < points.length && idx < steps.length; i++) {
     const a = points[i - 1];
     const b = points[i];
     const dtMs = b.timestamp - a.timestamp;
@@ -295,15 +266,57 @@ export function replaySteps(
     const ddM = haversineMeters(a, b);
     const moving = ddM / (dtMs / 1000) >= MIN_MOVING_SPEED_MPS;
 
-    cumulativeM += ddM;
-    const elapsedMs = b.timestamp - t0;
+    // O que sobra desta amostra para distribuir entre as sub-etapas que ela
+    // atravessa. Uma amostra pode fechar mais de uma (alvos muito curtos).
+    let restM = ddM;
+    let restMs = dtMs;
 
-    if (moving) {
-      out[cursor.idx].actualKm += ddM / 1000;
-      out[cursor.idx].actualSeconds += dtMs / 1000;
+    while (idx < steps.length && (restM > 0 || restMs > 0)) {
+      const step = steps[idx];
+
+      // Alvo não-positivo: sub-etapa degenerada, fecha sem consumir nada.
+      if (step.target <= 0) {
+        idx += 1;
+        progressM = 0;
+        progressMs = 0;
+        continue;
+      }
+
+      const byDistance = step.metric === 'distance';
+      const falta = byDistance
+        ? step.target - progressM
+        : step.target - progressMs;
+      const disponivel = byDistance ? restM : restMs;
+
+      if (disponivel < falta) {
+        // Não fecha aqui: a amostra inteira pertence a esta sub-etapa.
+        if (moving) {
+          out[idx].actualKm += restM / 1000;
+          out[idx].actualSeconds += restMs / 1000;
+        }
+        progressM += restM;
+        progressMs += restMs;
+        break;
+      }
+
+      // Fecha DENTRO desta amostra: divide na proporção exata em que a
+      // fronteira cai. É isto que impede o erro de acumular de um bloco para
+      // o seguinte.
+      const frac = disponivel > 0 ? falta / disponivel : 0;
+      const fatiaM = restM * frac;
+      const fatiaMs = restMs * frac;
+
+      if (moving) {
+        out[idx].actualKm += fatiaM / 1000;
+        out[idx].actualSeconds += fatiaMs / 1000;
+      }
+
+      restM -= fatiaM;
+      restMs -= fatiaMs;
+      idx += 1;
+      progressM = 0;
+      progressMs = 0;
     }
-
-    cursor = advanceReplayCursor(steps, cursor, cumulativeM, elapsedMs);
   }
 
   for (const s of out) {
