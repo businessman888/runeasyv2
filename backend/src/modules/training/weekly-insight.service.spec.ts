@@ -156,7 +156,10 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
     sendPushNotification: jest.Mock;
   };
   let aiRouter: { isAvailable: boolean; call: jest.Mock };
-  let vdotService: { reestimateForPlan: jest.Mock };
+  let vdotService: {
+    reestimateForPlan: jest.Mock;
+    describeQualityEfforts: jest.Mock;
+  };
   let trainingService: { reanchorRemainingWorkoutsToToday: jest.Mock };
 
   const build = async (
@@ -172,7 +175,11 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
     aiRouter = { isAvailable: false, call: jest.fn() };
     // Fase 3: por padrão "nenhuma mudança de VDOT" — o caso da imensa maioria
     // das semanas. Testes que exercitam a reestimativa sobrescrevem.
-    vdotService = { reestimateForPlan: jest.fn().mockResolvedValue(null) };
+    vdotService = {
+      reestimateForPlan: jest.fn().mockResolvedValue(null),
+      // Sem tiro medido é o default honesto: a maioria das semanas é base pura.
+      describeQualityEfforts: jest.fn().mockResolvedValue([]),
+    };
     trainingService = {
       reanchorRemainingWorkoutsToToday: jest
         .fn()
@@ -784,6 +791,133 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
       const week2 = tables.plan_week_insights.find((r) => r.week_number === 2);
 
       expect(week2.ai_narrative).toBe('Semana firme, 10 km no plano.');
+    });
+
+    /**
+     * O prompt é a superfície onde os 3 escorregões do Haiku nasceram. Cada um
+     * virou um número errado (ou uma causa inventada) entregue ao corredor, e
+     * nenhum aparece nos testes do motor determinístico — só aqui.
+     */
+    describe('prompt', () => {
+      /** Último `userMessage` enviado ao modelo. */
+      const promptEnviado = (): string =>
+        aiRouter.call.mock.calls.at(-1)?.[0]?.userMessage ?? '';
+      const systemEnviado = (): string =>
+        aiRouter.call.mock.calls.at(-1)?.[0]?.systemPrompt?.[0]?.text ?? '';
+
+      const comIA = async () => {
+        await build(seedPlan());
+        freezeToday();
+        aiRouter.isAvailable = true;
+        aiRouter.call.mockResolvedValue({ data: { narrative: 'ok' } });
+      };
+
+      it('o ritmo de tiro vem do bloco de qualidade, não da média do treino', async () => {
+        await comIA();
+        vdotService.describeQualityEfforts.mockResolvedValue([
+          {
+            workoutId: 'w-q1',
+            dateStr: '2026-06-12',
+            zones: ['Z4'],
+            paceSecPerKm: 292,
+            prescribedPaceMin: 297,
+            prescribedPaceMax: 313,
+            prescribedKm: 4,
+            deltaSeconds: -5,
+          },
+        ]);
+
+        await service.checkForClosedPlanWeeks();
+        const prompt = promptEnviado();
+
+        // O alvo REAL da zona e o pace REAL dos tiros, lado a lado.
+        expect(prompt).toContain('TIROS DA SEMANA');
+        expect(prompt).toContain(
+          'zona Z4: alvo 4:57–5:13/km, você fez 4:52/km',
+        );
+        // E a média do treino inteiro deixa de se parecer com alvo de zona.
+        expect(prompt).not.toContain('zona principal Z');
+        expect(prompt).toContain(
+          'NUNCA escreva "os X/km da zona Y" com estes números',
+        );
+        expect(systemEnviado()).toContain(
+          'use SÓ os números do bloco TIROS DA SEMANA',
+        );
+      });
+
+      it('semana sem tiro medido diz isso em voz alta', async () => {
+        await comIA();
+
+        await service.checkForClosedPlanWeeks();
+
+        // A ausência tem de ser explícita: calada, o modelo vai buscar um
+        // substituto na média do treino inteiro — que foi o defeito original.
+        expect(promptEnviado()).toContain(
+          'TIROS DA SEMANA: nenhum treino de qualidade medido por GPS',
+        );
+      });
+
+      it('a mudança de nível chega com a causa real e sem espaço para inventar outra', async () => {
+        await comIA();
+        vdotService.reestimateForPlan.mockResolvedValue({
+          planId: 'plan-1',
+          vdotBefore: 40,
+          vdotAfter: 41,
+          direction: 'up',
+          reason: '3 treinos de qualidade consistentemente acima do prescrito',
+          sampleSize: 3,
+          avgDeltaSeconds: -22,
+          workoutsRepriced: 9,
+          briefingsInvalidated: 0,
+          evidence: [
+            {
+              workoutId: 'w-q1',
+              dateStr: '2026-06-12',
+              zones: ['Z4'],
+              paceSecPerKm: 292,
+              prescribedPaceMin: 297,
+              prescribedPaceMax: 313,
+              prescribedKm: 4,
+              deltaSeconds: -5,
+            },
+          ],
+        });
+
+        await service.checkForClosedPlanWeeks();
+        const prompt = promptEnviado();
+
+        expect(prompt).toContain('A CAUSA foram exatamente estes treinos');
+        expect(prompt).toContain(
+          '2026-06-12 (Z4): alvo 4:57–5:13/km, executado 4:52/km',
+        );
+        // O escorregão real: atribuir a subida aos easy corridos lentos, que
+        // são justamente os dados que a regra EXCLUI do sinal.
+        expect(prompt).toContain('treinos leves/easy');
+        expect(prompt).toContain('NÃO entram nessa conta');
+      });
+
+      it('km do plano nunca podem ser chamados de extra', async () => {
+        await comIA();
+
+        await service.checkForClosedPlanWeeks();
+
+        expect(promptEnviado()).toContain(
+          'NUNCA o descreva como "a mais", "extra"',
+        );
+        expect(systemEnviado()).toContain('Km do plano nunca são extras');
+      });
+
+      it('medição dos tiros que falha não derruba o insight', async () => {
+        await comIA();
+        vdotService.describeQualityEfforts.mockRejectedValue(
+          new Error('replay down'),
+        );
+
+        const generated = await service.checkForClosedPlanWeeks();
+
+        expect(generated).toHaveLength(2);
+        expect(promptEnviado()).toContain('TIROS DA SEMANA: nenhum treino');
+      });
     });
 
     it('IA que falha não derruba a geração — cai no fallback', async () => {

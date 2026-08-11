@@ -428,6 +428,66 @@ describe('VdotService — reestimativa', () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────────
+  /**
+   * A mesma medição, exposta para a narrativa.
+   *
+   * Existe porque o insight só tinha o pace ponderado do treino inteiro
+   * rotulado pela zona dominante, e o Haiku o apresentava como "o ritmo
+   * esperado na zona 4" — 35–50 s/km longe do alvo real. Narrativa e motor
+   * precisam citar o MESMO número.
+   */
+  describe('descrição dos tiros (para a narrativa)', () => {
+    it('devolve o pace real do tiro com o alvo da zona ao lado', async () => {
+      await build({ workPace: 265 });
+
+      const efforts = await service.describeQualityEfforts(
+        'plan-1',
+        '2026-06-08',
+        '2026-06-14',
+      );
+
+      expect(efforts).toHaveLength(1);
+      const [e] = efforts;
+      expect(e.dateStr).toBe('2026-06-12');
+      expect(e.zones).toEqual(['Z4']);
+      // O tiro, não a média do treino: 265 s/km, não os ~350 do treino inteiro.
+      expect(Math.abs(e.paceSecPerKm - 265)).toBeLessThanOrEqual(2);
+      expect(e.prescribedPaceMin).toBe(Z4_MIN);
+      expect(e.prescribedPaceMax).toBe(Z4_MAX);
+      expect(e.deltaSeconds).toBe(e.paceSecPerKm - Z4_MIN);
+    });
+
+    it('treino que JÁ votou continua aparecendo — a semana não muda porque o VDOT andou', async () => {
+      await build({ workPace: 265 });
+      expect(
+        await service.reestimateForPlan('user-1', 'plan-1', 6, TODAY),
+      ).not.toBeNull();
+
+      // A reestimativa marcou os 3 como votados; a narrativa da semana seguinte
+      // ainda precisa poder contar o que o corredor fez.
+      const efforts = await service.describeQualityEfforts(
+        'plan-1',
+        '2026-06-01',
+        TODAY,
+      );
+
+      expect(efforts).toHaveLength(MIN_QUALITY_EFFORTS);
+    });
+
+    it('semana sem tiro não inventa nada', async () => {
+      await build({ workPace: 265 });
+
+      const efforts = await service.describeQualityEfforts(
+        'plan-1',
+        '2026-06-15',
+        TODAY,
+      );
+
+      expect(efforts).toEqual([]);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
   describe('aplicação dos paces', () => {
     it('reescreve SÓ os treinos futuros, e só o pace', async () => {
       const tables = await build({ workPace: 265 });

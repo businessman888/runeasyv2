@@ -96,6 +96,46 @@ interface QualityCandidate {
   impliedVdot: number;
 }
 
+/**
+ * Um bloco de qualidade MEDIDO — o ritmo real dos tiros, com o alvo ao lado.
+ *
+ * Existe para que a narrativa fale dos tiros com o MESMO número que decidiu o
+ * VDOT. Antes disso, o insight só tinha o pace ponderado do treino inteiro
+ * (aquecimento + tiros + volta à calma) rotulado pela zona dominante, e o Haiku
+ * o apresentava como "o ritmo esperado na zona 4" — 35–50 s/km longe do alvo
+ * real da zona. O erro não era de estilo: era um número errado entregue ao
+ * corredor.
+ */
+export interface MeasuredQualityEffort {
+  workoutId: string;
+  dateStr: string;
+  /** Zonas do bloco de qualidade (subconjunto de Z3/Z4/Z5). */
+  zones: string[];
+  /** Pace REAL dos tiros, reconstruído do GPS (s/km). */
+  paceSecPerKm: number;
+  /** Alvo prescrito do bloco (s/km) — a faixa da zona, não a média do treino. */
+  prescribedPaceMin: number;
+  prescribedPaceMax: number;
+  /** Distância de qualidade prescrita (km). */
+  prescribedKm: number;
+  /** Distância até a FAIXA: negativo = mais rápido, 0 = dentro do alvo. */
+  deltaSeconds: number;
+}
+
+/** Achata o candidato interno na forma que sai do service. */
+function toMeasured(c: QualityCandidate): MeasuredQualityEffort {
+  return {
+    workoutId: c.workoutId,
+    dateStr: c.dateStr,
+    zones: c.effort.zones,
+    paceSecPerKm: c.effort.paceSecPerKm,
+    prescribedPaceMin: c.effort.prescribedPaceMin,
+    prescribedPaceMax: c.effort.prescribedPaceMax,
+    prescribedKm: c.effort.prescribedKm,
+    deltaSeconds: c.deltaSeconds,
+  };
+}
+
 export interface VdotChange {
   planId: string;
   vdotBefore: number;
@@ -106,6 +146,14 @@ export interface VdotChange {
   avgDeltaSeconds: number;
   workoutsRepriced: number;
   briefingsInvalidated: number;
+  /**
+   * Os treinos que SUSTENTARAM a mudança — a causa real, para a narrativa.
+   *
+   * Sem isto o Haiku recebia só o veredito e inventava um porquê: numa validação
+   * ele atribuiu a subida aos easy corridos lentos, que são exatamente os dados
+   * que a regra EXCLUI do sinal.
+   */
+  evidence: MeasuredQualityEffort[];
 }
 
 interface WorkoutRow {
@@ -268,7 +316,24 @@ export class VdotService {
       avgDeltaSeconds: avgDelta,
       workoutsRepriced: repriced.count,
       briefingsInvalidated: briefings,
+      evidence: sample.map(toMeasured),
     };
+  }
+
+  /**
+   * Os blocos de qualidade medidos num intervalo — sem decidir nada.
+   *
+   * É a mesma medição que alimenta a reestimativa, exposta para a narrativa
+   * poder citar o ritmo dos tiros. Não filtra por "já votou": um treino que já
+   * moveu o VDOT continua sendo o que o corredor fez naquela semana.
+   */
+  async describeQualityEfforts(
+    planId: string,
+    fromDate: string,
+    toDate: string,
+  ): Promise<MeasuredQualityEffort[]> {
+    const efforts = await this.measureQualityEfforts(planId, fromDate, toDate);
+    return efforts.map(toMeasured);
   }
 
   /**
@@ -363,20 +428,48 @@ export class VdotService {
     votedIds: Set<string>,
     todayStr: string,
   ): Promise<QualityCandidate[]> {
-    const client = this.supabaseService.getClient();
     const since = this.shiftDays(todayStr, -QUALITY_WINDOW_DAYS);
+    const candidates = await this.measureQualityEfforts(
+      planId,
+      since,
+      todayStr,
+      votedIds,
+    );
+
+    this.logger.log(
+      `[VDOT] Plano ${planId}: ${candidates.length} treino(s) de qualidade ` +
+        `elegíveis na janela de ${QUALITY_WINDOW_DAYS}d (VDOT atual ${vdotCurrent})`,
+    );
+    return candidates;
+  }
+
+  /**
+   * A MEDIÇÃO, sem regra nenhuma em cima: reconstrói o pace dos tiros de cada
+   * treino do intervalo a partir dos pontos de GPS.
+   *
+   * Compartilhada entre a reestimativa (que decide) e a narrativa (que só
+   * conta). Se cada uma medisse do seu jeito, o texto poderia citar um ritmo de
+   * tiro diferente do que moveu o plano.
+   */
+  private async measureQualityEfforts(
+    planId: string,
+    fromDate: string,
+    toDate: string,
+    excludeIds?: Set<string>,
+  ): Promise<QualityCandidate[]> {
+    const client = this.supabaseService.getClient();
 
     const { data: workouts } = await client
       .from('workouts')
       .select('id, scheduled_date, instructions_json')
       .eq('plan_id', planId)
       .eq('status', 'completed')
-      .gte('scheduled_date', since)
-      .lte('scheduled_date', todayStr)
+      .gte('scheduled_date', fromDate)
+      .lte('scheduled_date', toDate)
       .order('scheduled_date', { ascending: false });
 
     const rows = ((workouts ?? []) as WorkoutRow[]).filter(
-      (w) => !votedIds.has(w.id),
+      (w) => !excludeIds?.has(w.id),
     );
     if (rows.length === 0) return [];
 
@@ -419,10 +512,6 @@ export class VdotService {
       });
     }
 
-    this.logger.log(
-      `[VDOT] Plano ${planId}: ${candidates.length} treino(s) de qualidade ` +
-        `elegíveis na janela de ${QUALITY_WINDOW_DAYS}d (VDOT atual ${vdotCurrent})`,
-    );
     return candidates;
   }
 

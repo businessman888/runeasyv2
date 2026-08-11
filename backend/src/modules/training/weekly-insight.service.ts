@@ -17,7 +17,7 @@ import {
   EASY_PACE_TOLERANCE_SEC,
 } from './helpers/weekly-adjustment';
 import { toSaoPauloDateStr } from './wellness/helpers/streak.helper';
-import { VdotService, VdotChange } from './vdot.service';
+import { VdotService, VdotChange, MeasuredQualityEffort } from './vdot.service';
 import {
   buildMetric,
   sparkline7,
@@ -490,11 +490,28 @@ export class WeeklyInsightService {
         );
       }
 
+      // O ritmo REAL dos tiros da semana — a única fonte honesta para a
+      // narrativa falar de zona. Não filtra por "já votou": um treino que
+      // acabou de mover o VDOT continua sendo o que o corredor fez na semana.
+      let qualityEfforts: MeasuredQualityEffort[] = [];
+      try {
+        qualityEfforts = await this.vdotService.describeQualityEfforts(
+          planId,
+          week.startStr,
+          week.endStr,
+        );
+      } catch (error) {
+        this.logger.warn(
+          `[WeeklyInsight] Medição dos tiros falhou p/ plano ${planId}: ${String(error)}`,
+        );
+      }
+
       const narrative = await this.generateNarrative(
         userId,
         metrics,
         adjustment,
         vdotChange,
+        qualityEfforts,
       );
 
       const isZeroWeek =
@@ -1108,6 +1125,7 @@ export class WeeklyInsightService {
     metrics: PlanWeekMetrics,
     adjustment: SuggestedAdjustment,
     vdotChange: VdotChange | null = null,
+    qualityEfforts: MeasuredQualityEffort[] = [],
   ): Promise<string> {
     if (!this.aiRouter.isAvailable)
       return this.fallbackNarrative(metrics, adjustment, vdotChange);
@@ -1120,12 +1138,14 @@ REGRAS INVIOLÁVEIS:
 - 2 a 3 frases, segunda pessoa, português do Brasil, tom direto e sem bajulação.
 - Se houver AJUSTE DE RITMO, mencione-o em UMA frase como algo JÁ FEITO ("ajustei", não "vou ajustar") — os paces dos próximos treinos já foram reescritos.
 - NÃO invente relações de causa e efeito entre os números. Correr mais devagar que o alvo nunca indica evolução: descreva o que aconteceu, e use a explicação do ajuste que você recebeu pronta.
+- Ao falar de RITMO DE TIRO ou de ALVO DE ZONA, use SÓ os números do bloco TIROS DA SEMANA. Nenhum outro número desta mensagem é ritmo de tiro ou alvo de zona.
+- "Extra", "a mais", "além do plano" só valem para o que estiver explicitamente rotulado como FORA DO PLANO. Km do plano nunca são extras.
 - Responda APENAS com JSON válido: {"narrative": "..."}`;
 
     const zonesLine = Object.entries(metrics.intensityAdherence)
       .map(
         ([z, b]) =>
-          `zona principal ${z}: ${b.n} treino(s), prescrito ${fmtPace(b.avgExpectedSec)}, executado ${fmtPace(b.avgActualSec)} (${b.avgDeltaSec > 0 ? '+' : ''}${b.avgDeltaSec}s/km)`,
+          `treinos cuja zona principal é ${z} (${b.n}): média do treino inteiro — prescrito ${fmtPace(b.avgExpectedSec)}, executado ${fmtPace(b.avgActualSec)} (${b.avgDeltaSec > 0 ? '+' : ''}${b.avgDeltaSec}s/km)`,
       )
       .join('\n  ');
 
@@ -1141,9 +1161,11 @@ TOTAL CORRIDO NO PERÍODO: ${metrics.totalDistanceKm} km em ${metrics.totalRunsI
 - deste total, ${metrics.freeRunDistanceKm} km foram FORA do plano
 - o total JÁ INCLUI os ${metrics.completedDistanceKm} km do plano; NUNCA o descreva como "a mais", "extra" ou "além do prescrito"
 
+${qualityEffortsBlock(qualityEfforts)}
 RITMO MÉDIO DO TREINO INTEIRO, agrupado pela zona principal de cada treino:
   ${zonesLine || '(sem treino com pace prescrito e executado)'}
-- Estes números incluem aquecimento, trote de recuperação e volta à calma. NÃO são o ritmo dos tiros nem o alvo da zona — nunca os apresente como tal.
+- Cada número aqui é a média do treino INTEIRO: aquecimento + tiros + trote de recuperação + volta à calma, tudo junto. A zona só diz qual era o treino, não o ritmo dele.
+- Por isso são MUITO mais lentos que o alvo da zona. NUNCA escreva "os X/km da zona Y" com estes números, nem os chame de alvo, prescrição de zona ou ritmo de tiro.
 
 RECOMENDAÇÃO JÁ DECIDIDA: ${ADJUSTMENT_LABELS[adjustment.code]} (motivo: ${adjustment.reason})
 ${vdotChangeBlock(vdotChange)}
@@ -1561,6 +1583,42 @@ Escreva a narrativa explicando o que aconteceu na semana e por que essa é a rec
  * decide nada, só encontra as palavras. É a mesma disciplina do reajuste
  * semanal: o cálculo é do backend, a voz é do Haiku.
  */
+/**
+ * O ritmo REAL dos tiros — o único número desta mensagem que descreve uma zona.
+ *
+ * Sem este bloco o prompt só tinha o pace ponderado do treino inteiro rotulado
+ * pela zona dominante, e o Haiku o servia como "o ritmo esperado na zona 4",
+ * errando o alvo real em 35–50 s/km. Quando a semana não tem tiro medido, o
+ * bloco diz isso em voz alta: a ausência precisa ser explícita, senão o modelo
+ * vai buscar um substituto no bloco de baixo — que foi exatamente o defeito.
+ */
+function qualityEffortsBlock(efforts: MeasuredQualityEffort[]): string {
+  if (efforts.length === 0) {
+    return `TIROS DA SEMANA: nenhum treino de qualidade medido por GPS nesta semana.
+- Não existe ritmo de tiro nem alvo de zona para citar. Não use nenhum outro número no lugar.
+`;
+  }
+
+  const linhas = efforts
+    .map((e) => {
+      const zona = e.zones.join('/');
+      const alvo = fmtBand(e.prescribedPaceMin, e.prescribedPaceMax);
+      const veredito =
+        e.deltaSeconds === 0
+          ? 'dentro do alvo'
+          : e.deltaSeconds < 0
+            ? `${Math.abs(e.deltaSeconds)}s/km MAIS RÁPIDO que o alvo`
+            : `${e.deltaSeconds}s/km mais lento que o alvo`;
+      return `${e.dateStr}, zona ${zona}: alvo ${alvo}, você fez ${fmtPace(e.paceSecPerKm)} (${veredito})`;
+    })
+    .join('\n  ');
+
+  return `TIROS DA SEMANA (só o bloco de qualidade, reconstruído do GPS — SEM aquecimento e SEM volta à calma):
+  ${linhas}
+- ESTE é o ritmo dos tiros e ESTE é o alvo da zona. É o único lugar da mensagem de onde tirar qualquer um dos dois.
+`;
+}
+
 function vdotChangeBlock(change: VdotChange | null): string {
   if (!change) return '';
   const verbo = change.direction === 'up' ? 'subiu' : 'baixou';
@@ -1568,11 +1626,20 @@ function vdotChangeBlock(change: VdotChange | null): string {
     change.direction === 'up'
       ? 'os paces dos próximos treinos ficaram um pouco mais rápidos'
       : 'os paces dos próximos treinos ficaram um pouco mais leves';
+  const provas = change.evidence
+    .map(
+      (e) =>
+        `  - ${e.dateStr} (${e.zones.join('/')}): alvo ${fmtBand(e.prescribedPaceMin, e.prescribedPaceMax)}, executado ${fmtPace(e.paceSecPerKm)}`,
+    )
+    .join('\n');
   return `
 AJUSTE DE RITMO JÁ APLICADO:
 - Seu nível estimado ${verbo} (${change.reason}).
+- A CAUSA foram exatamente estes treinos de qualidade, e nada mais:
+${provas || '  - (sem detalhe por treino)'}
 - ${change.workoutsRepriced} treino(s) futuro(s) já foram reajustados: ${efeito}.
 - NÃO cite "VDOT" nem o número — fale de evolução/ajuste de ritmo, em linguagem de corredor.
+- É PROIBIDO atribuir o ajuste a qualquer outra coisa: treinos leves/easy, volume total, frequência, regularidade ou constância NÃO entram nessa conta. Se citar o motivo, cite os treinos de qualidade acima.
 `;
 }
 
@@ -1613,7 +1680,18 @@ function pct(numerator: number, denominator: number): number {
 
 function fmtPace(seconds: number): string {
   if (!seconds || seconds <= 0) return '—';
+  return `${fmtMinSec(seconds)}/km`;
+}
+
+/** `4:57` — sem unidade, para compor faixas sem repetir "/km" duas vezes. */
+function fmtMinSec(seconds: number): string {
+  if (!seconds || seconds <= 0) return '—';
   const m = Math.floor(seconds / 60);
   const s = Math.round(seconds % 60);
-  return `${m}:${String(s).padStart(2, '0')}/km`;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/** A faixa prescrita de um bloco: `4:57–5:13/km`. */
+function fmtBand(min: number, max: number): string {
+  return `${fmtMinSec(min)}–${fmtMinSec(max)}/km`;
 }
