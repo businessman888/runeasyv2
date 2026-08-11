@@ -645,6 +645,107 @@ describe('WeeklyInsightService — métricas da semana', () => {
       });
     });
 
+    /**
+     * A REGRESSÃO QUE ESTE TESTE PRENDE.
+     *
+     * Até 2026-08-10 o "esperado" era a borda RÁPIDA da faixa (`pace_min`).
+     * Quem executava no MEIO do prescrito — que é executar certo — lia na
+     * narrativa que ficou lento por metade da largura da banda. Com a Z1 em
+     * 393–434, o harness rodando exatamente no alvo produzia "20 segundos mais
+     * lento que o planejado".
+     */
+    it('o esperado é o CENTRO da faixa, não a borda rápida', async () => {
+      await build({ activities: [] });
+      const banda = () => [
+        {
+          type: 'main',
+          zone: 'Z1',
+          distance_km: 6,
+          pace_min: 393,
+          pace_max: 434,
+        },
+      ];
+
+      expect(
+        service.expectedPaceForWorkout({ instructions_json: banda() } as never),
+      ).toBe(414); // (393 + 434) / 2 = 413,5
+
+      expect(
+        service.expectedPaceRangeForWorkout({
+          instructions_json: banda(),
+        } as never),
+      ).toEqual({ min: 393, max: 434, center: 414 });
+    });
+
+    it('sem pace_max a faixa colapsa num ponto — plano legado intocado', async () => {
+      // Planos anteriores gravavam só `pace_min`. O comportamento antigo tem de
+      // sobreviver, senão a métrica de todo insight já gerado mudaria de sentido.
+      await build({ activities: [] });
+      expect(
+        service.expectedPaceRangeForWorkout({
+          instructions_json: [
+            { type: 'main', zone: 'Z1', distance_km: 5, pace_min: 400 },
+          ],
+        } as never),
+      ).toEqual({ min: 400, max: 400, center: 400 });
+    });
+
+    /**
+     * A OUTRA METADE DA MESMA CORREÇÃO.
+     *
+     * O que se EXIBE virou o centro, mas o que DISPARA `aliviar_ritmo` continua
+     * sendo a borda rápida. Se o cue passasse a medir contra o centro, acusaria
+     * de "rápido demais" quem correu dentro da própria faixa pedida — e a
+     * mudança feita para a narrativa teria estragado a regra da Fase 2.
+     */
+    it('correr no CENTRO da faixa NÃO conta como rápido demais', async () => {
+      await build({ activities: [] });
+      const comFaixa = [
+        {
+          type: 'main',
+          zone: 'Z1',
+          distance_km: 6,
+          pace_min: 393,
+          pace_max: 434,
+        },
+      ];
+
+      const noAlvo = await service.buildPlanWeekMetrics(
+        'user-1',
+        WEEK,
+        null,
+        [
+          planWorkout({
+            status: 'completed',
+            distance_run: 6,
+            pace_seconds_per_km: 414, // o centro exato
+            instructions_json: comFaixa,
+          }),
+        ],
+        3,
+      );
+      expect(noAlvo.easyRunsMeasured).toBe(1);
+      expect(noAlvo.easyRunsTooFast).toBe(0);
+      expect(noAlvo.intensityAdherence.Z1.avgExpectedSec).toBe(414);
+      expect(noAlvo.intensityAdherence.Z1.avgDeltaSec).toBe(0);
+
+      const rapidoDemais = await service.buildPlanWeekMetrics(
+        'user-1',
+        WEEK,
+        null,
+        [
+          planWorkout({
+            status: 'completed',
+            distance_run: 6,
+            pace_seconds_per_km: 375, // 18 s/km ALÉM da borda rápida (393)
+            instructions_json: comFaixa,
+          }),
+        ],
+        3,
+      );
+      expect(rapidoDemais.easyRunsTooFast).toBe(1);
+    });
+
     it('reps ausente conta como 1 — mesma convenção do motor que executa', async () => {
       await build({ activities: [] });
 

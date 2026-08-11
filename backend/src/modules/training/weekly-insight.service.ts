@@ -935,37 +935,63 @@ export class WeeklyInsightService {
    * isso, as recuperações e os aquecimentos por tempo — que o prompt PREFERE —
    * sumiriam do denominador, e o esperado ficaria mais rápido que a corrida que
    * ele descreve, justo na direção que faz o atleta parecer melhor do que foi.
+   *
+   * ── CENTRO DA FAIXA, NÃO A BORDA RÁPIDA ───────────────────────────────────
+   *
+   * Devolve a faixa inteira porque as duas pontas têm usos diferentes, e
+   * confundi-las produziu um erro visível para o usuário:
+   *
+   *   `center` — o que "esperado" significa para quem lê. Até 2026-08-10 a
+   *              narrativa usava `min`, a borda RÁPIDA, e quem executava no
+   *              meio do prescrito lia que ficou lento por metade da largura
+   *              da banda. Com a Z1 em 393–434, isso eram 20 s/km de atraso
+   *              relatados a um atleta que correu exatamente no alvo.
+   *   `min`    — o gatilho de `aliviar_ritmo`. "Rápido demais" é passar da
+   *              borda rápida com folga; medir contra o centro faria o cue
+   *              disparar dentro da própria faixa prescrita.
    */
-  expectedPaceForWorkout(w: WorkoutRow): number | null {
+  expectedPaceRangeForWorkout(
+    w: WorkoutRow,
+  ): { min: number; max: number; center: number } | null {
     const segments = Array.isArray(w.instructions_json)
       ? (w.instructions_json as Array<Record<string, unknown>>)
       : [];
     if (segments.length === 0) return null;
 
-    let seconds = 0;
     let distance = 0;
+    let secondsMin = 0;
+    let secondsMax = 0;
 
     /** Acumula um sub-bloco `times` vezes. Sem pace utilizável, não entra. */
     const addEffort = (raw: unknown, times = 1): void => {
       if (!raw || typeof raw !== 'object') return;
       const effort = raw as Record<string, unknown>;
 
-      const paceSec = paceValueToSecondsPerKm(
+      const min = paceValueToSecondsPerKm(
         effort.pace_min as number | undefined,
       );
-      if (paceSec == null || paceSec <= 0) return;
+      if (min == null || min <= 0) return;
+      // Plano legado (e alguns walk/run) não trazem `pace_max`: a faixa colapsa
+      // num ponto, e center === min. É o comportamento anterior, preservado.
+      const max =
+        paceValueToSecondsPerKm(effort.pace_max as number | undefined) ?? min;
 
       const km = num(effort.distance_km as number | string | null);
       if (km > 0) {
         distance += km * times;
-        seconds += km * paceSec * times;
+        secondsMin += km * min * times;
+        secondsMax += km * max * times;
         return;
       }
 
       const sec = num(effort.duration_seconds as number | string | null);
       if (sec > 0) {
-        distance += (sec / paceSec) * times;
-        seconds += sec * times;
+        // A distância de um bloco por TEMPO depende do pace corrido; usar o
+        // centro aqui mantém o peso do bloco estável entre as duas pontas.
+        const km2 = sec / ((min + max) / 2);
+        distance += km2 * times;
+        secondsMin += km2 * min * times;
+        secondsMax += km2 * max * times;
       }
     };
 
@@ -983,7 +1009,18 @@ export class WeeklyInsightService {
     }
 
     if (distance <= 0) return null;
-    return Math.round(seconds / distance);
+    const min = Math.round(secondsMin / distance);
+    const max = Math.round(secondsMax / distance);
+    return { min, max, center: Math.round((min + max) / 2) };
+  }
+
+  /**
+   * O pace que a prescrição COMUNICA — o centro da faixa ponderada.
+   *
+   * É este número que vai para a narrativa e para `expected_pace_seconds`.
+   */
+  expectedPaceForWorkout(w: WorkoutRow): number | null {
+    return this.expectedPaceRangeForWorkout(w)?.center ?? null;
   }
 
   /** Pace esperado médio da semana (ponderado pelos treinos concluídos). */
@@ -1018,15 +1055,19 @@ export class WeeklyInsightService {
       const zone = this.zoneOf(w);
       if (!zone) continue;
 
-      const expected = this.expectedPaceForWorkout(w);
+      const band = this.expectedPaceRangeForWorkout(w);
       const actual = num(w.pace_seconds_per_km);
-      if (expected == null || actual <= 0) continue;
+      if (band == null || actual <= 0) continue;
 
       if (!acc[zone]) acc[zone] = { expected: [], actual: [], faster: 0 };
-      acc[zone].expected.push(expected);
+      // O que se EXIBE é o centro: é o pace que a prescrição comunica.
+      acc[zone].expected.push(band.center);
       acc[zone].actual.push(actual);
 
-      const tooFast = actual <= expected - EASY_PACE_TOLERANCE_SEC;
+      // O que DISPARA o cue é a borda rápida. "Rápido demais" significa passar
+      // do limite superior da prescrição com folga — medir contra o centro
+      // acusaria de erro quem correu dentro da própria faixa pedida.
+      const tooFast = actual <= band.min - EASY_PACE_TOLERANCE_SEC;
       if (tooFast) acc[zone].faster += 1;
 
       if (EASY_ZONES.has(zone)) {
@@ -1078,12 +1119,13 @@ REGRAS INVIOLÁVEIS:
 - Cite pelo menos dois números reais que recebeu.
 - 2 a 3 frases, segunda pessoa, português do Brasil, tom direto e sem bajulação.
 - Se houver AJUSTE DE RITMO, mencione-o em UMA frase como algo JÁ FEITO ("ajustei", não "vou ajustar") — os paces dos próximos treinos já foram reescritos.
+- NÃO invente relações de causa e efeito entre os números. Correr mais devagar que o alvo nunca indica evolução: descreva o que aconteceu, e use a explicação do ajuste que você recebeu pronta.
 - Responda APENAS com JSON válido: {"narrative": "..."}`;
 
     const zonesLine = Object.entries(metrics.intensityAdherence)
       .map(
         ([z, b]) =>
-          `${z}: ${b.n} treino(s), prescrito ${fmtPace(b.avgExpectedSec)}, executado ${fmtPace(b.avgActualSec)} (${b.avgDeltaSec > 0 ? '+' : ''}${b.avgDeltaSec}s/km)`,
+          `zona principal ${z}: ${b.n} treino(s), prescrito ${fmtPace(b.avgExpectedSec)}, executado ${fmtPace(b.avgActualSec)} (${b.avgDeltaSec > 0 ? '+' : ''}${b.avgDeltaSec}s/km)`,
       )
       .join('\n  ');
 
@@ -1095,11 +1137,13 @@ ADERÊNCIA:
 - Distância do plano: ${metrics.completedDistanceKm} km de ${metrics.plannedDistanceKm} km prescritos
 - Nos treinos que fez, cumpriu ${metrics.executionRatioPercent}% da distância prescrita
 
-TOTAL CORRIDO (inclui corrida livre, fora do plano):
-- ${metrics.totalDistanceKm} km em ${metrics.totalRunsInPeriod} corrida(s); ${metrics.freeRunDistanceKm} km fora do plano
+TOTAL CORRIDO NO PERÍODO: ${metrics.totalDistanceKm} km em ${metrics.totalRunsInPeriod} corrida(s)
+- deste total, ${metrics.freeRunDistanceKm} km foram FORA do plano
+- o total JÁ INCLUI os ${metrics.completedDistanceKm} km do plano; NUNCA o descreva como "a mais", "extra" ou "além do prescrito"
 
-RITMO POR ZONA:
+RITMO MÉDIO DO TREINO INTEIRO, agrupado pela zona principal de cada treino:
   ${zonesLine || '(sem treino com pace prescrito e executado)'}
+- Estes números incluem aquecimento, trote de recuperação e volta à calma. NÃO são o ritmo dos tiros nem o alvo da zona — nunca os apresente como tal.
 
 RECOMENDAÇÃO JÁ DECIDIDA: ${ADJUSTMENT_LABELS[adjustment.code]} (motivo: ${adjustment.reason})
 ${vdotChangeBlock(vdotChange)}
