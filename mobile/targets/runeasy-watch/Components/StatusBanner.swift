@@ -79,7 +79,16 @@ struct ConnectivityBanner: View {
     var body: some View {
         if let message {
             Button {
-                isRefreshing = onRefresh()
+                guard onRefresh() else { return }
+                isRefreshing = true
+                // Auto-reset: o pedido é fire-and-forget (sendMessage não tem
+                // callback de "contexto aplicado"). Sem isto o rótulo ficava
+                // preso em "Atualizando…" no caso mais comum — corrida pendente
+                // COM o iPhone alcançável, onde isReachable nunca muda.
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                    isRefreshing = false
+                }
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: pendingTransfers > 0
@@ -101,9 +110,6 @@ struct ConnectivityBanner: View {
                 .cornerRadius(8)
             }
             .buttonStyle(.plain)
-            .onChange(of: isReachable) { _, reachable in
-                if reachable { isRefreshing = false }
-            }
         }
     }
 }

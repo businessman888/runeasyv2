@@ -108,7 +108,7 @@ struct ActiveRunView: View {
     private func targetsRow(for workout: PlannedWorkout) -> some View {
         HStack(spacing: 10) {
             if workout.distanceKm > 0 {
-                targetChip(label: "META", value: "\(formatKm(workout.distanceKm)) km")
+                targetChip(label: "META", value: "\(MetricFormat.km(workout.distanceKm)) km")
             }
             if !workout.targetPace.isEmpty {
                 targetChip(label: "PACE", value: "\(workout.targetPace)/km")
@@ -132,11 +132,6 @@ struct ActiveRunView: View {
         .padding(.vertical, 4)
         .background(Color.runEasyCardBg)
         .cornerRadius(8)
-    }
-
-    private func formatKm(_ km: Double) -> String {
-        if km == km.rounded() { return String(format: "%.0f", km) }
-        return String(format: "%.1f", km)
     }
 
     // MARK: - Starting

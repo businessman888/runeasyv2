@@ -52,7 +52,7 @@ struct ResultCard: View {
 
     private var metricsGrid: some View {
         HStack(alignment: .top, spacing: 6) {
-            metric(label: "DISTÂNCIA", value: "\(MetricFormat.distance(result.distanceKm * 1000)) km")
+            metric(label: "DISTÂNCIA", value: "\(MetricFormat.km(result.distanceKm)) km")
             metric(label: "TEMPO", value: MetricFormat.time(result.durationSeconds))
             metric(label: "PACE", value: result.pace.isEmpty ? "—" : result.pace)
             Spacer(minLength: 0)

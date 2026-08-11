@@ -97,7 +97,7 @@ struct WorkoutDayCard: View {
 
     private var statsSection: some View {
         HStack(alignment: .top, spacing: 6) {
-            stat(label: "Distância", value: "\(formatKm(workout.distanceKm)) km")
+            stat(label: "Distância", value: "\(MetricFormat.km(workout.distanceKm)) km")
             stat(label: "Tempo", value: formattedDuration)
             stat(label: "Pace", value: workout.targetPace.isEmpty ? "—" : "\(workout.targetPace)/km")
             Spacer(minLength: 0)
@@ -150,10 +150,6 @@ struct WorkoutDayCard: View {
         .padding(.top, 2)
     }
 
-    private func formatKm(_ km: Double) -> String {
-        if km == km.rounded() { return String(format: "%.0f", km) }
-        return String(format: "%.1f", km)
-    }
 }
 
 #Preview("Pending") {

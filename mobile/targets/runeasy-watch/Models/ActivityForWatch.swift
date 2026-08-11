@@ -37,9 +37,9 @@ struct ActivityForWatch: Codable, Identifiable, Equatable {
 
     var isCompleted: Bool { status == .completed }
 
-    /// "5,2 km · 28:14 · 6:00/km" — linha única do card compacto.
+    /// "5.2 km · 28:14 · 6:00/km" — linha única do card compacto.
     var summaryLine: String {
-        var parts: [String] = ["\(MetricFormat.distance(distanceKm * 1000)) km"]
+        var parts: [String] = ["\(MetricFormat.km(distanceKm)) km"]
         if let durationSeconds, durationSeconds > 0 {
             parts.append(MetricFormat.time(durationSeconds))
         }
