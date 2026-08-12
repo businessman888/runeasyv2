@@ -1274,7 +1274,27 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
       const week = plan.weeks[wi];
       const sk = byWeek.get(week.week_number) ?? skeleton[wi];
       const workouts = week?.workouts ?? [];
-      if (!sk || workouts.length === 0) continue;
+      if (!sk) continue;
+
+      // A FASE É CÁLCULO, NÃO ECO DO MODELO.
+      //
+      // Até aqui `week.phase` era o que a IA tivesse escrito no JSON. Este
+      // método já cravava distância e tipo de treino por cima da resposta dela,
+      // mas deixava a fase passar — e `workouts.metadata.week_phase`
+      // (training.service.ts) copia justamente este campo. Resultado: a fase
+      // exibida no app e usada para agrupar blocos era opinião do modelo, com
+      // `getPlanOverview` caindo para 'base' quando o campo vinha ausente.
+      //
+      // O esqueleto vem de `calculatePhases`, função pura de
+      // (duration_weeks, goalKm). Atribuir aqui corrige `plan_json` E o
+      // metadata dos treinos de uma vez, porque o segundo deriva do primeiro.
+      //
+      // ANTES do guard de `workouts.length`: semana que a IA devolveu vazia não
+      // tem volume a redistribuir, mas continua tendo fase — e é ela que
+      // aparece no calendário.
+      week.phase = sk.phase;
+
+      if (workouts.length === 0) continue;
 
       // Mapeia por PAPEL (não por índice) E é robusto à DIVERGÊNCIA DE CONTAGEM:
       // a IA devolve os treinos na ordem dela e às vezes em número diferente de

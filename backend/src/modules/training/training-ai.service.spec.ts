@@ -123,4 +123,93 @@ describe('TrainingAIService — VDOT resolution', () => {
     expect(vdotFromPrompt()).toBeGreaterThan(0);
     expect(callMock).toHaveBeenCalledTimes(1);
   });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  /**
+   * A FASE É CÁLCULO, NÃO ECO DO MODELO.
+   *
+   * `applyDeterministicVolume` sempre cravou distância e tipo por cima da
+   * resposta da IA, mas deixava `week.phase` passar intacto — e
+   * `training.service.ts` copia esse campo para `workouts.metadata.week_phase`.
+   * A fase que o app exibia (e que a Fase 4 usa para agrupar blocos) era, na
+   * prática, opinião do modelo.
+   */
+  describe('fase determinística', () => {
+    /** Treino mínimo que sobrevive à redistribuição de volume. */
+    const workout = (day: number) => ({
+      day_of_week: day,
+      type: 'easy_run' as const,
+      distance_km: 5,
+      segments: [
+        {
+          type: 'main' as const,
+          distance_km: 5,
+          pace_min: 400,
+          pace_max: 430,
+        },
+      ],
+      objective: 'rodagem',
+      tips: [],
+    });
+
+    /** Plano de 12 semanas em que a IA marcou TUDO como 'peak'. */
+    const planComFaseErrada = (): GeneratedPlan => ({
+      duration_weeks: 12,
+      frequency_per_week: 4,
+      weeks: Array.from({ length: 12 }, (_, i) => ({
+        week_number: i + 1,
+        phase: 'peak' as const,
+        workouts: [workout(1), workout(3), workout(5), workout(6)],
+      })),
+    });
+
+    it('sobrescreve a fase que a IA devolveu pela de calculatePhases', async () => {
+      callMock.mockResolvedValue({
+        data: planComFaseErrada(),
+        latencyMs: 1,
+      });
+
+      const plan = await service.generateTrainingPlan({
+        ...baseRequest,
+        recentDistanceKm: 10,
+        calculatedPace: 5.0,
+      });
+
+      // 12 semanas / meta 10 km → base 6, build 3, peak 2, taper 1.
+      const esperado = new VolumePlannerService().calculatePhases(12, 10);
+      expect(esperado).toEqual({ base: 6, build: 3, peak: 2, taper: 1 });
+
+      const fases = plan.weeks.map((w) => w.phase);
+      expect(fases).toEqual([
+        'base',
+        'base',
+        'base',
+        'base',
+        'base',
+        'base',
+        'build',
+        'build',
+        'build',
+        'peak',
+        'peak',
+        'taper',
+      ]);
+    });
+
+    it('semana que a IA devolveu vazia também recebe a fase', async () => {
+      // Não há volume a redistribuir, mas a semana continua aparecendo no
+      // calendário — e o guard de `workouts.length` a pulava por completo.
+      const plan = planComFaseErrada();
+      plan.weeks[0].workouts = [];
+      callMock.mockResolvedValue({ data: plan, latencyMs: 1 });
+
+      const out = await service.generateTrainingPlan({
+        ...baseRequest,
+        recentDistanceKm: 10,
+        calculatedPace: 5.0,
+      });
+
+      expect(out.weeks[0].phase).toBe('base');
+    });
+  });
 });
