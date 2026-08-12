@@ -93,11 +93,17 @@ export const useWeeklyInsightStore = create<WeeklyInsightState>((set, get) => ({
     dismissModal: () => set({ modalDismissedThisSession: true }),
 
     markSeen: async (insightId: string) => {
-        // Otimista: carimba `seen_at` na hora, e o modal some por consequência
-        // (`selectUnseen` deixa de casar). O write no servidor é best-effort —
-        // se falhar, o pior caso é o modal voltar uma vez.
+        // Otimista: carimba `seen_at` na hora. O write no servidor é
+        // best-effort — se falhar, o pior caso é o card voltar uma vez.
+        //
+        // NÃO dispensa a folha. Até a Fase 4 isto também setava
+        // `modalDismissedThisSession`, porque o único jeito de marcar como visto
+        // era ABRINDO a tela — carimbar e fechar eram o mesmo gesto. Com o
+        // carrossel deixaram de ser: deslizar até o segundo card carimba o
+        // primeiro, e o efeito colateral fecharia a folha no meio do gesto.
+        // Quem dispensa agora é `dismissModal`, chamado explicitamente por quem
+        // fecha ou navega.
         set((s) => ({
-            modalDismissedThisSession: true,
             latest:
                 s.latest && s.latest.id === insightId
                     ? { ...s.latest, seen_at: new Date().toISOString() }

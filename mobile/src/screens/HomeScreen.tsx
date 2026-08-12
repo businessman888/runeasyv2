@@ -41,7 +41,7 @@ import { ProCtaButton } from '../components/upgrade/ProCtaButton';
 import { ProTeaseBadge } from '../components/upgrade/ProTeaseBadge';
 import { PlanGeneratingOverlay } from '../components/loading/PlanGeneratingOverlay';
 import { WeeklyInsightCard } from '../components/insight/WeeklyInsightCard';
-import { WeeklyInsightEntry } from '../components/insight/WeeklyInsightEntry';
+import { InsightEntry } from '../components/insight/InsightEntry';
 import { useWeeklyInsightStore } from '../stores/weeklyInsightStore';
 import type { WorkoutData } from '../components/WorkoutCard';
 
@@ -147,8 +147,8 @@ export function HomeScreen({ navigation }: any) {
     const [recoveryTimeLeft, setRecoveryTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 });
     const [recoveryProgress, setRecoveryProgress] = useState(0);
     const [retrospectiveReady, setRetrospectiveReady] = useState(false);
-    // A busca é feita pelo <WeeklyInsightEntry/> logo abaixo — aqui só lemos o
-    // resultado, para o card e o modal compartilharem uma única requisição.
+    // A busca é feita pelo <InsightEntry/> logo abaixo — aqui só lemos o
+    // resultado, para o card e a folha compartilharem uma única requisição.
     const weeklyInsight = useWeeklyInsightStore((s) => s.latest);
 
     // Plan generation overlay — driven by the shared gate hook (reads
@@ -1086,12 +1086,12 @@ export function HomeScreen({ navigation }: any) {
             )}
 
             {/*
-              Insight semanal: busca o dado (para o card acima e para o modal) e
-              abre a folha quando há semana nova não vista. Montado na home
-              porque é a primeira tela após os gates de auth/onboarding — não
-              precisa replicar essas condições.
+              Insights: busca os dados (para o card acima e para a folha) e abre
+              o carrossel quando há resumo novo não visto — o semanal, o de
+              mesociclo, ou os dois lado a lado. Montado na home porque é a
+              primeira tela após os gates de auth/onboarding.
             */}
-            <WeeklyInsightEntry />
+            <InsightEntry />
         </ScreenContainer >
     );
 }
