@@ -49,13 +49,8 @@ export function InsightEntry() {
         modalDismissedThisSession,
         fetch: fetchWeekly,
         dismissModal,
-        markSeen: markWeeklySeen,
     } = useWeeklyInsightStore();
-    const {
-        latest: mesoLatest,
-        fetch: fetchMeso,
-        markSeen: markMesoSeen,
-    } = useMesoInsightStore();
+    const { latest: mesoLatest, fetch: fetchMeso } = useMesoInsightStore();
 
     const unseenWeekly = selectUnseen(weeklyLatest);
     const unseenMeso = selectUnseenMeso(mesoLatest);
@@ -110,15 +105,23 @@ export function InsightEntry() {
         setPinned(null);
     }, [dismissModal]);
 
+    /**
+     * Abrir é o que conta como visto — e quem carimba é a TELA de destino, não
+     * este handler. Carimbar aqui duplicaria o write e, pior, faria o gesto de
+     * "abrir" e o de "marcar como lido" divergirem se a navegação falhasse.
+     * Aqui só dispensamos a folha, para ela não reaparecer no caminho de volta.
+     */
     const handleOpenWeekly = useCallback(() => {
-        const weekly = pinned?.weekly;
-        if (!weekly) return;
-        // Abrir É ter visto — a própria tela também carimba, mas fazer aqui
-        // evita a folha reaparecer no caminho de volta.
-        void markWeeklySeen(weekly.id);
+        if (!pinned?.weekly) return;
         handleClose();
         navigation.navigate('WeeklyInsight' as never);
-    }, [pinned, markWeeklySeen, handleClose, navigation]);
+    }, [pinned, handleClose, navigation]);
+
+    const handleOpenMeso = useCallback(() => {
+        if (!pinned?.meso) return;
+        handleClose();
+        navigation.navigate('MesoInsight' as never);
+    }, [pinned, handleClose, navigation]);
 
     const visible = Boolean(pinned) && !modalDismissedThisSession;
 
@@ -129,8 +132,7 @@ export function InsightEntry() {
             visible={visible}
             onClose={handleClose}
             onOpenWeekly={handleOpenWeekly}
-            onSeenWeekly={markWeeklySeen}
-            onSeenMeso={markMesoSeen}
+            onOpenMeso={handleOpenMeso}
         />
     );
 }

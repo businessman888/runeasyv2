@@ -1,5 +1,5 @@
 import React, { memo, useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, fonts } from '../../../theme';
 import { formatKm, formatPercent } from '../../../screens/weekly-insight/format';
@@ -10,25 +10,25 @@ import {
 import { cardStyles } from './cardStyles';
 
 /**
- * O card do INSIGHT DE MESOCICLO — o arco de 4 semanas.
+ * O card do INSIGHT DE MESOCICLO no carrossel — um CONVITE, não o insight.
  *
- * ── É O INSIGHT INTEIRO, NÃO UMA PRÉVIA ──────────────────────────────────────
+ * ── ELE JÁ FOI O INSIGHT INTEIRO ─────────────────────────────────────────────
  *
- * Diferente do card semanal, este não tem CTA: não há tela por trás. Reflexão
- * pura não tem sub-navegação nem ação, e o que há para mostrar (o arco, a
- * aderência do bloco, os tiros) cabe aqui. Uma tela dedicada seria uma rota a
- * mais no navigator para exibir os mesmos seis números.
+ * Enquanto não havia tela por trás, este card carregava tudo: arco, aderência,
+ * tiros e narrativa. Com a `MesoInsightScreen` existindo, manter isso aqui
+ * duplicaria o topo da tela e deixaria a folha alta demais — o cartão de
+ * entrada passaria mais informação que o destino.
  *
- * ── O ARCO É O PROTAGONISTA ──────────────────────────────────────────────────
- *
- * As barras semanais são o que distingue esta altitude do insight semanal, que
- * por construção só enxerga uma semana. Por isso ficam em cima da aderência: é
- * o dado que só existe aqui.
+ * Agora é simétrico ao card semanal: rótulo, número-herói, o arco em miniatura
+ * e um CTA. O arco fica porque é a ASSINATURA desta altitude — o desenho que o
+ * insight semanal, enxergando uma semana só, não tem como fazer.
  */
 export const MesoInsightCardBody = memo(function MesoInsightCardBody({
     insight,
+    onOpen,
 }: {
     insight: MesoInsight;
+    onOpen: () => void;
 }) {
     const trend = insight.volume_trend ?? [];
 
@@ -104,12 +104,24 @@ export const MesoInsightCardBody = memo(function MesoInsightCardBody({
             </View>
 
             {!!insight.ai_narrative && (
-                <Text style={cardStyles.narrative} numberOfLines={5}>
+                <Text style={cardStyles.narrative} numberOfLines={3}>
                     {insight.ai_narrative}
                 </Text>
             )}
 
             <MesoFooter insight={insight} />
+
+            <Pressable
+                onPress={onOpen}
+                style={({ pressed }) => [
+                    cardStyles.cta,
+                    pressed && cardStyles.ctaPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Ver o bloco completo"
+            >
+                <Text style={cardStyles.ctaText}>Ver o bloco completo</Text>
+            </Pressable>
         </View>
     );
 });

@@ -41,8 +41,10 @@ import { ProCtaButton } from '../components/upgrade/ProCtaButton';
 import { ProTeaseBadge } from '../components/upgrade/ProTeaseBadge';
 import { PlanGeneratingOverlay } from '../components/loading/PlanGeneratingOverlay';
 import { WeeklyInsightCard } from '../components/insight/WeeklyInsightCard';
+import { MesoInsightCard } from '../components/insight/MesoInsightCard';
 import { InsightEntry } from '../components/insight/InsightEntry';
 import { useWeeklyInsightStore } from '../stores/weeklyInsightStore';
+import { useMesoInsightStore } from '../stores/mesoInsightStore';
 import type { WorkoutData } from '../components/WorkoutCard';
 
 import { BASE_API_URL } from '../config/api.config';
@@ -148,8 +150,9 @@ export function HomeScreen({ navigation }: any) {
     const [recoveryProgress, setRecoveryProgress] = useState(0);
     const [retrospectiveReady, setRetrospectiveReady] = useState(false);
     // A busca é feita pelo <InsightEntry/> logo abaixo — aqui só lemos o
-    // resultado, para o card e a folha compartilharem uma única requisição.
+    // resultado, para os cards e a folha compartilharem uma única requisição.
     const weeklyInsight = useWeeklyInsightStore((s) => s.latest);
+    const mesoInsight = useMesoInsightStore((s) => s.latest);
 
     // Plan generation overlay — driven by the shared gate hook (reads
     // trainingStore.generationStatus + polls while focused, independent of the
@@ -737,6 +740,19 @@ export function HomeScreen({ navigation }: any) {
                         insight={weeklyInsight}
                         unread={weeklyInsight.seen_at === null}
                         onPress={() => navigation.navigate('WeeklyInsight')}
+                        style={styles.weeklyInsightCard}
+                    />
+                )}
+
+                {/* Insight de bloco — mesma rede de segurança, uma altitude
+                    acima. Fica ABAIXO do semanal: o semanal muda toda semana e
+                    é o que a pessoa vem checar; o bloco é mensal e pode
+                    esperar o olho descer. */}
+                {mesoInsight && (
+                    <MesoInsightCard
+                        insight={mesoInsight}
+                        unread={mesoInsight.seen_at === null}
+                        onPress={() => navigation.navigate('MesoInsight')}
                         style={styles.weeklyInsightCard}
                     />
                 )}

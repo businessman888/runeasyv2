@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useRef, useState } from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import {
     View,
     StyleSheet,
@@ -57,9 +57,8 @@ export interface InsightCarouselProps {
     onClose: () => void;
     /** Abre a tela do insight semanal (onde vive a bandeja de ajuste). */
     onOpenWeekly: () => void;
-    /** Carimba `seen_at` do card que entrou em foco. */
-    onSeenWeekly: (id: string) => void;
-    onSeenMeso: (id: string) => void;
+    /** Abre a tela do insight de bloco (stories + dashboard). */
+    onOpenMeso: () => void;
 }
 
 type Page =
@@ -72,48 +71,36 @@ export const InsightCarousel = memo(function InsightCarousel({
     visible,
     onClose,
     onOpenWeekly,
-    onSeenWeekly,
-    onSeenMeso,
+    onOpenMeso,
 }: InsightCarouselProps) {
     const insets = useSafeAreaInsets();
     const { width } = useWindowDimensions();
     const [index, setIndex] = useState(0);
-    // Quais páginas já carimbamos nesta abertura — o carimbo é otimista na
-    // store, mas o usuário pode deslizar de volta e disparar de novo.
-    const stamped = useRef<Set<string>>(new Set());
 
     const pages: Page[] = [];
     if (meso) pages.push({ kind: 'meso', id: meso.id, insight: meso });
     if (weekly) pages.push({ kind: 'weekly', id: weekly.id, insight: weekly });
 
-    const stamp = useCallback(
-        (page: Page | undefined) => {
-            if (!page || stamped.current.has(page.id)) return;
-            stamped.current.add(page.id);
-            if (page.kind === 'meso') onSeenMeso(page.id);
-            else onSeenWeekly(page.id);
-        },
-        [onSeenMeso, onSeenWeekly],
-    );
-
-    // O primeiro card já está em foco na abertura — carimba sem esperar gesto.
-    const handleShow = useCallback(() => {
-        stamped.current.clear();
-        setIndex(0);
-        stamp(pages[0]);
-        // `pages` é derivado das props; recriar o callback a cada render seria
-        // pior que a dependência exaustiva aqui.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [stamp, pages[0]?.id]);
+    /**
+     * VER O CARD NÃO É TER VISTO O INSIGHT.
+     *
+     * Até a Fase 4 (mobile) o carrossel carimbava `seen_at` ao card entrar em
+     * foco, e o primeiro era carimbado já no `onShow`. Abrir a folha e fechá-la
+     * no mesmo segundo queimava o insight para sempre: na sessão seguinte
+     * aquele card não voltava, e a folha aparecia com um só — ora sem o
+     * semanal, ora sem o bloco, conforme qual tinha sido carimbado antes.
+     *
+     * Agora quem carimba é a TELA, ao ser aberta — o padrão que a 2B já usava.
+     * Quem não abriu não viu, e o card volta na próxima sessão. Fechar a folha
+     * continua dispensando-a só nesta sessão.
+     */
+    const handleShow = useCallback(() => setIndex(0), []);
 
     const handleScrollEnd = useCallback(
         (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-            const next = Math.round(e.nativeEvent.contentOffset.x / width);
-            setIndex(next);
-            stamp(pages[next]);
-            // eslint-disable-next-line react-hooks/exhaustive-deps
+            setIndex(Math.round(e.nativeEvent.contentOffset.x / width));
         },
-        [width, stamp, pages.length],
+        [width],
     );
 
     if (pages.length === 0) return null;
@@ -161,7 +148,10 @@ export const InsightCarousel = memo(function InsightCarousel({
                     {pages.map((page) => (
                         <View key={page.id} style={[styles.page, { width }]}>
                             {page.kind === 'meso' ? (
-                                <MesoInsightCardBody insight={page.insight} />
+                                <MesoInsightCardBody
+                                    insight={page.insight}
+                                    onOpen={onOpenMeso}
+                                />
                             ) : (
                                 <WeeklyInsightCardBody
                                     insight={page.insight}
