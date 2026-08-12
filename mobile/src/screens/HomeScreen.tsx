@@ -40,8 +40,7 @@ import { GlassTeaseOverlay } from '../components/upgrade/GlassTeaseOverlay';
 import { ProCtaButton } from '../components/upgrade/ProCtaButton';
 import { ProTeaseBadge } from '../components/upgrade/ProTeaseBadge';
 import { PlanGeneratingOverlay } from '../components/loading/PlanGeneratingOverlay';
-import { WeeklyInsightCard } from '../components/insight/WeeklyInsightCard';
-import { MesoInsightCard } from '../components/insight/MesoInsightCard';
+import { HomeInsightCarousel } from '../components/insight/HomeInsightCarousel';
 import { InsightEntry } from '../components/insight/InsightEntry';
 import { useWeeklyInsightStore } from '../stores/weeklyInsightStore';
 import { useMesoInsightStore } from '../stores/mesoInsightStore';
@@ -733,27 +732,15 @@ export function HomeScreen({ navigation }: any) {
                     </TouchableOpacity>
                 )}
 
-                {/* Insight semanal — card persistente. Independe de `seen_at`:
-                    é a rede de segurança de quem fechou o modal sem abrir. */}
-                {weeklyInsight && (
-                    <WeeklyInsightCard
-                        insight={weeklyInsight}
-                        unread={weeklyInsight.seen_at === null}
-                        onPress={() => navigation.navigate('WeeklyInsight')}
-                        style={styles.weeklyInsightCard}
-                    />
-                )}
-
-                {/* Insight de bloco — mesma rede de segurança, uma altitude
-                    acima. Fica ABAIXO do semanal: o semanal muda toda semana e
-                    é o que a pessoa vem checar; o bloco é mensal e pode
-                    esperar o olho descer. */}
-                {mesoInsight && (
-                    <MesoInsightCard
-                        insight={mesoInsight}
-                        unread={mesoInsight.seen_at === null}
-                        onPress={() => navigation.navigate('MesoInsight')}
-                        style={styles.weeklyInsightCard}
+                {/* Rede de segurança persistente para quem fechou a folha sem
+                    abrir. Quando os resumos coincidem, mantém a mesma leitura
+                    horizontal e os mesmos indicadores do sheet. */}
+                {(weeklyInsight || mesoInsight) && (
+                    <HomeInsightCarousel
+                        weekly={weeklyInsight}
+                        meso={mesoInsight}
+                        onOpenWeekly={() => navigation.navigate('WeeklyInsight')}
+                        onOpenMeso={() => navigation.navigate('MesoInsight')}
                     />
                 )}
 
@@ -1623,9 +1610,6 @@ const styles = StyleSheet.create({
         color: '#EBEBF5',
     },
     // Retrospective Card
-    weeklyInsightCard: {
-        marginBottom: spacing.md,
-    },
     retrospectiveCard: {
         backgroundColor: 'rgba(0, 212, 255, 0.08)',
         borderRadius: borderRadius.lg,

@@ -2,6 +2,7 @@ import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography, fonts } from '../../../theme';
 import { useEnterAnimation } from '../../weekly-insight/hooks/useEnterAnimation';
 import { CoachCallout } from '../../weekly-insight/components/CoachCallout';
@@ -9,7 +10,7 @@ import { SectionHeader } from '../../weekly-insight/components/SectionHeader';
 import { ZonesRadar } from '../../weekly-insight/components/ZonesRadar';
 import { CountUp } from '../../weekly-insight/components/CountUp';
 import { formatKm, formatPercent, formatPace } from '../../weekly-insight/format';
-import { GlassSurface } from '../../../components/ui/GlassSurface';
+import { DiffuseHeaderSurface } from '../../../components/ui/DiffuseHeaderSurface';
 import { MesoVolumeArc } from './MesoVolumeArc';
 import type { MesoInsight } from '../../../types/mesoInsight.types';
 import type { MesoStoryModel } from '../hooks/useMesoStory';
@@ -45,6 +46,8 @@ const IDX = {
     next: 6,
 } as const;
 
+const DASHBOARD_HEADER_HEIGHT = 52;
+
 interface MesoDashboardProps {
     insight: MesoInsight;
     model: MesoStoryModel;
@@ -61,12 +64,13 @@ export const MesoDashboard = memo(function MesoDashboard({
     active,
     onBack,
 }: MesoDashboardProps) {
+    const insets = useSafeAreaInsets();
+    const headerInset = insets.top + DASHBOARD_HEADER_HEIGHT;
+
     return (
         <View style={styles.root}>
-            {/* Header em vidro — a única camada de blur enquanto o painel está
-                em foco (a barra dos stories está atrás e apagada). */}
-            <GlassSurface radius={0} intensity={28} bordered={false} style={styles.header}>
-                <View style={styles.headerInner}>
+            <DiffuseHeaderSurface style={styles.header}>
+                <View style={[styles.headerInner, { paddingTop: insets.top }]}>
                     <Pressable
                         onPress={onBack}
                         hitSlop={12}
@@ -86,11 +90,19 @@ export const MesoDashboard = memo(function MesoDashboard({
                         </Text>
                     </View>
                 </View>
-            </GlassSurface>
+            </DiffuseHeaderSurface>
 
             <ScrollView
-                contentContainerStyle={styles.scroll}
+                contentContainerStyle={[
+                    styles.scroll,
+                    {
+                        paddingTop: headerInset + spacing.lg,
+                        paddingBottom: insets.bottom + spacing['2xl'],
+                    },
+                ]}
                 showsVerticalScrollIndicator={false}
+                contentInsetAdjustmentBehavior="never"
+                scrollIndicatorInsets={{ top: headerInset, bottom: insets.bottom }}
             >
                 {!!insight.ai_narrative && (
                     <CoachCallout narrative={insight.ai_narrative} index={IDX.coach} />

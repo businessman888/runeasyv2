@@ -84,14 +84,12 @@ export function MesoInsightScreen() {
         <View style={styles.root}>
             {/* Camada de trás: os stories. Recua e apaga quando o painel sobe. */}
             <Animated.View style={[StyleSheet.absoluteFill, storiesStyle]}>
-                <SafeAreaView style={styles.layer} edges={['top', 'bottom']}>
-                    <MesoStoryDeck
-                        model={model}
-                        next={next}
-                        onClose={goBack}
-                        onOpenDetails={open}
-                    />
-                </SafeAreaView>
+                <MesoStoryDeck
+                    model={model}
+                    next={next}
+                    onClose={goBack}
+                    onOpenDetails={open}
+                />
             </Animated.View>
 
             {/* Camada da frente: o painel. Fora da tela até `open()`.
@@ -101,15 +99,13 @@ export function MesoInsightScreen() {
                 style={[StyleSheet.absoluteFill, dashboardStyle]}
                 pointerEvents={dashboardReady ? 'auto' : 'none'}
             >
-                <SafeAreaView style={styles.layer} edges={['top', 'bottom']}>
-                    <MesoDashboard
-                        insight={latest}
-                        model={model}
-                        next={next}
-                        active={dashboardReady}
-                        onBack={close}
-                    />
-                </SafeAreaView>
+                <MesoDashboard
+                    insight={latest}
+                    model={model}
+                    next={next}
+                    active={dashboardReady}
+                    onBack={close}
+                />
             </Animated.View>
         </View>
     );
@@ -117,7 +113,6 @@ export function MesoInsightScreen() {
 
 const styles = StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.background },
-    layer: { flex: 1 },
 
     fallback: {
         flex: 1,

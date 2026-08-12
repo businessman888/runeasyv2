@@ -9,12 +9,14 @@ import Animated, {
 } from 'react-native-reanimated';
 import { captureRef } from 'react-native-view-shot';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, typography, fonts } from '../../../theme';
 import { StoryProgressBar } from '../../retrospective/StoryProgressBar';
 import { StoryCardShell } from '../../retrospective/StoryCards';
 import { gradientForCard } from '../../retrospective/storyTheme';
 import { openSystemShareSheet } from '../../sharing/utils/shareHandlers';
 import { GlassSurface } from '../../../components/ui/GlassSurface';
+import { DiffuseHeaderSurface } from '../../../components/ui/DiffuseHeaderSurface';
 import {
     MESO_GRADIENT_INDEX,
     MesoCardOpening,
@@ -46,6 +48,7 @@ import type { NextBlock } from '../hooks/useNextBlock';
  */
 
 const TOTAL_CARDS = 5;
+const STORY_HEADER_HEIGHT = 52;
 
 interface MesoStoryDeckProps {
     model: MesoStoryModel;
@@ -61,6 +64,7 @@ export const MesoStoryDeck = memo(function MesoStoryDeck({
     onClose,
     onOpenDetails,
 }: MesoStoryDeckProps) {
+    const insets = useSafeAreaInsets();
     const [index, setIndex] = useState(0);
     const [sharing, setSharing] = useState(false);
     const cardRef = useRef<View>(null);
@@ -125,10 +129,10 @@ export const MesoStoryDeck = memo(function MesoStoryDeck({
 
     return (
         <View style={styles.root}>
-            {/* Barra superior em vidro — a única camada de blur enquanto os
-                stories estão em foco. Fica FORA da área capturada. */}
-            <GlassSurface radius={0} intensity={28} bordered={false} style={styles.topBar}>
-                <View style={styles.topBarInner}>
+            {/* Superfície sólida desde o topo físico do aparelho. O fade abaixo
+                separa navegação e conteúdo sem amostrar o card em movimento. */}
+            <DiffuseHeaderSurface style={styles.topBar}>
+                <View style={[styles.topBarInner, { paddingTop: insets.top }]}>
                     <StoryProgressBar
                         total={TOTAL_CARDS}
                         current={index}
@@ -144,10 +148,16 @@ export const MesoStoryDeck = memo(function MesoStoryDeck({
                         <Ionicons name="close" size={22} color={colors.textLight} />
                     </Pressable>
                 </View>
-            </GlassSurface>
+            </DiffuseHeaderSurface>
 
             <GestureDetector gesture={swipe}>
-                <Animated.View style={[styles.cardWrap, cardAnimStyle]}>
+                <Animated.View
+                    style={[
+                        styles.cardWrap,
+                        { paddingTop: insets.top + STORY_HEADER_HEIGHT + spacing.sm },
+                        cardAnimStyle,
+                    ]}
+                >
                     {/* `collapsable={false}`: sem isso o Android pode achatar a
                         View e `captureRef` não encontra nada para capturar. */}
                     <View ref={cardRef} collapsable={false} style={styles.captureArea}>
@@ -177,7 +187,10 @@ export const MesoStoryDeck = memo(function MesoStoryDeck({
             {/* O botão flutuante — a porta para o dashboard. */}
             <Pressable
                 onPress={onOpenDetails}
-                style={styles.detailsWrap}
+                style={[
+                    styles.detailsWrap,
+                    { bottom: Math.max(spacing.xl, insets.bottom + spacing.sm) },
+                ]}
                 accessibilityRole="button"
                 accessibilityLabel="Ver detalhes do bloco"
                 accessibilityHint="Abre o painel completo com os números das quatro semanas"
@@ -269,7 +282,6 @@ const styles = StyleSheet.create({
 
     detailsWrap: {
         position: 'absolute',
-        bottom: spacing.xl,
         alignSelf: 'center',
         zIndex: 4,
     },
