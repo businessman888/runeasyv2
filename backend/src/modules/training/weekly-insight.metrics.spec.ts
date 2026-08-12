@@ -1,10 +1,17 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { WeeklyInsightService } from './weekly-insight.service';
+// Extraídas para o helper de janela na Fase 4 — nenhuma delas sabe o que é
+// "uma semana", e o insight de mesociclo usa exatamente as mesmas.
+import {
+  expectedPaceForWorkout,
+  expectedPaceRangeForWorkout,
+} from './helpers/window-metrics.helper';
 import { SupabaseService } from '../../database';
 import { NotificationService } from '../notifications/notification.service';
 import { AIRouterService } from '../../common/ai';
 import { VdotService } from './vdot.service';
+import { MesoInsightService } from './meso-insight.service';
 import { TrainingService } from './training.service';
 import { PlanWeekWindow } from './helpers/plan-window.helper';
 
@@ -124,6 +131,12 @@ describe('WeeklyInsightService — métricas da semana', () => {
           useValue: { isAvailable: false, call: jest.fn() },
         },
         // Este arquivo mede MÉTRICAS; a reestimativa de VDOT tem spec própria.
+        {
+          // Fase 4: nenhuma semana deste spec fecha um bloco de 4, então o
+          // gatilho nunca dispara — o mock só satisfaz a injeção.
+          provide: MesoInsightService,
+          useValue: { maybeGenerateForClosedWeek: jest.fn() },
+        },
         {
           provide: VdotService,
           useValue: { reestimateForPlan: jest.fn().mockResolvedValue(null) },
@@ -424,7 +437,7 @@ describe('WeeklyInsightService — métricas da semana', () => {
       // (400×1 + 300×3 + 400×1) / 5 = 340 — e NÃO 300, o do segmento main.
       // Comparar o pace da corrida inteira com o do main faria todo mundo
       // parecer mais lento do que correu.
-      const expected = service.expectedPaceForWorkout({
+      const expected = expectedPaceForWorkout({
         instructions_json: segmented(),
       } as never);
 
@@ -526,7 +539,7 @@ describe('WeeklyInsightService — métricas da semana', () => {
       await build({ activities: [] });
 
       expect(
-        service.expectedPaceForWorkout({
+        expectedPaceForWorkout({
           instructions_json: walkRun(),
         } as never),
       ).toBeNull();
@@ -585,7 +598,7 @@ describe('WeeklyInsightService — métricas da semana', () => {
     it('intervalado estruturado: o bloco de qualidade ENTRA no ponderado', async () => {
       await build({ activities: [] });
 
-      const expected = service.expectedPaceForWorkout({
+      const expected = expectedPaceForWorkout({
         instructions_json: intervaladoEstruturado(),
       } as never);
 
@@ -599,7 +612,7 @@ describe('WeeklyInsightService — métricas da semana', () => {
       expect(expected).toBe(422);
 
       // A trava de verdade: NÃO pode ser o esperado de um easy equivalente.
-      const easy = service.expectedPaceForWorkout({
+      const easy = expectedPaceForWorkout({
         instructions_json: [
           { type: 'main', zone: 'Z1', distance_km: 6, pace_min: 459 },
         ],
@@ -667,11 +680,11 @@ describe('WeeklyInsightService — métricas da semana', () => {
       ];
 
       expect(
-        service.expectedPaceForWorkout({ instructions_json: banda() } as never),
+        expectedPaceForWorkout({ instructions_json: banda() } as never),
       ).toBe(414); // (393 + 434) / 2 = 413,5
 
       expect(
-        service.expectedPaceRangeForWorkout({
+        expectedPaceRangeForWorkout({
           instructions_json: banda(),
         } as never),
       ).toEqual({ min: 393, max: 434, center: 414 });
@@ -682,7 +695,7 @@ describe('WeeklyInsightService — métricas da semana', () => {
       // sobreviver, senão a métrica de todo insight já gerado mudaria de sentido.
       await build({ activities: [] });
       expect(
-        service.expectedPaceRangeForWorkout({
+        expectedPaceRangeForWorkout({
           instructions_json: [
             { type: 'main', zone: 'Z1', distance_km: 5, pace_min: 400 },
           ],
@@ -752,7 +765,7 @@ describe('WeeklyInsightService — métricas da semana', () => {
       // `segmentEngine.buildSegSteps` faz `Math.max(1, Math.round(reps || 1))`.
       // Se as duas contagens divergirem, o esperado descreve um treino que não
       // é o que o app mandou correr.
-      const expected = service.expectedPaceForWorkout({
+      const expected = expectedPaceForWorkout({
         instructions_json: [
           { type: 'repeat', work: { distance_km: 2, pace_min: 300 } },
         ],

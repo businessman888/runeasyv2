@@ -5,6 +5,7 @@ import { SupabaseService } from '../../database';
 import { NotificationService } from '../notifications/notification.service';
 import { AIRouterService } from '../../common/ai';
 import { VdotService } from './vdot.service';
+import { MesoInsightService } from './meso-insight.service';
 import { TrainingService } from './training.service';
 
 /**
@@ -160,6 +161,7 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
     reestimateForPlan: jest.Mock;
     describeQualityEfforts: jest.Mock;
   };
+  let mesoInsightService: { maybeGenerateForClosedWeek: jest.Mock };
   let trainingService: { reanchorRemainingWorkoutsToToday: jest.Mock };
 
   const build = async (
@@ -179,6 +181,11 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
       reestimateForPlan: jest.fn().mockResolvedValue(null),
       // Sem tiro medido é o default honesto: a maioria das semanas é base pura.
       describeQualityEfforts: jest.fn().mockResolvedValue([]),
+    };
+    // Fase 4: por padrão "nenhum bloco fechou" — o caso de 3 em cada 4 semanas.
+    // Os testes do gatilho sobrescrevem.
+    mesoInsightService = {
+      maybeGenerateForClosedWeek: jest.fn().mockResolvedValue(null),
     };
     trainingService = {
       reanchorRemainingWorkoutsToToday: jest
@@ -204,6 +211,7 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
         { provide: NotificationService, useValue: notificationService },
         { provide: AIRouterService, useValue: aiRouter },
         { provide: VdotService, useValue: vdotService },
+        { provide: MesoInsightService, useValue: mesoInsightService },
       ],
     }).compile();
 
@@ -767,6 +775,80 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────────
+  // ───────────────────────────────────────────────────────────────────────────
+  /**
+   * Fase 4 — a colisão entre o insight semanal e o de mesociclo.
+   *
+   * Na madrugada em que um bloco de 4 semanas fecha, os dois são gerados. Um
+   * push só sai, e é o de maior altitude — repetir o duplo-push seria voltar ao
+   * bug que a Fase 1A corrigiu na retrospectiva.
+   */
+  describe('convivência com o insight de mesociclo', () => {
+    it('quando o meso é gerado, o semanal daquela semana cala o push', async () => {
+      await build(seedPlan());
+      freezeToday();
+      mesoInsightService.maybeGenerateForClosedWeek.mockResolvedValue({
+        id: 'meso-1',
+      });
+
+      await service.checkForClosedPlanWeeks();
+
+      // A linha do semanal continua existindo — a tela e o card dependem dela.
+      const week2 = tables.plan_week_insights.find((r) => r.week_number === 2);
+      expect(week2.status).toBe('completed');
+      // Mas sem push: quem notificou foi o meso.
+      expect(week2.notified_at).toBeNull();
+      expect(notificationService.sendPushNotification).not.toHaveBeenCalled();
+    });
+
+    it('meso que FALHA devolve o push ao semanal — a madrugada não fica muda', async () => {
+      await build(seedPlan());
+      freezeToday();
+      mesoInsightService.maybeGenerateForClosedWeek.mockRejectedValue(
+        new Error('meso down'),
+      );
+
+      const generated = await service.checkForClosedPlanWeeks();
+
+      expect(generated).toHaveLength(2);
+      const week2 = tables.plan_week_insights.find((r) => r.week_number === 2);
+      expect(week2.notified_at).toBeTruthy();
+      expect(notificationService.sendPushNotification).toHaveBeenCalled();
+    });
+
+    it('meso que não tinha bloco a fechar não interfere', async () => {
+      await build(seedPlan());
+      freezeToday();
+      // `null` = a semana não fecha bloco (o caso de 3 em cada 4).
+      mesoInsightService.maybeGenerateForClosedWeek.mockResolvedValue(null);
+
+      await service.checkForClosedPlanWeeks();
+
+      const week2 = tables.plan_week_insights.find((r) => r.week_number === 2);
+      expect(week2.notified_at).toBeTruthy();
+    });
+
+    it('o meso é consultado ANTES do semanal ser gravado', async () => {
+      // A ordem é o que garante o fallback: só dá para silenciar o semanal
+      // depois de saber que o meso existe.
+      await build(seedPlan());
+      freezeToday();
+      const ordem: string[] = [];
+      mesoInsightService.maybeGenerateForClosedWeek.mockImplementation(() => {
+        ordem.push('meso');
+        return Promise.resolve(null);
+      });
+      notificationService.createNotification.mockImplementation(() => {
+        ordem.push('push-semanal');
+        return Promise.resolve({ id: 'n' });
+      });
+
+      await service.checkForClosedPlanWeeks();
+
+      expect(ordem[0]).toBe('meso');
+    });
+  });
+
   describe('narrativa', () => {
     it('cai para o texto determinístico sem IA disponível, citando os números', async () => {
       await build(seedPlan());

@@ -24,6 +24,7 @@ import {
 } from './retrospective.service';
 import { TrainingAIService } from './training-ai.service';
 import { WeeklyInsightService } from './weekly-insight.service';
+import { MesoInsightService } from './meso-insight.service';
 import { SupabaseService } from '../../database';
 import { User } from '../../common/decorators';
 import { ProGuard } from '../../common/guards/pro.guard';
@@ -107,6 +108,7 @@ export class TrainingController {
     private readonly trainingService: TrainingService,
     private readonly retrospectiveService: RetrospectiveService,
     private readonly weeklyInsightService: WeeklyInsightService,
+    private readonly mesoInsightService: MesoInsightService,
     private readonly supabaseService: SupabaseService,
     private readonly usersService: UsersService,
     private readonly gamificationService: GamificationService,
@@ -1293,6 +1295,64 @@ export class TrainingController {
 
     this.logger.log(`[WeeklyInsight] Gatilho manual para user ${userId}`);
     return this.weeklyInsightService.generateLatestClosedWeek(userId);
+  }
+
+  // ── Insight de mesociclo (Fase 4) ─────────────────────────────────────────
+  //
+  // Não há `/apply` aqui, e é deliberado: o insight de bloco é REFLEXÃO PURA.
+  // Calendário já é ação do insight semanal, pace já é automático desde a
+  // Fase 3, e volume/prescrição é Fase 6.
+
+  /**
+   * Último insight de mesociclo concluído do usuário.
+   *
+   * Fino de propósito, igual ao semanal: devolve a linha crua de
+   * `plan_meso_insights` e deixa a apresentação puramente mobile.
+   */
+  @Get('meso-insight/latest')
+  @UseGuards(ProGuard)
+  async getLatestMesoInsight(@User('id') userId: string) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+
+    const insight = await this.mesoInsightService.getLatest(userId);
+    return { insight, hasInsight: insight !== null };
+  }
+
+  /**
+   * Marca o insight de bloco como visto — cada card do carrossel carimba o seu.
+   * Idempotente: uma segunda chamada devolve `updated: false` sem erro.
+   */
+  @Patch('meso-insight/:id/seen')
+  @UseGuards(ProGuard)
+  async markMesoInsightSeen(
+    @User('id') userId: string,
+    @Param('id') insightId: string,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+
+    const updated = await this.mesoInsightService.markSeen(userId, insightId);
+    return { updated };
+  }
+
+  /**
+   * Gera o insight do último bloco FECHADO e elegível do plano ativo.
+   *
+   * Para validação em staging e recuperação de falha do cron. Mesmas regras:
+   * último bloco do plano suprimido (a retrospectiva cobre) e dedupe por linha.
+   */
+  @Post('meso-insight/generate')
+  @UseGuards(ProGuard)
+  async manuallyGenerateMesoInsight(@User('id') userId: string) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+
+    this.logger.log(`[MesoInsight] Gatilho manual para user ${userId}`);
+    return this.mesoInsightService.generateLatestClosedBlock(userId);
   }
 
   /**

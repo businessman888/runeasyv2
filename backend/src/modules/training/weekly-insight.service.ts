@@ -14,10 +14,26 @@ import {
   decideAdjustment,
   SuggestedAdjustment,
   ADJUSTMENT_LABELS,
-  EASY_PACE_TOLERANCE_SEC,
 } from './helpers/weekly-adjustment';
+// Medidas de janela (zona, pace esperado, aderência de intensidade). Moradas
+// aqui até a Fase 4: nenhuma delas sabe o que é "uma semana" — todas recebem um
+// array de treinos — e o insight de mesociclo precisa das mesmas sobre 4
+// semanas. Ver o cabeçalho do helper para por que NÃO reparametrizamos
+// `buildPlanWeekMetrics` em vez disso.
+import {
+  ZONES,
+  Zone,
+  ZoneBucket,
+  IntensityBucket,
+  buildZoneDistribution,
+  buildIntensityAdherence,
+  expectedPaceRangeForWorkout,
+  expectedPaceForWorkout,
+  avgExpectedPaceSeconds,
+} from './helpers/window-metrics.helper';
 import { toSaoPauloDateStr } from './wellness/helpers/streak.helper';
 import { VdotService, VdotChange, MeasuredQualityEffort } from './vdot.service';
+import { MesoInsightService } from './meso-insight.service';
 import {
   buildMetric,
   sparkline7,
@@ -48,12 +64,15 @@ import {
  * semana 3 de um plano pode ir de quarta a segunda.
  */
 
-/** Zonas de treino, na ordem em que aparecem. */
-const ZONES = ['Z1', 'Z2', 'Z3', 'Z4', 'Z5'] as const;
-export type Zone = (typeof ZONES)[number];
-
-/** Zonas em que correr mais rápido que o prescrito é ERRO, não objetivo. */
-const EASY_ZONES: ReadonlySet<string> = new Set<string>(['Z1', 'Z2']);
+// `ZONES`/`Zone`/`ZoneBucket`/`IntensityBucket` são reexportados do helper de
+// janela: os consumidores (controller, DTOs, mobile) importavam daqui e não
+// devem sentir a extração.
+export { ZONES } from './helpers/window-metrics.helper';
+export type {
+  Zone,
+  ZoneBucket,
+  IntensityBucket,
+} from './helpers/window-metrics.helper';
 
 /**
  * Data de ativação da feature. Semanas que fecharam ANTES disso não geram
@@ -110,23 +129,6 @@ export interface WeeklyInsightRow {
   notified_at: string | null;
   seen_at: string | null;
   adjustment_applied_at: string | null;
-}
-
-export interface ZoneBucket {
-  workouts: number;
-  km: number;
-  seconds: number;
-}
-
-export interface IntensityBucket {
-  /** Treinos medidos (têm pace esperado E executado). */
-  n: number;
-  avgExpectedSec: number;
-  avgActualSec: number;
-  /** Negativo = correu MAIS RÁPIDO que o prescrito. */
-  avgDeltaSec: number;
-  /** Quantos saíram `EASY_PACE_TOLERANCE_SEC` (ou mais) abaixo do alvo. */
-  fasterCount: number;
 }
 
 export interface PlanWeekMetrics {
@@ -201,6 +203,10 @@ export class WeeklyInsightService {
     // Reestimativa de VDOT (Fase 3): roda no fecho de cada semana do plano e,
     // quando move, já deixa os paces futuros reescritos antes da narrativa.
     private readonly vdotService: VdotService,
+    // Insight de mesociclo (Fase 4). Sem cron próprio: este service já varre os
+    // planos ativos, já derivou as janelas de semana e já carregou os treinos —
+    // um segundo cron repetiria tudo para chegar na mesma conclusão.
+    private readonly mesoInsightService: MesoInsightService,
   ) {}
 
   /** Cutoff de ativação (YYYY-MM-DD). Semanas fechadas antes disso são ignoradas. */
@@ -363,6 +369,33 @@ export class WeeklyInsightService {
       if (week.endStr < cutoff) continue; // sem backfill
       if (existing.has(week.weekNumber)) continue;
 
+      // ── Fase 4: esta semana fecha um bloco de 4? ─────────────────────────
+      //
+      // O MESO VEM PRIMEIRO, e a ordem não é estética. Ele é quem notifica na
+      // madrugada de fecho de bloco (um push por madrugada, a altitude maior
+      // ganha a voz) — mas só faz sentido silenciar o semanal DEPOIS de saber
+      // que o meso de fato existe. Na ordem inversa, um meso que falhasse
+      // deixaria a madrugada muda.
+      //
+      // Best-effort: falha aqui não derruba o insight semanal, que segue
+      // notificando normalmente.
+      let mesoGenerated = false;
+      try {
+        const meso = await this.mesoInsightService.maybeGenerateForClosedWeek({
+          userId,
+          planId,
+          weekNumber: week.weekNumber,
+          weeks,
+          workouts,
+          planFrequency,
+        });
+        mesoGenerated = meso != null;
+      } catch (error) {
+        this.logger.warn(
+          `[WeeklyInsight] Insight de mesociclo falhou p/ plano ${planId}: ${String(error)}`,
+        );
+      }
+
       const insight = await this.generateForWeek(
         userId,
         planId,
@@ -370,6 +403,7 @@ export class WeeklyInsightService {
         weeks,
         workouts,
         planFrequency,
+        mesoGenerated,
       );
       if (insight) {
         out.push({
@@ -422,6 +456,12 @@ export class WeeklyInsightService {
     allWeeks: PlanWeekWindow[],
     workouts: WorkoutRow[],
     planFrequency: number | null,
+    /**
+     * Fase 4: o insight de MESOCICLO desta madrugada já foi gerado e já
+     * notificou. O semanal ainda é criado (a tela e o card dependem dele), mas
+     * cala o push — um por madrugada, e a altitude maior ganha a voz.
+     */
+    suppressPush = false,
   ): Promise<WeeklyInsight | null> {
     const supabase = this.supabaseService.getClient();
 
@@ -516,9 +556,11 @@ export class WeeklyInsightService {
 
       const isZeroWeek =
         metrics.completedWorkouts === 0 && metrics.totalRunsInPeriod === 0;
-      const shouldNotify = isZeroWeek
-        ? !(await this.previousWeekWasZeroed(planId, week.weekNumber))
-        : true;
+      const shouldNotify =
+        !suppressPush &&
+        (isZeroWeek
+          ? !(await this.previousWeekWasZeroed(planId, week.weekNumber))
+          : true);
 
       const notifiedAt = shouldNotify ? new Date().toISOString() : null;
 
@@ -691,17 +733,14 @@ export class WeeklyInsightService {
       : [];
 
     // ── Zonas e intensidade ──
-    const zoneDistribution = this.buildZoneDistribution(
-      weekWorkouts,
-      completed,
-    );
+    const zoneDistribution = buildZoneDistribution(weekWorkouts, completed);
     const {
       buckets: intensityAdherence,
       easyMeasured,
       easyTooFast,
-    } = this.buildIntensityAdherence(completed);
+    } = buildIntensityAdherence(completed);
 
-    const expectedPaceSeconds = this.weekExpectedPaceSeconds(completed);
+    const expectedPaceSeconds = avgExpectedPaceSeconds(completed);
 
     // ── Frequência: DIAS DISTINTOS, não contagem de treinos ──
     // Dois treinos no mesmo dia contam 1 — é a definição de
@@ -837,276 +876,6 @@ export class WeeklyInsightService {
         sparkline7(current, startStr, (a) => a.elevation_gain || 0),
       ),
     };
-  }
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // Zonas
-  // ──────────────────────────────────────────────────────────────────────────
-
-  /**
-   * Distribuição por zona PRESCRITA (`metadata.zone`), não inferida do tipo.
-   *
-   * `WellnessService.buildZonesBlock` classifica por FC e, sem FC, cai num mapa
-   * hardcoded de tipo→zona. Mas FC praticamente não existe nos dados, e
-   * `metadata.zone` — escrita pela geração do plano, com o VDOT em mãos — está
-   * preenchida em 100% dos treinos de plano. É informação melhor, e estava
-   * sendo descartada.
-   */
-  private buildZoneDistribution(
-    weekWorkouts: WorkoutRow[],
-    completed: WorkoutRow[],
-  ): {
-    prescribed: Record<string, ZoneBucket>;
-    executed: Record<string, ZoneBucket>;
-  } {
-    const empty = (): Record<string, ZoneBucket> => {
-      const out: Record<string, ZoneBucket> = {};
-      for (const z of ZONES) out[z] = { workouts: 0, km: 0, seconds: 0 };
-      return out;
-    };
-
-    const prescribed = empty();
-    for (const w of weekWorkouts) {
-      const zone = this.zoneOf(w);
-      if (!zone) continue;
-      prescribed[zone].workouts += 1;
-      prescribed[zone].km += num(w.distance_km);
-    }
-
-    const executed = empty();
-    for (const w of completed) {
-      const zone = this.zoneOf(w);
-      if (!zone) continue;
-      executed[zone].workouts += 1;
-      executed[zone].km += num(w.distance_run ?? w.distance_km);
-      executed[zone].seconds += num(w.time_run_seconds);
-    }
-
-    for (const z of ZONES) {
-      prescribed[z].km = round1(prescribed[z].km);
-      executed[z].km = round1(executed[z].km);
-    }
-
-    return { prescribed, executed };
-  }
-
-  private zoneOf(w: WorkoutRow): Zone | null {
-    const raw = w.metadata?.zone;
-    if (typeof raw !== 'string') return null;
-    const upper = raw.toUpperCase();
-    return (ZONES as readonly string[]).includes(upper)
-      ? (upper as Zone)
-      : null;
-  }
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // Aderência de intensidade
-  // ──────────────────────────────────────────────────────────────────────────
-
-  /**
-   * Pace ESPERADO de um treino, em segundos/km, ponderado pela distância dos
-   * segmentos de `instructions_json`.
-   *
-   * ── POR QUE PONDERADO, E NÃO O PACE DO SEGMENTO `main` ────────────────────
-   *
-   * `pace_seconds_per_km` é o pace da CORRIDA INTEIRA — inclui aquecimento e
-   * volta à calma, que são lentos de propósito. Comparar esse número com o
-   * `pace_min` do segmento principal faria todo mundo parecer mais lento do que
-   * correu. O ponderado por distância é a única comparação apples-to-apples.
-   *
-   * ── POR QUE NÃO `workouts.target_pace_seconds` ────────────────────────────
-   *
-   * Aquela coluna é NULL em todo treino de plano — só é preenchida para
-   * `source='manual'` (está no COMMENT da coluna, e produção confirma). O pace
-   * prescrito de um treino de plano vive em `instructions_json`.
-   *
-   * Segmentos com `pace_min` inutilizável (walk/run grava `pace_min: 0`) ficam
-   * FORA do numerador e do denominador. Um treino sem nenhum segmento
-   * aproveitável devolve `null` e não entra na agregação — é correto: não havia
-   * pace prescrito para comparar.
-   *
-   * ── OS DOIS FORMATOS DE SEGMENTO ──────────────────────────────────────────
-   *
-   * `instructions_json` tem duas formas, e a geração escolhe pelo tipo do treino
-   * (ver o schema em `training-ai.service.ts`):
-   *
-   *   simples  { type: 'warmup'|'main'|'cooldown', distance_km OU duration_seconds,
-   *              pace_min, pace_max, zone }
-   *   repeat   { type: 'repeat', reps: N,
-   *              work:     { distance_km OU duration_seconds, pace_min, ... },
-   *              recovery: { distance_km OU duration_seconds, pace_min, ... } }
-   *
-   * O `repeat` NÃO tem `distance_km` nem `pace_min` no topo — eles vivem dentro
-   * de `work`/`recovery`, e valem `reps` vezes cada. Até 2026-08-06 esta função
-   * procurava `seg.repeat.work` (chave que o schema nunca produziu) e exigia
-   * `distance_km` no topo do bloco: o resultado era o MIOLO DE QUALIDADE INTEIRO
-   * ser descartado, sobrando só aquecimento e volta à calma. Um intervalado
-   * estruturado saía com pace esperado idêntico ao de uma rodagem leve, e a
-   * aderência de Z4/Z5 media o esforço duro com régua de easy.
-   *
-   * ── DISTÂNCIA × TEMPO ─────────────────────────────────────────────────────
-   *
-   * Todo sub-bloco tem EXATAMENTE um entre `distance_km` e `duration_seconds`.
-   * O ponderado é sempre Σtempo ÷ Σdistância; um sub-bloco por tempo entra
-   * convertendo com o próprio pace prescrito (90 s a 7:39/km = 0,196 km). Sem
-   * isso, as recuperações e os aquecimentos por tempo — que o prompt PREFERE —
-   * sumiriam do denominador, e o esperado ficaria mais rápido que a corrida que
-   * ele descreve, justo na direção que faz o atleta parecer melhor do que foi.
-   *
-   * ── CENTRO DA FAIXA, NÃO A BORDA RÁPIDA ───────────────────────────────────
-   *
-   * Devolve a faixa inteira porque as duas pontas têm usos diferentes, e
-   * confundi-las produziu um erro visível para o usuário:
-   *
-   *   `center` — o que "esperado" significa para quem lê. Até 2026-08-10 a
-   *              narrativa usava `min`, a borda RÁPIDA, e quem executava no
-   *              meio do prescrito lia que ficou lento por metade da largura
-   *              da banda. Com a Z1 em 393–434, isso eram 20 s/km de atraso
-   *              relatados a um atleta que correu exatamente no alvo.
-   *   `min`    — o gatilho de `aliviar_ritmo`. "Rápido demais" é passar da
-   *              borda rápida com folga; medir contra o centro faria o cue
-   *              disparar dentro da própria faixa prescrita.
-   */
-  expectedPaceRangeForWorkout(
-    w: WorkoutRow,
-  ): { min: number; max: number; center: number } | null {
-    const segments = Array.isArray(w.instructions_json)
-      ? (w.instructions_json as Array<Record<string, unknown>>)
-      : [];
-    if (segments.length === 0) return null;
-
-    let distance = 0;
-    let secondsMin = 0;
-    let secondsMax = 0;
-
-    /** Acumula um sub-bloco `times` vezes. Sem pace utilizável, não entra. */
-    const addEffort = (raw: unknown, times = 1): void => {
-      if (!raw || typeof raw !== 'object') return;
-      const effort = raw as Record<string, unknown>;
-
-      const min = paceValueToSecondsPerKm(
-        effort.pace_min as number | undefined,
-      );
-      if (min == null || min <= 0) return;
-      // Plano legado (e alguns walk/run) não trazem `pace_max`: a faixa colapsa
-      // num ponto, e center === min. É o comportamento anterior, preservado.
-      const max =
-        paceValueToSecondsPerKm(effort.pace_max as number | undefined) ?? min;
-
-      const km = num(effort.distance_km as number | string | null);
-      if (km > 0) {
-        distance += km * times;
-        secondsMin += km * min * times;
-        secondsMax += km * max * times;
-        return;
-      }
-
-      const sec = num(effort.duration_seconds as number | string | null);
-      if (sec > 0) {
-        // A distância de um bloco por TEMPO depende do pace corrido; usar o
-        // centro aqui mantém o peso do bloco estável entre as duas pontas.
-        const km2 = sec / ((min + max) / 2);
-        distance += km2 * times;
-        secondsMin += km2 * min * times;
-        secondsMax += km2 * max * times;
-      }
-    };
-
-    for (const seg of segments) {
-      if (seg.type === 'repeat') {
-        // `Math.max(1, ...)` espelha `segmentEngine.buildSegSteps` no mobile —
-        // o motor que EXECUTA o treino. As duas contagens de reps têm de ser a
-        // mesma, senão o esperado descreve um treino diferente do realizado.
-        const reps = Math.max(1, Math.round(num(seg.reps as number) || 1));
-        addEffort(seg.work, reps);
-        addEffort(seg.recovery, reps);
-        continue;
-      }
-      addEffort(seg);
-    }
-
-    if (distance <= 0) return null;
-    const min = Math.round(secondsMin / distance);
-    const max = Math.round(secondsMax / distance);
-    return { min, max, center: Math.round((min + max) / 2) };
-  }
-
-  /**
-   * O pace que a prescrição COMUNICA — o centro da faixa ponderada.
-   *
-   * É este número que vai para a narrativa e para `expected_pace_seconds`.
-   */
-  expectedPaceForWorkout(w: WorkoutRow): number | null {
-    return this.expectedPaceRangeForWorkout(w)?.center ?? null;
-  }
-
-  /** Pace esperado médio da semana (ponderado pelos treinos concluídos). */
-  private weekExpectedPaceSeconds(completed: WorkoutRow[]): number {
-    const values = completed
-      .map((w) => this.expectedPaceForWorkout(w))
-      .filter((v): v is number => v != null);
-    if (values.length === 0) return 0;
-    return Math.round(values.reduce((s, v) => s + v, 0) / values.length);
-  }
-
-  /**
-   * Cruza pace prescrito × executado por zona.
-   *
-   * `easyMeasured`/`easyTooFast` contam SÓ Z1/Z2 — é onde correr mais rápido que
-   * o alvo é erro inequívoco. Num Z4, correr rápido é o objetivo do treino, e
-   * incluí-lo faria o cue de intensidade disparar em quem executou bem.
-   */
-  private buildIntensityAdherence(completed: WorkoutRow[]): {
-    buckets: Record<string, IntensityBucket>;
-    easyMeasured: number;
-    easyTooFast: number;
-  } {
-    const acc: Record<
-      string,
-      { expected: number[]; actual: number[]; faster: number }
-    > = {};
-    let easyMeasured = 0;
-    let easyTooFast = 0;
-
-    for (const w of completed) {
-      const zone = this.zoneOf(w);
-      if (!zone) continue;
-
-      const band = this.expectedPaceRangeForWorkout(w);
-      const actual = num(w.pace_seconds_per_km);
-      if (band == null || actual <= 0) continue;
-
-      if (!acc[zone]) acc[zone] = { expected: [], actual: [], faster: 0 };
-      // O que se EXIBE é o centro: é o pace que a prescrição comunica.
-      acc[zone].expected.push(band.center);
-      acc[zone].actual.push(actual);
-
-      // O que DISPARA o cue é a borda rápida. "Rápido demais" significa passar
-      // do limite superior da prescrição com folga — medir contra o centro
-      // acusaria de erro quem correu dentro da própria faixa pedida.
-      const tooFast = actual <= band.min - EASY_PACE_TOLERANCE_SEC;
-      if (tooFast) acc[zone].faster += 1;
-
-      if (EASY_ZONES.has(zone)) {
-        easyMeasured += 1;
-        if (tooFast) easyTooFast += 1;
-      }
-    }
-
-    const buckets: Record<string, IntensityBucket> = {};
-    for (const [zone, v] of Object.entries(acc)) {
-      const avgExpected = avg(v.expected);
-      const avgActual = avg(v.actual);
-      buckets[zone] = {
-        n: v.expected.length,
-        avgExpectedSec: Math.round(avgExpected),
-        avgActualSec: Math.round(avgActual),
-        avgDeltaSec: Math.round(avgActual - avgExpected),
-        fasterCount: v.faster,
-      };
-    }
-
-    return { buckets, easyMeasured, easyTooFast };
   }
 
   // ──────────────────────────────────────────────────────────────────────────
