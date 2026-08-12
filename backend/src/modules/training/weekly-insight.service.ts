@@ -369,41 +369,13 @@ export class WeeklyInsightService {
       if (week.endStr < cutoff) continue; // sem backfill
       if (existing.has(week.weekNumber)) continue;
 
-      // ── Fase 4: esta semana fecha um bloco de 4? ─────────────────────────
-      //
-      // O MESO VEM PRIMEIRO, e a ordem não é estética. Ele é quem notifica na
-      // madrugada de fecho de bloco (um push por madrugada, a altitude maior
-      // ganha a voz) — mas só faz sentido silenciar o semanal DEPOIS de saber
-      // que o meso de fato existe. Na ordem inversa, um meso que falhasse
-      // deixaria a madrugada muda.
-      //
-      // Best-effort: falha aqui não derruba o insight semanal, que segue
-      // notificando normalmente.
-      let mesoGenerated = false;
-      try {
-        const meso = await this.mesoInsightService.maybeGenerateForClosedWeek({
-          userId,
-          planId,
-          weekNumber: week.weekNumber,
-          weeks,
-          workouts,
-          planFrequency,
-        });
-        mesoGenerated = meso != null;
-      } catch (error) {
-        this.logger.warn(
-          `[WeeklyInsight] Insight de mesociclo falhou p/ plano ${planId}: ${String(error)}`,
-        );
-      }
-
-      const insight = await this.generateForWeek(
+      const insight = await this.generateWeekWithMeso(
         userId,
         planId,
         week,
         weeks,
         workouts,
         planFrequency,
-        mesoGenerated,
       );
       if (insight) {
         out.push({
@@ -415,6 +387,65 @@ export class WeeklyInsightService {
     }
 
     return out;
+  }
+
+  /**
+   * Fecha uma semana: o insight de MESOCICLO primeiro, o SEMANAL depois.
+   *
+   * ── POR QUE ESTA FUNÇÃO EXISTE ────────────────────────────────────────────
+   *
+   * Existem DOIS caminhos que fecham uma semana — o cron (`processPlan`) e o
+   * gatilho manual (`generateLatestClosedWeek`, usado pelo harness de QA e para
+   * recuperar de falha do cron). A Fase 4 nasceu ligada só ao primeiro, e o
+   * resultado foi um buraco silencioso: rodando pelo endpoint manual, o
+   * mesociclo nunca era gerado e o semanal notificava normalmente. Nada falhava
+   * — só não acontecia. Com a sequência num lugar só, os dois caminhos não têm
+   * como divergir de novo.
+   *
+   * ── POR QUE O MESO VEM PRIMEIRO ───────────────────────────────────────────
+   *
+   * Ele é quem notifica na madrugada de fecho de bloco (um push por madrugada,
+   * a altitude maior ganha a voz) — mas só faz sentido silenciar o semanal
+   * DEPOIS de saber que o meso de fato existe. Na ordem inversa, um meso que
+   * falhasse deixaria a madrugada muda.
+   *
+   * Best-effort: falha na geração do bloco não derruba o insight semanal, que
+   * segue notificando normalmente.
+   */
+  private async generateWeekWithMeso(
+    userId: string,
+    planId: string,
+    week: PlanWeekWindow,
+    weeks: PlanWeekWindow[],
+    workouts: WorkoutRow[],
+    planFrequency: number | null,
+  ): Promise<WeeklyInsight | null> {
+    let mesoGenerated = false;
+    try {
+      const meso = await this.mesoInsightService.maybeGenerateForClosedWeek({
+        userId,
+        planId,
+        weekNumber: week.weekNumber,
+        weeks,
+        workouts,
+        planFrequency,
+      });
+      mesoGenerated = meso != null;
+    } catch (error) {
+      this.logger.warn(
+        `[WeeklyInsight] Insight de mesociclo falhou p/ plano ${planId}: ${String(error)}`,
+      );
+    }
+
+    return this.generateForWeek(
+      userId,
+      planId,
+      week,
+      weeks,
+      workouts,
+      planFrequency,
+      mesoGenerated,
+    );
   }
 
   private async fetchPlanWorkouts(planId: string): Promise<WorkoutRow[]> {
@@ -1175,7 +1206,10 @@ Escreva a narrativa explicando o que aconteceu na semana e por que essa é a rec
       };
     }
 
-    const insight = await this.generateForWeek(
+    // MESMO caminho do cron, incluindo o insight de mesociclo e a supressão do
+    // push do semanal quando o bloco fecha — é o que faz o gatilho manual ser
+    // um ensaio fiel da madrugada, e não uma versão reduzida dela.
+    const insight = await this.generateWeekWithMeso(
       userId,
       plan.id,
       eligible,

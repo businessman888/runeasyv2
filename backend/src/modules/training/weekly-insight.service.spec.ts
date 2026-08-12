@@ -536,6 +536,40 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
         reason: 'no_active_plan',
       });
     });
+
+    /**
+     * O gatilho manual é o caminho do harness de QA e o da recuperação de falha
+     * do cron — ele PRECISA ser um ensaio fiel da madrugada.
+     *
+     * Na Fase 4 ele deixou de ser por um tempo: o mesociclo foi ligado só no
+     * laço do cron, e rodando pelo endpoint manual o bloco nunca era gerado.
+     * Nada falhava — só não acontecia, e o semanal notificava como se não
+     * houvesse bloco nenhum. Estes dois testes existem para isso não voltar.
+     */
+    it('também dispara o insight de mesociclo', async () => {
+      await build(seedPlan());
+      freezeToday();
+
+      await service.generateLatestClosedWeek('user-1');
+
+      expect(
+        mesoInsightService.maybeGenerateForClosedWeek,
+      ).toHaveBeenCalledWith(expect.objectContaining({ weekNumber: 2 }));
+    });
+
+    it('e cala o push do semanal quando o bloco é gerado', async () => {
+      await build(seedPlan());
+      freezeToday();
+      mesoInsightService.maybeGenerateForClosedWeek.mockResolvedValue({
+        id: 'meso-1',
+      });
+
+      await service.generateLatestClosedWeek('user-1');
+
+      const week2 = tables.plan_week_insights.find((r) => r.week_number === 2);
+      expect(week2.notified_at).toBeNull();
+      expect(notificationService.sendPushNotification).not.toHaveBeenCalled();
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────
