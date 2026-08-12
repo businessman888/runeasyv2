@@ -74,16 +74,36 @@ export function InsightEntry() {
         meso: typeof unseenMeso;
     } | null>(null);
 
+    /**
+     * As DUAS buscas terminaram — só então dá para congelar.
+     *
+     * São requisições independentes, e sem esta trava o congelamento acontecia
+     * na primeira que chegasse. O semanal responde antes, o par era fixado como
+     * `{ weekly, meso: null }`, e quando o mesociclo chegava o `pinned` já
+     * existia: o card do bloco era descartado em silêncio. Foi exatamente o que
+     * apareceu na validação — a folha abriu com um card só.
+     *
+     * `fetch` das stores nunca rejeita (trata o erro internamente), então o
+     * `Promise.all` sempre resolve — inclusive offline, onde o certo é abrir com
+     * o que houver em vez de nunca abrir.
+     */
+    const [ready, setReady] = useState(false);
+
     useEffect(() => {
-        void fetchWeekly();
-        void fetchMeso();
+        let alive = true;
+        void Promise.all([fetchWeekly(), fetchMeso()]).finally(() => {
+            if (alive) setReady(true);
+        });
+        return () => {
+            alive = false;
+        };
     }, [fetchWeekly, fetchMeso]);
 
     useEffect(() => {
-        if (pinned || modalDismissedThisSession) return;
+        if (!ready || pinned || modalDismissedThisSession) return;
         if (!unseenWeekly && !unseenMeso) return;
         setPinned({ weekly: unseenWeekly, meso: unseenMeso });
-    }, [pinned, modalDismissedThisSession, unseenWeekly, unseenMeso]);
+    }, [ready, pinned, modalDismissedThisSession, unseenWeekly, unseenMeso]);
 
     const handleClose = useCallback(() => {
         dismissModal();
