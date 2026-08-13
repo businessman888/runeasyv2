@@ -10,11 +10,17 @@ if (process.env.APP_ENV === 'staging') {
   config({ path: '.env.staging', override: true });
 }
 
+// With remote app versioning, EAS injects the effective iOS build number only
+// during the cloud build. Exposing it through `ios.buildNumber` is also needed
+// by @bacons/apple-targets, otherwise the generated Watch target falls back to
+// CURRENT_PROJECT_VERSION=1 while EAS increments only the iPhone target.
+const iosBuildNumber = process.env.EAS_BUILD_IOS_BUILD_NUMBER || "1";
+
 export default {
   owner: "businessman23",
   name: "RunEasy",
   slug: "runeasy",
-  version: "1.0.3",
+  version: "1.0.4",
   // "default" libera rotação no nível nativo; o lock por device (phone trava em
   // portrait, tablet/iPad rotaciona) é feito em runtime no App.tsx via
   // expo-screen-orientation. Ver TABLET_RESPONSIVENESS_PLAN.md.
@@ -28,6 +34,7 @@ export default {
     backgroundColor: "#0E0E1F"
   },
   ios: {
+    buildNumber: iosBuildNumber,
     // Habilita iPad. PRÉ-REQUISITO DE SUBMIT (Fase 7): com supportsTablet=true,
     // o App Store Connect passa a EXIGIR screenshots de iPad 12.9" (2048×2732px).
     // Ver TABLET_RESPONSIVENESS_PLAN.md §7.

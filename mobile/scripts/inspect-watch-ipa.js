@@ -59,7 +59,10 @@ function expectValue(object, key, expected, label) {
     expected === PRESENT
       ? received !== undefined && received !== null && received !== ''
       : JSON.stringify(received) === JSON.stringify(expected);
-  console.log(`${valid ? 'PASS' : 'FAIL'} ${label}: ${JSON.stringify(received)}`);
+  const detail = valid || expected === PRESENT
+    ? JSON.stringify(received)
+    : `recebido=${JSON.stringify(received)} esperado=${JSON.stringify(expected)}`;
+  console.log(`${valid ? 'PASS' : 'FAIL'} ${label}: ${detail}`);
   return valid ? 0 : 1;
 }
 
