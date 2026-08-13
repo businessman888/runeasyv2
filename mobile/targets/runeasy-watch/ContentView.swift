@@ -6,9 +6,16 @@ private let navLog = Logger(
     category: "navigation"
 )
 
-enum AppRoute: Hashable {
-    case activeRun(workoutId: String?)
-    case summary
+private enum RunLaunch {
+    case planned(workout: PlannedWorkout)
+    case free
+
+    var workout: PlannedWorkout? {
+        switch self {
+        case .planned(let workout): return workout
+        case .free: return nil
+        }
+    }
 }
 
 /// Raiz do app.
@@ -16,26 +23,24 @@ enum AppRoute: Hashable {
 /// Paginação vertical (AUDITORIA §P2): arrastar a tela inicial para cima abre
 /// Resultados. É o idioma nativo do watchOS — o mesmo do app Treino da Apple.
 ///
-/// A NavigationStack fica DENTRO da página 1, não envolvendo o TabView.
-/// Envolver o TabView faria a barra de navegação aparecer nas duas páginas e
-/// competiria com o gesto vertical de paginação.
+/// O tracking é apresentado fora do pager. Assim uma sessão ativa não compete
+/// com o gesto vertical nem é recriada quando o usuário muda de página.
 struct ContentView: View {
     @EnvironmentObject private var phoneBridge: PhoneBridge
 
-    @State private var path: [AppRoute] = []
+    @State private var activeRun: RunLaunch?
     @State private var lastCompletedRun: CompletedRun?
 
     var body: some View {
-        TabView {
-            todayPage
-            ResultsView(
-                isPro: phoneBridge.isPro,
-                activities: phoneBridge.todayActivities,
-                planResult: phoneBridge.latestPlanResult,
-                activityResult: phoneBridge.latestActivityResult
-            )
+        Group {
+            if let activeRun {
+                activeRunScreen(activeRun)
+            } else if let run = lastCompletedRun {
+                summaryScreen(run)
+            } else {
+                homePages
+            }
         }
-        .tabViewStyle(.verticalPage)
         .preferredColorScheme(.dark)
         .task {
             phoneBridge.activate()
@@ -44,14 +49,15 @@ struct ContentView: View {
 
     // MARK: - Página 1 — Hoje
 
-    private var todayPage: some View {
-        NavigationStack(path: $path) {
+    private var homePages: some View {
+        TabView {
             StartView(
                 userName: phoneBridge.userName,
                 avatarUrl: phoneBridge.avatarUrl,
                 isPro: phoneBridge.isPro,
                 hasReceivedContext: phoneBridge.hasReceivedContext,
                 isReachable: phoneBridge.isReachable,
+                syncState: phoneBridge.syncState,
                 workout: phoneBridge.todayWorkout,
                 weekStats: phoneBridge.weekStats,
                 nextWorkout: phoneBridge.nextWorkout,
@@ -62,13 +68,17 @@ struct ContentView: View {
                     navLog.info("onStart tocado, workout=\(workout?.id ?? "free", privacy: .public) completed=\(workout?.isCompleted == true, privacy: .public)")
                     // Bloqueia se treino já completado (botão deveria estar disabled, mas por segurança)
                     if workout?.isCompleted == true { return }
-                    path.append(.activeRun(workoutId: workout?.id))
-                    navLog.info("path.append → activeRun (depth=\(path.count, privacy: .public))")
+                    if let workout {
+                        // Snapshot imutável: um applicationContext novo não
+                        // pode transformar a tela já aberta em corrida livre.
+                        activeRun = .planned(workout: workout)
+                    }
+                    navLog.info("root → activeRun planned")
                 },
                 onStartFreeRun: {
                     // workoutId nil → o iPhone roteia para completeFreeRun.
                     navLog.info("onStartFreeRun tocado")
-                    path.append(.activeRun(workoutId: nil))
+                    activeRun = .free
                 },
                 onUpgrade: {
                     // O Superwall não roda no watchOS: delega ao iPhone.
@@ -84,42 +94,42 @@ struct ContentView: View {
                     return delivered
                 }
             )
-            .navigationDestination(for: AppRoute.self) { route in
-                switch route {
-                case .activeRun(let workoutId):
-                    ActiveRunView(
-                        // Treino livre (workoutId nil) NÃO deve herdar o treino
-                        // do plano do dia — senão a corrida seria creditada ao
-                        // treino programado.
-                        workout: workoutId == nil ? nil : phoneBridge.todayWorkout,
-                        onFinish: { run in
-                            lastCompletedRun = run
-                            phoneBridge.sendCompletedRun(run)
-                            path.append(.summary)
-                        },
-                        onCancel: {
-                            if !path.isEmpty { path.removeLast() }
-                        }
-                    )
-                case .summary:
-                    if let run = lastCompletedRun {
-                        RunSummaryView(
-                            run: run,
-                            pendingTransfers: phoneBridge.pendingTransfers,
-                            onDone: {
-                                // Limpar evita o resumo antigo reaparecer numa
-                                // navegação seguinte antes do novo run chegar.
-                                lastCompletedRun = nil
-                                path.removeAll()
-                            }
-                        )
-                    } else {
-                        Text("Sem dados").onAppear { path.removeAll() }
-                    }
-                }
-            }
+
+            ResultsView(
+                isPro: phoneBridge.isPro,
+                activities: phoneBridge.todayActivities,
+                planResult: phoneBridge.latestPlanResult,
+                activityResult: phoneBridge.latestActivityResult
+            )
+        }
+        .tabViewStyle(.verticalPage)
+    }
+
+    private func activeRunScreen(_ launch: RunLaunch) -> some View {
+        NavigationStack {
+            ActiveRunView(
+                workout: launch.workout,
+                onFinish: { run in
+                    lastCompletedRun = run
+                    phoneBridge.sendCompletedRun(run)
+                    activeRun = nil
+                },
+                onCancel: { activeRun = nil }
+            )
         }
     }
+
+    private func summaryScreen(_ run: CompletedRun) -> some View {
+        NavigationStack {
+            RunSummaryView(
+                run: run,
+                pendingTransfers: phoneBridge.pendingTransfers,
+                deliveryAck: phoneBridge.lastRunAck,
+                onDone: { lastCompletedRun = nil }
+            )
+        }
+    }
+
 }
 
 #Preview {

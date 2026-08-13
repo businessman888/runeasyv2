@@ -7,11 +7,10 @@ import {
     onCompletedRun,
     onReachabilityChange,
     onPairedChange,
-    sendTodayWorkout,
     sendWatchContext,
     type CompletedRunFromWatch,
-    type TodayWorkoutForWatch,
     type WatchContext,
+    type RunDeliveryAck,
 } from '../services/appleWatch';
 import {
     useTrainingStore,
@@ -30,10 +29,10 @@ interface AppleWatchState {
     lastRoutingResult: 'success' | 'savedLocally' | null;
     /** Último contexto enviado — permite reenviar quando o Watch pedir refresh. */
     lastContext: WatchContext | null;
+    lastRunAck: RunDeliveryAck | null;
 
     // actions
     bootstrap: () => Promise<void>;
-    sendTodayWorkoutToWatch: (workout: TodayWorkoutForWatch | null, userName: string) => void;
     sendContextToWatch: (ctx: WatchContext) => void;
     /** Reenvia o último contexto. No-op se nada foi enviado ainda. */
     resendLastContext: () => void;
@@ -42,6 +41,7 @@ interface AppleWatchState {
 
 let bootstrapped = false;
 let unsubFns: Array<() => void> = [];
+const processingRunIds = new Set<string>();
 
 /**
  * Converte os RoutePoints do Watch (snake_case via JSON do Swift) para a shape
@@ -59,6 +59,26 @@ function mapRoutePoints(input: CompletedRunFromWatch['route_points']): RoutePoin
     }));
 }
 
+/** Gera uma identidade estável para transfers criados antes do schema 2. */
+function resolveRunId(run: CompletedRunFromWatch): string {
+    const explicitId = run.run_id?.trim();
+    if (explicitId) return explicitId;
+
+    const fingerprint = [
+        run.workout_id ?? 'free',
+        run.started_at,
+        Math.round(run.total_distance_meters),
+        Math.round(run.duration_seconds),
+    ].join('|');
+
+    let hash = 2166136261;
+    for (let index = 0; index < fingerprint.length; index += 1) {
+        hash ^= fingerprint.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+    }
+    return `legacy-${(hash >>> 0).toString(16)}`;
+}
+
 /**
  * Roteia uma corrida recebida do Watch para o trainingStore existente.
  * Reutiliza completeWorkout (treino do plano) ou completeFreeRun (corrida livre).
@@ -68,7 +88,8 @@ function mapRoutePoints(input: CompletedRunFromWatch['route_points']): RoutePoin
 async function routeCompletedRunToTraining(run: CompletedRunFromWatch): Promise<'success' | 'savedLocally'> {
     const trainingStore = useTrainingStore.getState();
     const route_points = mapRoutePoints(run.route_points);
-    const externalId = `apple_watch_${run.workout_id ?? 'free'}_${run.started_at}`;
+    const runId = resolveRunId(run);
+    const externalId = `apple_watch_${runId}`;
 
     if (run.workout_id) {
         // Treino do plano — completeWorkout dispara feedback AI quando workout.source === 'plan'
@@ -89,7 +110,7 @@ async function routeCompletedRunToTraining(run: CompletedRunFromWatch): Promise<
         return res.success ? 'success' : 'savedLocally';
     } else {
         // Corrida livre — gera localId pra dedup do MMKV
-        const localId = `watch_free_${run.started_at}_${run.duration_seconds}`;
+        const localId = `watch_free_${runId}`;
         const payload: FreeRunPayload = {
             localId,
             route_points,
@@ -116,6 +137,7 @@ export const useAppleWatchStore = create<AppleWatchState>((set, get) => ({
     lastReceivedAt: null,
     lastRoutingResult: null,
     lastContext: null,
+    lastRunAck: null,
 
     bootstrap: async () => {
         if (bootstrapped) return;
@@ -132,21 +154,44 @@ export const useAppleWatchStore = create<AppleWatchState>((set, get) => ({
 
         unsubFns.push(
             onCompletedRun(async (run) => {
+                const runId = resolveRunId(run);
+                if (processingRunIds.has(runId)) {
+                    console.log(`[AppleWatchStore] duplicate em processamento ignorado: ${runId}`);
+                    return;
+                }
+                processingRunIds.add(runId);
                 console.log('[AppleWatchStore] received completed run:', {
                     workout_id: run.workout_id,
                     distance_m: run.total_distance_meters,
                     duration_s: run.duration_seconds,
                     points: run.route_points?.length ?? 0,
+                    run_id: runId,
                 });
                 set({ lastReceivedRun: run, lastReceivedAt: Date.now() });
 
                 try {
                     const result = await routeCompletedRunToTraining(run);
-                    set({ lastRoutingResult: result });
+                    const ack: RunDeliveryAck = {
+                        runId,
+                        status: result === 'success' ? 'server_accepted' : 'pending_sync',
+                        acknowledgedAt: new Date().toISOString(),
+                    };
+                    set({ lastRoutingResult: result, lastRunAck: ack });
+                    const ctx = get().lastContext;
+                    if (ctx) sendWatchContext({ ...ctx, runAck: ack });
                     console.log(`[AppleWatchStore] routed → ${result}`);
                 } catch (err) {
                     console.error('[AppleWatchStore] routing error:', err);
-                    set({ lastRoutingResult: 'savedLocally' });
+                    const ack: RunDeliveryAck = {
+                        runId,
+                        status: 'pending_sync',
+                        acknowledgedAt: new Date().toISOString(),
+                    };
+                    set({ lastRoutingResult: 'savedLocally', lastRunAck: ack });
+                    const ctx = get().lastContext;
+                    if (ctx) sendWatchContext({ ...ctx, runAck: ack });
+                } finally {
+                    processingRunIds.delete(runId);
                 }
             })
         );
@@ -166,13 +211,10 @@ export const useAppleWatchStore = create<AppleWatchState>((set, get) => ({
         console.log('[AppleWatchStore] bootstrap complete', { paired, installed });
     },
 
-    sendTodayWorkoutToWatch: (workout, userName) => {
-        sendTodayWorkout(workout, userName);
-    },
-
     sendContextToWatch: (ctx) => {
-        set({ lastContext: ctx });
-        sendWatchContext(ctx);
+        const enriched = { ...ctx, runAck: get().lastRunAck };
+        set({ lastContext: enriched });
+        sendWatchContext(enriched);
     },
 
     resendLastContext: () => {
@@ -182,7 +224,7 @@ export const useAppleWatchStore = create<AppleWatchState>((set, get) => ({
             return;
         }
         console.log('[AppleWatchStore] reenviando contexto a pedido do Watch');
-        sendWatchContext(ctx);
+        sendWatchContext({ ...ctx, runAck: get().lastRunAck });
     },
 
     clearLastReceivedRun: () => set({ lastReceivedRun: null, lastReceivedAt: null, lastRoutingResult: null }),

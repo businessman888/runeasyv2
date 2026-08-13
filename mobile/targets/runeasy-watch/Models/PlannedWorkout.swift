@@ -1,5 +1,13 @@
 import Foundation
 
+struct EarnableBadge: Codable, Equatable, Identifiable {
+    var id: String { slug }
+    let slug: String
+    let type: String
+    let tier: Int
+    let earned: Bool
+}
+
 struct PlannedWorkout: Codable, Identifiable, Equatable {
     let id: String
     let type: WorkoutType
@@ -16,6 +24,7 @@ struct PlannedWorkout: Codable, Identifiable, Equatable {
     var intensity: String?
     /// "Hoje, 14/06" — header pequeno do card (formatado pelo iPhone)
     var dateLabel: String?
+    var earnableBadges: [EarnableBadge]?
 
     enum Status: String, Codable {
         case pending
@@ -54,6 +63,9 @@ extension PlannedWorkout {
         status: .pending,
         targetDurationSeconds: 36 * 60,
         intensity: "Moderada",
-        dateLabel: "Hoje, 14/06"
+        dateLabel: "Hoje, 14/06",
+        earnableBadges: [
+            EarnableBadge(slug: "fiel_ao_plano", type: "adherence", tier: 1, earned: false)
+        ]
     )
 }

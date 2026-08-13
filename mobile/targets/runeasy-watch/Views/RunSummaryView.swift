@@ -6,6 +6,7 @@ struct RunSummaryView: View {
     /// corrida ainda não chegou ao iPhone — o envio é durável (transferUserInfo
     /// tem retry automático), mas o usuário precisa saber que está pendente.
     var pendingTransfers: Int = 0
+    var deliveryAck: RunDeliveryAck?
     let onDone: () -> Void
 
     var body: some View {
@@ -19,20 +20,21 @@ struct RunSummaryView: View {
 
                 summaryCard
 
+                if let warning = run.completionWarning {
+                    HStack(alignment: .top, spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                        Text(warning)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundColor(.runEasyWarning)
+                }
+
                 PrimaryActionButton("OK") {
                     onDone()
                 }
 
-                if pendingTransfers > 0 {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 9, weight: .semibold))
-                        Text("Enviando ao iPhone…")
-                            .font(.system(size: 9, weight: .medium))
-                    }
-                    .foregroundColor(.runEasyWarning)
-                    .multilineTextAlignment(.center)
-                }
+                deliveryStatus
 
                 Text("Detalhes completos no iPhone")
                     .font(AppFont.captionMuted)
@@ -44,6 +46,29 @@ struct RunSummaryView: View {
         }
         .background(Color.runEasyNavy.ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
+    }
+
+    private var deliveryStatus: some View {
+        Group {
+            if let deliveryAck, deliveryAck.runId == run.runId {
+                switch deliveryAck.status {
+                case .serverAccepted:
+                    Label("Salvo no RunEasy", systemImage: "checkmark.icloud.fill")
+                        .foregroundColor(.runEasySuccess)
+                case .pendingSync:
+                    Label("Salvo no iPhone — sincronização pendente", systemImage: "arrow.triangle.2.circlepath")
+                        .foregroundColor(.runEasyWarning)
+                }
+            } else if pendingTransfers > 0 {
+                Label("Enviando ao iPhone…", systemImage: "arrow.triangle.2.circlepath")
+                    .foregroundColor(.runEasyWarning)
+            } else {
+                Label("Aguardando confirmação do iPhone", systemImage: "iphone.and.arrow.forward")
+                    .foregroundColor(.runEasyText60)
+            }
+        }
+        .font(.system(size: 8, weight: .medium))
+        .multilineTextAlignment(.center)
     }
 
     // MARK: - Sections
@@ -121,6 +146,7 @@ struct RunSummaryView: View {
     NavigationStack {
         RunSummaryView(
             run: CompletedRun(
+                runId: "mock-run-001",
                 workoutId: "mock-001",
                 totalDistanceMeters: 4500,
                 durationSeconds: 1620,
@@ -130,7 +156,15 @@ struct RunSummaryView: View {
                 calories: 270,
                 routePoints: [],
                 startedAt: ISO8601DateFormatter().string(from: Date()),
-                source: "apple_watch"
+                source: "apple_watch",
+                healthKitSaved: true,
+                routeSaved: true,
+                completionWarning: nil
+            ),
+            deliveryAck: RunDeliveryAck(
+                runId: "mock-run-001",
+                status: .serverAccepted,
+                acknowledgedAt: ISO8601DateFormatter().string(from: Date())
             ),
             onDone: { }
         )

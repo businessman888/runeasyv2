@@ -17,7 +17,7 @@ import { onWatchRequest } from '../services/appleWatch';
 import { useProFeature } from './useProFeature';
 import { useTrainingStore, type ScheduleDay } from '../stores/trainingStore';
 import { useAuthStore, getDisplayName, getAvatarUrl } from '../stores/authStore';
-import { useGamificationStore } from '../stores/gamificationStore';
+import { useGamificationStore, type Badge } from '../stores/gamificationStore';
 import { useAppleWatchStore } from '../stores/appleWatchStore';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
 import { useFeedbackStore, type LatestActivityData } from '../stores/feedbackStore';
@@ -28,6 +28,13 @@ import type {
     ActivityForWatch,
     RunResultForWatch,
 } from '../services/appleWatch';
+import {
+    getEarnableBadgeSlugs,
+    resolveWorkoutDurationSeconds,
+    resolveWorkoutPaceSeconds,
+} from '../utils/workoutPreview';
+
+const SUBSCRIPTION_FRESHNESS_MS = 24 * 60 * 60 * 1000;
 
 function mapWorkoutType(t: string | undefined | null): TodayWorkoutForWatch['type'] {
     switch (t) {
@@ -117,14 +124,31 @@ function findNextWorkout(schedule: ScheduleDay[]): NextWorkoutForWatch | null {
     return { title, date: next.date };
 }
 
-function buildTodayWorkout(today: ScheduleDay | null): TodayWorkoutForWatch | null {
+function buildTodayWorkout(
+    today: ScheduleDay | null,
+    badges: Badge[],
+): TodayWorkoutForWatch | null {
     if (!today) return null;
     if (today.type === 'recovery' || today.type === null) return null;
     if (!today.workout) return null;
 
     const w = today.workout;
     const distanceKm = typeof w.distance_km === 'number' ? w.distance_km : 0;
-    const targetPace = formatTargetPace(w.target_pace_seconds);
+    const previewInput = {
+        type: w.type,
+        distance_km: w.distance_km,
+        target_pace_seconds: w.target_pace_seconds,
+        target_duration_seconds: w.target_duration_seconds,
+        instructions_json: w.instructions_json,
+    };
+    const targetPace = formatTargetPace(resolveWorkoutPaceSeconds(previewInput));
+    const targetDurationSeconds = resolveWorkoutDurationSeconds(previewInput);
+    const earnableBadges = getEarnableBadgeSlugs(previewInput).map((slug) => {
+        const badge = badges.find((candidate) => candidate.slug === slug);
+        return badge
+            ? { slug: badge.slug, type: badge.type, tier: badge.tier, earned: badge.earned }
+            : { slug, type: 'adherence', tier: 1, earned: false };
+    });
 
     const titleByType: Record<string, string> = {
         long_run: 'Longão',
@@ -158,10 +182,11 @@ function buildTodayWorkout(today: ScheduleDay | null): TodayWorkoutForWatch | nu
         distanceKm,
         targetPace,
         instructions: w.objective?.trim() || '',
-        targetDurationSeconds: w.target_duration_seconds ?? null,
+        targetDurationSeconds,
         intensity: intensityByType[w.type] || 'Moderada',
         dateLabel: formatDateLabel(today.date),
         status,
+        earnableBadges,
     };
 }
 
@@ -245,6 +270,7 @@ export function useWatchSync() {
     const rawWorkouts = useTrainingStore((s) => s.workouts);
     const user = useAuthStore((s) => s.user);
     const stats = useGamificationStore((s) => s.stats);
+    const badges = useGamificationStore((s) => s.badges);
     const latestPlanActivity = useFeedbackStore((s) => s.latestPlanActivity);
     const latestActivityResultData = useFeedbackStore((s) => s.latestActivityResult);
     const sendContextToWatch = useAppleWatchStore((s) => s.sendContextToWatch);
@@ -257,6 +283,7 @@ export function useWatchSync() {
     // override, so toggling "Forçar Free" propagates to the Watch on the next
     // schedule rebuild without any extra wiring.
     const isProUser = useSubscriptionStore((s) => s.isProUser);
+    const subscriptionVerifiedAt = useSubscriptionStore((s) => s.lastFetchedAt);
 
     const lastSentRef = useRef<string | null>(null);
 
@@ -277,6 +304,15 @@ export function useWatchSync() {
     useEffect(() => {
         if (Platform.OS !== 'ios') return;
         if (!isPaired) return;
+        const subscriptionAge = subscriptionVerifiedAt == null
+            ? Number.POSITIVE_INFINITY
+            : Date.now() - subscriptionVerifiedAt;
+        const subscriptionIsFresh =
+            subscriptionAge >= -5 * 60 * 1000 &&
+            subscriptionAge <= SUBSCRIPTION_FRESHNESS_MS;
+        // Não publica tier default ou persistido indefinidamente. O contexto
+        // anterior expira no Watch e exibe uma ação de ressincronização.
+        if (user && !subscriptionIsFresh) return;
 
         // Free/Pro gate at the data source — same pattern the CalendarScreen
         // already uses. Free users must never see plan workouts on the Watch:
@@ -293,7 +329,7 @@ export function useWatchSync() {
 
         const userName = getDisplayName(user) || 'Atleta';
         const avatarUrl = getAvatarUrl(user);
-        const todayWorkout = buildTodayWorkout(effectiveToday);
+        const todayWorkout = buildTodayWorkout(effectiveToday, badges);
         const weekStats = computeWeekStats(
             effectiveSchedule,
             stats?.current_streak ?? 0,
@@ -311,6 +347,7 @@ export function useWatchSync() {
         const latestActivityResult = buildRunResult(latestActivityResultData, 'activity');
 
         const ctx = {
+            accountId: user?.id ?? null,
             userName,
             avatarUrl,
             isPro: isProUser,
@@ -320,6 +357,7 @@ export function useWatchSync() {
             todayActivities,
             latestPlanResult,
             latestActivityResult,
+            subscriptionVerifiedAt,
         };
         const cacheKey = JSON.stringify(ctx);
         if (lastSentRef.current === cacheKey) return;
@@ -346,8 +384,10 @@ export function useWatchSync() {
         rawWorkouts,
         user,
         stats,
+        badges,
         isPaired,
         isProUser,
+        subscriptionVerifiedAt,
         latestPlanActivity,
         latestActivityResultData,
         sendContextToWatch,

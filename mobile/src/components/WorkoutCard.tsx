@@ -2,7 +2,10 @@ import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BadgeShield } from './BadgeShield';
-import { paceValueToSecondsPerKm } from '../utils/pace';
+import {
+  getEarnableBadgeSlugs,
+  resolveWorkoutPaceSeconds,
+} from '../utils/workoutPreview';
 import {
   workoutDurationSeconds,
   formatDurationLabel,
@@ -97,26 +100,7 @@ function getIntensityLabel(type: string): string {
 }
 
 function getPaceMinutes(workout: WorkoutData): number {
-  if (workout.instructions_json?.length > 0) {
-    const main =
-      workout.instructions_json.find((i) => i.type === 'main') ??
-      workout.instructions_json.find((i: any) => i.type === 'repeat') ??
-      workout.instructions_json[0];
-    // pace_min pode estar em segundos/km (novo) ou decimal min/km (legado).
-    // Esta função retorna minutos decimais (usada em formatPace e pace×distância).
-    const paceSecs = paceValueToSecondsPerKm(
-      main?.pace_min ?? (main as any)?.work?.pace_min,
-    );
-    if (paceSecs != null) return paceSecs / 60;
-  }
-  const defaults: Record<string, number> = {
-    easy_run: 6.5,
-    long_run: 6.0,
-    intervals: 5.0,
-    tempo: 5.5,
-    recovery: 7.0,
-  };
-  return defaults[workout.type] ?? 6.0;
+  return (resolveWorkoutPaceSeconds(workout) ?? 360) / 60;
 }
 
 function formatPace(paceMin: number): string {
@@ -177,41 +161,6 @@ function formatCardDate(dateStr?: string): string {
 // Determines which badge slugs are most relevant for a given workout,
 // so the card can preview what the user might earn.
 
-function getEarnableSlugs(workout: WorkoutData): string[] {
-  const pace = getPaceMinutes(workout);
-  const dist = workout.distance_km;
-  const estMins = pace * dist;
-
-  type Candidate = { slug: string; priority: number };
-  const candidates: Candidate[] = [];
-
-  // Distance milestones
-  if (dist >= 42) candidates.push({ slug: 'maratona_completa', priority: 10 });
-  else if (dist >= 21) candidates.push({ slug: 'maratonista', priority: 9 });
-
-  // Duration milestones
-  if (estMins >= 120) candidates.push({ slug: 'duas_horas', priority: 8 });
-  else if (estMins >= 60) candidates.push({ slug: 'uma_hora', priority: 7 });
-
-  // Pace milestones (only performance workouts)
-  if (workout.type === 'intervals' || workout.type === 'tempo') {
-    if (pace < 3.5) candidates.push({ slug: 'foguete', priority: 6 });
-    else if (pace < 4.0) candidates.push({ slug: 'velocista_iv', priority: 5 });
-    else if (pace < 4.5) candidates.push({ slug: 'velocista_iii', priority: 5 });
-    else if (pace < 5.0) candidates.push({ slug: 'velocista_ii', priority: 5 });
-    else if (pace < 5.5) candidates.push({ slug: 'velocista_i', priority: 5 });
-  }
-
-  // Always relevant
-  candidates.push({ slug: 'fiel_ao_plano', priority: 3 });
-  candidates.push({ slug: 'primeiro_passo', priority: 1 });
-
-  return candidates
-    .sort((a, b) => b.priority - a.priority)
-    .slice(0, 2)
-    .map((c) => c.slug);
-}
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const WorkoutCard = memo(
@@ -244,7 +193,7 @@ export const WorkoutCard = memo(
 
     // Resolve earnable badges against the user's real badge list
     const earnableBadges = useMemo(() => {
-      const slugs = getEarnableSlugs(workout);
+      const slugs = getEarnableBadgeSlugs(workout);
       return slugs
         .map((slug) => allBadges.find((b) => b.slug === slug) ?? null)
         .filter((b): b is BadgeData => b !== null);

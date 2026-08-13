@@ -16,6 +16,10 @@ import { authedFetch } from '../services/apiClient';
 import { HealthKitManager } from '../services/healthkit';
 import * as devicesService from '../services/devices';
 import * as Storage from '../utils/storage';
+import { useFeedbackStore } from './feedbackStore';
+import { useGamificationStore } from './gamificationStore';
+import { useStatsStore } from './statsStore';
+import { useTrainingStore } from './trainingStore';
 import { useWellnessStore } from './wellnessStore';
 
 interface HealthKitState {
@@ -30,6 +34,8 @@ interface HealthKitState {
     isSyncing: boolean;
     lastSyncedAt: string | null;
     lastSyncedCount: number;
+    /** Leitura real: `empty` também pode significar permissão negada por privacidade do iOS. */
+    lastReadState: 'notAttempted' | 'readable' | 'empty' | 'error';
     /**
      * Por que a última tentativa de sync não rodou. `notConnected` é o caso
      * silencioso que fazia treinos do app nativo do Apple Watch nunca
@@ -52,6 +58,38 @@ interface HealthKitState {
 
 const APPLE_HEALTH_PROVIDER = 'apple_health';
 
+async function refreshActivityConsumers(): Promise<void> {
+    const end = new Date();
+    end.setDate(end.getDate() + 1);
+    const start = new Date();
+    start.setDate(start.getDate() - 31);
+    const toDate = (date: Date) => date.toISOString().slice(0, 10);
+
+    const training = useTrainingStore.getState();
+    const gamification = useGamificationStore.getState();
+    const feedback = useFeedbackStore.getState();
+    const stats = useStatsStore.getState();
+    const wellness = useWellnessStore.getState();
+    wellness.reset();
+
+    const results = await Promise.allSettled([
+        training.fetchWorkouts(toDate(start), toDate(end)),
+        training.fetchUpcomingWorkouts(),
+        training.fetchPlanOverview(),
+        gamification.fetchStats(),
+        gamification.fetchBadges(),
+        feedback.fetchWorkoutHistory(),
+        feedback.fetchLatestActivity('activity'),
+        stats.fetchAllStats(),
+        wellness.fetchSummary(true),
+    ]);
+
+    const rejected = results.filter((result) => result.status === 'rejected').length;
+    if (rejected > 0) {
+        console.warn(`[healthKitStore] ${rejected} atualização(ões) pós-importação falharam`);
+    }
+}
+
 export const useHealthKitStore = create<HealthKitState>((set, get) => ({
     isAvailable: false,
     isConnected: false,
@@ -59,6 +97,7 @@ export const useHealthKitStore = create<HealthKitState>((set, get) => ({
     isSyncing: false,
     lastSyncedAt: null,
     lastSyncedCount: 0,
+    lastReadState: 'notAttempted',
     lastSyncSkipReason: null,
     error: null,
 
@@ -86,19 +125,18 @@ export const useHealthKitStore = create<HealthKitState>((set, get) => ({
     },
 
     /**
-     * Connected only when BOTH the backend has the apple_health row AND iOS
-     * still holds the authorization. Requiring the native half prevents a stale
-     * backend row from showing Apple Health as connected when the OS has no
-     * authorization — the "mocked" Apple Watch state reported on iOS.
+     * Connected means the backend row exists and the iOS authorization flow
+     * was completed. HealthKit does not reveal whether read access was granted;
+     * `lastReadState` records the observable result of the real query.
      */
     async loadConnectionStatus() {
         try {
-            const [devices, authorized] = await Promise.all([
+            const [devices, authorizationDecided] = await Promise.all([
                 devicesService.listDevices(),
-                HealthKitManager.isAuthorized(),
+                HealthKitManager.hasAuthorizationDecision(),
             ]);
             const backendConnected = devices.some((d) => d.provider === APPLE_HEALTH_PROVIDER);
-            set({ isConnected: backendConnected && authorized });
+            set({ isConnected: backendConnected && authorizationDecided });
         } catch (e) {
             console.warn('[healthKitStore] loadConnectionStatus failed:', e);
             // Don't flip isConnected on transient errors — keep previous state.
@@ -130,12 +168,12 @@ export const useHealthKitStore = create<HealthKitState>((set, get) => ({
                 };
             }
 
-            const { granted } = await HealthKitManager.requestPermissions();
-            if (!granted) {
+            const { completed } = await HealthKitManager.requestPermissions();
+            if (!completed) {
                 set({ isConnecting: false });
                 return {
                     success: false,
-                    error: 'Permissão negada. Abra Ajustes para habilitar.',
+                    error: 'A autorização do Apple Health não foi concluída.',
                     needsSettings: true,
                 };
             }
@@ -206,6 +244,7 @@ export const useHealthKitStore = create<HealthKitState>((set, get) => ({
             isConnected: false,
             lastSyncedAt: null,
             lastSyncedCount: 0,
+            lastReadState: 'notAttempted',
             error: null,
         });
     },
@@ -246,15 +285,16 @@ export const useHealthKitStore = create<HealthKitState>((set, get) => ({
                 isSyncing: false,
                 lastSyncedAt: HealthKitManager.getLastSyncedAt(),
                 lastSyncedCount: result.inserted,
+                lastReadState: activities.length > 0 ? 'readable' : 'empty',
             });
 
             if (result.inserted > 0) {
-                useWellnessStore.getState().reset();
+                await refreshActivityConsumers();
             }
         } catch (e) {
             const message = e instanceof Error ? e.message : 'Erro desconhecido';
             console.warn('[healthKitStore] syncRecentIfConnected failed:', e);
-            set({ isSyncing: false, error: message });
+            set({ isSyncing: false, error: message, lastReadState: 'error' });
         }
     },
 

@@ -20,6 +20,7 @@ struct StartView: View {
     /// sync seria pior do que o inverso.
     let hasReceivedContext: Bool
     let isReachable: Bool
+    let syncState: WatchSyncState
     let workout: PlannedWorkout?
     let weekStats: WeekStats
     let nextWorkout: NextWorkoutInfo?
@@ -40,12 +41,13 @@ struct StartView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                HeaderView(avatarUrl: avatarUrl, stats: weekStats)
+                HeaderView(userName: userName, avatarUrl: avatarUrl, stats: weekStats)
                     .padding(.bottom, 2)
 
                 ConnectivityBanner(
                     isReachable: isReachable,
                     hasReceivedContext: hasReceivedContext,
+                    syncState: syncState,
                     pendingTransfers: pendingTransfers,
                     onRefresh: onRefresh
                 )
@@ -93,6 +95,7 @@ private func previewStart(
         isPro: isPro,
         hasReceivedContext: true,
         isReachable: isReachable,
+        syncState: .synced,
         workout: workout,
         weekStats: .mock,
         nextWorkout: nextWorkout,

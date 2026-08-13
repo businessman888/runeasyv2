@@ -22,7 +22,7 @@ private let workoutLog = Logger(
 //   .running → gravando (metrics.isPaused distingue rodando de pausado)
 //   .failed → erro navegável, com "Tentar novamente" e "Voltar"
 //
-// A sessão NUNCA inicia sozinha. Entrar na tela só pede permissão (prepare()).
+// A sessão NUNCA inicia sozinha. A autorização só é solicitada após o play.
 @MainActor
 final class WorkoutManager: NSObject, ObservableObject {
 
@@ -30,6 +30,7 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     enum Phase: Equatable {
         case idle
+        case authorizing
         case starting
         case running
         case failed(String)
@@ -73,6 +74,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     private(set) var routePoints: [RoutePoint] = []
     private(set) var heartRateSamples: [Int] = []
     private var workoutId: String?
+    private var runId: String?
     private var displayTask: Task<Void, Never>?
     private var simulatorTickTask: Task<Void, Never>?
     private var watchdogTask: Task<Void, Never>?
@@ -99,14 +101,6 @@ final class WorkoutManager: NSObject, ObservableObject {
     }
 
     // MARK: - Authorization
-
-    /// Chamado ao ENTRAR na tela de tracking. Só pede permissão — não inicia nada.
-    /// Assim o prompt do HealthKit aparece antes do play, e o play fica instantâneo.
-    func prepare() async {
-        workoutLog.info("prepare() phase=\(String(describing: self.phase), privacy: .public)")
-        guard phase == .idle else { return }
-        await requestAuthorization()
-    }
 
     func requestAuthorization() async {
         #if targetEnvironment(simulator)
@@ -165,13 +159,14 @@ final class WorkoutManager: NSObject, ObservableObject {
             return
         }
 
-        self.workoutId = workoutId
-        self.startDate = Date()
-        self.phase = .starting
-        workoutLog.info("startWorkout workoutId=\(workoutId ?? "free", privacy: .public)")
+        phase = .authorizing
 
         #if targetEnvironment(simulator)
         hasPermission = true
+        self.workoutId = workoutId
+        self.runId = UUID().uuidString
+        self.startDate = Date()
+        self.phase = .starting
         await startSimulatedWorkout()
         return
         #else
@@ -182,6 +177,11 @@ final class WorkoutManager: NSObject, ObservableObject {
                 return
             }
         }
+        self.workoutId = workoutId
+        self.runId = UUID().uuidString
+        self.startDate = Date()
+        self.phase = .starting
+        workoutLog.info("startWorkout runId=\(self.runId ?? "missing", privacy: .public) workoutId=\(workoutId ?? "free", privacy: .public)")
         await startRealWorkout()
         #endif
     }
@@ -199,6 +199,8 @@ final class WorkoutManager: NSObject, ObservableObject {
         session = nil
         builder = nil
         routeBuilder = nil
+        workoutId = nil
+        runId = nil
         wantsLocationUpdates = false
         metrics = RunMetrics()
         routePoints = []
@@ -217,20 +219,29 @@ final class WorkoutManager: NSObject, ObservableObject {
         startWatchdog()
 
         do {
-            session = try HKWorkoutSession(healthStore: healthStore, configuration: config)
-            builder = session?.associatedWorkoutBuilder()
-            builder?.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: config)
-            routeBuilder = HKWorkoutRouteBuilder(healthStore: healthStore, device: nil)
+            let newSession = try HKWorkoutSession(healthStore: healthStore, configuration: config)
+            let newBuilder = newSession.associatedWorkoutBuilder()
+            newBuilder.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: config)
 
-            session?.delegate = self
-            builder?.delegate = self
+            session = newSession
+            builder = newBuilder
+            routeBuilder = newBuilder.seriesBuilder(for: HKSeriesType.workoutRoute()) as? HKWorkoutRouteBuilder
+
+            newSession.delegate = self
+            newBuilder.delegate = self
 
             let now = startDate ?? Date()
             workoutLog.info("startActivity…")
-            session?.startActivity(with: now)
+            newSession.startActivity(with: now)
             workoutLog.info("beginCollection…")
-            try await builder?.beginCollection(at: now)
+            try await newBuilder.beginCollection(at: now)
             workoutLog.info("beginCollection OK")
+
+            guard phase == .starting else {
+                newSession.end()
+                workoutLog.error("início concluído após timeout; sessão abortada")
+                return
+            }
 
             watchdogTask?.cancel(); watchdogTask = nil
 
@@ -240,6 +251,12 @@ final class WorkoutManager: NSObject, ObservableObject {
             startDisplayTimer()
         } catch {
             watchdogTask?.cancel(); watchdogTask = nil
+            session?.end()
+            locationManager.stopUpdatingLocation()
+            wantsLocationUpdates = false
+            session = nil
+            builder = nil
+            routeBuilder = nil
             workoutLog.error("falha ao iniciar: \(error.localizedDescription, privacy: .public)")
             phase = .failed("Não foi possível iniciar o treino: \(error.localizedDescription)")
         }
@@ -254,6 +271,9 @@ final class WorkoutManager: NSObject, ObservableObject {
             guard let self, !Task.isCancelled else { return }
             guard self.phase == .starting else { return }
             workoutLog.error("watchdog: sessão presa em .starting por \(Self.startTimeoutSeconds, privacy: .public)s")
+            self.session?.end()
+            self.locationManager.stopUpdatingLocation()
+            self.wantsLocationUpdates = false
             self.phase = .failed(
                 "O treino não iniciou. Verifique as permissões de Saúde e Localização do RunEasy no Apple Watch."
             )
@@ -304,14 +324,50 @@ final class WorkoutManager: NSObject, ObservableObject {
 
         let endDate = Date()
 
+        var healthKitSaved = true
+        var routeSaved = true
+        var completionWarning: String?
+
         #if !targetEnvironment(simulator)
+        healthKitSaved = false
+        routeSaved = false
         if let session {
             session.end()
         }
         do {
-            try await builder?.endCollection(at: endDate)
-            _ = try await builder?.finishWorkout()
+            guard let builder else {
+                throw WorkoutFinalizationError.missingBuilder
+            }
+            try await builder.endCollection(at: endDate)
+            guard let savedWorkout = try await builder.finishWorkout() else {
+                throw WorkoutFinalizationError.workoutNotSaved
+            }
+            healthKitSaved = true
+
+            if routePoints.isEmpty {
+                completionWarning = "Treino salvo sem rota GPS. Verifique a permissão de Localização."
+            } else {
+                if let routeBuilder {
+                    do {
+                        _ = try await routeBuilder.finishRoute(with: savedWorkout, metadata: [
+                            "com.oytotec.runeasy.run_id": runId ?? "unknown"
+                        ])
+                        routeSaved = true
+                    } catch {
+                        routeSaved = false
+                        completionWarning = "Treino salvo, mas a rota GPS não pôde ser anexada."
+                        workoutLog.error("erro ao finalizar rota: \(error.localizedDescription, privacy: .public)")
+                    }
+                } else {
+                    routeSaved = false
+                    completionWarning = "Treino salvo, mas a rota GPS não pôde ser anexada."
+                    workoutLog.error("route builder indisponível durante a finalização")
+                }
+            }
         } catch {
+            healthKitSaved = false
+            routeSaved = false
+            completionWarning = "A corrida será enviada ao iPhone, mas não foi confirmada no app Saúde."
             workoutLog.error("erro ao finalizar: \(error.localizedDescription, privacy: .public)")
         }
         if session != nil {
@@ -327,6 +383,7 @@ final class WorkoutManager: NSObject, ObservableObject {
             : heartRateSamples.reduce(0, +) / heartRateSamples.count
 
         let payload = CompletedRun(
+            runId: runId ?? UUID().uuidString,
             workoutId: workoutId,
             totalDistanceMeters: metrics.distanceMeters,
             durationSeconds: metrics.elapsedSeconds,
@@ -336,7 +393,10 @@ final class WorkoutManager: NSObject, ObservableObject {
             calories: metrics.calories > 0 ? metrics.calories : nil,
             routePoints: routePoints,
             startedAt: ISO8601DateFormatter().string(from: startDate ?? endDate),
-            source: "apple_watch"
+            source: "apple_watch",
+            healthKitSaved: healthKitSaved,
+            routeSaved: routeSaved,
+            completionWarning: completionWarning
         )
         workoutLog.info("endWorkout dist=\(self.metrics.distanceMeters, privacy: .public)m dur=\(self.metrics.elapsedSeconds, privacy: .public)s pts=\(self.routePoints.count, privacy: .public)")
         return payload
@@ -513,12 +573,28 @@ extension WorkoutManager: CLLocationManagerDelegate {
             self.routePoints.append(contentsOf: points)
             // Acessar routeBuilder no MainActor (insertRouteData é async, await ok aqui)
             if let builder = self.routeBuilder {
-                try? await builder.insertRouteData(filtered)
+                do {
+                    try await builder.insertRouteData(filtered)
+                } catch {
+                    workoutLog.error("erro ao inserir rota: \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         workoutLog.error("GPS erro: \(error.localizedDescription, privacy: .public)")
+    }
+}
+
+private enum WorkoutFinalizationError: LocalizedError {
+    case missingBuilder
+    case workoutNotSaved
+
+    var errorDescription: String? {
+        switch self {
+        case .missingBuilder: return "Workout builder indisponível"
+        case .workoutNotSaved: return "HealthKit não retornou o workout salvo"
+        }
     }
 }

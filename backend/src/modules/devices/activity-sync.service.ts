@@ -55,11 +55,61 @@ const DEDUP_WINDOW_MINUTES = 10;
 const CROSS_PROVIDER_WINDOW_MINUTES = 5;
 const CROSS_PROVIDER_DISTANCE_TOLERANCE = 0.1; // ±10%
 
-// Reconciliation window: search plan workouts whose scheduled_date is within
-// ±1 day of the run's São Paulo date, to cover midnight crossings under TZ.
-const RECONCILE_WINDOW_DAYS = 1;
-const RECONCILE_DISTANCE_TOLERANCE = 0.2; // ±20%
+const RECONCILE_DISTANCE_TOLERANCE = 0.1; // ±10%
+const RECONCILE_AMBIGUITY_MARGIN = 0.05; // 5 percentage points
 const SAO_PAULO_OFFSET_HOURS = -3; // UTC-3 (BRT)
+
+export interface ReconciliationCandidate {
+  id: string;
+  source: 'plan' | 'manual';
+  scheduled_date: string;
+  distance_km: number | string | null;
+}
+
+/**
+ * Selects only a high-confidence same-day match. When two candidates are
+ * similarly close, returning null is intentional: silently completing the
+ * wrong planned/manual workout is harder to recover from than importing a
+ * free activity.
+ */
+export function selectReconciliationCandidate(
+  activityDate: string,
+  executedKm: number,
+  candidates: ReconciliationCandidate[],
+): ReconciliationCandidate | null {
+  if (!Number.isFinite(executedKm) || executedKm <= 0) return null;
+
+  const scored = candidates
+    .filter((candidate) => candidate.scheduled_date === activityDate)
+    .map((candidate) => {
+      const plannedKm = Number(candidate.distance_km ?? 0);
+      if (!Number.isFinite(plannedKm) || plannedKm <= 0) return null;
+      return {
+        candidate,
+        distanceDiff: Math.abs(plannedKm - executedKm) / plannedKm,
+      };
+    })
+    .filter(
+      (entry): entry is {
+        candidate: ReconciliationCandidate;
+        distanceDiff: number;
+      } =>
+        entry !== null &&
+        entry.distanceDiff <= RECONCILE_DISTANCE_TOLERANCE,
+    )
+    .sort((left, right) => left.distanceDiff - right.distanceDiff);
+
+  if (scored.length === 0) return null;
+  if (
+    scored.length > 1 &&
+    scored[1].distanceDiff - scored[0].distanceDiff <
+      RECONCILE_AMBIGUITY_MARGIN
+  ) {
+    return null;
+  }
+
+  return scored[0].candidate;
+}
 
 // Two device-local sources today; the cross-provider dedup query skips both
 // of them so a user with iPhone + Android wearable in parallel doesn't dup.
@@ -197,16 +247,10 @@ export class ActivitySyncService {
    *  3. Phone-tracking redundant marker: any phone-sourced run inside the
    *     ±10 min window is flipped to `phone_redundant` (the wearable record
    *     replaces the GPS run as canonical).
-   *  4. NEW — reconciliation with the user's training plan:
-   *       • Free users: ingested as a free run via TrainingService
-   *         (gamification yes, AI feedback no — coherent with the global rule).
-   *       • Pro users: looks up the user's pending plan workouts within
-   *         ±1 day of the run's São Paulo date, filters by distance ±20%,
-   *         picks the best match (temporal proximity first, distance second).
-   *           – Match → completeWorkout(workoutId): links the activity to
-   *             the workout, marks it completed, enqueues AI feedback.
-   *           – No match → completeFreeWorkout(): same path as Free, the
-   *             run appears in the "Atividades" tab.
+   *  4. Conservative reconciliation with a pending workout on the exact São
+   *     Paulo day and within ±10% distance. Manual candidates are available to
+   *     every tier; plan candidates only to Pro. Similar candidates are treated
+   *     as ambiguous and imported as free rather than silently misclassified.
    *
    * NOTE: The legacy direct INSERT into `activities` (used by the old
    * processAppleHealthActivity) is removed — both `completeWorkout` and
@@ -317,40 +361,24 @@ export class ActivitySyncService {
 
     const isPro = await this.safeIsProUser(userId);
 
-    if (!isPro) {
-      const workout = await this.trainingService.completeFreeWorkout(
-        userId,
-        freePayload,
-      );
-      this.logger.log(
-        `[${source}] activity ${activity.external_id} → free run (workout=${workout?.id}, free user)` +
-          (overlappingPhone?.length
-            ? ` (${overlappingPhone.length} phone activities marked redundant)`
-            : ''),
-      );
-      return {
-        action: 'inserted',
-        activityId: workout?.activity_id ?? null,
-        redundantCount: overlappingPhone?.length || 0,
-        reconciliation: 'free_user_no_plan',
-      };
-    }
-
-    // Pro path: try to match a pending plan workout within ±1 day & ±20%.
-    const matchedWorkoutId = await this.findMatchingPlanWorkout(
+    // Manual workouts can belong to any tier. Plan candidates are considered
+    // only for Pro users, so a stale/free subscription can never complete a
+    // plan workout by inference.
+    const matchedWorkout = await this.findMatchingWorkout(
       userId,
       activity,
+      isPro,
     );
 
-    if (matchedWorkoutId) {
+    if (matchedWorkout) {
       try {
         await this.trainingService.completeWorkout(
           userId,
-          matchedWorkoutId,
+          matchedWorkout.id,
           trackingPayload,
         );
         this.logger.log(
-          `[${source}] activity ${activity.external_id} → plan workout ${matchedWorkoutId} completed (Pro user)` +
+          `[${source}] activity ${activity.external_id} → ${matchedWorkout.source} workout ${matchedWorkout.id} completed` +
             (overlappingPhone?.length
               ? ` (${overlappingPhone.length} phone activities marked redundant)`
               : ''),
@@ -358,16 +386,16 @@ export class ActivitySyncService {
         return {
           action: 'inserted',
           activityId: null, // resolved internally by completeWorkout
-          workoutId: matchedWorkoutId,
+          workoutId: matchedWorkout.id,
           redundantCount: overlappingPhone?.length || 0,
-          reconciliation: 'plan_match',
+          reconciliation: `${matchedWorkout.source}_match`,
         };
       } catch (err) {
         // If the plan link fails for any reason, degrade to free-run so the
         // user still sees the activity. This protects against rare cases like
         // the workout being deleted between query and update.
         this.logger.warn(
-          `[${source}] completeWorkout failed for workout ${matchedWorkoutId}, falling back to free run: ${(err as Error).message}`,
+          `[${source}] completeWorkout failed for workout ${matchedWorkout.id}, falling back to free run: ${(err as Error).message}`,
         );
       }
     }
@@ -386,74 +414,40 @@ export class ActivitySyncService {
       action: 'inserted',
       activityId: workout?.activity_id ?? null,
       redundantCount: overlappingPhone?.length || 0,
-      reconciliation: 'no_plan_match',
+      reconciliation: isPro ? 'no_workout_match' : 'free_user_no_manual_match',
     };
   }
 
   /**
-   * Pro-path candidate search: pending plan workouts in [dataSP − 1 day,
-   * dataSP + 1 day] whose distance is within ±20% of the executed distance.
-   * Ranks by temporal proximity (scheduled_date vs activity.start_date) and
-   * uses distance as the tiebreaker.
+   * Candidate search is deliberately conservative: pending workouts on the
+   * exact São Paulo calendar day and within ±10% distance. Ambiguous matches
+   * degrade to a free activity instead of mutating the wrong workout.
    */
-  private async findMatchingPlanWorkout(
+  private async findMatchingWorkout(
     userId: string,
     activity: DeviceLocalActivity,
-  ): Promise<string | null> {
+    includePlan: boolean,
+  ): Promise<ReconciliationCandidate | null> {
     const activityStart = new Date(activity.start_date);
     const saoPauloDate = this.toSaoPauloDateString(activityStart);
-    const windowStart = this.shiftDateString(
-      saoPauloDate,
-      -RECONCILE_WINDOW_DAYS,
-    );
-    const windowEnd = this.shiftDateString(saoPauloDate, RECONCILE_WINDOW_DAYS);
+    const allowedSources = includePlan ? ['plan', 'manual'] : ['manual'];
 
     const { data: candidates, error } = await this.supabaseService
       .from('workouts')
-      .select('id, distance_km, scheduled_date, type')
+      .select('id, source, distance_km, scheduled_date, type')
       .eq('user_id', userId)
-      .eq('source', 'plan')
+      .in('source', allowedSources)
       .eq('status', 'pending')
-      .gte('scheduled_date', windowStart)
-      .lte('scheduled_date', windowEnd);
+      .eq('scheduled_date', saoPauloDate);
 
     if (error || !candidates || candidates.length === 0) return null;
 
     const executedKm = activity.distance / 1000;
-    const activityStartMs = activityStart.getTime();
-
-    type ScoredCandidate = {
-      id: string;
-      distanceDiff: number;
-      temporalDiff: number;
-    };
-
-    const scored: ScoredCandidate[] = [];
-    for (const w of candidates) {
-      const plannedKm = Number(w.distance_km ?? 0);
-      if (plannedKm <= 0) continue;
-      const distanceDiff = Math.abs(plannedKm - executedKm) / plannedKm;
-      if (distanceDiff > RECONCILE_DISTANCE_TOLERANCE) continue;
-
-      // scheduled_date is YYYY-MM-DD; anchor at noon SP local (UTC + 3h
-      // because SAO_PAULO is UTC-3) so the temporal distance reflects "same
-      // day" intent rather than midnight-boundary jitter.
-      const scheduledAtMs =
-        new Date(`${w.scheduled_date}T00:00:00Z`).getTime() +
-        (12 - SAO_PAULO_OFFSET_HOURS) * 60 * 60 * 1000;
-      const temporalDiff = Math.abs(scheduledAtMs - activityStartMs);
-
-      scored.push({ id: w.id, distanceDiff, temporalDiff });
-    }
-
-    if (scored.length === 0) return null;
-
-    scored.sort(
-      (a, b) =>
-        a.temporalDiff - b.temporalDiff || a.distanceDiff - b.distanceDiff,
+    return selectReconciliationCandidate(
+      saoPauloDate,
+      executedKm,
+      candidates as ReconciliationCandidate[],
     );
-
-    return scored[0].id;
   }
 
   /**
@@ -553,13 +547,6 @@ export class ActivitySyncService {
     const m = String(shifted.getUTCMonth() + 1).padStart(2, '0');
     const d = String(shifted.getUTCDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
-  }
-
-  /** Shift a YYYY-MM-DD string by N days (UTC arithmetic, calendar-safe). */
-  private shiftDateString(dateStr: string, days: number): string {
-    const base = new Date(`${dateStr}T00:00:00Z`);
-    base.setUTCDate(base.getUTCDate() + days);
-    return base.toISOString().slice(0, 10);
   }
 
   /**

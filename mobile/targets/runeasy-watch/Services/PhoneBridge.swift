@@ -8,6 +8,25 @@ private let bridgeLog = Logger(
     category: "bridge"
 )
 
+enum WatchSyncState: Equatable {
+    case waiting
+    case synced
+    case stale
+    case incompatible
+    case signedOut
+}
+
+struct RunDeliveryAck: Codable, Equatable {
+    enum Status: String, Codable {
+        case serverAccepted = "server_accepted"
+        case pendingSync = "pending_sync"
+    }
+
+    let runId: String
+    let status: Status
+    let acknowledgedAt: String
+}
+
 /// Bridge WatchConnectivity entre o Apple Watch e o iPhone.
 /// - iPhone → Watch: `applicationContext` com contexto unificado (user, workout, stats, next)
 /// - Watch → iPhone: `transferUserInfo` com a corrida finalizada (durável, retry automático)
@@ -36,8 +55,15 @@ final class PhoneBridge: NSObject, ObservableObject {
     /// de "nunca sincronizou" na UI.
     @Published var hasReceivedContext: Bool = false
     @Published var lastContextAt: Date?
+    @Published var syncState: WatchSyncState = .waiting
+    @Published var lastRunAck: RunDeliveryAck?
 
     private let session: WCSession?
+    private var accountId: String?
+    private var contextExpiryTask: Task<Void, Never>?
+    private static let supportedSchemaVersion = 2
+    private static let contextTTL: TimeInterval = 36 * 60 * 60
+    private static let subscriptionTTL: TimeInterval = 24 * 60 * 60
 
     override init() {
         if WCSession.isSupported() {
@@ -128,6 +154,25 @@ final class PhoneBridge: NSObject, ObservableObject {
 
     private func handleReceived(_ context: [String: Any]) {
         guard !context.isEmpty else { return }
+        guard let sentAt = validate(context: context) else { return }
+
+        if context["auth_state"] as? String == "signed_out" {
+            clearUserContext()
+            syncState = .signedOut
+            lastContextAt = sentAt
+            return
+        }
+
+        guard let incomingAccountId = context["account_id"] as? String,
+              !incomingAccountId.isEmpty else {
+            invalidateContext(as: .incompatible, reason: "contexto sem identidade de conta")
+            return
+        }
+        if let accountId, accountId != incomingAccountId {
+            clearUserContext()
+        }
+        accountId = incomingAccountId
+
         let type = context["type"] as? String
 
         // Treino do dia (ou rest)
@@ -175,12 +220,97 @@ final class PhoneBridge: NSObject, ObservableObject {
         } else if context.keys.contains("latest_activity_result") {
             latestActivityResult = nil
         }
+        if let ackDict = context["run_ack"] as? [String: Any] {
+            lastRunAck = decode(RunDeliveryAck.self, from: ackDict, label: "run_ack")
+        } else if context.keys.contains("run_ack") {
+            lastRunAck = nil
+        }
 
         hasReceivedContext = true
-        lastContextAt = Date()
+        lastContextAt = sentAt
+        syncState = .synced
+        scheduleExpiry(for: sentAt)
         bridgeLog.info(
             "contexto recebido: pro=\(self.isPro, privacy: .public) workout=\(self.todayWorkout != nil, privacy: .public) atividades=\(self.todayActivities.count, privacy: .public)"
         )
+    }
+
+    private func validate(context: [String: Any]) -> Date? {
+        guard let schema = context["schema_version"] as? Int,
+              schema == Self.supportedSchemaVersion else {
+            invalidateContext(as: .incompatible, reason: "schema incompatível")
+            return nil
+        }
+        guard let sentAtRaw = context["sent_at"] as? String,
+              let sentAt = parseISO8601(sentAtRaw) else {
+            invalidateContext(as: .incompatible, reason: "sent_at inválido")
+            return nil
+        }
+        let age = Date().timeIntervalSince(sentAt)
+        guard age >= -300, age <= Self.contextTTL else {
+            invalidateContext(as: .stale, reason: "contexto expirado")
+            return nil
+        }
+        if context["auth_state"] as? String == "signed_in" {
+            guard let verifiedRaw = context["subscription_verified_at"] as? String,
+                  let verifiedAt = parseISO8601(verifiedRaw) else {
+                invalidateContext(as: .incompatible, reason: "entitlement sem verificação")
+                return nil
+            }
+            let subscriptionAge = Date().timeIntervalSince(verifiedAt)
+            guard subscriptionAge >= -300,
+                  subscriptionAge <= Self.subscriptionTTL else {
+                invalidateContext(as: .stale, reason: "entitlement expirado")
+                return nil
+            }
+        }
+        return sentAt
+    }
+
+    private func parseISO8601(_ value: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+    }
+
+    private func invalidateContext(as state: WatchSyncState, reason: String) {
+        clearUserContext()
+        syncState = state
+        bridgeLog.error("contexto rejeitado: \(reason, privacy: .public)")
+    }
+
+    private func clearUserContext() {
+        contextExpiryTask?.cancel()
+        contextExpiryTask = nil
+        todayWorkout = nil
+        userName = "Atleta"
+        avatarUrl = nil
+        weekStats = .zero
+        nextWorkout = nil
+        todayActivities = []
+        latestPlanResult = nil
+        latestActivityResult = nil
+        lastRunAck = nil
+        isPro = true
+        hasReceivedContext = false
+        accountId = nil
+    }
+
+    private func scheduleExpiry(for sentAt: Date) {
+        contextExpiryTask?.cancel()
+        let remaining = max(
+            1,
+            Self.contextTTL - Date().timeIntervalSince(sentAt)
+        )
+        contextExpiryTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(
+                nanoseconds: UInt64(remaining * 1_000_000_000)
+            )
+            guard let self, !Task.isCancelled,
+                  self.lastContextAt == sentAt,
+                  self.hasReceivedContext else { return }
+            self.invalidateContext(as: .stale, reason: "contexto expirou durante o uso")
+        }
     }
 
     private func handleTodayWorkout(_ rawPayload: Any?) {

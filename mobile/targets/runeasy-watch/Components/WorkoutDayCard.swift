@@ -24,6 +24,9 @@ struct WorkoutDayCard: View {
             topSection
             divider
             statsSection
+            if let badges = workout.earnableBadges, !badges.isEmpty {
+                badgeSection(badges)
+            }
             actionButton
         }
         .padding(8)
@@ -115,6 +118,31 @@ struct WorkoutDayCard: View {
                 .foregroundColor(.runEasyTextPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
+        }
+    }
+
+    private func badgeSection(_ badges: [EarnableBadge]) -> some View {
+        HStack(spacing: 5) {
+            Text("CONQUISTA")
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundColor(.runEasyText60)
+                .tracking(0.3)
+            ForEach(Array(badges.prefix(2))) { badge in
+                Image(systemName: badge.earned ? "checkmark.shield.fill" : "shield.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(badgeColor(tier: badge.tier))
+                    .accessibilityLabel(badge.slug.replacingOccurrences(of: "_", with: " "))
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func badgeColor(tier: Int) -> Color {
+        switch tier {
+        case 4...: return .runEasyPurple
+        case 3: return .runEasyOrange
+        case 2: return .runEasyCyan
+        default: return .runEasyText60
         }
     }
 

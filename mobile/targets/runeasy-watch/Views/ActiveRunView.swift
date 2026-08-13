@@ -4,7 +4,8 @@ import WatchKit
 /// Tela de tracking do treino no Apple Watch.
 ///
 /// Fluxo (o card da Home só ABRE esta tela — não inicia nada):
-///   .idle    → resumo do treino + botão de play grande. Nada é gravado ainda.
+///   .idle    → resumo do treino + botão de play grande. HealthKit ainda não é tocado.
+///   .authorizing → prompt explícito, disparado pelo play.
 ///   .starting→ "Iniciando…" com watchdog de 12s no WorkoutManager
 ///   .running → Figma 1074-1239 (rodando) / 1089-1282 (pausado)
 ///   .failed  → erro legível com "Tentar novamente" e "Voltar"
@@ -30,7 +31,7 @@ struct ActiveRunView: View {
     /// "Preparando…" sem botão de voltar).
     private var lockNavigation: Bool {
         switch workoutManager.phase {
-        case .running, .starting: return true
+        case .authorizing, .running, .starting: return true
         default: return false
         }
     }
@@ -40,19 +41,20 @@ struct ActiveRunView: View {
             switch workoutManager.phase {
             case .idle:
                 idleContent
+            case .authorizing:
+                startingContent(label: "Autorizando…")
             case .starting:
-                startingContent
+                startingContent(label: "Iniciando…")
             case .running:
                 runningContent
             case .failed(let message):
                 failedContent(message)
             case .finished:
-                startingContent
+                startingContent(label: "Finalizando…")
             }
         }
         .background(Color.runEasyNavy.ignoresSafeArea())
         .navigationBarBackButtonHidden(lockNavigation)
-        .task { await workoutManager.prepare() }
         .alert("Finalizar corrida?", isPresented: $showStopConfirmation) {
             Button("Cancelar", role: .cancel) { }
             Button("Finalizar", role: .destructive) { finalize() }
@@ -136,12 +138,12 @@ struct ActiveRunView: View {
 
     // MARK: - Starting
 
-    private var startingContent: some View {
+    private func startingContent(label: String) -> some View {
         VStack(spacing: 8) {
             ProgressView()
                 .controlSize(.large)
                 .tint(.runEasyCyan)
-            Text("Iniciando…")
+            Text(label)
                 .font(.system(size: 11))
                 .foregroundColor(.runEasyText60)
         }

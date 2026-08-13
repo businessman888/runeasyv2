@@ -5,9 +5,10 @@ import SwiftUI
 ///
 /// Pills:
 ///   🔥 streak (sequência de dias de treino)
-///   ⚡ workoutsDone / workoutsTotal (treinos da semana)
-///   🏃 restDone / restTotal (descansos da semana)
+///   🏃 workoutsDone / workoutsTotal (treinos da semana)
+///   🛏 restDone / restTotal (descansos da semana)
 struct HeaderView: View {
+    let userName: String
     let avatarUrl: String?
     let stats: WeekStats
 
@@ -17,14 +18,14 @@ struct HeaderView: View {
             Spacer(minLength: 2)
             statPill(icon: "flame.fill", value: "\(stats.streak)", iconColor: .runEasyOrange)
             statPill(
-                icon: "bolt.fill",
+                icon: "figure.run",
                 value: "\(stats.workoutsDone)/\(stats.workoutsTotal)",
-                iconColor: .runEasyPurple
+                iconColor: .runEasyCyan
             )
             statPill(
-                icon: "figure.run",
+                icon: "bed.double.fill",
                 value: "\(stats.restDone)/\(stats.restTotal)",
-                iconColor: .runEasyCyan
+                iconColor: .runEasyPurple
             )
         }
         .padding(.horizontal, 2)
@@ -61,10 +62,16 @@ struct HeaderView: View {
     private var avatarPlaceholder: some View {
         ZStack {
             Color.runEasyCardBg
-            Image(systemName: "person.fill")
-                .foregroundColor(.runEasyText60)
-                .font(.system(size: 12, weight: .medium))
+            Text(userInitial)
+                .foregroundColor(.runEasyTextPrimary)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
         }
+    }
+
+    private var userInitial: String {
+        let trimmed = userName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = trimmed.first else { return "A" }
+        return String(first).uppercased()
     }
 
     // MARK: - Pill
@@ -89,8 +96,8 @@ struct HeaderView: View {
 
 #Preview {
     VStack(spacing: 8) {
-        HeaderView(avatarUrl: nil, stats: .mock)
-        HeaderView(avatarUrl: nil, stats: .zero)
+        HeaderView(userName: "Matheus", avatarUrl: nil, stats: .mock)
+        HeaderView(userName: "Atleta", avatarUrl: nil, stats: .zero)
     }
     .padding()
     .background(Color.runEasyNavy)

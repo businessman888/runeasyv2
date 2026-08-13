@@ -50,6 +50,13 @@ export interface SyncResult {
     queuedOffline: number;
 }
 
+export class HealthKitReadError extends Error {
+    constructor(message: string, readonly cause?: unknown) {
+        super(message);
+        this.name = 'HealthKitReadError';
+    }
+}
+
 // ─── MMKV (persistent caches) ────────────────────────────────────────────────
 
 const syncedIdsStorage = createMMKV({ id: 'healthkit-synced-ids' });
@@ -157,12 +164,10 @@ class HealthKitManagerClass {
     }
 
     /**
-     * Whether the user has already been through HealthKit authorization for our
-     * read types. Used by the store as the *native* half of the connection
-     * truth (combined with the backend device row) so a stale backend entry
-     * can't make the app look connected when iOS has no authorization.
+     * Whether the user has already responded to HealthKit authorization.
+     * Apple deliberately does not reveal read grant vs. denial.
      */
-    async isAuthorized(): Promise<boolean> {
+    async hasAuthorizationDecision(): Promise<boolean> {
         return (await this.getRequestStatus()) === 'unnecessary';
     }
 
@@ -178,8 +183,8 @@ class HealthKitManagerClass {
      * A denial surfaces later as zero readable workouts, which the OS does not
      * let us detect up front.
      */
-    async requestPermissions(): Promise<{ granted: boolean }> {
-        if (!this.isIOS) return { granted: false };
+    async requestPermissions(): Promise<{ completed: boolean }> {
+        if (!this.isIOS) return { completed: false };
 
         try {
             const hk = await import('@kingstinct/react-native-healthkit');
@@ -198,20 +203,21 @@ class HealthKitManagerClass {
             // `unnecessary` post-request → the user has made a determination.
             // `shouldRequest` still here → the sheet was dismissed without one.
             const after = await hk.getRequestStatusForAuthorization(authPayload);
-            const granted = after === hk.AuthorizationRequestStatus.unnecessary;
+            const completed = after === hk.AuthorizationRequestStatus.unnecessary;
 
-            metadataStorage.set(PERMISSION_GRANTED_KEY, granted);
-            return { granted };
+            // Para tipos somente leitura, a Apple não informa grant vs. deny.
+            // Esta chave significa apenas que o usuário concluiu a decisão.
+            metadataStorage.set(PERMISSION_GRANTED_KEY, completed);
+            return { completed };
         } catch (e) {
             console.error('[HealthKit] requestPermissions failed:', e);
-            return { granted: false };
+            return { completed: false };
         }
     }
 
     /**
-     * Best-effort cached flag of whether the user authorized us. Backed by the
-     * truthful value persisted in `requestPermissions`. Used for the fast
-     * foreground-sync path; the authoritative check is `isAuthorized()`.
+     * Best-effort cache indicating that the authorization flow was completed;
+     * it is not proof that read access was granted.
      */
     hasPermissionsCached(): boolean {
         return metadataStorage.getBoolean(PERMISSION_GRANTED_KEY) ?? false;
@@ -285,7 +291,10 @@ class HealthKitManagerClass {
             return results;
         } catch (e) {
             console.error('[HealthKit] fetchRecentRuns failed:', e);
-            return [];
+            throw new HealthKitReadError(
+                'Não foi possível ler as corridas do Apple Health.',
+                e,
+            );
         }
     }
 

@@ -137,6 +137,49 @@ describe('TrainingService', () => {
     expect(service).toBeDefined();
   });
 
+  describe('completeWorkout idempotency', () => {
+    it('returns an already completed workout without repeating side effects', async () => {
+      const completedWorkout = {
+        id: 'w-completed',
+        user_id: 'user-123',
+        source: 'plan',
+        status: 'completed',
+        activity_id: 'activity-1',
+      };
+      const workoutQuery = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest
+          .fn()
+          .mockResolvedValue({ data: completedWorkout, error: null }),
+      };
+      const activityQuery = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        maybeSingle: jest
+          .fn()
+          .mockResolvedValue({ data: { id: 'activity-1' }, error: null }),
+      };
+      (mockSupabaseService.from as jest.Mock).mockImplementation(
+        (table: string) =>
+          table === 'workouts' ? workoutQuery : activityQuery,
+      );
+
+      const result = await service.completeWorkout('user-123', 'w-completed', {
+        route_points: [],
+        total_distance_meters: 5000,
+        duration_seconds: 1800,
+        source: 'apple_watch',
+        external_id: 'apple_watch_run-1',
+        started_at: '2026-08-13T10:00:00.000Z',
+      });
+
+      expect(result).toEqual(completedWorkout);
+      expect(activityQuery.maybeSingle).toHaveBeenCalledTimes(1);
+      expect(mockSupabaseService.from).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe('getActivePlan', () => {
     it('should return active plan for user', async () => {
       const result = await service.getActivePlan('user-123');

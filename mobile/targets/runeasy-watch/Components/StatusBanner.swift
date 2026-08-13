@@ -57,6 +57,7 @@ struct StatusBanner: View {
 struct ConnectivityBanner: View {
     let isReachable: Bool
     let hasReceivedContext: Bool
+    let syncState: WatchSyncState
     let pendingTransfers: Int
     /// Retorna false quando o pedido não pôde ser entregue.
     let onRefresh: () -> Bool
@@ -68,7 +69,12 @@ struct ConnectivityBanner: View {
             return "Corrida pendente de envio ao iPhone"
         }
         if !hasReceivedContext {
-            return "Aguardando dados do iPhone"
+            switch syncState {
+            case .stale: return "Dados expirados — abra o RunEasy no iPhone"
+            case .incompatible: return "Apps dessincronizados — atualize e abra o iPhone"
+            case .signedOut: return "Abra o RunEasy no iPhone para entrar"
+            case .waiting, .synced: return "Aguardando dados do iPhone"
+            }
         }
         if !isReachable {
             return "iPhone fora de alcance — dados podem estar desatualizados"
@@ -125,9 +131,9 @@ struct ConnectivityBanner: View {
 
 #Preview("Conectividade") {
     VStack(spacing: 8) {
-        ConnectivityBanner(isReachable: false, hasReceivedContext: true, pendingTransfers: 0, onRefresh: { false })
-        ConnectivityBanner(isReachable: true, hasReceivedContext: true, pendingTransfers: 1, onRefresh: { true })
-        ConnectivityBanner(isReachable: true, hasReceivedContext: false, pendingTransfers: 0, onRefresh: { true })
+        ConnectivityBanner(isReachable: false, hasReceivedContext: true, syncState: .synced, pendingTransfers: 0, onRefresh: { false })
+        ConnectivityBanner(isReachable: true, hasReceivedContext: true, syncState: .synced, pendingTransfers: 1, onRefresh: { true })
+        ConnectivityBanner(isReachable: true, hasReceivedContext: false, syncState: .stale, pendingTransfers: 0, onRefresh: { true })
     }
     .padding()
     .background(Color.runEasyNavy)

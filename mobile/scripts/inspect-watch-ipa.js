@@ -1,123 +1,150 @@
+const childProcess = require('child_process');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const plist = require('plist');
 const bplistParser = require('bplist-parser');
 
-/** Sentinela para checagens de "a chave precisa existir, com qualquer valor". */
 const PRESENT = Symbol('present');
+const input = process.argv[2] || process.env.RUNEASY_IPA_PATH;
 
-const ROOT = 'C:/Users/marti/AppData/Local/Temp/runeasy-ipa-check/extracted/Payload/RunEasy.app';
-const WATCH_APP = path.join(ROOT, 'Watch/RunEasyWatch.app');
+if (!input) {
+  console.error('Uso: npm run inspect:watch-ipa -- /caminho/RunEasy.ipa');
+  process.exit(2);
+}
 
-function readPlist(p) {
-  const buf = fs.readFileSync(p);
-  // Detect binary plist (magic "bplist00")
-  if (buf.slice(0, 6).toString('ascii') === 'bplist') {
-    return bplistParser.parseBuffer(buf)[0];
+let temporaryRoot = null;
+
+function readPlist(filePath) {
+  const buffer = fs.readFileSync(filePath);
+  if (buffer.slice(0, 6).toString('ascii') === 'bplist') {
+    return bplistParser.parseBuffer(buffer)[0];
   }
-  return plist.parse(buf.toString('utf8'));
+  return plist.parse(buffer.toString('utf8'));
 }
 
-function pick(obj, keys) {
-  return keys.reduce((acc, k) => {
-    if (k in obj) acc[k] = obj[k];
-    return acc;
-  }, {});
-}
+function locatePhoneApp(sourcePath) {
+  const resolved = path.resolve(sourcePath);
+  if (!fs.existsSync(resolved)) throw new Error(`Artefato não encontrado: ${resolved}`);
 
-console.log('=== iOS App Info.plist (relevant keys) ===');
-const iosInfo = readPlist(path.join(ROOT, 'Info.plist'));
-console.log(JSON.stringify(pick(iosInfo, [
-  'CFBundleIdentifier',
-  'CFBundleVersion',
-  'CFBundleShortVersionString',
-  'WKAppBundleIdentifier',
-  'NSHealthShareUsageDescription',
-]), null, 2));
-
-console.log('\n=== Watch App Info.plist (full) ===');
-const watchInfo = readPlist(path.join(WATCH_APP, 'Info.plist'));
-console.log(JSON.stringify(watchInfo, null, 2));
-
-console.log('\n=== Watch App critical keys check ===');
-const checks = [
-  ['CFBundleIdentifier', 'com.oytotec.runeasy.watchkitapp'],
-  ['WKApplication', true],
-  ['WKCompanionAppBundleIdentifier', 'com.oytotec.runeasy'],
-  // Obrigatório para usar HKWorkoutSession no watchOS. Sem isto a tela de
-  // tracking trava em "Iniciando…" — foi o bug do teste de 2026-08.
-  // Ver AUDITORIA-apple-watch.md §3.5.
-  ['WKBackgroundModes', ['workout-processing']],
-  // Sem estas strings o app CRASHA ao pedir autorização. Qualquer texto serve,
-  // então usamos PRESENT em vez de um valor exato.
-  ['NSHealthShareUsageDescription', PRESENT],
-  ['NSHealthUpdateUsageDescription', PRESENT],
-  ['NSLocationWhenInUseUsageDescription', PRESENT],
-];
-let failures = 0;
-checks.forEach(([key, expected]) => {
-  const got = watchInfo[key];
-  const ok =
-    expected === PRESENT
-      ? got !== undefined && got !== null && got !== ''
-      : JSON.stringify(got) === JSON.stringify(expected);
-  if (!ok) failures++;
-  const expectedLabel = expected === PRESENT ? '<presente>' : JSON.stringify(expected);
-  console.log(`${ok ? 'PASS' : 'FAIL'} ${key}: got=${JSON.stringify(got)} expected=${expectedLabel}`);
-});
-if (failures > 0) {
-  console.log(`\n${failures} verificação(ões) FALHARAM — não instale este IPA.`);
-  process.exitCode = 1;
-}
-
-console.log('\n=== Watch app file listing ===');
-fs.readdirSync(WATCH_APP).forEach(f => {
-  const stat = fs.statSync(path.join(WATCH_APP, f));
-  console.log(`  ${f} ${stat.isDirectory() ? '(dir)' : '(' + stat.size + ' bytes)'}`);
-});
-
-console.log('\n=== Watch binary architectures (Mach-O magic check) ===');
-const binPath = path.join(WATCH_APP, 'RunEasyWatch');
-if (fs.existsSync(binPath)) {
-  const bin = fs.readFileSync(binPath);
-  const magic = bin.readUInt32BE(0);
-  console.log(`First 4 bytes (BE hex): 0x${magic.toString(16)}`);
-  // FAT magic = 0xcafebabe / 0xbebafeca; thin Mach-O = 0xfeedface (32) / 0xfeedfacf (64)
-  const magicMap = {
-    0xfeedface: 'Mach-O 32-bit (BE/LE thin)',
-    0xfeedfacf: 'Mach-O 64-bit (LE thin)',
-    0xcffaedfe: 'Mach-O 64-bit (LE thin)',
-    0xcefaedfe: 'Mach-O 32-bit (LE thin)',
-    0xcafebabe: 'FAT (multi-arch)',
-    0xbebafeca: 'FAT (swapped)',
-  };
-  console.log('Type:', magicMap[magic] || 'Unknown');
-  console.log('Binary size:', bin.length, 'bytes');
-}
-
-console.log('\n=== embedded.mobileprovision (entitlements via plist scan) ===');
-const profPath = path.join(WATCH_APP, 'embedded.mobileprovision');
-if (fs.existsSync(profPath)) {
-  const profBuf = fs.readFileSync(profPath);
-  const txt = profBuf.toString('utf8');
-  const start = txt.indexOf('<?xml');
-  const end = txt.indexOf('</plist>') + 8;
-  if (start >= 0 && end > start) {
-    const xmlSection = txt.slice(start, end);
-    try {
-      const prof = plist.parse(xmlSection);
-      console.log('AppIDName:', prof.AppIDName);
-      console.log('TeamIdentifier:', prof.TeamIdentifier);
-      console.log('Entitlements (subset):');
-      const ent = prof.Entitlements || {};
-      console.log(JSON.stringify({
-        'application-identifier': ent['application-identifier'],
-        'com.apple.developer.healthkit': ent['com.apple.developer.healthkit'],
-        'com.apple.developer.healthkit.access': ent['com.apple.developer.healthkit.access'],
-        'com.apple.developer.team-identifier': ent['com.apple.developer.team-identifier'],
-      }, null, 2));
-    } catch (e) {
-      console.log('Could not parse mobileprovision XML:', e.message);
+  if (resolved.endsWith('.ipa')) {
+    temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'runeasy-ipa-check-'));
+    if (process.platform === 'win32') {
+      childProcess.execFileSync('tar', ['-xf', resolved, '-C', temporaryRoot], {
+        stdio: 'inherit',
+      });
+    } else {
+      childProcess.execFileSync('unzip', ['-q', resolved, '-d', temporaryRoot], {
+        stdio: 'inherit',
+      });
     }
+    return locatePhoneApp(path.join(temporaryRoot, 'Payload'));
+  }
+
+  if (resolved.endsWith('.app') && fs.statSync(resolved).isDirectory()) return resolved;
+
+  const payload = fs.existsSync(path.join(resolved, 'Payload'))
+    ? path.join(resolved, 'Payload')
+    : resolved;
+  const appName = fs
+    .readdirSync(payload)
+    .find((name) => name.endsWith('.app') && fs.statSync(path.join(payload, name)).isDirectory());
+  if (!appName) throw new Error(`Nenhum app iOS encontrado em ${payload}`);
+  return path.join(payload, appName);
+}
+
+function expectValue(object, key, expected, label) {
+  const received = object[key];
+  const valid =
+    expected === PRESENT
+      ? received !== undefined && received !== null && received !== ''
+      : JSON.stringify(received) === JSON.stringify(expected);
+  console.log(`${valid ? 'PASS' : 'FAIL'} ${label}: ${JSON.stringify(received)}`);
+  return valid ? 0 : 1;
+}
+
+function readCodeSignEntitlements(appPath) {
+  if (process.platform !== 'darwin') return null;
+  try {
+    const result = childProcess.spawnSync(
+      'codesign',
+      ['-d', '--entitlements', ':-', appPath],
+      { encoding: 'utf8' },
+    );
+    if (result.error) throw result.error;
+    const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+    const start = output.indexOf('<?xml');
+    return start >= 0 ? plist.parse(output.slice(start)) : null;
+  } catch (error) {
+    console.warn(`WARN não foi possível ler entitlements assinados: ${error.message}`);
+    return null;
+  }
+}
+
+try {
+  const phoneApp = locatePhoneApp(input);
+  const watchDirectory = path.join(phoneApp, 'Watch');
+  if (!fs.existsSync(watchDirectory)) throw new Error('IPA não contém a pasta Watch/.');
+
+  const watchName = fs.readdirSync(watchDirectory).find((name) => name.endsWith('.app'));
+  if (!watchName) throw new Error('IPA não contém um app watchOS embutido.');
+  const watchApp = path.join(watchDirectory, watchName);
+  const phoneInfo = readPlist(path.join(phoneApp, 'Info.plist'));
+  const watchInfo = readPlist(path.join(watchApp, 'Info.plist'));
+
+  console.log(`iPhone: ${phoneApp}`);
+  console.log(`Watch:  ${watchApp}`);
+
+  let failures = 0;
+  failures += expectValue(phoneInfo, 'CFBundleIdentifier', 'com.oytotec.runeasy', 'bundle iPhone');
+  failures += expectValue(watchInfo, 'CFBundleIdentifier', 'com.oytotec.runeasy.watchkitapp', 'bundle Watch');
+  failures += expectValue(watchInfo, 'WKApplication', true, 'WKApplication');
+  failures += expectValue(
+    watchInfo,
+    'WKCompanionAppBundleIdentifier',
+    phoneInfo.CFBundleIdentifier,
+    'companion bundle',
+  );
+  failures += expectValue(watchInfo, 'WKBackgroundModes', ['workout-processing'], 'workout background mode');
+  failures += expectValue(watchInfo, 'NSHealthShareUsageDescription', PRESENT, 'Health read usage');
+  failures += expectValue(watchInfo, 'NSHealthUpdateUsageDescription', PRESENT, 'Health write usage');
+  failures += expectValue(watchInfo, 'NSLocationWhenInUseUsageDescription', PRESENT, 'Location usage');
+  failures += expectValue(
+    watchInfo,
+    'CFBundleShortVersionString',
+    phoneInfo.CFBundleShortVersionString,
+    'versão iPhone/Watch',
+  );
+  failures += expectValue(
+    watchInfo,
+    'CFBundleVersion',
+    phoneInfo.CFBundleVersion,
+    'build iPhone/Watch',
+  );
+
+  const entitlements = readCodeSignEntitlements(watchApp);
+  if (entitlements) {
+    failures += expectValue(
+      entitlements,
+      'com.apple.developer.healthkit',
+      true,
+      'HealthKit entitlement assinado',
+    );
+  } else {
+    console.warn('WARN entitlements assinados só são verificados no macOS.');
+  }
+
+  if (failures > 0) {
+    console.error(`\n${failures} verificação(ões) falharam — não distribua este IPA.`);
+    process.exitCode = 1;
+  } else {
+    console.log('\nIPA aprovado nas verificações estruturais do Apple Watch.');
+  }
+} catch (error) {
+  console.error(`FAIL ${error.message}`);
+  process.exitCode = 1;
+} finally {
+  if (temporaryRoot && temporaryRoot.startsWith(os.tmpdir())) {
+    fs.rmSync(temporaryRoot, { recursive: true, force: true });
   }
 }

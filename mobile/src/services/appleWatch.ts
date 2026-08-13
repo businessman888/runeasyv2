@@ -10,6 +10,7 @@
  */
 
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import {
     updateApplicationContext,
     watchEvents,
@@ -31,6 +32,8 @@ export interface WatchRoutePoint {
 }
 
 export interface CompletedRunFromWatch {
+    /** Introduzido no schema 2; opcional para drenar transfers legados. */
+    run_id?: string;
     workout_id: string | null;
     total_distance_meters: number;
     duration_seconds: number;
@@ -41,6 +44,15 @@ export interface CompletedRunFromWatch {
     route_points: WatchRoutePoint[];
     started_at: string; // ISO 8601
     source: 'apple_watch';
+    healthkit_saved?: boolean;
+    route_saved?: boolean;
+    completion_warning?: string | null;
+}
+
+export interface RunDeliveryAck {
+    runId: string;
+    status: 'server_accepted' | 'pending_sync';
+    acknowledgedAt: string;
 }
 
 export interface TodayWorkoutForWatch {
@@ -61,6 +73,12 @@ export interface TodayWorkoutForWatch {
      * (espelha o comportamento do app mobile: card desativado pós-finalização).
      */
     status?: 'pending' | 'completed';
+    earnableBadges?: Array<{
+        slug: string;
+        type: string;
+        tier: number;
+        earned: boolean;
+    }>;
 }
 
 export interface WeekStatsForWatch {
@@ -210,6 +228,8 @@ export function initAppleWatch(): void {
  * Watch reflete fielmente o que o iPhone tem.
  */
 export interface WatchContext {
+    /** Identidade da conta pareada. Null representa sessão encerrada. */
+    accountId: string | null;
     userName: string;
     avatarUrl?: string | null;
     /**
@@ -231,6 +251,10 @@ export interface WatchContext {
     latestPlanResult?: RunResultForWatch | null;
     /** Último resultado de atividade avulsa. Nunca gated. */
     latestActivityResult?: RunResultForWatch | null;
+    /** Último ACK de corrida; o sender o mantém até outro run substituí-lo. */
+    runAck?: RunDeliveryAck | null;
+    /** Timestamp da última verificação do entitlement no backend. */
+    subscriptionVerifiedAt?: number | null;
 }
 
 /**
@@ -242,6 +266,8 @@ export interface WatchContext {
 const PAYLOAD_WARN_BYTES = 16_000;
 const PAYLOAD_MAX_BYTES = 200_000;
 const MAX_ACTIVITIES = 5;
+export const WATCH_CONTEXT_SCHEMA_VERSION = 2;
+let contextRevision = 0;
 
 function byteLength(json: string): number {
     // TextEncoder existe no Hermes; fallback conservador para ambientes sem ele.
@@ -249,27 +275,62 @@ function byteLength(json: string): number {
     return json.length * 2;
 }
 
-export function sendTodayWorkout(workout: TodayWorkoutForWatch | null, userName: string): void {
-    sendWatchContext({ todayWorkout: workout, userName, isPro: false });
+/** WCSession aceita somente tipos de property list; NSNull invalida o contexto inteiro. */
+function sanitizeForWatch(value: unknown): unknown {
+    if (value == null) return undefined;
+    if (Array.isArray(value)) {
+        return value
+            .map(sanitizeForWatch)
+            .filter((item) => item !== undefined);
+    }
+    if (typeof value === 'object') {
+        return Object.fromEntries(
+            Object.entries(value as Record<string, unknown>)
+                .map(([key, item]) => [key, sanitizeForWatch(item)] as const)
+                .filter(([, item]) => item !== undefined),
+        );
+    }
+    return value;
 }
 
 export function sendWatchContext(ctx: WatchContext): void {
     if (Platform.OS !== 'ios') return;
     try {
         const payloadType = ctx.todayWorkout ? 'today_workout' : 'today_rest';
-        const payload = {
+        contextRevision += 1;
+        const version = Constants.expoConfig?.version ?? 'unknown';
+        const build = Constants.expoConfig?.ios?.buildNumber ?? 'unknown';
+        const sentAt = new Date().toISOString();
+        const rawPayload = {
+            schema_version: WATCH_CONTEXT_SCHEMA_VERSION,
+            context_id: `${Date.now()}-${contextRevision}`,
+            revision: contextRevision,
+            account_id: ctx.accountId ?? '',
+            auth_state: ctx.accountId ? 'signed_in' : 'signed_out',
+            phone_build: `${version}(${build})`,
             type: payloadType,
-            payload: ctx.todayWorkout ? { ...ctx.todayWorkout } : null,
+            payload: ctx.todayWorkout ? { ...ctx.todayWorkout } : {},
             user_name: ctx.userName,
-            avatar_url: ctx.avatarUrl ?? null,
+            avatar_url: ctx.avatarUrl ?? '',
             is_pro: ctx.isPro,
-            week_stats: ctx.weekStats ?? null,
-            next_workout: ctx.nextWorkout ?? null,
+            week_stats: ctx.weekStats ?? {
+                streak: 0,
+                workoutsDone: 0,
+                workoutsTotal: 0,
+                restDone: 0,
+                restTotal: 0,
+            },
+            next_workout: ctx.nextWorkout ?? {},
             today_activities: (ctx.todayActivities ?? []).slice(0, MAX_ACTIVITIES),
-            latest_plan_result: ctx.latestPlanResult ?? null,
-            latest_activity_result: ctx.latestActivityResult ?? null,
-            sent_at: new Date().toISOString(),
+            latest_plan_result: ctx.latestPlanResult ?? {},
+            latest_activity_result: ctx.latestActivityResult ?? {},
+            run_ack: ctx.runAck ?? {},
+            subscription_verified_at: ctx.subscriptionVerifiedAt
+                ? new Date(ctx.subscriptionVerifiedAt).toISOString()
+                : '',
+            sent_at: sentAt,
         };
+        const payload = sanitizeForWatch(rawPayload) as Record<string, unknown>;
 
         const size = byteLength(JSON.stringify(payload));
         if (size > PAYLOAD_MAX_BYTES) {

@@ -10,7 +10,7 @@ const gamificationCache = createMMKV({ id: 'gamification-cache' });
 const STATS_KEY = 'stats';
 const EARNED_BADGES_KEY = 'earned_badges';
 
-interface Badge {
+export interface Badge {
     id: string;
     name: string;
     slug: string;

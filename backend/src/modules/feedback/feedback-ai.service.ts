@@ -198,7 +198,12 @@ export class FeedbackAIService {
     await this.feedbackQueue.add(
       'generate',
       { userId, workoutId, activityId },
-      { delay: 1000 },
+      {
+        delay: 1000,
+        // BullMQ rejeita dois jobs ativos com o mesmo id. Evita feedback
+        // duplicado quando WatchConnectivity/API reentregam a mesma corrida.
+        jobId: `feedback-${activityId}`,
+      },
     );
   }
 

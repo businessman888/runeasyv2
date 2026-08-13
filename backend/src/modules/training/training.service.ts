@@ -918,8 +918,6 @@ export class TrainingService {
     // (infinite recursion → one INSERT per cycle → millions of orphan rows).
     isAlreadyFreeRun = false,
   ) {
-    const turf = await import('@turf/turf'); // Dynamic import to prevent initial load overhead
-
     // ── Pro gate (defense in depth) ────────────────────────────────────────
     // Free users must never reach this method with a plan workout — Home
     // shows UpgradeProCard, Calendar hides plan rows, and useWatchSync
@@ -978,6 +976,28 @@ export class TrainingService {
     if (workoutError || !workout) {
       throw new Error('Workout not found');
     }
+
+    // WatchConnectivity e filas offline oferecem entrega "at least once".
+    // Se esta mesma corrida já concluiu o treino, devolvemos sucesso sem
+    // repetir rota, XP, badges ou enqueue de feedback.
+    if (workout.status === 'completed' && payload.external_id) {
+      const { data: existingActivity } = await this.supabaseService
+        .from('activities')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('external_id', payload.external_id)
+        .maybeSingle();
+      if (existingActivity?.id) {
+        this.logger.log(
+          `[completeWorkout] idempotent hit for ${payload.external_id} — reusing workout ${workoutId}`,
+        );
+        return workout;
+      }
+    }
+
+    // Carregado só quando haverá processamento geoespacial; reentregas e
+    // degradações Free retornam antes sem pagar esse custo.
+    const turf = await import('@turf/turf');
 
     const environment: 'outdoor' | 'treadmill' =
       payload.environment === 'treadmill' ? 'treadmill' : 'outdoor';
