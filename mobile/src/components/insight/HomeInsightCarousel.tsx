@@ -89,8 +89,14 @@ export const HomeInsightCarousel = memo(function HomeInsightCarousel({
                 scrollEnabled={pages.length > 1}
                 onMomentumScrollEnd={handleScrollEnd}
             >
-                {pages.map((page) => (
-                    <View key={`${page.kind}-${page.id}`} style={{ width: pageWidth }}>
+                {pages.map((page, pageIndex) => (
+                    <View
+                        key={`${page.kind}-${page.id}`}
+                        style={[
+                            { width: pageWidth },
+                            pageIndex < pages.length - 1 && styles.pageWithGap,
+                        ]}
+                    >
                         {page.kind === 'meso' ? (
                             <MesoInsightCard
                                 insight={page.insight}
@@ -135,6 +141,11 @@ const styles = StyleSheet.create({
     },
     card: {
         minHeight: 88,
+    },
+    // O gutter vive dentro da largura usada pelo `pagingEnabled`: separa os
+    // cards durante o gesto sem alterar o ponto exato em que cada página para.
+    pageWithGap: {
+        paddingRight: spacing.base,
     },
     dots: {
         minHeight: spacing.sm,
