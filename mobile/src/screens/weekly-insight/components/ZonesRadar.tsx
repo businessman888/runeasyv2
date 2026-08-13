@@ -48,6 +48,13 @@ interface ZonesRadarProps {
     prescribed: Record<string, ZoneBucket>;
     executed: Record<string, ZoneBucket>;
     index?: number;
+    /**
+     * `false` segura a animacao de entrada. Existe porque a
+     * `MesoInsightScreen` monta o dashboard fora da tela e so o traz depois:
+     * sem isto a coreografia rodava no vazio e o usuario chegava num painel ja
+     * montado. Default `true` -- a tela semanal nao sente diferenca.
+     */
+    enabled?: boolean;
 }
 
 interface Series {
@@ -97,9 +104,10 @@ export const ZonesRadar = memo(function ZonesRadar({
     prescribed,
     executed,
     index = 5,
+    enabled = true,
 }: ZonesRadarProps) {
     const { width: windowWidth } = useWindowDimensions();
-    const progress = useEnterAnimation(index);
+    const progress = useEnterAnimation(index, enabled);
 
     const pres = useMemo(() => toSeries(prescribed), [prescribed]);
     const exec = useMemo(() => toSeries(executed), [executed]);

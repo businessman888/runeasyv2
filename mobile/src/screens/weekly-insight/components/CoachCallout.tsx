@@ -24,6 +24,13 @@ import { useEnterAnimation } from '../hooks/useEnterAnimation';
 interface CoachCalloutProps {
     narrative: string;
     index?: number;
+    /**
+     * `false` segura a animacao de entrada. Existe porque a
+     * `MesoInsightScreen` monta o dashboard fora da tela e so o traz depois:
+     * sem isto a coreografia rodava no vazio e o usuario chegava num painel ja
+     * montado. Default `true` -- a tela semanal nao sente diferenca.
+     */
+    enabled?: boolean;
 }
 
 /** Divide em "primeira frase" e "resto". Sem ponto final, tudo é headline. */
@@ -39,9 +46,10 @@ export function splitNarrative(text: string): { lead: string; rest: string } {
 export const CoachCallout = memo(function CoachCallout({
     narrative,
     index = 0,
+    enabled = true,
 }: CoachCalloutProps) {
     const [expanded, setExpanded] = useState(false);
-    const progress = useEnterAnimation(index);
+    const progress = useEnterAnimation(index, enabled);
 
     const { lead, rest } = useMemo(() => splitNarrative(narrative), [narrative]);
 

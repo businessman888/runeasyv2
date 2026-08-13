@@ -105,7 +105,11 @@ export const MesoDashboard = memo(function MesoDashboard({
                 scrollIndicatorInsets={{ top: headerInset, bottom: insets.bottom }}
             >
                 {!!insight.ai_narrative && (
-                    <CoachCallout narrative={insight.ai_narrative} index={IDX.coach} />
+                    <CoachCallout
+                        narrative={insight.ai_narrative}
+                        index={IDX.coach}
+                        enabled={active}
+                    />
                 )}
 
                 <MesoHero model={model} active={active} />
@@ -146,19 +150,19 @@ export const MesoDashboard = memo(function MesoDashboard({
                     </View>
                 </Section>
 
+                {/* SEM `SectionHeader` aqui: o `ZonesRadar` renderiza o
+                    proprio ("Intensidade / Distribuicao de zonas"). Ate agora
+                    havia dois cabecalhos empilhados, e o de cima parecia uma
+                    secao vazia logo acima do radar. Quem tem o header e o
+                    componente, porque ele tambem muda o texto no caso sem zona
+                    prescrita. */}
                 {!!insight.zone_distribution && (
-                    <Section index={IDX.radar} active={active}>
-                        <SectionHeader
-                            eyebrow="Intensidade"
-                            title="Zonas do bloco"
-                            note="% do volume"
-                        />
-                        <ZonesRadar
-                            prescribed={insight.zone_distribution.prescribed}
-                            executed={insight.zone_distribution.executed}
-                            index={IDX.radar}
-                        />
-                    </Section>
+                    <ZonesRadar
+                        prescribed={insight.zone_distribution.prescribed}
+                        executed={insight.zone_distribution.executed}
+                        index={IDX.radar}
+                        enabled={active}
+                    />
                 )}
 
                 <Section index={IDX.quality} active={active}>

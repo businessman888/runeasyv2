@@ -6,6 +6,7 @@ import Animated from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, fonts } from '../../theme';
 import { useMesoInsightStore } from '../../stores/mesoInsightStore';
+import { useTrainingStore } from '../../stores/trainingStore';
 import { MesoStoryDeck } from './stories/MesoStoryDeck';
 import { MesoDashboard } from './dashboard/MesoDashboard';
 import { useMesoStory } from './hooks/useMesoStory';
@@ -36,6 +37,17 @@ export function MesoInsightScreen() {
     const navigation = useNavigation();
     const { latest, loading, fetch, markSeen } = useMesoInsightStore();
 
+    // A FASE DO PROXIMO BLOCO VEM DO PLANO, nao do insight.
+    //
+    // `plan_meso_insights` descreve o bloco que fechou e nao diz nada sobre o
+    // proximo; `useNextBlock` deriva a fase de `planOverview.weeks[].phase`.
+    // So que NINGUEM carregava o overview antes desta tela: a home nao busca, e
+    // abrir o insight pelo card caia com `planOverview` nulo -- e o card final
+    // exibia o texto generico de ausencia. Buscar aqui e o mesmo que a
+    // `WeeklyInsightScreen` ja faz para desenhar a trajetoria dela.
+    const fetchPlanOverview = useTrainingStore((s) => s.fetchPlanOverview);
+    const planOverview = useTrainingStore((s) => s.planOverview);
+
     const model = useMesoStory(latest);
     const next = useNextBlock(latest?.block_index ?? 0);
     const { storiesStyle, dashboardStyle, open, close, dashboardReady } =
@@ -45,6 +57,10 @@ export function MesoInsightScreen() {
     useEffect(() => {
         void fetch();
     }, [fetch]);
+
+    useEffect(() => {
+        if (!planOverview) void fetchPlanOverview();
+    }, [planOverview, fetchPlanOverview]);
 
     useEffect(() => {
         if (latest && latest.seen_at === null) void markSeen(latest.id);
