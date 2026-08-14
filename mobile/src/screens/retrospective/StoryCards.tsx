@@ -2,6 +2,12 @@ import React, { memo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import Animated, {
+  FadeInDown,
+  FadeInUp,
+  ReduceMotion,
+  ZoomIn,
+} from 'react-native-reanimated';
 import { colors, fonts } from '../../theme';
 import { storyType, StoryGradient } from './storyTheme';
 import type { RetrospectiveData } from './types';
@@ -67,7 +73,7 @@ const HeroNumber = memo(function HeroNumber({
   climax?: boolean;
 }) {
   return (
-    <View style={styles.heroRow}>
+    <Animated.View style={styles.heroRow} entering={ENTER_HERO}>
       <Text
         style={climax ? storyType.heroClimax : storyType.hero}
         // O número é o conteúdo — deixá-lo encolher em fonte grande do sistema
@@ -77,12 +83,16 @@ const HeroNumber = memo(function HeroNumber({
         {value}
       </Text>
       {unit ? <Text style={[storyType.unit, styles.unit]}>{unit}</Text> : null}
-    </View>
+    </Animated.View>
   );
 });
 
 const Eyebrow = memo(function Eyebrow({ children }: { children: string }) {
-  return <Text style={storyType.eyebrow}>{children.toUpperCase()}</Text>;
+  return (
+    <Animated.Text style={storyType.eyebrow} entering={ENTER_EYEBROW}>
+      {children.toUpperCase()}
+    </Animated.Text>
+  );
 });
 
 // ── Card 1 — Abertura ────────────────────────────────────────────────────────
@@ -99,7 +109,12 @@ export const CardOpening = memo(function CardOpening({ data }: { data: Retrospec
         size={40}
         color="rgba(235,235,245,0.55)"
       />
-      <Text style={[storyType.title, styles.openingTitle]}>Seu ciclo,{'\n'}revisitado</Text>
+      <Animated.Text
+        style={[storyType.title, styles.openingTitle]}
+        entering={ENTER_SUPPORTING}
+      >
+        Seu ciclo,{'\n'}revisitado
+      </Animated.Text>
       {context ? <Text style={storyType.body}>{context}</Text> : null}
 
       {/* A voz do coach entra aqui como UMA frase — o texto integral da IA num
@@ -263,6 +278,7 @@ export interface NextGoalOption {
 export const CardNextGoal = memo(function CardNextGoal({
   data,
   options,
+  compact = false,
 }: {
   data: RetrospectiveData;
   /**
@@ -271,69 +287,111 @@ export const CardNextGoal = memo(function CardNextGoal({
    * há nada aqui presumindo "meta = distância".
    */
   options: NextGoalOption[];
+  compact?: boolean;
 }) {
   return (
-    <View style={styles.center}>
-      <Text style={[storyType.title, styles.ctaTitle]}>E agora?</Text>
+    <View style={[styles.center, compact && styles.ctaCenterCompact]}>
+      <Animated.Text
+        style={[storyType.title, styles.ctaTitle, compact && styles.ctaTitleCompact]}
+        entering={ENTER_SUPPORTING}
+      >
+        E agora?
+      </Animated.Text>
 
       {data.suggestedNextGoal ? (
         <>
           <Eyebrow>O treinador sugere</Eyebrow>
-          <Text style={[storyType.hero, styles.ctaGoal]} allowFontScaling={false}>
+          <Animated.Text
+            style={[storyType.hero, styles.ctaGoal, compact && styles.ctaGoalCompact]}
+            allowFontScaling={false}
+            entering={ENTER_HERO}
+          >
             {data.suggestedNextGoal}
-          </Text>
+          </Animated.Text>
         </>
       ) : null}
 
-      <View style={styles.ctaActions}>
-        {options.map((opt) => (
-          <Pressable
+      <View style={[styles.ctaActions, compact && styles.ctaActionsCompact]}>
+        {options.map((opt, optionIndex) => (
+          <Animated.View
             key={opt.kind}
-            onPress={opt.onPress}
-            style={({ pressed }) => [
-              styles.ctaBtn,
-              opt.kind === 'coach' && styles.ctaBtnPrimary,
-              opt.kind === 'manual' && styles.ctaBtnManual,
-              pressed && styles.ctaBtnPressed,
-              opt.disabled && styles.ctaBtnDisabled,
-            ]}
-            disabled={opt.disabled}
-            accessibilityRole="button"
-            accessibilityLabel={opt.label}
-            accessibilityHint={opt.description}
+            style={styles.ctaOption}
+            entering={enterAction(optionIndex)}
           >
-            <View style={styles.ctaBtnCopy}>
-              <Text
-                style={[
-                  styles.ctaBtnText,
-                  opt.kind === 'coach' && styles.ctaBtnTextPrimary,
-                  opt.kind === 'manual' && styles.ctaBtnTextManual,
-                ]}
-              >
-                {opt.loading ? 'Gerando seu plano…' : opt.label}
-              </Text>
-              {opt.kind !== 'manual' ? (
+            <Pressable
+              onPress={opt.onPress}
+              style={({ pressed }) => [
+                styles.ctaBtn,
+                compact && styles.ctaBtnCompact,
+                opt.kind === 'coach' && styles.ctaBtnPrimary,
+                opt.kind === 'manual' && styles.ctaBtnManual,
+                pressed && styles.ctaBtnPressed,
+                opt.disabled && styles.ctaBtnDisabled,
+              ]}
+              disabled={opt.disabled}
+              accessibilityRole="button"
+              accessibilityLabel={opt.label}
+              accessibilityHint={opt.description}
+              accessibilityState={{ disabled: opt.disabled, busy: opt.loading }}
+            >
+              <View style={styles.ctaBtnCopy}>
                 <Text
                   style={[
-                    styles.ctaBtnDescription,
-                    opt.kind === 'coach' && styles.ctaBtnDescriptionPrimary,
+                    styles.ctaBtnText,
+                    opt.kind === 'coach' && styles.ctaBtnTextPrimary,
+                    opt.kind === 'manual' && styles.ctaBtnTextManual,
                   ]}
+                  maxFontSizeMultiplier={1.2}
                 >
-                  {opt.description}
+                  {opt.loading ? 'Gerando seu plano…' : opt.label}
                 </Text>
-              ) : null}
-            </View>
-            <Ionicons
-              name={opt.kind === 'coach' ? 'sparkles' : 'arrow-forward'}
-              size={18}
-              color={opt.kind === 'coach' ? colors.background : colors.primary}
-            />
-          </Pressable>
+                {opt.kind !== 'manual' ? (
+                  <Text
+                    style={[
+                      styles.ctaBtnDescription,
+                      opt.kind === 'coach' && styles.ctaBtnDescriptionPrimary,
+                    ]}
+                    maxFontSizeMultiplier={1.2}
+                  >
+                    {opt.description}
+                  </Text>
+                ) : null}
+              </View>
+              <Ionicons
+                name={opt.kind === 'coach' ? 'sparkles' : 'arrow-forward'}
+                size={18}
+                color={opt.kind === 'coach' ? colors.background : colors.primary}
+              />
+            </Pressable>
+          </Animated.View>
         ))}
       </View>
     </View>
   );
 });
+
+const ENTER_EYEBROW = FadeInDown.duration(320).reduceMotion(ReduceMotion.System);
+const ENTER_HERO = ZoomIn
+  .delay(80)
+  .springify()
+  .damping(18)
+  .stiffness(190)
+  .reduceMotion(ReduceMotion.System);
+const ENTER_SUPPORTING = FadeInUp
+  .delay(120)
+  .springify()
+  .damping(20)
+  .stiffness(180)
+  .reduceMotion(ReduceMotion.System);
+
+function enterAction(index: number) {
+  return FadeInUp
+    .delay(160 + index * 55)
+    .springify()
+    .damping(20)
+    .stiffness(185)
+    .reduceMotion(ReduceMotion.System);
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -452,15 +510,33 @@ const styles = StyleSheet.create({
   ctaTitle: {
     fontSize: 34,
   },
+  ctaTitleCompact: {
+    fontSize: 28,
+    lineHeight: 34,
+  },
   ctaGoal: {
     fontSize: 34,
     lineHeight: 42,
     textAlign: 'center',
   },
+  ctaGoalCompact: {
+    fontSize: 30,
+    lineHeight: 36,
+  },
   ctaActions: {
     marginTop: 18,
     width: '100%',
     gap: 10,
+  },
+  ctaCenterCompact: {
+    gap: 8,
+  },
+  ctaActionsCompact: {
+    marginTop: 10,
+    gap: 8,
+  },
+  ctaOption: {
+    width: '100%',
   },
   ctaBtn: {
     flexDirection: 'row',
@@ -474,6 +550,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(235,235,245,0.14)',
     paddingHorizontal: 18,
     paddingVertical: 12,
+  },
+  ctaBtnCompact: {
+    minHeight: 58,
+    paddingVertical: 9,
   },
   ctaBtnPrimary: {
     backgroundColor: colors.primary,

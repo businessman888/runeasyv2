@@ -2,9 +2,19 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, useWindowDimensions, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, runOnJS } from 'react-native-reanimated';
+import Animated, {
+    FadeIn,
+    FadeInLeft,
+    FadeInRight,
+    FadeOut,
+    ReduceMotion,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+    runOnJS,
+} from 'react-native-reanimated';
 import { captureRef } from 'react-native-view-shot';
 
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -17,7 +27,6 @@ import { openSystemShareSheet } from './sharing/utils/shareHandlers';
 import { gradientForCard, CLIMAX_CARD_INDEX, storyType } from './retrospective/storyTheme';
 import { StoryProgressBar } from './retrospective/StoryProgressBar';
 import {
-    StoryCardShell,
     CardOpening,
     CardVolume,
     CardConsistency,
@@ -27,6 +36,7 @@ import {
     CardNextGoal,
     type NextGoalOption,
 } from './retrospective/StoryCards';
+import { AnimatedStoryBackground } from './retrospective/AnimatedStoryBackground';
 import { ShareSummaryCard } from './retrospective/ShareSummaryCard';
 import type { RetrospectiveData } from './retrospective/types';
 import { retrospectiveGoalService } from '../services/retrospectiveGoalService';
@@ -52,15 +62,19 @@ import { retrospectiveGoalService } from '../services/retrospectiveGoalService';
  */
 
 const TOTAL_CARDS = 7;
+const BACKGROUND_IN = FadeIn.duration(420).reduceMotion(ReduceMotion.System);
+const BACKGROUND_OUT = FadeOut.duration(320).reduceMotion(ReduceMotion.System);
 
 export function RetrospectiveScreen() {
     const navigation = useNavigation();
+    const isFocused = useIsFocused();
     const insets = useSafeAreaInsets();
-    const { width } = useWindowDimensions();
+    const { height } = useWindowDimensions();
 
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState<RetrospectiveData | null>(null);
     const [index, setIndex] = useState(0);
+    const [direction, setDirection] = useState<1 | -1>(1);
     const [sharing, setSharing] = useState(false);
     const [goalAction, setGoalAction] = useState<'coach' | null>(null);
 
@@ -92,21 +106,22 @@ export function RetrospectiveScreen() {
 
     // ── Navegação ─────────────────────────────────────────────────────────────
 
-    const goTo = useCallback((next: number) => {
-        setIndex((prev) => {
-            const clamped = Math.max(0, Math.min(TOTAL_CARDS - 1, next));
-            return clamped === prev ? prev : clamped;
-        });
-    }, []);
-
-    const advance = useCallback(() => goTo(indexRef.current + 1), [goTo]);
-    const rewind = useCallback(() => goTo(indexRef.current - 1), [goTo]);
-
     // Espelho do índice para os callbacks do gesto, que não re-criam a cada render.
     const indexRef = useRef(0);
     useEffect(() => {
         indexRef.current = index;
     }, [index]);
+
+    const goTo = useCallback((next: number) => {
+        const current = indexRef.current;
+        const clamped = Math.max(0, Math.min(TOTAL_CARDS - 1, next));
+        if (clamped === current) return;
+        setDirection(clamped > current ? 1 : -1);
+        setIndex(clamped);
+    }, []);
+
+    const advance = useCallback(() => goTo(indexRef.current + 1), [goTo]);
+    const rewind = useCallback(() => goTo(indexRef.current - 1), [goTo]);
 
     const translateX = useSharedValue(0);
 
@@ -124,6 +139,16 @@ export function RetrospectiveScreen() {
     const cardAnimStyle = useAnimatedStyle(() => ({
         transform: [{ translateX: translateX.value }],
     }));
+
+    const storyEntering = React.useMemo(
+        () =>
+            (direction > 0 ? FadeInRight : FadeInLeft)
+                .springify()
+                .damping(20)
+                .stiffness(190)
+                .reduceMotion(ReduceMotion.System),
+        [direction],
+    );
 
     // ── Compartilhar ──────────────────────────────────────────────────────────
 
@@ -246,78 +271,112 @@ export function RetrospectiveScreen() {
 
     const gradient = gradientForCard(index);
     const isLastCard = index === TOTAL_CARDS - 1;
+    const compact = height < 720;
 
     return (
-        <ScreenContainer>
-            <View style={[styles.root, { paddingTop: insets.top + 8 }]}>
+        <View style={styles.root}>
+            <GestureDetector gesture={swipe}>
+                <Animated.View style={[styles.stage, cardAnimStyle]}>
+                    {/* Captura a composição fullscreen sem o chrome de navegação. */}
+                    <View ref={cardRef} collapsable={false} style={styles.captureArea}>
+                        <Animated.View
+                            key={`retrospective-background-${index}`}
+                            entering={BACKGROUND_IN}
+                            exiting={BACKGROUND_OUT}
+                            collapsable={false}
+                            style={StyleSheet.absoluteFill}
+                        >
+                            <AnimatedStoryBackground gradient={gradient} active={isFocused} />
+                        </Animated.View>
+                        <Animated.View
+                            key={`retrospective-story-${index}`}
+                            entering={storyEntering}
+                            style={[
+                                styles.storyContent,
+                                {
+                                    paddingTop: insets.top + (compact ? 76 : 92),
+                                    paddingBottom: Math.max(insets.bottom + 24, compact ? 32 : 48),
+                                },
+                            ]}
+                        >
+                            {renderCard(index, data, nextGoalOptions, compact)}
+                        </Animated.View>
+                    </View>
+
+                    {/* No CTA final as zonas laterais somem: nenhum overlay pode
+                        interceptar os botões de criação de plano. */}
+                    {!isLastCard && (
+                        <>
+                            <Pressable
+                                style={[styles.tapZone, styles.tapLeft]}
+                                onPress={rewind}
+                                accessibilityRole="button"
+                                accessibilityLabel="Card anterior"
+                            />
+                            <Pressable
+                                style={[styles.tapZone, styles.tapRight]}
+                                onPress={advance}
+                                accessibilityRole="button"
+                                accessibilityLabel="Próximo card"
+                            />
+                        </>
+                    )}
+                </Animated.View>
+            </GestureDetector>
+
+            {/* Chrome flutua sobre o story; não rouba altura do conteúdo. */}
+            <View style={[styles.chrome, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
                 <StoryProgressBar total={TOTAL_CARDS} current={index} accent={gradient.accent} />
-
                 <View style={styles.header}>
-                    <Text style={styles.brand}>Retrospectiva</Text>
-                    <Pressable
-                        onPress={() => navigation.goBack()}
-                        hitSlop={12}
-                        style={styles.closeBtn}
-                        accessibilityRole="button"
-                        accessibilityLabel="Fechar retrospectiva"
-                    >
-                        <Ionicons name="close" size={24} color={colors.textLight} />
-                    </Pressable>
+                    <View>
+                        <Text style={styles.brand}>Retrospectiva</Text>
+                        <Text style={styles.counter}>{index + 1} de {TOTAL_CARDS}</Text>
+                    </View>
+                    <View style={styles.headerActions}>
+                        <Pressable
+                            onPress={isLastCard ? shareSummary : shareCurrentCard}
+                            hitSlop={8}
+                            style={styles.headerBtn}
+                            disabled={sharing}
+                            accessibilityRole="button"
+                            accessibilityLabel={
+                                isLastCard ? 'Compartilhar resumo do ciclo' : 'Compartilhar este card'
+                            }
+                            accessibilityState={{ busy: sharing }}
+                        >
+                            {sharing ? (
+                                <ActivityIndicator size="small" color={colors.textLight} />
+                            ) : (
+                                <Ionicons name="share-outline" size={20} color={colors.textLight} />
+                            )}
+                        </Pressable>
+                        <Pressable
+                            onPress={() => navigation.goBack()}
+                            hitSlop={8}
+                            style={styles.headerBtn}
+                            accessibilityRole="button"
+                            accessibilityLabel="Fechar retrospectiva"
+                        >
+                            <Ionicons name="close" size={24} color={colors.textLight} />
+                        </Pressable>
+                    </View>
                 </View>
-
-                <GestureDetector gesture={swipe}>
-                    <Animated.View style={[styles.stage, cardAnimStyle]}>
-                        {/* A ref de captura envolve só o card — o share sai sem a
-                            barra de progresso nem o header. */}
-                        <View ref={cardRef} collapsable={false} style={styles.captureArea}>
-                            <StoryCardShell gradient={gradient} onShare={shareCurrentCard}>
-                                {renderCard(index, data, nextGoalOptions)}
-                            </StoryCardShell>
-                        </View>
-
-                        {/* Zonas de toque: metade esquerda volta, direita avança.
-                            Ficam ABAIXO do botão de share na ordem de render, então
-                            não engolem o toque dele. */}
-                        <Pressable
-                            style={[styles.tapZone, { left: 0, width: width * 0.3 }]}
-                            onPress={rewind}
-                            accessibilityRole="button"
-                            accessibilityLabel="Card anterior"
-                        />
-                        <Pressable
-                            style={[styles.tapZone, { right: 0, width: width * 0.3 }]}
-                            onPress={advance}
-                            accessibilityRole="button"
-                            accessibilityLabel="Próximo card"
-                        />
-                    </Animated.View>
-                </GestureDetector>
-
-                {/* O compartilhamento do compilado só faz sentido no fim do arco. */}
-                {isLastCard && (
-                    <Pressable
-                        onPress={shareSummary}
-                        style={styles.summaryShareBtn}
-                        disabled={sharing}
-                        accessibilityRole="button"
-                        accessibilityLabel="Compartilhar resumo do ciclo"
-                        accessibilityState={{ busy: sharing }}
-                    >
-                        <Ionicons name="share-outline" size={18} color={colors.textLight} />
-                        <Text style={styles.summaryShareText}>Compartilhar resumo</Text>
-                    </Pressable>
-                )}
             </View>
 
             {/* Fora do viewport: existe só para ser capturado. */}
             <View style={styles.offscreen} pointerEvents="none">
                 <ShareSummaryCard ref={summaryRef} data={data} />
             </View>
-        </ScreenContainer>
+        </View>
     );
 }
 
-function renderCard(index: number, data: RetrospectiveData, nextGoalOptions: NextGoalOption[]) {
+function renderCard(
+    index: number,
+    data: RetrospectiveData,
+    nextGoalOptions: NextGoalOption[],
+    compact: boolean,
+) {
     switch (index) {
         case 0:
             return <CardOpening data={data} />;
@@ -332,65 +391,75 @@ function renderCard(index: number, data: RetrospectiveData, nextGoalOptions: Nex
         case CLIMAX_CARD_INDEX:
             return <CardClimax data={data} />;
         default:
-            return <CardNextGoal data={data} options={nextGoalOptions} />;
+            return <CardNextGoal data={data} options={nextGoalOptions} compact={compact} />;
     }
 }
 
 const styles = StyleSheet.create({
     root: {
         flex: 1,
+        backgroundColor: colors.background,
+    },
+    chrome: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 5,
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
-        paddingVertical: 12,
+        paddingTop: 10,
     },
     brand: {
         fontFamily: fonts.semibold,
         fontSize: 15,
-        color: 'rgba(235,235,245,0.65)',
+        color: colors.textLight,
     },
-    closeBtn: {
+    counter: {
+        marginTop: 2,
+        fontFamily: fonts.medium,
+        fontSize: 11,
+        color: 'rgba(235,235,245,0.58)',
+    },
+    headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    headerBtn: {
         width: 44,
         height: 44,
-        alignItems: 'flex-end',
+        borderRadius: 22,
+        alignItems: 'center',
         justifyContent: 'center',
+        backgroundColor: 'rgba(10,10,24,0.24)',
     },
     stage: {
         flex: 1,
-        paddingHorizontal: 16,
-        paddingBottom: 16,
     },
     captureArea: {
         flex: 1,
-        borderRadius: 28,
         overflow: 'hidden',
+    },
+    storyContent: {
+        flex: 1,
+        width: '100%',
+        maxWidth: 560,
+        alignSelf: 'center',
+        paddingHorizontal: 24,
     },
     tapZone: {
         position: 'absolute',
-        top: 0,
-        bottom: 80, // libera o canto do botão de share
+        top: 104,
+        bottom: 32,
+        width: '30%',
     },
-    summaryShareBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        marginHorizontal: 16,
-        marginBottom: 16,
-        minHeight: 48,
-        borderRadius: 24,
-        borderWidth: 1,
-        borderColor: 'rgba(235,235,245,0.18)',
-        backgroundColor: 'rgba(255,255,255,0.06)',
-    },
-    summaryShareText: {
-        fontFamily: fonts.semibold,
-        fontSize: 15,
-        color: colors.textLight,
-    },
+    tapLeft: { left: 0 },
+    tapRight: { right: 0 },
     offscreen: {
         position: 'absolute',
         left: -9999,

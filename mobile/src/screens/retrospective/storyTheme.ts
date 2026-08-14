@@ -35,6 +35,8 @@ export interface StoryGradient {
   accent: string;
   /** Rótulo de depuração — aparece só em comentário/teste. */
   name: string;
+  /** Linguagem de movimento do fundo imersivo. */
+  motion: 'aurora' | 'bars' | 'orbit' | 'rays' | 'calm';
 }
 
 /**
@@ -47,8 +49,9 @@ function gradient(
   accent: string,
   mid: string,
   deep: string,
+  motion: StoryGradient['motion'],
 ): StoryGradient {
-  return { name, accent, colors: [colors.background, mid, deep] as const };
+  return { name, accent, motion, colors: [colors.background, mid, deep] as const };
 }
 
 /**
@@ -59,19 +62,19 @@ function gradient(
  */
 export const STORY_GRADIENTS: readonly StoryGradient[] = [
   // 1. Abertura — ciano da marca
-  gradient('ciano', colors.primary, '#0B3A4A', '#071E28'),
+  gradient('ciano', colors.primary, '#0B3A4A', '#071E28', 'aurora'),
   // 2. Volume — ciano profundo
-  gradient('ciano-profundo', colors.primaryDark, '#0A3446', '#06202E'),
+  gradient('ciano-profundo', colors.primaryDark, '#0A3446', '#06202E', 'orbit'),
   // 3. Treinos + consistência — azul
-  gradient('azul', colors.primaryLight, '#132A55', '#0B1836'),
+  gradient('azul', colors.primaryLight, '#132A55', '#0B1836', 'bars'),
   // 4. Pace — índigo (entre azul e roxo)
-  gradient('indigo', '#6366F1', '#221F5C', '#12103A'),
+  gradient('indigo', '#6366F1', '#221F5C', '#12103A', 'bars'),
   // 5. Comparação lúdica — roxo
-  gradient('roxo', colors.recovery, '#2E1A55', '#1A0E36'),
+  gradient('roxo', colors.recovery, '#2E1A55', '#1A0E36', 'orbit'),
   // 6. CLÍMAX — âmbar. Único tom quente; mais luminoso de propósito.
-  gradient('ambar', colors.accent, '#5C3A05', '#2E1D02'),
+  gradient('ambar', colors.accent, '#5C3A05', '#2E1D02', 'rays'),
   // 7. CTA — volta ao ciano da marca
-  gradient('ciano', colors.primary, '#0B3A4A', '#071E28'),
+  gradient('ciano', colors.primary, '#0B3A4A', '#071E28', 'calm'),
 ] as const;
 
 /** Gradiente do card `index` (0-based), com wrap defensivo. */
