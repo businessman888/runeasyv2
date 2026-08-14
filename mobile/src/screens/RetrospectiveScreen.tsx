@@ -1,23 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    Pressable,
-    ActivityIndicator,
-    useWindowDimensions,
-    Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, useWindowDimensions, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, {
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring,
-    runOnJS,
-} from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, runOnJS } from 'react-native-reanimated';
 import { captureRef } from 'react-native-view-shot';
 
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -42,6 +29,7 @@ import {
 } from './retrospective/StoryCards';
 import { ShareSummaryCard } from './retrospective/ShareSummaryCard';
 import type { RetrospectiveData } from './retrospective/types';
+import { retrospectiveGoalService } from '../services/retrospectiveGoalService';
 
 /**
  * Retrospectiva de fim de ciclo em formato STORIES (Fase 1B).
@@ -74,6 +62,7 @@ export function RetrospectiveScreen() {
     const [data, setData] = useState<RetrospectiveData | null>(null);
     const [index, setIndex] = useState(0);
     const [sharing, setSharing] = useState(false);
+    const [goalAction, setGoalAction] = useState<'coach' | null>(null);
 
     // Ref do card VISÍVEL — o share por card captura exatamente o que está na tela.
     const cardRef = useRef<View>(null);
@@ -89,10 +78,9 @@ export function RetrospectiveScreen() {
             const userId = await Storage.getItemAsync('user_id');
             if (!userId) return;
 
-            const response = await authedFetch(
-                `${BASE_API_URL}/training/retrospective/latest`,
-                { headers: { 'x-user-id': userId } },
-            );
+            const response = await authedFetch(`${BASE_API_URL}/training/retrospective/latest`, {
+                headers: { 'x-user-id': userId },
+            });
             const result = await response.json();
             if (result.hasRetrospective) setData(result.retrospective);
         } catch (error) {
@@ -159,34 +147,70 @@ export function RetrospectiveScreen() {
         [sharing],
     );
 
-    const shareCurrentCard = useCallback(
-        () => shareView(cardRef, 'deste card'),
-        [shareView],
-    );
-    const shareSummary = useCallback(
-        () => shareView(summaryRef, 'do resumo'),
-        [shareView],
-    );
+    const shareCurrentCard = useCallback(() => shareView(cardRef, 'deste card'), [shareView]);
+    const shareSummary = useCallback(() => shareView(summaryRef, 'do resumo'), [shareView]);
 
     // ── Próxima meta ──────────────────────────────────────────────────────────
     //
     // Lista de opções, não um botão fixo. A Fase 5 acrescenta a meta de
     // pace/tempo empurrando outro item aqui — o card não presume "meta =
     // distância" em lugar nenhum.
+    const acceptCoachPlan = useCallback(async () => {
+        if (!data || goalAction) return;
+        setGoalAction('coach');
+        try {
+            await retrospectiveGoalService.acceptSuggestion(data.id);
+            (navigation as any).reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+        } catch (error) {
+            Alert.alert(
+                'Não foi possível gerar o plano',
+                error instanceof Error ? error.message : 'Tente novamente em instantes.',
+            );
+        } finally {
+            setGoalAction(null);
+        }
+    }, [data, goalAction, navigation]);
+
     const nextGoalOptions: NextGoalOption[] = React.useMemo(() => {
         if (!data) return [];
+        const openWizard = (goalKind: 'distance' | 'pace', manual = false) =>
+            (navigation as any).navigate('CustomizeGoal', {
+                retrospectiveId: data.id,
+                goalKind,
+                manual,
+            });
         return [
             {
+                kind: 'coach',
+                label: 'Aceitar o plano do coach',
+                description: 'Um toque e o próximo ciclo começa a ser criado',
+                onPress: acceptCoachPlan,
+                loading: goalAction === 'coach',
+                disabled: goalAction !== null,
+            },
+            {
                 kind: 'distance',
-                label: 'Definir próxima meta',
-                description: 'Escolher uma nova distância e montar o próximo plano',
-                onPress: () =>
-                    (navigation as any).navigate('CustomizeGoal', {
-                        retrospectiveId: data.id,
-                    }),
+                label: 'Meta de distância',
+                description: 'Escolha a distância do próximo ciclo',
+                onPress: () => openWizard('distance'),
+                disabled: goalAction !== null,
+            },
+            {
+                kind: 'pace',
+                label: 'Meta de tempo',
+                description: 'Defina seu tempo-alvo com análise de viabilidade',
+                onPress: () => openWizard('pace'),
+                disabled: goalAction !== null,
+            },
+            {
+                kind: 'manual',
+                label: 'Ajustar manualmente',
+                description: 'Configurar os detalhes do ciclo',
+                onPress: () => openWizard('distance', true),
+                disabled: goalAction !== null,
             },
         ];
-    }, [data, navigation]);
+    }, [acceptCoachPlan, data, goalAction, navigation]);
 
     // ── Estados ───────────────────────────────────────────────────────────────
 
@@ -204,15 +228,9 @@ export function RetrospectiveScreen() {
         return (
             <ScreenContainer>
                 <View style={styles.stateContainer}>
-                    <Ionicons
-                        name="documents-outline"
-                        size={44}
-                        color={colors.textMuted}
-                    />
+                    <Ionicons name="documents-outline" size={44} color={colors.textMuted} />
                     <Text style={styles.emptyTitle}>Nenhuma retrospectiva ainda</Text>
-                    <Text style={styles.emptyBody}>
-                        Ela fica pronta quando você concluir um ciclo de treino.
-                    </Text>
+                    <Text style={styles.emptyBody}>Ela fica pronta quando você concluir um ciclo de treino.</Text>
                     <Pressable
                         onPress={() => navigation.goBack()}
                         style={styles.emptyBtn}
@@ -232,11 +250,7 @@ export function RetrospectiveScreen() {
     return (
         <ScreenContainer>
             <View style={[styles.root, { paddingTop: insets.top + 8 }]}>
-                <StoryProgressBar
-                    total={TOTAL_CARDS}
-                    current={index}
-                    accent={gradient.accent}
-                />
+                <StoryProgressBar total={TOTAL_CARDS} current={index} accent={gradient.accent} />
 
                 <View style={styles.header}>
                     <Text style={styles.brand}>Retrospectiva</Text>
@@ -303,11 +317,7 @@ export function RetrospectiveScreen() {
     );
 }
 
-function renderCard(
-    index: number,
-    data: RetrospectiveData,
-    nextGoalOptions: NextGoalOption[],
-) {
+function renderCard(index: number, data: RetrospectiveData, nextGoalOptions: NextGoalOption[]) {
     switch (index) {
         case 0:
             return <CardOpening data={data} />;

@@ -16,9 +16,10 @@ interface CustomKeypadProps {
     onPress: (key: string) => void;
     onDelete: () => void;
     disabled?: boolean;
+    compact?: boolean;
 }
 
-export function CustomKeypad({ onPress, onDelete, disabled }: CustomKeypadProps) {
+export function CustomKeypad({ onPress, onDelete, disabled, compact = false }: CustomKeypadProps) {
     const keys = [
         ['1', '2', '3'],
         ['4', '5', '6'],
@@ -28,29 +29,27 @@ export function CustomKeypad({ onPress, onDelete, disabled }: CustomKeypadProps)
     return (
         <View style={styles.container}>
             {keys.map((row, rowIndex) => (
-                <View key={rowIndex} style={styles.row}>
+                <View key={rowIndex} style={[styles.row, compact && styles.rowCompact]}>
                     {row.map((key) => (
                         <TouchableOpacity
                             key={key}
-                            style={[styles.button, disabled && styles.disabledButton]}
+                            style={[styles.button, compact && styles.buttonCompact, disabled && styles.disabledButton]}
                             onPress={() => onPress(key)}
                             disabled={disabled}
                             activeOpacity={0.7}
                         >
-                            <Text style={[styles.keyText, disabled && styles.disabledText]}>
-                                {key}
-                            </Text>
+                            <Text style={[styles.keyText, disabled && styles.disabledText]}>{key}</Text>
                         </TouchableOpacity>
                     ))}
                 </View>
             ))}
 
             {/* Bottom Row: Empty, 0, Backspace */}
-            <View style={styles.row}>
-                <View style={styles.buttonPlaceholder} />
+            <View style={[styles.row, compact && styles.rowCompact]}>
+                <View style={[styles.buttonPlaceholder, compact && styles.buttonCompact]} />
 
                 <TouchableOpacity
-                    style={[styles.button, disabled && styles.disabledButton]}
+                    style={[styles.button, compact && styles.buttonCompact, disabled && styles.disabledButton]}
                     onPress={() => onPress('0')}
                     disabled={disabled}
                     activeOpacity={0.7}
@@ -59,7 +58,7 @@ export function CustomKeypad({ onPress, onDelete, disabled }: CustomKeypadProps)
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    style={[styles.button, disabled && styles.disabledButton]}
+                    style={[styles.button, compact && styles.buttonCompact, disabled && styles.disabledButton]}
                     onPress={onDelete}
                     disabled={disabled}
                     activeOpacity={0.7}
@@ -86,6 +85,9 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: 12,
     },
+    rowCompact: {
+        marginBottom: 6,
+    },
     button: {
         width: '30%',
         height: 60, // Taller touch targets
@@ -93,11 +95,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderRadius: 12,
         // Optional: Add subtle background if desired, or keep transparent as per user image
-        // backgroundColor: 'rgba(255,255,255,0.03)', 
+        // backgroundColor: 'rgba(255,255,255,0.03)',
     },
     buttonPlaceholder: {
         width: '30%',
         height: 60,
+    },
+    buttonCompact: {
+        height: 44,
     },
     disabledButton: {
         opacity: 0.5,

@@ -74,6 +74,50 @@ export class PaceCalculatorService {
   }
 
   /**
+   * Numeric inverse of `estimateVDOTFromRace`: returns the race time in
+   * seconds for a VDOT and distance. The forward Daniels formula remains the
+   * single source of truth, following `impliedVdotForZonePace`'s pattern.
+   */
+  estimateRaceTimeFromVDOT(distanceMeters: number, vdot: number): number {
+    if (!Number.isFinite(distanceMeters) || distanceMeters <= 0) return 0;
+
+    const targetVDOT = this.clamp(vdot);
+    let lo = Math.max(60, distanceMeters / 12);
+    let hi = Math.max(lo, distanceMeters / 0.8);
+
+    for (let i = 0; i < 48; i++) {
+      const mid = (lo + hi) / 2;
+      if (this.estimateVDOTFromRace(distanceMeters, mid) > targetVDOT) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+
+    const center = Math.round((lo + hi) / 2);
+    let bestTime = center;
+    let bestError = Math.abs(
+      this.estimateVDOTFromRace(distanceMeters, center) - targetVDOT,
+    );
+    // `estimateVDOTFromRace` exposes 0.1 resolution. Choose a whole second
+    // inside that plateau so the public round-trip lands on the exact target.
+    for (
+      let seconds = Math.max(1, center - 90);
+      seconds <= center + 90;
+      seconds++
+    ) {
+      const error = Math.abs(
+        this.estimateVDOTFromRace(distanceMeters, seconds) - targetVDOT,
+      );
+      if (error < bestError) {
+        bestError = error;
+        bestTime = seconds;
+      }
+    }
+    return bestTime;
+  }
+
+  /**
    * Returns training paces (decimal min/km) for each Daniels zone.
    * Interpolates linearly between the closest VDOT anchors.
    */

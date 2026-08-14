@@ -179,7 +179,7 @@ export class TrainingService {
         plan_id: plan.id,
         generation_status: 'generating',
         planHeader: {
-          objectiveShort: onboardingData.goal,
+          objectiveShort: onboardingData.goalLabel ?? onboardingData.goal,
           durationWeeks: `${onboardingData.targetWeeks} Sem`,
           frequencyWeekly: `${onboardingData.daysPerWeek}x/Sem`,
         },

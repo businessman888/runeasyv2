@@ -75,12 +75,14 @@ export class VolumePlannerService {
     const neverRan = input.recentDistanceKm === 0;
 
     const kmAnchor =
-      input.currentWeeklyKm && WEEKLY_KM_MIDPOINTS[input.currentWeeklyKm] != null
+      input.currentWeeklyKm &&
+      WEEKLY_KM_MIDPOINTS[input.currentWeeklyKm] != null
         ? WEEKLY_KM_MIDPOINTS[input.currentWeeklyKm]
         : null;
 
     const freqCap =
-      input.recentFrequency && FREQUENCY_IMPLIED_KM[input.recentFrequency] != null
+      input.recentFrequency &&
+      FREQUENCY_IMPLIED_KM[input.recentFrequency] != null
         ? FREQUENCY_IMPLIED_KM[input.recentFrequency]
         : null;
 
@@ -166,6 +168,10 @@ export class VolumePlannerService {
       half_marathon: 21.1,
       marathon: 42.2,
       general_fitness: 10,
+      // Defesa em profundidade. O fluxo da Fase 5 normaliza pace_improvement
+      // para a distância real antes da geração; se um caller legado não o fizer,
+      // preserve a distância recente em vez de cair silenciosamente em 10 km.
+      pace_improvement: input.recentDistanceKm ?? 5,
     };
     return map[input.goal ?? ''] ?? input.recentDistanceKm ?? 10;
   }
@@ -240,7 +246,10 @@ export class VolumePlannerService {
     const rampWeeksNeeded =
       ratio <= 1 ? 1 : Math.ceil(Math.log(ratio) / Math.log(1 + cap));
     const minWeeksRecommended =
-      rampWeeksNeeded + phases.peak + phases.taper + this.deloadCount(rampWeeksNeeded);
+      rampWeeksNeeded +
+      phases.peak +
+      phases.taper +
+      this.deloadCount(rampWeeksNeeded);
 
     // Maior meta atingível no prazo: qual peakLong a rampa segura alcança
     // (limitada pela barreira absoluta de crescimento), e qual meta corresponde
@@ -254,7 +263,8 @@ export class VolumePlannerService {
 
     return {
       feasible,
-      requiredWeeklyIncreasePct: this.round(requiredWeeklyIncreasePct * 100) / 100,
+      requiredWeeklyIncreasePct:
+        this.round(requiredWeeklyIncreasePct * 100) / 100,
       minWeeksRecommended,
       maxGoalKmInWindow: this.round(maxGoalKmInWindow),
       peakLongRunKm: peakLong,
@@ -347,7 +357,9 @@ export class VolumePlannerService {
       }
       let longRunKm = Math.min(longTarget, shareCap);
       if (deload[w - 1]) longRunKm *= 0.8; // longão também recua no deload
-      longRunKm = this.round(Math.max(longRunKm, MIN_WARMUP_KM + MIN_COOLDOWN_KM));
+      longRunKm = this.round(
+        Math.max(longRunKm, MIN_WARMUP_KM + MIN_COOLDOWN_KM),
+      );
 
       const workouts = this.distributeWeek(
         total,

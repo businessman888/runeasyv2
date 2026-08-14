@@ -25,9 +25,21 @@ describe('TrainingAIService — volume determinístico e parity', () => {
   const paceCalculator = new PaceCalculatorService();
   const volumePlanner = new VolumePlannerService();
 
+  it('pace_improvement preserva a distância recente em vez de cair em 10 km', () => {
+    expect(
+      volumePlanner.resolveGoalKm({
+        goal: 'pace_improvement',
+        recentDistanceKm: 5,
+      }),
+    ).toBe(5);
+  });
+
   /** Acesso tipado ao método privado, sem `any`. */
   type Internals = {
-    applyDeterministicVolume(plan: GeneratedPlan, skeleton: WeekSkeleton[]): void;
+    applyDeterministicVolume(
+      plan: GeneratedPlan,
+      skeleton: WeekSkeleton[],
+    ): void;
   };
 
   let service: TrainingAIService;
@@ -67,15 +79,17 @@ describe('TrainingAIService — volume determinístico e parity', () => {
     day_of_week: day,
     type,
     distance_km: 0, // será cravado pelo pós-processamento
-    segments: [
-      { type: 'main', distance_km: 1, pace_min: 300, pace_max: 360 },
-    ],
+    segments: [{ type: 'main', distance_km: 1, pace_min: 300, pace_max: 360 }],
     objective: 'obj',
     tips: [],
   });
 
   /** Intervalado: warmup + repeat (por distância) + cooldown. */
-  const intervalado = (day: number, reps: number, workKm: number): GeneratedWorkout => ({
+  const intervalado = (
+    day: number,
+    reps: number,
+    workKm: number,
+  ): GeneratedWorkout => ({
     day_of_week: day,
     type: 'intervals',
     distance_km: 0,
@@ -337,82 +351,103 @@ describe('TrainingAIService — volume determinístico e parity', () => {
   // ── Lacuna 3 — parity precheck × geração ──────────────────────────────────
 
   describe('parity: assessRequestViability (precheck) × geração', () => {
-    const perfis: Array<{ nome: string; req: Partial<TrainingPlanRequest> & { targetWeeks: number } }> = [
+    const perfis: Array<{
+      nome: string;
+      req: Partial<TrainingPlanRequest> & { targetWeeks: number };
+    }> = [
       {
         nome: 'viável (avançado, maratona, volume alto)',
         req: {
-          goal: 'marathon', level: 'advanced', daysPerWeek: 5, targetWeeks: 24,
-          recentDistanceKm: 15, recentFrequency: '4x_plus', currentWeeklyKm: 'gt30',
+          goal: 'marathon',
+          level: 'advanced',
+          daysPerWeek: 5,
+          targetWeeks: 24,
+          recentDistanceKm: 15,
+          recentFrequency: '4x_plus',
+          currentWeeklyKm: 'gt30',
         },
       },
       {
         nome: 'inviável (iniciante, 10k, volume baixo)',
         req: {
-          goal: '10k', level: 'beginner', daysPerWeek: 4, targetWeeks: 12,
-          recentDistanceKm: 5, recentFrequency: '2x', currentWeeklyKm: '5_10',
+          goal: '10k',
+          level: 'beginner',
+          daysPerWeek: 4,
+          targetWeeks: 12,
+          recentDistanceKm: 5,
+          recentFrequency: '2x',
+          currentWeeklyKm: '5_10',
         },
       },
       {
         nome: 'nunca correu',
         req: {
-          goal: '5k', level: 'beginner', daysPerWeek: 3, targetWeeks: 12,
-          recentDistanceKm: 0, walkCapacity: 'effort',
+          goal: '5k',
+          level: 'beginner',
+          daysPerWeek: 3,
+          targetWeeks: 12,
+          recentDistanceKm: 0,
+          walkCapacity: 'effort',
         },
       },
       {
         nome: 'prova com data',
         req: {
-          goal: '10k', goalType: 'race', raceDistance: 10, raceWeeksUntil: 10,
-          level: 'intermediate', daysPerWeek: 4, targetWeeks: 10,
-          recentDistanceKm: 10, recentFrequency: '3x', currentWeeklyKm: '10_20',
+          goal: '10k',
+          goalType: 'race',
+          raceDistance: 10,
+          raceWeeksUntil: 10,
+          level: 'intermediate',
+          daysPerWeek: 4,
+          targetWeeks: 10,
+          recentDistanceKm: 10,
+          recentFrequency: '3x',
+          currentWeeklyKm: '10_20',
         },
       },
     ];
 
-    it.each(perfis)(
-      'veredito idêntico ao do motor para: $nome',
-      ({ req }) => {
-        // Caminho do PRECHECK (controller /onboarding/precheck).
-        const precheck = service.assessRequestViability(req);
+    it.each(perfis)('veredito idêntico ao do motor para: $nome', ({ req }) => {
+      // Caminho do PRECHECK (controller /onboarding/precheck).
+      const precheck = service.assessRequestViability(req);
 
-        // Caminho da GERAÇÃO: a mesma capacidade/fases que generatePlan deriva,
-        // avaliada direto no motor. Se os dois algum dia divergirem, quebra aqui.
-        const goalKm = volumePlanner.resolveGoalKm({
-          goal: req.goal,
-          goalType: req.goalType,
-          raceDistance: req.raceDistance,
-          recentDistanceKm: req.recentDistanceKm,
-        });
-        const capacity = volumePlanner.deriveEffectiveCapacity({
-          currentWeeklyKm: req.currentWeeklyKm,
-          recentFrequency: req.recentFrequency,
-          recentDistanceKm: req.recentDistanceKm,
-          level: req.level,
-        });
+      // Caminho da GERAÇÃO: a mesma capacidade/fases que generatePlan deriva,
+      // avaliada direto no motor. Se os dois algum dia divergirem, quebra aqui.
+      const goalKm = volumePlanner.resolveGoalKm({
+        goal: req.goal,
+        goalType: req.goalType,
+        raceDistance: req.raceDistance,
+        recentDistanceKm: req.recentDistanceKm,
+      });
+      const capacity = volumePlanner.deriveEffectiveCapacity({
+        currentWeeklyKm: req.currentWeeklyKm,
+        recentFrequency: req.recentFrequency,
+        recentDistanceKm: req.recentDistanceKm,
+        level: req.level,
+      });
 
-        if (capacity.neverRan) {
-          // Quem nunca correu vai para o protocolo caminhada/corrida: sempre
-          // viável, e sem longão de pico a perseguir.
-          expect(precheck.neverRan).toBe(true);
-          expect(precheck.feasible).toBe(true);
-          expect(precheck.peakLongRunKm).toBe(0);
-          return;
-        }
+      if (capacity.neverRan) {
+        // Quem nunca correu vai para o protocolo caminhada/corrida: sempre
+        // viável, e sem longão de pico a perseguir.
+        expect(precheck.neverRan).toBe(true);
+        expect(precheck.feasible).toBe(true);
+        expect(precheck.peakLongRunKm).toBe(0);
+        return;
+      }
 
-        const motor = volumePlanner.assessViability({
-          capacity,
-          goalKm,
-          totalWeeks: req.targetWeeks,
-          phases: volumePlanner.calculatePhases(req.targetWeeks, goalKm),
-        });
+      const motor = volumePlanner.assessViability({
+        capacity,
+        goalKm,
+        totalWeeks: req.targetWeeks,
+        phases: volumePlanner.calculatePhases(req.targetWeeks, goalKm),
+      });
 
-        expect(precheck.feasible).toBe(motor.feasible);
-        expect(precheck.minWeeksRecommended).toBe(motor.minWeeksRecommended);
-        expect(precheck.peakLongRunKm).toBe(motor.peakLongRunKm);
-        expect(precheck.maxGoalKmInWindow).toBe(motor.maxGoalKmInWindow);
-        expect(precheck.goalKm).toBe(goalKm);
-        expect(precheck.effectiveWeeklyKm).toBe(capacity.weeklyKm);
-      },
-    );
+      expect(precheck.feasible).toBe(motor.feasible);
+      expect(precheck.minWeeksRecommended).toBe(motor.minWeeksRecommended);
+      expect(precheck.peakLongRunKm).toBe(motor.peakLongRunKm);
+      expect(precheck.maxGoalKmInWindow).toBe(motor.maxGoalKmInWindow);
+      expect(precheck.goalKm).toBe(goalKm);
+      expect(precheck.effectiveWeeklyKm).toBe(capacity.weeklyKm);
+    });
   });
 });

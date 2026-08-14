@@ -21,6 +21,7 @@ import {
 } from '../../common/volume-planner';
 import { selectArchetypeKey } from '../../common/archetype';
 import { PlanPreviewDto, PreviewViabilityDto } from './dto/plan-preview.dto';
+import { PaceGoalFeasibility } from './pace-goal.service';
 
 export interface TrainingPlanRequest {
   goal: string;
@@ -45,6 +46,13 @@ export interface TrainingPlanRequest {
   // Manual overrides from Customize Screen
   targetTime?: string; // e.g., "01:55:00"
   targetPace?: string; // e.g., "5:30"
+  /** Measured fitness at plan creation. This, never targetVDOT, prescribes pace. */
+  currentVDOT?: number;
+  /** Destination of a time goal. Used for feasibility and plan emphasis only. */
+  targetVDOT?: number;
+  goalMode?: 'distance' | 'time';
+  paceGoalFeasibility?: PaceGoalFeasibility;
+  goalLabel?: string;
   // Race goal (Fase 2): when goalType === 'race' the plan is anchored to the
   // race date and periodized backwards (base → build → peak → taper).
   goalType?: 'distance' | 'race';
@@ -230,6 +238,13 @@ export interface GeneratedPlan {
    * pace prescrito.
    */
   vdot?: number;
+  goalMode?: 'distance' | 'time';
+  targetTime?: string;
+  targetPace?: string;
+  targetVDOT?: number;
+  paceGoalFeasibility?: PaceGoalFeasibility;
+  qualityEmphasis?: 'balanced' | 'threshold_progression';
+  goalLabel?: string;
 }
 
 @Injectable()
@@ -337,6 +352,17 @@ export class TrainingAIService {
     request: TrainingPlanRequest,
     safePace: number | null | undefined,
   ): number {
+    if (Number.isFinite(request.currentVDOT) && request.currentVDOT! > 0) {
+      const { min, max } = this.paceCalculator.bounds;
+      const currentVDOT =
+        Math.round(Math.min(max, Math.max(min, request.currentVDOT!)) * 10) /
+        10;
+      this.logger.log(
+        `[VDOT] Current plan fitness: VDOT ${currentVDOT.toFixed(1)}`,
+      );
+      return currentVDOT;
+    }
+
     const calculatedPace = this.clampPace(request.calculatedPace);
     const recentDistanceKm = request.recentDistanceKm;
 
@@ -562,7 +588,7 @@ Gere as SEMANAS 2 até ${request.targetWeeks} seguindo esta progressão:
 3. Distribuição de fases: base (40%), build (30%), peak (20%), taper (10%)
 4. Aumente volume progressivamente até semana de peak, depois reduza no taper
 5. Mantenha consistência de paces com a Semana 1
-${request.targetPace ? `6. IMPORTANTE: O objetivo final é correr no pace ${request.targetPace} min/km. Aumente a intensidade gradualmente para atingir isso na semana de prova.` : ''}
+  ${request.targetVDOT ? `6. META DE TEMPO: destino VDOT ${request.targetVDOT.toFixed(1)}. Dê ênfase progressiva a limiar/economia nos slots de qualidade existentes, mas use SOMENTE os paces do VDOT atual e nunca prescreva pelo VDOT-alvo.` : ''}
 
 Responda APENAS com o JSON contendo as semanas 2 até ${request.targetWeeks}.`;
 
@@ -865,7 +891,7 @@ coach_note — NÃO transcreva estes números em pace_min/pace_max; o sistema os
 - Z5 Repetition:  ${formattedPaces.repetition} min/km
 
 VALORES PRÉ-DEFINIDOS:
-- objectiveShort: "${this.goalLabels[request.goal] || request.goal}"
+- objectiveShort: "${request.goalLabel || this.goalLabels[request.goal] || request.goal}"
 - durationWeeks: "${request.targetWeeks} Sem"
 - frequencyWeekly: "${request.daysPerWeek}x/Sem"
 - welcomeBadge: "${this.levelLabels[request.level] || 'Corredor'}"
@@ -885,7 +911,7 @@ EXIGÊNCIAS DO PLANO:
 3. Aplique a regra 80/20 do volume semanal (Z1+Z2 dominantes).
 4. Máximo 2 sessões de qualidade (Z3/Z4/Z5) por semana, com ≥48h de intervalo; prefira o slot [Q].
 5. No treino [Q] intervalado, o total de tiros (reps × distância do tiro) NÃO pode exceder o teto indicado — o resto da distância vira aquecimento/desaquecimento.
-${request.targetPace ? `6. PACE ALVO FINAL: ${request.targetPace} min/km — progrida ritmos das sessões de qualidade gradualmente em direção a este alvo.` : ''}
+${request.targetVDOT ? `6. META DE TEMPO (DESTINO, NÃO PRESCRIÇÃO): VDOT-alvo ${request.targetVDOT.toFixed(1)}. Nos slots [Q] já existentes, priorize trabalho progressivo de limiar/economia compatível com a fase. NÃO acrescente sessões de qualidade e NÃO use o VDOT-alvo ou o pace-alvo para prescrever ritmos: todos os ritmos permanecem ancorados no VDOT ATUAL ${vdot.toFixed(1)} e serão sobrescritos pelo sistema.` : ''}
 ${request.limitations ? `7. ADAPTAÇÃO obrigatória às limitações: ${request.limitations}` : ''}
 ${request.goalType === 'race' ? this.buildRacePromptBlock(request) : ''}
 
@@ -941,6 +967,16 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
       // aqui; agora sobe para o TrainingService semear `vdot_current`, que é o
       // ponto de partida da reestimativa.
       result.data.vdot = vdot;
+      result.data.goalMode = request.goalMode ?? 'distance';
+      result.data.targetTime = request.targetTime;
+      result.data.targetPace = request.targetPace;
+      result.data.targetVDOT = request.targetVDOT;
+      result.data.paceGoalFeasibility = request.paceGoalFeasibility;
+      result.data.qualityEmphasis = request.targetVDOT
+        ? 'threshold_progression'
+        : 'balanced';
+      result.data.goalLabel =
+        request.goalLabel ?? this.goalLabels[request.goal] ?? request.goal;
 
       return result.data;
     } catch (error) {

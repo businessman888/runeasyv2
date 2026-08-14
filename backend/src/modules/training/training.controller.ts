@@ -18,10 +18,11 @@ import {
   QuickPlanResponse,
   GenerationStatus,
 } from './training.service';
+import { RetrospectiveService } from './retrospective.service';
 import {
-  RetrospectiveService,
   CustomizePlanDto,
-} from './retrospective.service';
+  PaceGoalFeasibilityDto,
+} from './dto/customize-goal.dto';
 import { TrainingAIService } from './training-ai.service';
 import { WeeklyInsightService } from './weekly-insight.service';
 import { MesoInsightService } from './meso-insight.service';
@@ -1219,6 +1220,31 @@ export class TrainingController {
       throw new HttpException(
         error.message || 'Failed to customize plan',
         HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /** Deterministic target-time feasibility preview; performs no writes. */
+  @Post('retrospective/:id/pace-feasibility')
+  async assessRetrospectivePaceGoal(
+    @User('id') userId: string,
+    @Param('id') retrospectiveId: string,
+    @Body() params: PaceGoalFeasibilityDto,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+    try {
+      return await this.retrospectiveService.assessPaceGoal(
+        userId,
+        retrospectiveId,
+        params,
+      );
+    } catch (error) {
+      this.logger.error('Failed to assess pace goal', error);
+      throw new HttpException(
+        error.message || 'Failed to assess pace goal',
+        HttpStatus.BAD_REQUEST,
       );
     }
   }

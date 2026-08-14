@@ -5,7 +5,12 @@ import { NotificationService } from '../notifications/notification.service';
 import { TrainingService } from './training.service';
 import { TrainingPlanRequest } from './training-ai.service';
 import { AIRouterService, AI_FEATURES } from '../../common/ai';
-import { paceValueToSecondsPerKm } from '../../common/pace-calculator';
+import {
+  PaceCalculatorService,
+  paceValueToSecondsPerKm,
+} from '../../common/pace-calculator';
+import { PaceGoalFeasibility, PaceGoalService } from './pace-goal.service';
+import { CustomizePlanDto } from './dto/customize-goal.dto';
 import {
   derivePlanWindow,
   isPlanFinished,
@@ -145,16 +150,15 @@ const GOAL_LABELS: Record<string, string> = {
   half_marathon: 'Meia Maratona',
   marathon: 'Maratona',
   general_fitness: 'Condicionamento',
+  pace_improvement: 'Melhorar tempo',
 };
 
-export interface CustomizePlanDto {
-  distance_goal: string;
-  time_goal: string;
-  duration_weeks: number;
-  training_days: string[]; // ['Dom', 'Seg'...]
-  intense_day?: string;
-  target_pace: string;
-}
+const GOAL_DISTANCE_METERS: Record<string, number> = {
+  '5k': 5000,
+  '10k': 10000,
+  half_marathon: 21097,
+  marathon: 42195,
+};
 
 @Injectable()
 export class RetrospectiveService {
@@ -169,6 +173,8 @@ export class RetrospectiveService {
     @Inject(forwardRef(() => TrainingService))
     private readonly trainingService: TrainingService,
     private readonly aiRouter: AIRouterService,
+    private readonly paceCalculator: PaceCalculatorService,
+    private readonly paceGoalService: PaceGoalService,
   ) {
     this.hasAIRouter = this.aiRouter.isAvailable;
   }
@@ -882,7 +888,9 @@ Responda APENAS com JSON.`;
     // `frequency_per_week`; nível e dias vêm de `user_onboarding`.
     const { data: oldPlan, error: oldPlanError } = await supabase
       .from('training_plans')
-      .select('id, goal, duration_weeks, frequency_per_week, goal_type')
+      .select(
+        'id, goal, duration_weeks, frequency_per_week, goal_type, vdot_current',
+      )
       .eq('id', retro.plan_id)
       .maybeSingle();
 
@@ -900,7 +908,12 @@ Responda APENAS com JSON.`;
     // 4. Monta o request com os dados REAIS do usuário.
     const onboarding = await this.loadPlanInputsFromOnboarding(userId);
 
-    const newGoalType = retro.suggested_next_goal_type || oldPlan?.goal || '5k';
+    const suggestedGoal =
+      retro.suggested_next_goal_type || oldPlan?.goal || '5k';
+    const isPaceImprovement = suggestedGoal === 'pace_improvement';
+    const newGoalType = isPaceImprovement
+      ? this.normalizeDistanceGoal(oldPlan?.goal, onboarding.recentDistanceKm)
+      : this.normalizeDistanceGoal(suggestedGoal, onboarding.recentDistanceKm);
     const level = onboarding.level ?? 'intermediate';
     const daysPerWeek =
       oldPlan?.frequency_per_week ?? onboarding.daysPerWeek ?? 3;
@@ -911,6 +924,19 @@ Responda APENAS com JSON.`;
     const currentPace5k = retro.avg_pace_seconds
       ? retro.avg_pace_seconds / 60
       : onboarding.currentPace5k;
+
+    const currentVDOT = this.resolveCurrentVDOT({
+      storedVDOT: oldPlan?.vdot_current,
+      avgPaceSeconds: retro.avg_pace_seconds,
+      onboarding,
+    });
+    const paceGoal = isPaceImprovement
+      ? this.paceGoalService.buildReachableTarget({
+          distanceMeters: this.distanceMetersForGoal(newGoalType),
+          currentVDOT,
+          targetWeeks,
+        })
+      : null;
 
     const planRequest: TrainingPlanRequest = {
       goal: newGoalType,
@@ -926,10 +952,23 @@ Responda APENAS com JSON.`;
       recentDistanceKm: onboarding.recentDistanceKm,
       recentFrequency: onboarding.recentFrequency,
       currentWeeklyKm: onboarding.currentWeeklyKm,
+      currentVDOT,
+      goalMode: paceGoal ? 'time' : 'distance',
+      targetTime: paceGoal
+        ? this.paceGoalService.formatTargetTime(paceGoal.targetTimeSeconds)
+        : undefined,
+      targetPace: paceGoal
+        ? this.formatPaceTarget(paceGoal.targetPaceSeconds)
+        : undefined,
+      targetVDOT: paceGoal?.targetVDOT,
+      paceGoalFeasibility: paceGoal ?? undefined,
+      goalLabel: paceGoal
+        ? `${GOAL_LABELS[newGoalType]} em ${this.paceGoalService.formatTargetTime(paceGoal.targetTimeSeconds)}`
+        : GOAL_LABELS[newGoalType],
     };
 
     this.logger.log(
-      `[AcceptSuggestion] Creating new plan with: goal=${newGoalType}, level=${level}, ` +
+      `[AcceptSuggestion] Creating new plan with: goal=${newGoalType}, mode=${planRequest.goalMode}, level=${level}, ` +
         `days=${daysPerWeek}, weeks=${targetWeeks}, preferredDays=${JSON.stringify(onboarding.preferredDays)}`,
     );
 
@@ -979,13 +1018,13 @@ Responda APENAS com JSON.`;
       throw new Error('Retrospective not found');
     }
 
-    // 2. Archive retrospective
-    await supabase
-      .from('plan_retrospectives')
-      .update({ status: 'archived' })
-      .eq('id', retrospectiveId);
+    const { data: oldPlan } = await supabase
+      .from('training_plans')
+      .select('goal, vdot_current')
+      .eq('id', retro.plan_id)
+      .maybeSingle();
 
-    // 3. O plano antigo já ficou 'completed' em generateRetrospective — não
+    // O plano antigo já ficou 'completed' em generateRetrospective — não
     //    sobrescrever com 'archived' (mesmo motivo documentado em acceptSuggestion).
 
     // 4. Map Params to TrainingPlanRequest
@@ -1002,12 +1041,42 @@ Responda APENAS com JSON.`;
     const preferredDays = params.training_days.map((d) => dayMap[d] ?? 0);
 
     const onboarding = await this.loadPlanInputsFromOnboarding(userId);
+    const normalizedGoal = this.normalizeDistanceGoal(
+      params.distance_goal,
+      onboarding.recentDistanceKm,
+    );
+    const currentVDOT = this.resolveCurrentVDOT({
+      storedVDOT: oldPlan?.vdot_current,
+      avgPaceSeconds: retro.avg_pace_seconds,
+      onboarding,
+    });
+    const targetTimeSeconds = params.time_goal
+      ? this.paceGoalService.parseTargetTime(params.time_goal)
+      : 0;
+    if (params.goal_kind === 'pace' && targetTimeSeconds <= 0) {
+      throw new Error('Tempo-alvo inválido');
+    }
+    const paceGoal =
+      params.goal_kind === 'pace'
+        ? this.paceGoalService.assess({
+            distanceMeters: this.distanceMetersForGoal(normalizedGoal),
+            targetTimeSeconds,
+            currentVDOT,
+            targetWeeks: params.duration_weeks,
+          })
+        : null;
+
+    // Só arquiva depois de todos os parâmetros determinísticos estarem válidos.
+    await supabase
+      .from('plan_retrospectives')
+      .update({ status: 'archived' })
+      .eq('id', retrospectiveId);
 
     // `params` vence o onboarding em dias/semanas/frequência: são a escolha
     // EXPLÍCITA do usuário nesta tela. O onboarding entra só no que a tela não
     // pergunta (nível, limitações, pace atual, sinais de capacidade).
     const planRequest: TrainingPlanRequest = {
-      goal: params.distance_goal, // '5k', '10k', '21km', '42km'
+      goal: normalizedGoal,
       level: onboarding.level ?? 'intermediate',
       daysPerWeek: params.training_days.length,
       // `targetPace` (abaixo) continua sendo o alvo explícito; este é o ponto de
@@ -1016,16 +1085,27 @@ Responda APENAS com JSON.`;
       targetWeeks: params.duration_weeks,
       limitations: onboarding.limitations,
       preferredDays: preferredDays,
-      targetTime: params.time_goal,
-      targetPace: params.target_pace,
+      targetTime: paceGoal
+        ? this.paceGoalService.formatTargetTime(paceGoal.targetTimeSeconds)
+        : undefined,
+      targetPace: paceGoal
+        ? this.formatPaceTarget(paceGoal.targetPaceSeconds)
+        : undefined,
       calculatedPace: onboarding.calculatedPace,
       recentDistanceKm: onboarding.recentDistanceKm,
       recentFrequency: onboarding.recentFrequency,
       currentWeeklyKm: onboarding.currentWeeklyKm,
+      currentVDOT,
+      targetVDOT: paceGoal?.targetVDOT,
+      paceGoalFeasibility: paceGoal ?? undefined,
+      goalMode: paceGoal ? 'time' : 'distance',
+      goalLabel: paceGoal
+        ? `${GOAL_LABELS[normalizedGoal]} em ${this.paceGoalService.formatTargetTime(paceGoal.targetTimeSeconds)}`
+        : GOAL_LABELS[normalizedGoal],
     };
 
     this.logger.log(
-      `[CustomizePlan] Creating plan with target pace: ${params.target_pace}, ` +
+      `[CustomizePlan] Creating ${planRequest.goalMode} plan with target pace: ${planRequest.targetPace ?? 'none'}, ` +
         `level=${planRequest.level}, days=${planRequest.daysPerWeek}, weeks=${planRequest.targetWeeks}`,
     );
 
@@ -1042,6 +1122,67 @@ Responda APENAS com JSON.`;
       success: true,
       newPlanId: newPlan.plan_id,
       planHeader: newPlan.planHeader,
+    };
+  }
+
+  async assessPaceGoal(
+    userId: string,
+    retrospectiveId: string,
+    input: {
+      distance_goal: string;
+      time_goal: string;
+      duration_weeks: number;
+    },
+  ): Promise<
+    PaceGoalFeasibility & {
+      targetTimeFormatted: string;
+      targetPaceFormatted: string;
+      alternativeTimeFormatted: string | null;
+    }
+  > {
+    const supabase = this.supabaseService.getClient();
+    const { data: retro, error } = await supabase
+      .from('plan_retrospectives')
+      .select('plan_id, avg_pace_seconds')
+      .eq('id', retrospectiveId)
+      .eq('user_id', userId)
+      .single();
+    if (error || !retro) throw new Error('Retrospective not found');
+
+    const { data: plan } = await supabase
+      .from('training_plans')
+      .select('goal, vdot_current')
+      .eq('id', retro.plan_id)
+      .maybeSingle();
+    const onboarding = await this.loadPlanInputsFromOnboarding(userId);
+    const goal = this.normalizeDistanceGoal(
+      input.distance_goal,
+      onboarding.recentDistanceKm,
+    );
+    const targetTimeSeconds = this.paceGoalService.parseTargetTime(
+      input.time_goal,
+    );
+    if (targetTimeSeconds <= 0) throw new Error('Tempo-alvo inválido');
+
+    const result = this.paceGoalService.assess({
+      distanceMeters: this.distanceMetersForGoal(goal),
+      targetTimeSeconds,
+      currentVDOT: this.resolveCurrentVDOT({
+        storedVDOT: plan?.vdot_current,
+        avgPaceSeconds: retro.avg_pace_seconds,
+        onboarding,
+      }),
+      targetWeeks: input.duration_weeks,
+    });
+    return {
+      ...result,
+      targetTimeFormatted: this.paceGoalService.formatTargetTime(
+        result.targetTimeSeconds,
+      ),
+      targetPaceFormatted: this.formatPaceTarget(result.targetPaceSeconds),
+      alternativeTimeFormatted: result.alternativeTimeSeconds
+        ? this.paceGoalService.formatTargetTime(result.alternativeTimeSeconds)
+        : null,
     };
   }
 
@@ -1153,6 +1294,67 @@ Responda APENAS com JSON.`;
       recentFrequency: data.recent_frequency ?? null,
       currentWeeklyKm: data.current_weekly_km ?? null,
     };
+  }
+
+  private normalizeDistanceGoal(
+    goal: string | null | undefined,
+    recentDistanceKm: number | null,
+  ): string {
+    const aliases: Record<string, string> = {
+      '21km': 'half_marathon',
+      '42km': 'marathon',
+    };
+    const normalized = aliases[goal ?? ''] ?? goal;
+    if (normalized && GOAL_DISTANCE_METERS[normalized]) return normalized;
+
+    const recent = Number(recentDistanceKm) || 5;
+    if (recent >= 30) return 'marathon';
+    if (recent >= 15) return 'half_marathon';
+    if (recent >= 7.5) return '10k';
+    return '5k';
+  }
+
+  private distanceMetersForGoal(goal: string): number {
+    return GOAL_DISTANCE_METERS[goal] ?? 5000;
+  }
+
+  private resolveCurrentVDOT(input: {
+    storedVDOT: number | null | undefined;
+    avgPaceSeconds: number | null | undefined;
+    onboarding: {
+      currentPace5k: number | null;
+      calculatedPace: number | null;
+      recentDistanceKm: number | null;
+    };
+  }): number {
+    if (Number.isFinite(input.storedVDOT) && input.storedVDOT! > 0) {
+      return input.storedVDOT!;
+    }
+    if (input.avgPaceSeconds) {
+      return this.paceCalculator.estimateVDOTFromPace5K(
+        input.avgPaceSeconds / 60,
+      );
+    }
+    if (input.onboarding.calculatedPace && input.onboarding.recentDistanceKm) {
+      return this.paceCalculator.estimateVDOTFromRace(
+        input.onboarding.recentDistanceKm * 1000,
+        input.onboarding.calculatedPace *
+          input.onboarding.recentDistanceKm *
+          60,
+      );
+    }
+    if (input.onboarding.currentPace5k) {
+      return this.paceCalculator.estimateVDOTFromPace5K(
+        input.onboarding.currentPace5k,
+      );
+    }
+    return this.paceCalculator.vdotForBeginner();
+  }
+
+  private formatPaceTarget(seconds: number): string {
+    const minutes = Math.floor(seconds / 60);
+    const secs = Math.round(seconds % 60);
+    return `${minutes}:${String(secs).padStart(2, '0')}`;
   }
 
   /**

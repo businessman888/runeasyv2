@@ -5,6 +5,8 @@ import { SupabaseService } from '../../database';
 import { NotificationService } from '../notifications/notification.service';
 import { TrainingService } from './training.service';
 import { AIRouterService } from '../../common/ai';
+import { PaceCalculatorService } from '../../common/pace-calculator';
+import { PaceGoalService } from './pace-goal.service';
 
 /**
  * Fase 1A — retrospectiva de fim de plano.
@@ -63,7 +65,9 @@ function makeChain(rows: unknown[]) {
 function buildSupabaseMock(tables: TableData) {
   const from = jest.fn((table: string) => makeChain(tables[table] ?? []));
   return {
-    mock: { getClient: jest.fn(() => ({ from })) } as unknown as SupabaseService,
+    mock: {
+      getClient: jest.fn(() => ({ from })),
+    } as unknown as SupabaseService,
     from,
   };
 }
@@ -82,7 +86,10 @@ const planWorkout = (over: Partial<Record<string, unknown>> = {}) => ({
 
 describe('RetrospectiveService', () => {
   let service: RetrospectiveService;
-  let notificationService: { createNotification: jest.Mock; sendPushNotification: jest.Mock };
+  let notificationService: {
+    createNotification: jest.Mock;
+    sendPushNotification: jest.Mock;
+  };
   let trainingService: { createQuickPlan: jest.Mock };
 
   const build = async (tables: TableData) => {
@@ -94,7 +101,11 @@ describe('RetrospectiveService', () => {
     trainingService = {
       createQuickPlan: jest
         .fn()
-        .mockResolvedValue({ plan_id: 'plan-2', planHeader: {}, planHeadline: '' }),
+        .mockResolvedValue({
+          plan_id: 'plan-2',
+          planHeader: {},
+          planHeadline: '',
+        }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -105,7 +116,12 @@ describe('RetrospectiveService', () => {
         { provide: NotificationService, useValue: notificationService },
         { provide: TrainingService, useValue: trainingService },
         // isAvailable:false força getFallbackInsights — determinístico, sem rede.
-        { provide: AIRouterService, useValue: { isAvailable: false, call: jest.fn() } },
+        {
+          provide: AIRouterService,
+          useValue: { isAvailable: false, call: jest.fn() },
+        },
+        PaceCalculatorService,
+        PaceGoalService,
       ],
     }).compile();
 
@@ -138,7 +154,11 @@ describe('RetrospectiveService', () => {
     it('NÃO infla a aderência com corrida livre', async () => {
       await build({
         training_plans: [
-          { created_at: '2026-06-01T12:00:00Z', duration_weeks: 4, frequency_per_week: 3 },
+          {
+            created_at: '2026-06-01T12:00:00Z',
+            duration_weeks: 4,
+            frequency_per_week: 3,
+          },
         ],
         workouts: twelvePlannedSixDone(),
         // 70 km no período: 30 do plano + 40 de corrida livre.
@@ -164,7 +184,11 @@ describe('RetrospectiveService', () => {
     it('a aderência NUNCA lê activities — zero activities, mesma aderência', async () => {
       await build({
         training_plans: [
-          { created_at: '2026-06-01T12:00:00Z', duration_weeks: 4, frequency_per_week: 3 },
+          {
+            created_at: '2026-06-01T12:00:00Z',
+            duration_weeks: 4,
+            frequency_per_week: 3,
+          },
         ],
         workouts: twelvePlannedSixDone(),
         activities: [],
@@ -182,10 +206,18 @@ describe('RetrospectiveService', () => {
     it('usa distance_km como fallback quando distance_run é null (linha legada)', async () => {
       await build({
         training_plans: [
-          { created_at: '2026-06-01T12:00:00Z', duration_weeks: 4, frequency_per_week: 3 },
+          {
+            created_at: '2026-06-01T12:00:00Z',
+            duration_weeks: 4,
+            frequency_per_week: 3,
+          },
         ],
         workouts: [
-          planWorkout({ status: 'completed', distance_km: 5, distance_run: null }),
+          planWorkout({
+            status: 'completed',
+            distance_km: 5,
+            distance_run: null,
+          }),
         ],
         activities: [],
         readiness_history: [],
@@ -201,7 +233,11 @@ describe('RetrospectiveService', () => {
       // stories tem que mostrar 15 — esconder seria mentir por tecnicismo.
       await build({
         training_plans: [
-          { created_at: '2026-06-01T12:00:00Z', duration_weeks: 4, frequency_per_week: 3 },
+          {
+            created_at: '2026-06-01T12:00:00Z',
+            duration_weeks: 4,
+            frequency_per_week: 3,
+          },
         ],
         workouts: twelvePlannedSixDone(),
         activities: [
@@ -222,7 +258,11 @@ describe('RetrospectiveService', () => {
     it('sem corridas no período, o recorde é 0/null (card de clímax some)', async () => {
       await build({
         training_plans: [
-          { created_at: '2026-06-01T12:00:00Z', duration_weeks: 4, frequency_per_week: 3 },
+          {
+            created_at: '2026-06-01T12:00:00Z',
+            duration_weeks: 4,
+            frequency_per_week: 3,
+          },
         ],
         workouts: twelvePlannedSixDone(),
         activities: [],
@@ -237,7 +277,11 @@ describe('RetrospectiveService', () => {
     it('deriva o pace dos treinos do plano, não das activities', async () => {
       await build({
         training_plans: [
-          { created_at: '2026-06-01T12:00:00Z', duration_weeks: 4, frequency_per_week: 3 },
+          {
+            created_at: '2026-06-01T12:00:00Z',
+            duration_weeks: 4,
+            frequency_per_week: 3,
+          },
         ],
         workouts: [
           planWorkout({
@@ -269,7 +313,8 @@ describe('RetrospectiveService', () => {
         const done = i < 9;
         workouts.push(
           planWorkout({
-            scheduled_date: i === 11 ? lastDate : `2026-06-${String(i + 1).padStart(2, '0')}`,
+            scheduled_date:
+              i === 11 ? lastDate : `2026-06-${String(i + 1).padStart(2, '0')}`,
             status: done ? 'completed' : 'pending',
             distance_run: done ? 5 : null,
             time_run_seconds: done ? 1650 : null,
@@ -282,7 +327,11 @@ describe('RetrospectiveService', () => {
     it('É DIFERENTE de completionRate', async () => {
       await build({
         training_plans: [
-          { created_at: '2026-06-01T12:00:00Z', duration_weeks: 4, frequency_per_week: 4 },
+          {
+            created_at: '2026-06-01T12:00:00Z',
+            duration_weeks: 4,
+            frequency_per_week: 4,
+          },
         ],
         workouts: fourWeekPlan('2026-06-28'), // janela de 4 semanas
         activities: [],
@@ -302,7 +351,11 @@ describe('RetrospectiveService', () => {
     it('cai pela metade quando a re-âncora estica a janela, com completionRate intacto', async () => {
       await build({
         training_plans: [
-          { created_at: '2026-06-01T12:00:00Z', duration_weeks: 4, frequency_per_week: 4 },
+          {
+            created_at: '2026-06-01T12:00:00Z',
+            duration_weeks: 4,
+            frequency_per_week: 4,
+          },
         ],
         // Mesmas 9 concluídas, mas o último treino foi empurrado para 8 semanas.
         workouts: fourWeekPlan('2026-07-26'),
@@ -320,7 +373,11 @@ describe('RetrospectiveService', () => {
     it('deriva o alvo do plano quando frequency_per_week é nulo, sem NaN', async () => {
       await build({
         training_plans: [
-          { created_at: '2026-06-01T12:00:00Z', duration_weeks: 4, frequency_per_week: null },
+          {
+            created_at: '2026-06-01T12:00:00Z',
+            duration_weeks: 4,
+            frequency_per_week: null,
+          },
         ],
         workouts: fourWeekPlan('2026-06-28'),
         activities: [],
@@ -338,11 +395,23 @@ describe('RetrospectiveService', () => {
   // ─────────────────────────────────────────────────────────────────────────
   describe('generateRetrospective — notificação', () => {
     const happyTables = (): TableData => ({
-      plan_retrospectives: [{ id: 'retro-1', user_id: 'user-1', plan_id: 'plan-1' }],
-      training_plans: [
-        { created_at: '2026-06-01T12:00:00Z', duration_weeks: 4, frequency_per_week: 3 },
+      plan_retrospectives: [
+        { id: 'retro-1', user_id: 'user-1', plan_id: 'plan-1' },
       ],
-      workouts: [planWorkout({ status: 'completed', distance_run: 5, time_run_seconds: 1650 })],
+      training_plans: [
+        {
+          created_at: '2026-06-01T12:00:00Z',
+          duration_weeks: 4,
+          frequency_per_week: 3,
+        },
+      ],
+      workouts: [
+        planWorkout({
+          status: 'completed',
+          distance_run: 5,
+          time_run_seconds: 1650,
+        }),
+      ],
       activities: [],
       readiness_history: [],
       user_onboarding: [{ goal: '5k', level: 'beginner' }],
@@ -401,7 +470,14 @@ describe('RetrospectiveService', () => {
         },
       ],
       training_plans: [
-        { id: 'plan-1', goal: '5k', duration_weeks: 12, frequency_per_week: 5, goal_type: 'distance' },
+        {
+          id: 'plan-1',
+          goal: '5k',
+          duration_weeks: 12,
+          frequency_per_week: 5,
+          goal_type: 'distance',
+          vdot_current: 40,
+        },
       ],
       user_onboarding: [
         {
@@ -454,7 +530,8 @@ describe('RetrospectiveService', () => {
 
     it('cai para preferred_days quando available_days está vazio', async () => {
       const tables = onboardingTables();
-      (tables.user_onboarding[0] as Record<string, unknown>).available_days = [];
+      (tables.user_onboarding[0] as Record<string, unknown>).available_days =
+        [];
       await build(tables);
       await service.acceptSuggestion('user-1', 'retro-1');
 
@@ -464,12 +541,33 @@ describe('RetrospectiveService', () => {
 
     it('não arrasta limitação obsoleta quando has_limitations é false', async () => {
       const tables = onboardingTables();
-      (tables.user_onboarding[0] as Record<string, unknown>).has_limitations = false;
+      (tables.user_onboarding[0] as Record<string, unknown>).has_limitations =
+        false;
       await build(tables);
       await service.acceptSuggestion('user-1', 'retro-1');
 
       const [, req] = trainingService.createQuickPlan.mock.calls[0];
       expect(req.limitations).toBeNull();
+    });
+
+    it('pace_improvement vira meta de tempo rotulada, sem cair em distância muda', async () => {
+      const tables = onboardingTables();
+      (
+        tables.plan_retrospectives[0] as Record<string, unknown>
+      ).suggested_next_goal_type = 'pace_improvement';
+      await build(tables);
+
+      await service.acceptSuggestion('user-1', 'retro-1');
+
+      const [, req] = trainingService.createQuickPlan.mock.calls[0];
+      expect(req.goal).toBe('5k');
+      expect(req.goalMode).toBe('time');
+      expect(req.targetTime).toMatch(/^\d{2}:\d{2}$/);
+      expect(req.targetPace).toMatch(/^\d+:\d{2}$/);
+      expect(req.targetVDOT).toBeCloseTo(41, 0);
+      expect(req.currentVDOT).toBe(40);
+      expect(req.goalLabel).toMatch(/^5 Km em \d{2}:\d{2}$/);
+      expect(req.goalLabel).not.toBe('pace_improvement');
     });
 
     /**

@@ -87,16 +87,10 @@ const Eyebrow = memo(function Eyebrow({ children }: { children: string }) {
 
 // ── Card 1 — Abertura ────────────────────────────────────────────────────────
 
-export const CardOpening = memo(function CardOpening({
-  data,
-}: {
-  data: RetrospectiveData;
-}) {
+export const CardOpening = memo(function CardOpening({ data }: { data: RetrospectiveData }) {
   const weeks = data.planDurationWeeks;
   const goal = data.planGoalLabel;
-  const context = [goal && `Meta ${goal}`, weeks && `${weeks} semanas`]
-    .filter(Boolean)
-    .join(' · ');
+  const context = [goal && `Meta ${goal}`, weeks && `${weeks} semanas`].filter(Boolean).join(' · ');
 
   return (
     <View style={styles.center}>
@@ -105,9 +99,7 @@ export const CardOpening = memo(function CardOpening({
         size={40}
         color="rgba(235,235,245,0.55)"
       />
-      <Text style={[storyType.title, styles.openingTitle]}>
-        Seu ciclo,{'\n'}revisitado
-      </Text>
+      <Text style={[storyType.title, styles.openingTitle]}>Seu ciclo,{'\n'}revisitado</Text>
       {context ? <Text style={storyType.body}>{context}</Text> : null}
 
       {/* A voz do coach entra aqui como UMA frase — o texto integral da IA num
@@ -123,18 +115,14 @@ export const CardOpening = memo(function CardOpening({
 
 // ── Card 2 — Volume total ────────────────────────────────────────────────────
 
-export const CardVolume = memo(function CardVolume({
-  data,
-}: {
-  data: RetrospectiveData;
-}) {
+export const CardVolume = memo(function CardVolume({ data }: { data: RetrospectiveData }) {
   return (
     <View style={styles.center}>
       <Eyebrow>Você correu</Eyebrow>
       <HeroNumber value={fmt(data.totalDistanceKm)} unit="km" />
       <Text style={storyType.body}>
-        em {data.totalRunsInPeriod}{' '}
-        {data.totalRunsInPeriod === 1 ? 'corrida' : 'corridas'} neste ciclo
+        em {data.totalRunsInPeriod} {data.totalRunsInPeriod === 1 ? 'corrida' : 'corridas'} neste
+        ciclo
       </Text>
     </View>
   );
@@ -181,11 +169,7 @@ export const CardConsistency = memo(function CardConsistency({
 
 // ── Card 4 — Pace ────────────────────────────────────────────────────────────
 
-export const CardPace = memo(function CardPace({
-  data,
-}: {
-  data: RetrospectiveData;
-}) {
+export const CardPace = memo(function CardPace({ data }: { data: RetrospectiveData }) {
   const hasTarget = data.targetPaceFormatted && data.targetPaceFormatted !== '—';
   // Pace menor = mais rápido. `paceVsGoalPercent` já vem como alvo/real × 100:
   // acima de 100 significa que correu MAIS RÁPIDO que o alvo.
@@ -197,8 +181,7 @@ export const CardPace = memo(function CardPace({
       <HeroNumber value={data.avgPaceFormatted} unit="/km" />
       {hasTarget ? (
         <Text style={storyType.body}>
-          {beatTarget ? 'Mais rápido que a meta de' : 'A meta era'}{' '}
-          {data.targetPaceFormatted}/km
+          {beatTarget ? 'Mais rápido que a meta de' : 'A meta era'} {data.targetPaceFormatted}/km
         </Text>
       ) : (
         <Text style={storyType.body}>nos treinos deste plano</Text>
@@ -219,11 +202,7 @@ export const CardPace = memo(function CardPace({
 
 const MARATHON_KM = 42.195;
 
-export const CardFun = memo(function CardFun({
-  data,
-}: {
-  data: RetrospectiveData;
-}) {
+export const CardFun = memo(function CardFun({ data }: { data: RetrospectiveData }) {
   const marathons = data.totalDistanceKm / MARATHON_KM;
   // Abaixo de uma maratona, "0,4 maratonas" é desanimador e pouco legível —
   // nesse caso o enquadramento vira "voltas na pista", que é concreto e sempre
@@ -242,9 +221,7 @@ export const CardFun = memo(function CardFun({
       {useMarathons ? (
         <>
           <HeroNumber value={marathons.toFixed(1).replace('.', ',')} />
-          <Text style={storyType.body}>
-            {marathons >= 2 ? 'maratonas' : 'maratona'} completas
-          </Text>
+          <Text style={storyType.body}>{marathons >= 2 ? 'maratonas' : 'maratona'} completas</Text>
         </>
       ) : (
         <>
@@ -258,11 +235,7 @@ export const CardFun = memo(function CardFun({
 
 // ── Card 6 — CLÍMAX: maior corrida única ─────────────────────────────────────
 
-export const CardClimax = memo(function CardClimax({
-  data,
-}: {
-  data: RetrospectiveData;
-}) {
+export const CardClimax = memo(function CardClimax({ data }: { data: RetrospectiveData }) {
   return (
     <View style={styles.center}>
       <MaterialCommunityIcons name="trophy-outline" size={48} color={colors.accent} />
@@ -279,11 +252,12 @@ export const CardClimax = memo(function CardClimax({
 // ── Card 7 — CTA + próxima meta ──────────────────────────────────────────────
 
 export interface NextGoalOption {
-  /** Discriminante — a Fase 5 acrescenta 'pace' sem tocar neste componente. */
-  kind: 'distance' | 'pace';
+  kind: 'coach' | 'distance' | 'pace' | 'manual';
   label: string;
   description: string;
   onPress: () => void;
+  loading?: boolean;
+  disabled?: boolean;
 }
 
 export const CardNextGoal = memo(function CardNextGoal({
@@ -316,13 +290,44 @@ export const CardNextGoal = memo(function CardNextGoal({
           <Pressable
             key={opt.kind}
             onPress={opt.onPress}
-            style={({ pressed }) => [styles.ctaBtn, pressed && styles.ctaBtnPressed]}
+            style={({ pressed }) => [
+              styles.ctaBtn,
+              opt.kind === 'coach' && styles.ctaBtnPrimary,
+              opt.kind === 'manual' && styles.ctaBtnManual,
+              pressed && styles.ctaBtnPressed,
+              opt.disabled && styles.ctaBtnDisabled,
+            ]}
+            disabled={opt.disabled}
             accessibilityRole="button"
             accessibilityLabel={opt.label}
             accessibilityHint={opt.description}
           >
-            <Text style={styles.ctaBtnText}>{opt.label}</Text>
-            <Ionicons name="arrow-forward" size={18} color={colors.background} />
+            <View style={styles.ctaBtnCopy}>
+              <Text
+                style={[
+                  styles.ctaBtnText,
+                  opt.kind === 'coach' && styles.ctaBtnTextPrimary,
+                  opt.kind === 'manual' && styles.ctaBtnTextManual,
+                ]}
+              >
+                {opt.loading ? 'Gerando seu plano…' : opt.label}
+              </Text>
+              {opt.kind !== 'manual' ? (
+                <Text
+                  style={[
+                    styles.ctaBtnDescription,
+                    opt.kind === 'coach' && styles.ctaBtnDescriptionPrimary,
+                  ]}
+                >
+                  {opt.description}
+                </Text>
+              ) : null}
+            </View>
+            <Ionicons
+              name={opt.kind === 'coach' ? 'sparkles' : 'arrow-forward'}
+              size={18}
+              color={opt.kind === 'coach' ? colors.background : colors.primary}
+            />
           </Pressable>
         ))}
       </View>
@@ -335,9 +340,7 @@ export const CardNextGoal = memo(function CardNextGoal({
 /** Número em PT-BR, sem casa decimal desnecessária ("12" e não "12,0"). */
 function fmt(v: number): string {
   const rounded = Math.round(v * 10) / 10;
-  return Number.isInteger(rounded)
-    ? String(rounded)
-    : rounded.toFixed(1).replace('.', ',');
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1).replace('.', ',');
 }
 
 /** Primeira frase de um texto — a voz do coach cabe em uma. */
@@ -349,8 +352,18 @@ function firstSentence(text: string): string {
 /** 'YYYY-MM-DD' → '15 de junho'. Sem fuso: a string já é o dia local. */
 function formatLongDate(dateStr: string): string {
   const MONTHS = [
-    'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-    'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+    'janeiro',
+    'fevereiro',
+    'março',
+    'abril',
+    'maio',
+    'junho',
+    'julho',
+    'agosto',
+    'setembro',
+    'outubro',
+    'novembro',
+    'dezembro',
   ];
   const [, m, d] = dateStr.split('-').map(Number);
   return `${d} de ${MONTHS[m - 1] ?? ''}`;
@@ -445,19 +458,39 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   ctaActions: {
-    marginTop: 24,
+    marginTop: 18,
     width: '100%',
     gap: 10,
   },
   ctaBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    minHeight: 52,
-    borderRadius: 26,
+    justifyContent: 'space-between',
+    gap: 12,
+    minHeight: 64,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(235,235,245,0.14)',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  ctaBtnPrimary: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 24,
+    borderColor: colors.primary,
+  },
+  ctaBtnManual: {
+    minHeight: 44,
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
+    paddingVertical: 8,
+  },
+  ctaBtnDisabled: {
+    opacity: 0.55,
+  },
+  ctaBtnCopy: {
+    flex: 1,
   },
   ctaBtnPressed: {
     opacity: 0.75,
@@ -465,6 +498,24 @@ const styles = StyleSheet.create({
   ctaBtnText: {
     fontFamily: fonts.bold,
     fontSize: 16,
+    color: colors.textLight,
+  },
+  ctaBtnTextPrimary: {
     color: colors.background,
+  },
+  ctaBtnTextManual: {
+    color: 'rgba(235,235,245,0.68)',
+    textAlign: 'center',
+    fontSize: 14,
+  },
+  ctaBtnDescription: {
+    marginTop: 2,
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    lineHeight: 15,
+    color: 'rgba(235,235,245,0.55)',
+  },
+  ctaBtnDescriptionPrimary: {
+    color: 'rgba(10,10,24,0.68)',
   },
 });

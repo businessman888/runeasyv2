@@ -1,11 +1,5 @@
 import React, { useState, useRef } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    TouchableOpacity,
-    Platform,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CustomKeypad } from '../../components/CustomKeypad';
@@ -33,6 +27,8 @@ interface DistanceTimeScreenProps {
     value?: DistanceTimeValue | null;
     recentDistance?: number; // km
     onChange?: (value: DistanceTimeValue) => void;
+    mode?: 'recent' | 'target';
+    coaching?: React.ReactNode;
 }
 
 type FieldType = 'hours' | 'minutes' | 'seconds';
@@ -44,7 +40,13 @@ function initFromProp(val: DistanceTimeValue | null | undefined, field: 'hours' 
     return n > 0 ? String(n).padStart(2, '0') : '';
 }
 
-export function DistanceTimeScreen({ value, recentDistance = 5, onChange }: DistanceTimeScreenProps) {
+export function DistanceTimeScreen({
+    value,
+    recentDistance = 5,
+    onChange,
+    mode = 'recent',
+    coaching,
+}: DistanceTimeScreenProps) {
     // ===== ISOLATED LOCAL STATE =====
     // Initialized from props ONCE on mount. No useEffect, no sync loop.
     const [hours, setHours] = useState(() => initFromProp(value, 'hours'));
@@ -158,8 +160,13 @@ export function DistanceTimeScreen({ value, recentDistance = 5, onChange }: Dist
         label,
         blockValue,
         field,
-        placeholder = '00'
-    }: { label: string, blockValue: string, field: FieldType, placeholder?: string }) => {
+        placeholder = '00',
+    }: {
+        label: string;
+        blockValue: string;
+        field: FieldType;
+        placeholder?: string;
+    }) => {
         const isActive = activeField === field;
         const showPlaceholder = blockValue.length === 0;
 
@@ -167,20 +174,16 @@ export function DistanceTimeScreen({ value, recentDistance = 5, onChange }: Dist
             <TouchableOpacity
                 style={[
                     styles.inputBlock,
-                    isActive && styles.inputBlockActive
+                    mode === 'target' && styles.inputBlockTarget,
+                    isActive && styles.inputBlockActive,
                 ]}
                 onPress={() => setActiveField(field)}
                 activeOpacity={0.8}
             >
-                <Text style={[
-                    styles.inputValue,
-                    showPlaceholder && styles.inputValuePlaceholder,
-                ]}>
+                <Text style={[styles.inputValue, showPlaceholder && styles.inputValuePlaceholder]}>
                     {blockValue ? blockValue.padStart(2, '0') : '00'}
                 </Text>
-                <Text style={[styles.inputLabel, isActive && styles.inputLabelActive]}>
-                    {label}
-                </Text>
+                <Text style={[styles.inputLabel, isActive && styles.inputLabelActive]}>{label}</Text>
             </TouchableOpacity>
         );
     };
@@ -188,28 +191,40 @@ export function DistanceTimeScreen({ value, recentDistance = 5, onChange }: Dist
     return (
         <View style={styles.container}>
             {/* Title Section */}
-            <View style={styles.titleContainer}>
-                <Text style={styles.title}>
-                    Em <Text style={styles.titleHighlight}>quanto tempo</Text> você{'\n'}
-                    completou essa{'\n'}
-                    distância?
-                </Text>
+            <View style={[styles.titleContainer, mode === 'target' && styles.titleContainerTarget]}>
+                {mode === 'target' ? (
+                    <>
+                        <Text style={[styles.title, styles.titleTarget]}>
+                            Em <Text style={styles.titleHighlight}>quanto tempo</Text> você quer{'\n'}
+                            correr {recentDistance >= 21 ? recentDistance.toFixed(1) : recentDistance} km?
+                        </Text>
+                        <Text style={styles.subtitle}>
+                            O plano começa na sua aptidão atual e progride com segurança até esse destino.
+                        </Text>
+                    </>
+                ) : (
+                    <Text style={styles.title}>
+                        Em <Text style={styles.titleHighlight}>quanto tempo</Text> você
+                        {'\n'}
+                        completou essa{'\n'}
+                        distância?
+                    </Text>
+                )}
             </View>
 
             {/* Segmented Inputs */}
-            <View style={styles.inputsContainer}>
+            <View style={[styles.inputsContainer, mode === 'target' && styles.inputsContainerTarget]}>
                 <TimeInputBlock label="h" blockValue={hours} field="hours" />
                 <TimeInputBlock label="min" blockValue={minutes} field="minutes" />
                 <TimeInputBlock label="seg" blockValue={seconds} field="seconds" />
             </View>
 
+            {coaching}
+
             <View style={{ flex: 1 }} />
 
             {/* Custom Keypad */}
-            <CustomKeypad
-                onPress={handlePressKey}
-                onDelete={handleDelete}
-            />
+            <CustomKeypad onPress={handlePressKey} onDelete={handleDelete} compact={mode === 'target'} />
         </View>
     );
 }
@@ -223,21 +238,39 @@ const styles = StyleSheet.create({
         marginBottom: 40,
         paddingHorizontal: 0,
     },
+    titleContainerTarget: {
+        marginTop: 12,
+        marginBottom: 18,
+    },
     title: {
         fontFamily: fonts.bold,
         fontSize: 28,
         color: DS.text,
         lineHeight: 36,
     },
+    titleTarget: {
+        fontSize: 24,
+        lineHeight: 31,
+    },
     titleHighlight: {
         fontFamily: fonts.bold,
         color: DS.cyan,
+    },
+    subtitle: {
+        marginTop: 10,
+        fontFamily: fonts.regular,
+        fontSize: 14,
+        lineHeight: 21,
+        color: DS.textSecondary,
     },
     inputsContainer: {
         flexDirection: 'row',
         justifyContent: 'center',
         gap: 12,
         marginBottom: 24,
+    },
+    inputsContainerTarget: {
+        marginBottom: 14,
     },
     inputBlock: {
         width: 100,
@@ -248,11 +281,15 @@ const styles = StyleSheet.create({
         borderColor: DS.glassBorder,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: "#000",
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.3,
         shadowRadius: 20,
         elevation: 5,
+    },
+    inputBlockTarget: {
+        height: 76,
+        borderRadius: 16,
     },
     inputBlockActive: {
         borderColor: DS.activeBorder,

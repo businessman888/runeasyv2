@@ -183,6 +183,20 @@ describe('PaceCalculatorService — âncora VDOT 27', () => {
     });
   });
 
+  describe('target-time inverse (Fase 5)', () => {
+    it('round-trips VDOT -> race time -> VDOT with the Daniels formula', () => {
+      for (const distanceMeters of [5000, 10000, 21097, 42195]) {
+        for (const vdot of [30, 35, 40, 45, 50, 60]) {
+          const time = pc.estimateRaceTimeFromVDOT(distanceMeters, vdot);
+          expect(pc.estimateVDOTFromRace(distanceMeters, time)).toBeCloseTo(
+            vdot,
+            0,
+          );
+        }
+      }
+    });
+  });
+
   describe('sanidade da ponta baixa', () => {
     it('o easy do VDOT 27 continua sendo trote, não caminhada', () => {
       const { Z1 } = pc.getZonePaceRangesSeconds(27);

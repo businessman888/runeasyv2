@@ -9,6 +9,7 @@ import { RetrospectiveService } from './retrospective.service';
 import { WeeklyInsightService } from './weekly-insight.service';
 import { VdotService } from './vdot.service';
 import { MesoInsightService } from './meso-insight.service';
+import { PaceGoalService } from './pace-goal.service';
 import { WellnessController } from './wellness/wellness.controller';
 import { WellnessService } from './wellness/wellness.service';
 import { NotificationModule } from '../notifications';
@@ -55,6 +56,7 @@ import { FeedbackModule } from '../feedback/feedback.module';
     WellnessService,
     VdotService,
     MesoInsightService,
+    PaceGoalService,
   ],
   exports: [
     TrainingService,
@@ -63,6 +65,7 @@ import { FeedbackModule } from '../feedback/feedback.module';
     WeeklyInsightService,
     VdotService,
     MesoInsightService,
+    PaceGoalService,
   ],
 })
 export class TrainingModule {}

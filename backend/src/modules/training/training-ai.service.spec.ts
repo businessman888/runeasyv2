@@ -124,6 +124,64 @@ describe('TrainingAIService — VDOT resolution', () => {
     expect(callMock).toHaveBeenCalledTimes(1);
   });
 
+  it('time goal keeps prescribed paces on current VDOT and stores target as destination', async () => {
+    const planWithThreshold: GeneratedPlan = {
+      duration_weeks: 12,
+      frequency_per_week: 4,
+      weeks: [
+        {
+          week_number: 1,
+          phase: 'base',
+          workouts: [
+            {
+              day_of_week: 1,
+              type: 'tempo',
+              distance_km: 5,
+              segments: [
+                {
+                  type: 'main',
+                  distance_km: 5,
+                  pace_min: 0,
+                  pace_max: 0,
+                  zone: 'Z3',
+                },
+              ],
+              objective: 'limiar',
+              tips: [],
+            },
+          ],
+        },
+      ],
+    };
+    callMock.mockResolvedValue({ data: planWithThreshold, latencyMs: 1 });
+
+    const out = await service.generateTrainingPlan({
+      ...baseRequest,
+      currentVDOT: 40,
+      targetVDOT: 43,
+      targetTime: '22:00',
+      targetPace: '4:24',
+      goalMode: 'time',
+      goalLabel: '5 Km em 22:00',
+    });
+
+    const segment = out.weeks[0].workouts[0].segments[0];
+    if (segment.type === 'repeat') throw new Error('expected simple segment');
+    const currentBand = new PaceCalculatorService().getZonePaceRangesSeconds(
+      40,
+    ).Z3;
+    const targetBand = new PaceCalculatorService().getZonePaceRangesSeconds(
+      43,
+    ).Z3;
+    expect(segment.pace_min).toBe(currentBand.min);
+    expect(segment.pace_max).toBe(currentBand.max);
+    expect(segment.pace_min).not.toBe(targetBand.min);
+    expect(out.vdot).toBe(40);
+    expect(out.targetVDOT).toBe(43);
+    expect(out.qualityEmphasis).toBe('threshold_progression');
+    expect(out.goalLabel).toBe('5 Km em 22:00');
+  });
+
   // ───────────────────────────────────────────────────────────────────────────
   /**
    * A FASE É CÁLCULO, NÃO ECO DO MODELO.
