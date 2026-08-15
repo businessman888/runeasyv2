@@ -1,0 +1,14 @@
+{
+  "//": "Projeto Jest SEPARADO para os testes que rodam contra Postgres de verdade. Fica fora de `src` de propósito: a config unitária tem rootDir=src e testRegex .spec.ts, então nada aqui é coletado por `npm run test` e o unitário continua rodando sem banco. maxWorkers=1 é obrigatório: os testes de concorrência seguram transações abertas e disputariam o mesmo lock de plano se rodassem em paralelo.",
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": ".",
+  "roots": ["<rootDir>/test/integration"],
+  "testRegex": ".*\\.int-spec\\.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "testEnvironment": "node",
+  "globalSetup": "<rootDir>/test/db/global-setup.ts",
+  "maxWorkers": 1,
+  "testTimeout": 30000
+}

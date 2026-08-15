@@ -17,6 +17,60 @@ services:
       timeout: 5s
       retries: 5
 
+  # Postgres DESCARTÁVEL para os testes de integração da Fase 6 (fundação).
+  #
+  # ── POR QUE ISTO EXISTE ─────────────────────────────────────────────────────
+  #
+  # A fundação da Fase 6 é uma FUNÇÃO POSTGRES — o backend só fala PostgREST, e
+  # a única primitiva atômica disponível é uma chamada de função. Os testes de
+  # unidade MOCKAM o `.rpc()` (`mockResolvedValue`), então o SQL nunca executa:
+  # foi exatamente assim que a divergência entre a fronteira calculada pelo
+  # serviço e o predicado de `shift_pending_workouts` passou por 95 testes
+  # verdes. Lock, compare-and-swap, rollback e idempotência não têm como ser
+  # provados contra um mock.
+  #
+  # ── POR QUE NÃO A STACK COMPLETA DO SUPABASE ────────────────────────────────
+  #
+  # Os testes de concorrência precisam segurar DUAS transações abertas e
+  # interleavá-las na mão. O PostgREST fecha a transação a cada request, então
+  # a stack completa não testaria justamente o que importa. O acoplamento real
+  # com o Supabase é raso (3 FKs para `auth.users` e 6 policies com `auth.uid()`)
+  # e está stubado em `backend/test/db/bootstrap.sql`.
+  #
+  # ── DESCARTÁVEL POR CONSTRUÇÃO ──────────────────────────────────────────────
+  #
+  # `tmpfs` em vez de volume: o banco vive na RAM e MORRE com o container. Não
+  # existe estado para vazar entre execuções nem para confundir com staging.
+  # Porta 55432 (não 5432) para não colidir com um Postgres local do dev.
+  #
+  # Fica atrás do profile `test` de propósito: `docker-compose up -d` (o comando
+  # documentado no CLAUDE.md para subir o Redis) continua subindo SÓ o Redis.
+  #   docker compose --profile test up -d postgres-test
+  # Imagem COM PostGIS: o dump de produção declara `extensions.geometry(...)` em
+  # `activities.route_geometry` e `workout_routes.route`, mais um índice GiST.
+  # Com a imagem `postgres` pura o dump falharia na metade.
+  postgres-test:
+    image: postgis/postgis:17-3.5-alpine
+    container_name: runeasy-postgres-test
+    profiles: ['test']
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: runeasy_test
+    ports:
+      - '55432:5432'
+    tmpfs:
+      - /var/lib/postgresql/data
+    # Banco efêmero: durabilidade é custo puro aqui.
+    command: >
+      postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off
+               -c max_connections=50
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d runeasy_test']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
 volumes:
   redis_data:
     driver: local

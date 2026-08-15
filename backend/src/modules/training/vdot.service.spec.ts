@@ -7,6 +7,7 @@ import {
   MIN_DELTA_SEC_BEYOND_BAND,
   VDOT_STEP,
 } from './vdot.service';
+import { PlanAdaptationService } from './plan-adaptation.service';
 
 /**
  * Fase 3 — a reestimativa de VDOT.
@@ -260,6 +261,102 @@ function scenario(opts: Scenario = {}) {
   });
 }
 
+/**
+ * Dublê da fundação (Fase 6.1).
+ *
+ * ── POR QUE UM DUBLÊ, E O QUE ELE NÃO PROVA ──────────────────────────────────
+ *
+ * A escrita da reestimativa passou a acontecer dentro de
+ * `apply_plan_adaptation` — uma função Postgres. Este arquivo testa a DECISÃO
+ * ("+1 e só +1", "um treino vota uma vez", "Z1 fora do sinal"), que continua
+ * 100% em TypeScript e é o que ele sempre protegeu.
+ *
+ * O dublê aplica o patch nas mesmas tabelas em memória para os asserts de
+ * efeito continuarem valendo. Ele NÃO prova atomicidade, lock, CAS nem
+ * idempotência — nada disso existe em JavaScript. Isso é provado contra
+ * Postgres de verdade em `test/integration/plan-adaptation.int-spec.ts`, com
+ * duas conexões concorrentes.
+ *
+ * A divisão é deliberada: mock para decisão, banco real para transação. Foi
+ * justamente mockar a parte transacional que deixou a mina 2 passar por 95
+ * testes verdes.
+ */
+function fakeFoundation(tables: Record<string, Array<Record<string, unknown>>>) {
+  const real = PlanAdaptationService.prototype;
+
+  return {
+    todayStr: () => TODAY,
+
+    // Reproduz a fronteira de `plan_editable_workouts`: pendente, futuro, do
+    // plano, não-prova — com o md5 que o CAS compara.
+    loadEditableWorkouts: jest.fn(async (planId: string, todayStr: string) =>
+      (tables.workouts ?? [])
+        .filter(
+          (w) =>
+            w.plan_id === planId &&
+            w.status === 'pending' &&
+            String(w.scheduled_date) > todayStr &&
+            w.is_race_day !== true,
+        )
+        .map((w) => ({
+          ...w,
+          instructions_md5: JSON.stringify(w.instructions_json ?? ''),
+        })),
+    ),
+
+    getStateDigest: jest.fn(async () => 'digest-fake'),
+
+    buildIdempotencyKey: real.buildIdempotencyKey,
+
+    apply: jest.fn(
+      async (params: {
+        patch: Array<{ workout_id: string; set: Record<string, unknown> }>;
+        planPatch?: Record<string, unknown> | null;
+        vdotHistory?: Record<string, unknown> | null;
+        planId: string;
+        userId: string;
+      }) => {
+        for (const item of params.patch) {
+          const row = (tables.workouts ?? []).find(
+            (w) => w.id === item.workout_id,
+          );
+          if (row) Object.assign(row, item.set);
+        }
+
+        const touched = new Set(params.patch.map((p) => p.workout_id));
+        const before = (tables.workout_briefings ?? []).length;
+        tables.workout_briefings = (tables.workout_briefings ?? []).filter(
+          (b) => !touched.has(b.workout_id as string),
+        );
+
+        if (params.planPatch) {
+          const plan = (tables.training_plans ?? []).find(
+            (p) => p.id === params.planId,
+          );
+          if (plan) Object.assign(plan, params.planPatch);
+        }
+
+        if (params.vdotHistory) {
+          (tables.plan_vdot_history ??= []).push({
+            id: `hist-${tables.plan_vdot_history.length + 1}`,
+            user_id: params.userId,
+            plan_id: params.planId,
+            ...params.vdotHistory,
+          });
+        }
+
+        return {
+          applied: true,
+          affected: {
+            workouts: params.patch.length,
+            briefings: before - tables.workout_briefings.length,
+          },
+        };
+      },
+    ),
+  } as unknown as PlanAdaptationService;
+}
+
 describe('VdotService — reestimativa', () => {
   let service: VdotService;
 
@@ -270,6 +367,10 @@ describe('VdotService — reestimativa', () => {
         VdotService,
         { provide: SupabaseService, useValue: built.mock },
         PaceCalculatorService,
+        {
+          provide: PlanAdaptationService,
+          useValue: fakeFoundation(built.tables),
+        },
       ],
     }).compile();
     service = module.get(VdotService);

@@ -1320,10 +1320,25 @@ Escreva a narrativa explicando o que aconteceu na semana e por que essa é a rec
     const reclaimFrom =
       adjustment.code === 'repetir_semana' ? insight.week_start : undefined;
 
+    // ── O CARIMBO ENTRA NA MESMA TRANSAÇÃO (Fase 6.1) ────────────────────────
+    //
+    // Antes: deslocava, e SÓ DEPOIS gravava `adjustment_applied_at`. Duas
+    // requisições concorrentes liam `null` na checagem acima e empurravam o
+    // plano DUAS semanas; e se o shift confirmasse e o carimbo falhasse, um
+    // retry legítimo reaplicava. A leitura de `adjustment_applied_at` continua
+    // como atalho de UX (resposta imediata no caminho comum), mas quem de fato
+    // garante a unicidade agora é a `UNIQUE (idempotency_key)` lá dentro.
     const result = await this.trainingService.reanchorRemainingWorkoutsToToday(
       userId,
       insight.plan_id,
       reclaimFrom,
+      {
+        insightId,
+        source: 'weekly_insight',
+        reason: ADJUSTMENT_LABELS[adjustment.code],
+        reasonCode: adjustment.reason,
+        weekNumber: insight.week_number,
+      },
     );
 
     if (result.shifted === 0) {
@@ -1337,11 +1352,6 @@ Escreva a narrativa explicando o que aconteceu na semana e por que essa é a rec
         deltaDays: result.deltaDays,
       };
     }
-
-    await supabase
-      .from('plan_week_insights')
-      .update({ adjustment_applied_at: new Date().toISOString() })
-      .eq('id', insightId);
 
     this.logger.log(
       `[WeeklyInsight] ${adjustment.code} aplicado no plano ${insight.plan_id}: ${result.shifted} treino(s) +${result.deltaDays}d`,

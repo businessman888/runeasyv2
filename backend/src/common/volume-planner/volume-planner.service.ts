@@ -506,13 +506,32 @@ export class VolumePlannerService {
   /** Vetor phase por semana (índice 0-based). */
   private phaseByWeek(totalWeeks: number, phases: Phases): WeekPhase[] {
     const out: WeekPhase[] = [];
-    for (let w = 1; w <= totalWeeks; w++) {
-      if (w <= phases.base) out.push('base');
-      else if (w <= phases.base + phases.build) out.push('build');
-      else if (w <= phases.base + phases.build + phases.peak) out.push('peak');
-      else out.push('taper');
-    }
+    for (let w = 1; w <= totalWeeks; w++) out.push(this.phaseOfWeek(w, phases));
     return out;
+  }
+
+  /**
+   * A fase de UMA semana. Pública porque é a resposta AUTORITATIVA — e há mais
+   * de um consumidor fora da geração.
+   *
+   * ── POR QUE RECOMPUTAR EM VEZ DE LER ──────────────────────────────────────
+   *
+   * `plan_json.weeks[].phase` e `workouts.metadata.week_phase` guardam a fase,
+   * mas até 2026-08-11 (`d43cb1e`) esse campo era ECO DA IA:
+   * `applyDeterministicVolume` cravava distâncias e tipos por cima da resposta
+   * do modelo e deixava `week.phase` intacto. Planos gerados antes do fix
+   * carregam a fase que o modelo inventou.
+   *
+   * Esta função é pura, depende só de `(duration_weeks, goalKm)`, e por isso dá
+   * a resposta certa inclusive para aqueles planos antigos. `MesoInsightService`
+   * já fazia essa recomputação com uma cópia local da escada; agora ela mora
+   * num lugar só.
+   */
+  phaseOfWeek(weekNumber: number, phases: Phases): WeekPhase {
+    if (weekNumber <= phases.base) return 'base';
+    if (weekNumber <= phases.base + phases.build) return 'build';
+    if (weekNumber <= phases.base + phases.build + phases.peak) return 'peak';
+    return 'taper';
   }
 
   private taperFactors(taperWeeks: number): number[] {

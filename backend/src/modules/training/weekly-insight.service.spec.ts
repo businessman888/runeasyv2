@@ -653,7 +653,19 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
       ...over,
     });
 
-    it('aplica adiar_semana e carimba adjustment_applied_at', async () => {
+    it('aplica adiar_semana e delega o carimbo para a transação', async () => {
+      // ── MUDANÇA DE CONTRATO NA FASE 6.1 ───────────────────────────────────
+      //
+      // O carimbo de `adjustment_applied_at` NÃO é mais um UPDATE separado
+      // depois do deslocamento — ele acontece dentro de `apply_schedule_shift`,
+      // na mesma transação. Antes, duas requisições concorrentes liam
+      // `adjustment_applied_at = null` e empurravam o plano DUAS semanas; e um
+      // shift confirmado com carimbo falho era reaplicado no retry.
+      //
+      // Aqui o que se prova é que o `insightId` VIAJA (é ele que dispara o
+      // carimbo lá dentro). Que a linha é de fato carimbada — e uma só vez —
+      // é provado contra Postgres real em
+      // `test/integration/schedule-shift.int-spec.ts`.
       await build(
         seedPlan({
           plan_week_insights: [
@@ -669,7 +681,14 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
       const r = await service.applyScheduleAdjustment('user-1', 'wi-1');
 
       expect(r).toMatchObject({ applied: true, shifted: 9, deltaDays: 7 });
-      expect(tables.plan_week_insights[0].adjustment_applied_at).toBeTruthy();
+      expect(
+        trainingService.reanchorRemainingWorkoutsToToday,
+      ).toHaveBeenCalledWith(
+        'user-1',
+        'plan-1',
+        undefined,
+        expect.objectContaining({ insightId: 'wi-1' }),
+      );
     });
 
     it('adiar_semana NÃO passa reclaimFromDate — a semana está zerada', async () => {
@@ -689,7 +708,14 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
 
       expect(
         trainingService.reanchorRemainingWorkoutsToToday,
-      ).toHaveBeenCalledWith('user-1', 'plan-1', undefined);
+      ).toHaveBeenCalledWith(
+        'user-1',
+        'plan-1',
+        undefined,
+        // Fase 6.1: a procedência viaja junto para o histórico, e `insightId`
+        // faz o carimbo acontecer DENTRO da transação do deslocamento.
+        expect.objectContaining({ insightId: 'wi-1', source: 'weekly_insight' }),
+      );
     });
 
     it('repetir_semana ABRE a fronteira no início da semana repetida', async () => {
@@ -715,7 +741,12 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
 
       expect(
         trainingService.reanchorRemainingWorkoutsToToday,
-      ).toHaveBeenCalledWith('user-1', 'plan-1', '2026-06-08');
+      ).toHaveBeenCalledWith(
+        'user-1',
+        'plan-1',
+        '2026-06-08',
+        expect.objectContaining({ insightId: 'wi-1', source: 'weekly_insight' }),
+      );
     });
 
     it('RECUSA a classe prescription — mexer no volume é Fase 6', async () => {

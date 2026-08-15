@@ -4,6 +4,7 @@ import {
   Inject,
   forwardRef,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -18,6 +19,7 @@ import { GamificationService } from '../gamification/gamification.service';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { FeedbackAIService } from '../feedback/feedback-ai.service';
 import { VdotService } from './vdot.service';
+import { PlanAdaptationService } from './plan-adaptation.service';
 import { AiQuotaService, AIRouterService, AI_FEATURES } from '../../common/ai';
 import {
   PlanOverviewResponseDto,
@@ -26,7 +28,12 @@ import {
   WeekPhase,
 } from './dto/plan-overview.dto';
 import { formatPaceRangeLabel } from '../../common/pace-calculator';
-import { derivePlanWeeks, addDaysStr } from './helpers/plan-window.helper';
+import { VolumePlannerService } from '../../common/volume-planner';
+import {
+  derivePlanWeeks,
+  addDaysStr,
+  isEditableWorkout,
+} from './helpers/plan-window.helper';
 import { toSaoPauloDateStr } from './wellness/helpers/streak.helper';
 
 // Generation status types
@@ -75,6 +82,12 @@ export class TrainingService {
     // Persiste o VDOT que gerou o plano (Fase 3) — sem isso a reestimativa
     // não tem ponto de partida.
     private readonly vdotService: VdotService,
+    // A porta ÚNICA de escrita sobre plano ativo (Fase 6.1): atomicidade,
+    // versão e idempotência que o PostgREST não oferece.
+    private readonly planAdaptationService: PlanAdaptationService,
+    // Motor puro. Aqui só para RECOMPUTAR a fase da semana no overview, em vez
+    // de lê-la do `plan_json` — ver o comentário em `getPlanOverview`.
+    private readonly volumePlanner: VolumePlannerService,
   ) {}
 
   /**
@@ -261,7 +274,7 @@ export class TrainingService {
           duration_weeks: fullPlan.duration_weeks || onboardingData.targetWeeks,
           frequency_per_week:
             fullPlan.frequency_per_week || onboardingData.daysPerWeek,
-          generation_status: 'complete',
+          // `generation_status: 'complete'` NÃO entra aqui — ver STEP 5.
         })
         .eq('id', planId);
 
@@ -366,6 +379,33 @@ export class TrainingService {
             `[FullGen] STEP 4: race-day workout inserted on ${onboardingData.raceDate}`,
           );
         }
+      }
+
+      // STEP 5: SÓ AGORA o plano é declarado pronto.
+      //
+      // ── POR QUE ESTE UPDATE EXISTE SEPARADO (Fase 6.1) ────────────────────
+      //
+      // Até aqui `generation_status: 'complete'` era gravado no STEP 2, junto
+      // do `plan_json` — ou seja, ANTES de os workouts existirem. O estado
+      // "complete com zero treinos" era observável, e qualquer consumidor que
+      // tratasse `complete` como garantia de plano materializado lia um plano
+      // vazio. Para a Fase 6 isso é pior que um bug de UI: uma adaptação
+      // disparada nessa janela não saberia qual snapshot está editando.
+      //
+      // Vem depois do STEP 4 (prova) de propósito: os passos 3b e 4 são
+      // best-effort e não lançam, então chegar aqui significa que o plano está
+      // íntegro. Custo: o polling do app espera alguns segundos a mais — que é
+      // a verdade sobre quando o plano ficou pronto.
+      const { error: completeError } = await this.supabaseService
+        .from('training_plans')
+        .update({ generation_status: 'complete' })
+        .eq('id', planId);
+
+      if (completeError) {
+        this.logger.error(
+          `[FullGen] STEP 5 FAILED: não consegui marcar o plano ${planId} como complete: ${completeError.message}`,
+        );
+        throw completeError;
       }
 
       const elapsed = Date.now() - startTime;
@@ -718,12 +758,25 @@ export class TrainingService {
    *   de volta as sessões perdidas NO MEIO da semana repetida. Omitir preserva
    *   o comportamento original (só o que vem depois do último dia treinado).
    *
+   * @param options  (Fase 6.1) Procedência da ação, para o histórico em
+   *   `plan_adaptations`. `insightId` faz o carimbo de
+   *   `plan_week_insights.adjustment_applied_at` acontecer na MESMA transação
+   *   do deslocamento — antes eram duas escritas, e um retry entre elas
+   *   reaplicava o shift.
+   *
    * Returns { shifted, deltaDays } for logging/tests.
    */
   async reanchorRemainingWorkoutsToToday(
     userId: string,
     planId: string,
     reclaimFromDate?: string,
+    options?: {
+      insightId?: string | null;
+      source?: 'weekly_insight' | 'reactivation' | 'manual';
+      reason?: string;
+      reasonCode?: string;
+      weekNumber?: number | null;
+    },
   ): Promise<{ shifted: number; deltaDays: number }> {
     const { data: rows, error } = await this.supabaseService
       .from('workouts')
@@ -742,8 +795,20 @@ export class TrainingService {
     const all = rows as WorkoutRow[];
 
     // Progress frontier: last completed/skipped day (null if none yet).
+    //
+    // ⚠️ SÓ O PASSADO CONTA (Fase 6.1). Progresso é o que já ACONTECEU — e a
+    // partir da 6.2 uma adaptação pode marcar um treino FUTURO como `skipped`
+    // ("reduzir frequência"). Sem o corte em `todayStr`, esse skip empurraria a
+    // fronteira para uma data futura e uma re-âncora posterior ("repetir
+    // semana") deixaria para trás todos os pendentes anteriores a ela: o
+    // calendário ficaria com buracos e nenhum erro seria levantado.
+    const { dateStr: frontierTodayStr } = this.getSaoPauloToday();
     const frontier = all
-      .filter((w) => w.status === 'completed' || w.status === 'skipped')
+      .filter(
+        (w) =>
+          (w.status === 'completed' || w.status === 'skipped') &&
+          w.scheduled_date <= frontierTodayStr,
+      )
       .reduce<
         string | null
       >((max, w) => (max === null || w.scheduled_date > max ? w.scheduled_date : max), null);
@@ -784,38 +849,70 @@ export class TrainingService {
     const ONE_DAY_MS = 86400000;
     const deltaDays = Math.ceil(diffMs / ONE_DAY_MS / 7) * 7; // whole weeks → weekday preserved
 
-    // Reclaim lapse-missed sessions back to pending so the shift moves them too.
-    const missedIds = remaining
-      .filter((w) => w.status === 'missed')
-      .map((w) => w.id);
-    if (missedIds.length > 0) {
-      const { error: unmissError } = await this.supabaseService
-        .from('workouts')
-        .update({ status: 'pending' })
-        .in('id', missedIds);
-      if (unmissError) {
-        this.logger.warn(
-          `[reanchor] Failed to reclaim ${missedIds.length} missed workout(s) for plan ${planId}: ${unmissError.message}`,
-        );
-      }
-    }
+    // ── A SELEÇÃO DO SERVIÇO VIRA A SELEÇÃO DO SQL (Fase 6.1) ────────────────
+    //
+    // Até aqui, este método calculava `remaining` com todo o cuidado acima e
+    // depois chamava `shift_pending_workouts`, cujo predicado era
+    // `plan_id = ? AND status = 'pending'` — TODOS os pendentes do plano. Um
+    // pendente anterior à fronteira, deliberadamente excluído aqui, era
+    // deslocado do mesmo jeito. As duas seleções nunca foram iguais, e os
+    // testes não pegavam porque MOCKAM a RPC.
+    //
+    // `apply_schedule_shift` não tem predicado próprio: ela desloca exatamente
+    // os IDs que recebe. E faz reclaim + shift + carimbo do insight +
+    // histórico numa única transação — hoje eram três escritas independentes,
+    // qualquer uma podendo falhar deixando estado pela metade.
+    const remainingIds = remaining.map((w) => w.id);
+    const missedCount = remaining.filter((w) => w.status === 'missed').length;
 
-    // Shift all pending workouts forward by whole weeks (atomic RPC).
-    const { data: shifted, error: rpcError } = await this.supabaseService
-      .getClient()
-      .rpc('shift_pending_workouts', { p_plan_id: planId, p_days: deltaDays });
+    const expectedDigest = await this.planAdaptationService.getStateDigest(
+      planId,
+      frontierTodayStr,
+    );
 
-    if (rpcError) {
-      this.logger.error(
-        `[reanchor] shift_pending_workouts failed for plan ${planId}`,
-        rpcError,
+    if (!expectedDigest) {
+      this.logger.warn(
+        `[reanchor] plano ${planId} sem digest (inexistente ou inacessível) — nada deslocado`,
       );
       return { shifted: 0, deltaDays };
     }
 
-    const count = typeof shifted === 'number' ? shifted : 0;
+    const result = await this.planAdaptationService.applyScheduleShift({
+      userId,
+      planId,
+      workoutIds: remainingIds,
+      deltaDays,
+      expectedDigest,
+      todayStr: frontierTodayStr,
+      insightId: options?.insightId ?? null,
+      meta: {
+        source: options?.source ?? 'reactivation',
+        sourceInsightId: options?.insightId ?? null,
+        reason:
+          options?.reason ??
+          `Plano retomado a partir de hoje (+${deltaDays} dias)`,
+        reasonCode: options?.reasonCode ?? null,
+        metrics: {
+          reclaim_from: reclaimFromDate ?? null,
+          frontier: frontier ?? null,
+          first_remaining: firstRemaining,
+          missed_reclaimed: missedCount,
+        },
+        weekNumber: options?.weekNumber ?? null,
+      },
+    });
+
+    if (!result.applied) {
+      this.logger.warn(
+        `[reanchor] plano ${planId} não deslocado: ${result.reason}` +
+          (result.detail ? ` — ${result.detail}` : ''),
+      );
+      return { shifted: 0, deltaDays };
+    }
+
+    const count = result.shifted ?? 0;
     this.logger.log(
-      `[reanchor] Plan ${planId}: reclaimed ${missedIds.length} missed, shifted ${count} workout(s) +${deltaDays}d (firstRemaining=${firstRemaining}, frontier=${frontier ?? 'none'})`,
+      `[reanchor] Plan ${planId}: reclaimed ${result.reclaimed ?? missedCount} missed, shifted ${count} workout(s) +${deltaDays}d (firstRemaining=${firstRemaining}, frontier=${frontier ?? 'none'}${result.replayed ? ', REPLAY' : ''})`,
     );
     return { shifted: count, deltaDays };
   }
@@ -945,7 +1042,60 @@ export class TrainingService {
   /**
    * Mark a workout as skipped
    */
+  /**
+   * Pula um treino FUTURO do plano ativo.
+   *
+   * ── POR QUE OS GUARDS (Fase 6.1) ──────────────────────────────────────────
+   *
+   * Esta rota aceitava QUALQUER workout do usuário: passado, já concluído, ou
+   * de um ciclo encerrado — o filtro era só `id + user_id`. A partir da 6.2 a
+   * adaptação escreve `skipped` pela fundação, com fronteira; deixar a rota
+   * manual sem as mesmas regras manteria uma porta lateral para exatamente o
+   * que a fundação existe para impedir.
+   *
+   * Dois efeitos concretos que os guards evitam:
+   *   • pular um treino JÁ CONCLUÍDO apagaria a execução do histórico;
+   *   • pular um treino PASSADO mexeria na base de um insight semanal fechado,
+   *     que descreve a semana como ela foi.
+   *
+   * A fronteira é a mesma de `isEditableWorkout` — hoje inteiro congelado.
+   */
   async skipWorkout(userId: string, workoutId: string, reason: string) {
+    const { dateStr: todayStr } = this.getSaoPauloToday();
+
+    const { data: workout, error: readError } = await this.supabaseService
+      .from('workouts')
+      .select('id, plan_id, status, scheduled_date, is_race_day')
+      .eq('id', workoutId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (readError) throw readError;
+    if (!workout) {
+      throw new NotFoundException('Treino não encontrado');
+    }
+
+    const activePlanId = await this.loadActivePlanId(userId);
+    if (!activePlanId) {
+      throw new BadRequestException('Nenhum plano ativo');
+    }
+
+    const check = isEditableWorkout(workout, { activePlanId, todayStr });
+    if (!check.editable) {
+      // Mensagens por motivo: "não pode" sem explicação vira ticket de suporte.
+      const messages: Record<string, string> = {
+        not_in_active_plan:
+          'Este treino não pertence ao plano ativo e não pode ser alterado.',
+        not_pending: 'Este treino já foi concluído, pulado ou perdido.',
+        today_or_past:
+          'Só é possível pular treinos a partir de amanhã — o dia de hoje já está em curso.',
+        race_day: 'O dia da prova não pode ser pulado.',
+      };
+      throw new BadRequestException(
+        messages[check.reason ?? ''] ?? 'Este treino não pode ser pulado.',
+      );
+    }
+
     const { data, error } = await this.supabaseService
       .from('workouts')
       .update({
@@ -954,6 +1104,8 @@ export class TrainingService {
       })
       .eq('id', workoutId)
       .eq('user_id', userId)
+      // Rede final: o estado pode ter mudado entre a leitura e a escrita.
+      .eq('status', 'pending')
       .select()
       .single();
 
@@ -2246,15 +2398,31 @@ Gere o briefing aprofundado agora.`;
       ? planJson.weeks
       : [];
 
-    const phaseByWeek = new Map<number, WeekPhase>();
-    for (const gw of generatedWeeks) {
-      if (typeof gw.week_number === 'number' && gw.phase) {
-        phaseByWeek.set(gw.week_number, gw.phase);
-      }
-    }
-
     const totalWeeks: number =
       plan.duration_weeks ?? generatedWeeks.length ?? 0;
+
+    // ── A FASE É CÁLCULO, NÃO LEITURA (Fase 6.1) ─────────────────────────────
+    //
+    // Até aqui a fase exibida vinha de `plan_json.weeks[].phase`, com fallback
+    // para `workouts.metadata.week_phase` e, por último, `'base'` — um default
+    // silencioso. Os dois campos são a MESMA origem: `applyDeterministicVolume`
+    // cravava distâncias e tipos por cima da resposta da IA mas deixava
+    // `week.phase` intacto até `d43cb1e`, e o metadata copia dali. Ou seja: em
+    // todo plano gerado antes daquele fix, a fase que o app mostra é opinião do
+    // modelo, não periodização.
+    //
+    // `calculatePhases(duration_weeks, goalKm)` é função pura e recomputável, e
+    // acerta inclusive nos planos antigos. Com isso `plan_json` deixa de ter
+    // QUALQUER leitor de estado vigente: ele passa a ser o snapshot de como o
+    // plano nasceu, e `workouts` é a projeção vigente — que é o que todo o
+    // resto do app já lia. É essa separação que torna a edição da Fase 6
+    // segura sem precisar sincronizar dois lugares sem chave estável entre eles.
+    const goalKm = this.volumePlanner.resolveGoalKm({
+      goal: plan.goal,
+      goalType: plan.goal_type,
+      raceDistance: plan.race_distance,
+    });
+    const phases = this.volumePlanner.calculatePhases(totalWeeks, goalKm);
 
     // Datas do plano como strings YYYY-MM-DD em São Paulo. A versão anterior
     // usava `new Date(created_at)` + `setHours(0,0,0,0)`, que zera na TZ do
@@ -2294,25 +2462,25 @@ Gere o briefing aprofundado agora.`;
     );
     const windowByWeek = new Map(derivedWeeks.map((w) => [w.weekNumber, w]));
 
-    // A fase pode existir no plan_json para uma semana sem nenhum treino — daí
-    // a união com as chaves derivadas.
-    const weekNumbers = new Set<number>([
-      ...windowByWeek.keys(),
-      ...phaseByWeek.keys(),
-    ]);
-
-    const sortedWeekNumbers = Array.from(weekNumbers).sort((a, b) => a - b);
+    // As semanas são as derivadas dos treinos (`derivePlanWeeks` já completa as
+    // declaradas em `duration_weeks` que ainda não têm treino hidratado). A
+    // união com as chaves do `plan_json` deixou de ser necessária quando a fase
+    // passou a ser calculada: uma semana que só existisse no JSON não tem
+    // treino, não tem janela e não tem nada a exibir.
+    const sortedWeekNumbers = Array.from(windowByWeek.keys()).sort(
+      (a, b) => a - b,
+    );
 
     const weeks: PlanWeekDto[] = sortedWeekNumbers.map((weekNumber) => {
       const wkWorkouts = (workoutsByWeek.get(weekNumber) ?? []).slice();
-      const phase =
-        phaseByWeek.get(weekNumber) ??
-        (wkWorkouts[0]?.metadata?.week_phase as WeekPhase | undefined) ??
-        'base';
+      const phase: WeekPhase = this.volumePlanner.phaseOfWeek(
+        weekNumber,
+        phases,
+      );
 
       const win = windowByWeek.get(weekNumber);
-      // Último recurso: semana que só existe no plan_json (sem treino e fora de
-      // duration_weeks). Deriva do início do plano em São Paulo, sem `Date`.
+      // Último recurso: semana fora do intervalo derivado. Deriva do início do
+      // plano em São Paulo, sem `Date`.
       const startDate =
         win?.startStr ?? addDaysStr(planStartStr, (weekNumber - 1) * 7);
       const endDate = win?.endStr ?? addDaysStr(startDate, 6);

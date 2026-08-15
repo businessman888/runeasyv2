@@ -405,14 +405,13 @@ export class MesoInsightService {
     });
     const phases = this.volumePlanner.calculatePhases(totalWeeks, goalKm);
 
-    const phaseOf = (week: number): WeekPhase => {
-      if (week <= phases.base) return 'base';
-      if (week <= phases.base + phases.build) return 'build';
-      if (week <= phases.base + phases.build + phases.peak) return 'peak';
-      return 'taper';
-    };
-
-    return dominantPhase(blockWeeks.map(phaseOf));
+    // A escada mora no VolumePlannerService (Fase 6.1). Existiam duas cópias —
+    // esta e a do próprio motor — e o overview estava prestes a virar a
+    // terceira; duas implementações da mesma regra é como as fronteiras
+    // divergentes nasceram.
+    return dominantPhase(
+      blockWeeks.map((week) => this.volumePlanner.phaseOfWeek(week, phases)),
+    );
   }
 
   // ──────────────────────────────────────────────────────────────────────────

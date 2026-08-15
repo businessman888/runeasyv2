@@ -132,6 +132,147 @@ export function isPlanFinished(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Fronteira de EDIÇÃO (Fase 6) — a única autoritativa
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ── DUAS FRONTEIRAS, E ISSO É DE PROPÓSITO ────────────────────────────────────
+ *
+ * O repo tem duas perguntas diferentes sobre passado/futuro, e confundi-las
+ * quebraria uma das duas:
+ *
+ *   FRONTEIRA DE EDIÇÃO (aqui)      — "o que a Fase 6 e a Fase 3 podem MUDAR?"
+ *                                     amanhã em diante, pending, plano ativo.
+ *   FRONTEIRA DE PROGRESSO (re-âncora) — "até onde o atleta já andou?"
+ *                                     precisa tocar o PASSADO (reclamar missed,
+ *                                     repetir semana). Vive em
+ *                                     `reanchorRemainingWorkoutsToToday`.
+ *
+ * O defeito que a reauditoria da Fase 6 encontrou não era a existência das
+ * duas: era o SQL não reproduzir nenhuma delas. `shift_pending_workouts`
+ * deslocava TODOS os pendentes do plano, ignorando o conjunto que o serviço
+ * tinha calculado. Isso é resolvido passando IDs, não unificando as fronteiras.
+ *
+ * ── POR QUE HOJE INTEIRO É CONGELADO ──────────────────────────────────────────
+ *
+ * O backend NÃO conhece o estado "em execução": não existe `started`/
+ * `in_progress` em `workouts`, e o cursor da corrida vive em MMKV no device. A
+ * representação segura é NÃO representar — um treino que o corredor está
+ * correndo agora está agendado para HOJE, e hoje não é editável. Isso torna o
+ * estado local irrelevante para a segurança da edição, sem exigir um estado
+ * novo que pode ficar preso quando o app morre no meio da corrida.
+ *
+ * Não é fronteira nova: é a que a Fase 3 já roda em produção
+ * (`vdot.service.ts` → `status='pending'` + `scheduled_date > hoje`). Aqui ela
+ * vira helper compartilhado, para F3 e F6 não terem duas cópias que divergem.
+ */
+
+/** Primeiro dia que uma adaptação pode tocar. Hoje é sempre intocável. */
+export function editableFrom(todayStr: string): string {
+  return addDaysStr(todayStr, 1);
+}
+
+export type EditBlockReason =
+  | 'not_in_active_plan'
+  | 'not_pending'
+  | 'today_or_past'
+  | 'race_day';
+
+export interface EditableWorkoutRow {
+  plan_id?: string | null;
+  status?: string | null;
+  scheduled_date?: string | null;
+  is_race_day?: boolean | null;
+}
+
+export interface EditableCheck {
+  editable: boolean;
+  reason?: EditBlockReason;
+}
+
+/**
+ * Este treino pode ser alterado por uma adaptação?
+ *
+ * ⚠️ Esta função é a fronteira do lado do TypeScript. A MESMA fronteira é
+ * reafirmada no `WHERE` de `apply_plan_adaptation` — duplicação deliberada,
+ * defesa em profundidade. Foi exatamente a AUSÊNCIA dessa segunda camada que
+ * deixou `shift_pending_workouts` divergir do serviço sem ninguém perceber.
+ * Há teste de paridade entre as duas.
+ */
+export function isEditableWorkout(
+  w: EditableWorkoutRow,
+  ctx: { activePlanId: string; todayStr: string },
+): EditableCheck {
+  // Manual/livre (`plan_id` nulo) e treinos de ciclos encerrados ficam fora de
+  // forma inequívoca — nunca por heurística de data.
+  if (!w.plan_id || w.plan_id !== ctx.activePlanId) {
+    return { editable: false, reason: 'not_in_active_plan' };
+  }
+  if (w.status !== 'pending') {
+    return { editable: false, reason: 'not_pending' };
+  }
+  // Comparação lexicográfica de YYYY-MM-DD: sem `Date`, sem fuso. `todayStr`
+  // vem de `getSaoPauloToday()` — nunca do relógio do processo (UTC no Railway).
+  if (!w.scheduled_date || w.scheduled_date < editableFrom(ctx.todayStr)) {
+    return { editable: false, reason: 'today_or_past' };
+  }
+  // Prova é invariante: a adaptação trabalha ao redor, nunca move nem esvazia.
+  if (w.is_race_day === true) {
+    return { editable: false, reason: 'race_day' };
+  }
+  return { editable: true };
+}
+
+export type PlanBlockReason =
+  | 'not_active'
+  | 'generating'
+  | 'generation_failed'
+  | 'no_workouts';
+
+export interface PlanEditableRow {
+  status?: string | null;
+  generation_status?: string | null;
+}
+
+export interface PlanEditableCheck {
+  editable: boolean;
+  reason?: PlanBlockReason;
+}
+
+/**
+ * O PLANO está em estado editável?
+ *
+ * Existe porque `generation_status='complete'` nunca foi garantia de que os
+ * workouts terminaram de ser materializados: até a Fase 6.1 ele era gravado
+ * ANTES dos inserts em lote. A ordem foi corrigida, mas planos criados antes
+ * disso podem estar `complete` com zero treinos — daí `no_workouts` continuar
+ * sendo checado em vez de presumido.
+ *
+ * @param workoutCount treinos já materializados do plano.
+ */
+export function isPlanEditable(
+  plan: PlanEditableRow,
+  workoutCount: number,
+): PlanEditableCheck {
+  if (plan.status !== 'active') {
+    return { editable: false, reason: 'not_active' };
+  }
+  if (plan.generation_status === 'failed') {
+    return { editable: false, reason: 'generation_failed' };
+  }
+  if (
+    plan.generation_status === 'generating' ||
+    plan.generation_status === 'partial'
+  ) {
+    return { editable: false, reason: 'generating' };
+  }
+  if (workoutCount <= 0) {
+    return { editable: false, reason: 'no_workouts' };
+  }
+  return { editable: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Semanas do plano
 // ─────────────────────────────────────────────────────────────────────────────
 

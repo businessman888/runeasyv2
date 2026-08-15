@@ -8,11 +8,17 @@ import { SubscriptionService } from '../subscription/subscription.service';
 import { AiQuotaService, AIRouterService } from '../../common/ai';
 import { FeedbackAIService } from '../feedback/feedback-ai.service';
 import { VdotService } from './vdot.service';
+import { PlanAdaptationService } from './plan-adaptation.service';
+import { VolumePlannerService } from '../../common/volume-planner';
 
 describe('TrainingService', () => {
   let service: TrainingService;
   let mockSupabaseService: Partial<SupabaseService>;
   let mockTrainingAIService: Partial<TrainingAIService>;
+  let mockPlanAdaptation: {
+    getStateDigest: jest.Mock;
+    applyScheduleShift: jest.Mock;
+  };
 
   const mockWorkouts = [
     {
@@ -60,6 +66,27 @@ describe('TrainingService', () => {
       getClient: jest.fn().mockReturnValue({
         rpc: jest.fn().mockResolvedValue({ data: 0, error: null }),
       }),
+    };
+
+    // Dublê da fundação. Por padrão o apply "dá certo" e devolve a contagem de
+    // IDs recebida — os testes da re-âncora inspecionam `workoutIds` para
+    // provar QUAL conjunto foi enviado, que é o coração da mina 2.
+    mockPlanAdaptation = {
+      getStateDigest: jest.fn().mockResolvedValue('digest-fake'),
+      applyScheduleShift: jest.fn(
+        async ({
+          workoutIds,
+          deltaDays,
+        }: {
+          workoutIds: string[];
+          deltaDays: number;
+        }) => ({
+          applied: true,
+          shifted: workoutIds.length,
+          reclaimed: 0,
+          deltaDays,
+        }),
+      ),
     };
 
     mockTrainingAIService = {
@@ -134,6 +161,15 @@ describe('TrainingService', () => {
           provide: VdotService,
           useValue: { seedForPlan: jest.fn().mockResolvedValue(undefined) },
         },
+        // Fase 6.1 — a fundação. Aqui só a re-âncora a consome; o dublê
+        // registra a chamada para os testes provarem QUE CONJUNTO de IDs foi
+        // enviado, que é o ponto da mina 2. O comportamento real da função SQL
+        // (lock, CAS, atomicidade) é provado em `test/integration/`.
+        { provide: PlanAdaptationService, useValue: mockPlanAdaptation },
+        // Motor puro, sem I/O — usado no overview para RECOMPUTAR a fase da
+        // semana. Instanciado de verdade: mocká-lo tornaria o teste da fase
+        // um teste do mock.
+        VolumePlannerService,
       ],
     }).compile();
 
@@ -329,25 +365,126 @@ describe('TrainingService', () => {
   });
 
   describe('skipWorkout', () => {
-    it('should mark workout as skipped with reason', async () => {
-      const skippedWorkout = {
+    /**
+     * Fase 6.1 — a rota ganhou guards.
+     *
+     * Ela aceitava QUALQUER workout do usuário: passado, já concluído, de um
+     * ciclo encerrado. A partir da 6.2 a adaptação escreve `skipped` pela
+     * fundação, com fronteira; deixar a rota manual sem as mesmas regras
+     * manteria uma porta lateral para exatamente o que a fundação impede.
+     */
+    const FUTURO = '2999-01-01';
+
+    /**
+     * `skipWorkout` faz três acessos em sequência: lê o treino, lê o plano
+     * ativo (`loadActivePlanId`) e escreve. O mock responde na ordem.
+     */
+    const arrange = (workout: Record<string, unknown> | null) => {
+      const updated = {
         ...mockWorkouts[0],
         status: 'skipped',
         skip_reason: 'sick',
       };
+      const from = mockSupabaseService.from as jest.Mock;
+      from.mockReset();
+      from
+        .mockReturnValueOnce({
+          select: jest.fn().mockReturnThis(),
+          eq: jest.fn().mockReturnThis(),
+          maybeSingle: jest
+            .fn()
+            .mockResolvedValue({ data: workout, error: null }),
+        })
+        .mockReturnValueOnce({
+          select: jest.fn().mockReturnThis(),
+          eq: jest.fn().mockReturnThis(),
+          maybeSingle: jest
+            .fn()
+            .mockResolvedValue({ data: { id: 'plan-1' }, error: null }),
+        })
+        .mockReturnValue({
+          update: jest.fn().mockReturnThis(),
+          eq: jest.fn().mockReturnThis(),
+          select: jest.fn().mockReturnThis(),
+          single: jest.fn().mockResolvedValue({ data: updated, error: null }),
+        });
+    };
 
-      (mockSupabaseService.from as jest.Mock).mockReturnValue({
-        update: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        single: jest
-          .fn()
-          .mockResolvedValue({ data: skippedWorkout, error: null }),
+    it('marca como skipped um treino FUTURO do plano ativo', async () => {
+      arrange({
+        id: 'w1',
+        plan_id: 'plan-1',
+        status: 'pending',
+        scheduled_date: FUTURO,
+        is_race_day: false,
       });
 
       const result = await service.skipWorkout('user-123', 'w1', 'sick');
       expect(result.status).toBe('skipped');
       expect(result.skip_reason).toBe('sick');
+    });
+
+    it('RECUSA pular um treino já concluído — apagaria a execução', async () => {
+      arrange({
+        id: 'w1',
+        plan_id: 'plan-1',
+        status: 'completed',
+        scheduled_date: FUTURO,
+        is_race_day: false,
+      });
+
+      await expect(service.skipWorkout('user-123', 'w1', 'sick')).rejects.toThrow(
+        /concluído|pulado|perdido/i,
+      );
+    });
+
+    it('RECUSA pular treino do passado — mexeria em insight já fechado', async () => {
+      arrange({
+        id: 'w1',
+        plan_id: 'plan-1',
+        status: 'pending',
+        scheduled_date: '2000-01-01',
+        is_race_day: false,
+      });
+
+      await expect(service.skipWorkout('user-123', 'w1', 'sick')).rejects.toThrow(
+        /a partir de amanhã/i,
+      );
+    });
+
+    it('RECUSA pular treino de plano encerrado', async () => {
+      arrange({
+        id: 'w1',
+        plan_id: 'plano-antigo',
+        status: 'pending',
+        scheduled_date: FUTURO,
+        is_race_day: false,
+      });
+
+      await expect(service.skipWorkout('user-123', 'w1', 'sick')).rejects.toThrow(
+        /plano ativo/i,
+      );
+    });
+
+    it('RECUSA pular o dia da prova — invariante do contrato', async () => {
+      arrange({
+        id: 'w1',
+        plan_id: 'plan-1',
+        status: 'pending',
+        scheduled_date: FUTURO,
+        is_race_day: true,
+      });
+
+      await expect(service.skipWorkout('user-123', 'w1', 'sick')).rejects.toThrow(
+        /prova/i,
+      );
+    });
+
+    it('404 quando o treino não é do usuário', async () => {
+      arrange(null);
+      await expect(service.skipWorkout('user-123', 'w1', 'sick')).rejects.toThrow(
+        /não encontrado/i,
+      );
     });
   });
 
@@ -397,23 +534,35 @@ describe('TrainingService', () => {
   });
 
   describe('reanchorRemainingWorkoutsToToday (Q3 — resume frozen plan)', () => {
+    // ── O QUE MUDOU NA FASE 6.1 ────────────────────────────────────────────
+    //
+    // Antes o serviço fazia DUAS escritas: um UPDATE reclamando os `missed` e
+    // depois a RPC `shift_pending_workouts`. E aí estava a mina 2 — a RPC
+    // ignorava a seleção calculada aqui e deslocava TODOS os pendentes do
+    // plano. Os testes não podiam pegar isso: eles mockavam a RPC e só
+    // conferiam `p_days`.
+    //
+    // Agora o serviço faz UMA chamada, com a LISTA DE IDS. Isso torna o
+    // conjunto observável — e é sobre ele que estes testes passam a afirmar.
+    // Que o SQL desloque exatamente esses IDs (e nada além) é provado contra
+    // Postgres real em `test/integration/schedule-shift.int-spec.ts`.
     const setup = (
       rows: Array<{ id: string; scheduled_date: string; status: string }>,
     ) => {
-      const rpc = jest.fn().mockResolvedValue({ data: 99, error: null });
-      const inFn = jest.fn().mockResolvedValue({ error: null });
       (mockSupabaseService.from as jest.Mock).mockReturnValue({
         select: jest.fn().mockReturnThis(),
         eq: jest.fn().mockReturnThis(),
         order: jest.fn().mockResolvedValue({ data: rows, error: null }),
-        update: jest.fn().mockReturnValue({ in: inFn }),
       });
-      (mockSupabaseService.getClient as jest.Mock).mockReturnValue({ rpc });
-      return { rpc, inFn };
+      return mockPlanAdaptation.applyScheduleShift;
     };
 
+    /** Os IDs que o serviço mandou deslocar, na ordem em que os selecionou. */
+    const shiftedIds = (shift: jest.Mock): string[] =>
+      (shift.mock.calls[0][0] as { workoutIds: string[] }).workoutIds;
+
     it('reclaims lapse-missed sessions and shifts the block by whole weeks', async () => {
-      const { rpc, inFn } = setup([
+      const shift = setup([
         { id: 'w1', scheduled_date: '2000-01-01', status: 'missed' },
         { id: 'w2', scheduled_date: '2000-01-03', status: 'pending' },
       ]);
@@ -423,49 +572,53 @@ describe('TrainingService', () => {
         'plan-1',
       );
 
-      // Reclaimed the missed session back to pending...
-      expect(inFn).toHaveBeenCalledWith('id', ['w1']);
-      // ...then shifted by a whole number of weeks (preserves the weekday).
-      expect(rpc).toHaveBeenCalledTimes(1);
-      const args = rpc.mock.calls[0][1] as {
-        p_plan_id: string;
-        p_days: number;
+      expect(shift).toHaveBeenCalledTimes(1);
+      // O `missed` da lapsa entra JUNTO do pendente — o reclaim acontece
+      // dentro da mesma transação do deslocamento.
+      expect(shiftedIds(shift)).toEqual(['w1', 'w2']);
+
+      const args = shift.mock.calls[0][0] as {
+        planId: string;
+        userId: string;
+        deltaDays: number;
       };
-      expect(args.p_plan_id).toBe('plan-1');
-      expect(args.p_days).toBeGreaterThan(0);
-      expect(args.p_days % 7).toBe(0);
+      expect(args.planId).toBe('plan-1');
+      // `userId` viaja: o backend usa service role e ignora RLS, então a
+      // propriedade só é garantida se for passada explicitamente.
+      expect(args.userId).toBe('user-1');
+      expect(args.deltaDays).toBeGreaterThan(0);
+      expect(args.deltaDays % 7).toBe(0); // preserva o dia da semana
       expect(result.deltaDays % 7).toBe(0);
     });
 
     it('is a no-op when nothing is left to run', async () => {
-      const { rpc, inFn } = setup([
+      const shift = setup([
         { id: 'c1', scheduled_date: '2000-01-01', status: 'completed' },
       ]);
       const result = await service.reanchorRemainingWorkoutsToToday(
         'user-1',
         'plan-1',
       );
-      expect(rpc).not.toHaveBeenCalled();
-      expect(inFn).not.toHaveBeenCalled();
+      expect(shift).not.toHaveBeenCalled();
       expect(result).toEqual({ shifted: 0, deltaDays: 0 });
     });
 
     it('is a no-op when the remaining plan already resumes in the future', async () => {
-      const { rpc } = setup([
+      const shift = setup([
         { id: 'w1', scheduled_date: '2999-01-01', status: 'pending' },
       ]);
       const result = await service.reanchorRemainingWorkoutsToToday(
         'user-1',
         'plan-1',
       );
-      expect(rpc).not.toHaveBeenCalled();
+      expect(shift).not.toHaveBeenCalled();
       expect(result).toEqual({ shifted: 0, deltaDays: 0 });
     });
 
     it('does not resurrect sessions missed before the progress frontier', async () => {
       // m1 (missed) is BEFORE the last completed workout (c1) — a legit earlier
       // miss that must not be reclaimed. The only remaining session (p1) is future.
-      const { rpc, inFn } = setup([
+      const shift = setup([
         { id: 'm1', scheduled_date: '2000-01-01', status: 'missed' },
         { id: 'c1', scheduled_date: '2000-02-01', status: 'completed' },
         { id: 'p1', scheduled_date: '2999-01-01', status: 'pending' },
@@ -474,9 +627,31 @@ describe('TrainingService', () => {
         'user-1',
         'plan-1',
       );
-      expect(inFn).not.toHaveBeenCalled();
-      expect(rpc).not.toHaveBeenCalled();
+      expect(shift).not.toHaveBeenCalled();
       expect(result).toEqual({ shifted: 0, deltaDays: 0 });
+    });
+
+    it('um `skipped` FUTURO não empurra a fronteira de progresso', async () => {
+      // ── O DEFEITO QUE ISTO TRAVA (Fase 6.1) ──────────────────────────────
+      //
+      // A partir da 6.2, "reduzir frequência" marca um treino FUTURO como
+      // `skipped`. A fronteira de progresso considerava qualquer
+      // completed/skipped, então esse skip a empurraria para o futuro — e uma
+      // re-âncora posterior ("repetir semana") deixaria para trás TODOS os
+      // pendentes anteriores a ele. Calendário furado, sem erro nenhum.
+      //
+      // Progresso é o que já ACONTECEU: a fronteira agora só conta o passado.
+      const shift = setup([
+        { id: 'atrasado', scheduled_date: '2000-01-03', status: 'pending' },
+        { id: 'futuro-skip', scheduled_date: '2999-01-01', status: 'skipped' },
+      ]);
+
+      await service.reanchorRemainingWorkoutsToToday('user-1', 'plan-1');
+
+      // Sem o corte em `hoje`, a fronteira seria 2999-01-01 e `atrasado`
+      // (anterior a ela) sairia do conjunto — nada seria deslocado.
+      expect(shift).toHaveBeenCalledTimes(1);
+      expect(shiftedIds(shift)).toEqual(['atrasado']);
     });
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -488,7 +663,7 @@ describe('TrainingService', () => {
       // QUARTA e faltou TERÇA, a fronteira de progresso é QUARTA — e a terça,
       // sendo anterior, ficaria para trás. Repetir a semana perderia justamente
       // uma das sessões que ela precisa refazer.
-      const { rpc, inFn } = setup([
+      const shift = setup([
         { id: 'seg', scheduled_date: '2000-01-03', status: 'completed' },
         { id: 'ter', scheduled_date: '2000-01-04', status: 'missed' },
         { id: 'qua', scheduled_date: '2000-01-05', status: 'completed' },
@@ -502,15 +677,15 @@ describe('TrainingService', () => {
       );
 
       // TERÇA entra junto de SEXTA — é isso que o parâmetro existe para fazer.
-      expect(inFn).toHaveBeenCalledWith('id', ['ter', 'sex']);
-      expect(rpc).toHaveBeenCalledTimes(1);
+      expect(shiftedIds(shift)).toEqual(['ter', 'sex']);
+      expect(shift).toHaveBeenCalledTimes(1);
       expect(result.deltaDays % 7).toBe(0);
     });
 
     it('SEM reclaimFromDate a mesma semana perde a terça (comportamento do webhook)', async () => {
       // Contraprova do teste acima: quem chama sem o parâmetro — o webhook do
       // RevenueCat — mantém a fronteira, e é assim que tem que ser lá.
-      const { inFn } = setup([
+      const shift = setup([
         { id: 'seg', scheduled_date: '2000-01-03', status: 'completed' },
         { id: 'ter', scheduled_date: '2000-01-04', status: 'missed' },
         { id: 'qua', scheduled_date: '2000-01-05', status: 'completed' },
@@ -519,13 +694,13 @@ describe('TrainingService', () => {
 
       await service.reanchorRemainingWorkoutsToToday('user-1', 'plan-1');
 
-      expect(inFn).toHaveBeenCalledWith('id', ['sex']);
+      expect(shiftedIds(shift)).toEqual(['sex']);
     });
 
     it('reclaimFromDate não ressuscita sessão de ANTES da janela pedida', async () => {
       // A abertura da fronteira é limitada à semana repetida — uma falta de um
       // ciclo anterior continua sendo uma falta.
-      const { inFn } = setup([
+      const shift = setup([
         { id: 'antiga', scheduled_date: '2000-01-01', status: 'missed' },
         { id: 'ter', scheduled_date: '2000-01-04', status: 'missed' },
         { id: 'qua', scheduled_date: '2000-01-05', status: 'completed' },
@@ -537,7 +712,7 @@ describe('TrainingService', () => {
         '2000-01-03',
       );
 
-      expect(inFn).toHaveBeenCalledWith('id', ['ter']);
+      expect(shiftedIds(shift)).toEqual(['ter']);
     });
   });
 });

@@ -14,6 +14,11 @@ import {
   QualityEffort,
 } from '../../common/effort-replay';
 import { toSaoPauloDateStr } from './wellness/helpers/streak.helper';
+import {
+  PlanAdaptationService,
+  EditableWorkout,
+  PatchItem,
+} from './plan-adaptation.service';
 
 /**
  * REESTIMATIVA DE VDOT — o plano que se ajusta ao que o corredor entrega.
@@ -169,6 +174,10 @@ export class VdotService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly paceCalculator: PaceCalculatorService,
+    // A porta única de escrita sobre plano ativo (Fase 6.1). A Fase 3 é a
+    // OUTRA escritora de `instructions_json` — passar por aqui é o que impede
+    // ela e a Fase 6 de apagarem o trabalho uma da outra.
+    private readonly planAdaptation: PlanAdaptationService,
   ) {}
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -257,53 +266,63 @@ export class VdotService {
 
     const { direction, sample, avgDelta, vdotAfter } = decision;
 
-    // A CONSEQUÊNCIA antes do REGISTRO: se a reescrita de paces falhar, nada é
-    // gravado, os treinos não são marcados como já-votados, e a próxima semana
-    // tenta de novo. O inverso deixaria o plano anunciando um VDOT que os paces
-    // não refletem.
-    const repriced = await this.applyPacesToFutureWorkouts(
+    const reason = this.buildReason(direction, sample.length, avgDelta);
+
+    // ── UMA TRANSAÇÃO SÓ (Fase 6.1) ──────────────────────────────────────────
+    //
+    // Antes eram QUATRO escritas independentes: reprecificar treino a treino,
+    // apagar briefings, atualizar `vdot_current` e inserir o histórico. Cada
+    // fronteira entre elas era um estado parcial possível — e o pior deles é
+    // silencioso: paces novos gravados e histórico ausente faz o dedupe
+    // `evidence.workout_ids` sumir, e os MESMOS treinos votam de novo na
+    // semana seguinte. É exatamente a montanha-russa que a Fase 3 foi
+    // desenhada para impedir.
+    //
+    // Agora tudo passa pela primitiva da fundação: ou grava tudo, ou nada.
+    // Isso também resolve a corrida com a Fase 6 — as duas disputam o
+    // `FOR UPDATE` da linha do plano, então nunca reescrevem o mesmo
+    // `instructions_json` em cima uma da outra.
+    const applied = await this.repriceThroughFoundation({
+      userId,
       planId,
       vdotAfter,
       todayStr,
-    );
-    const briefings = await this.invalidateBriefings(repriced.workoutIds);
-
-    const reason = this.buildReason(direction, sample.length, avgDelta);
-
-    await client
-      .from('training_plans')
-      .update({ vdot_current: vdotAfter })
-      .eq('id', planId);
-
-    await client.from('plan_vdot_history').insert({
-      user_id: userId,
-      plan_id: planId,
-      vdot_before: vdotBefore,
-      vdot_after: vdotAfter,
-      source: 'reestimate',
-      reason,
-      week_number: weekNumber,
-      sample_size: sample.length,
-      avg_delta_seconds: avgDelta,
-      evidence: {
-        workout_ids: sample.map((c) => c.workoutId),
-        efforts: sample.map((c) => ({
-          workout_id: c.workoutId,
-          date: c.dateStr,
-          zones: c.effort.zones,
-          pace_seconds: c.effort.paceSecPerKm,
-          prescribed_min: c.effort.prescribedPaceMin,
-          prescribed_max: c.effort.prescribedPaceMax,
-          delta_seconds: c.deltaSeconds,
-          implied_vdot: c.impliedVdot,
-          coverage: c.effort.coverage,
-        })),
+      historyRow: {
+        vdot_before: vdotBefore,
+        vdot_after: vdotAfter,
+        source: 'reestimate',
+        reason,
+        week_number: weekNumber,
+        sample_size: sample.length,
+        avg_delta_seconds: avgDelta,
+        evidence: {
+          workout_ids: sample.map((c) => c.workoutId),
+          efforts: sample.map((c) => ({
+            workout_id: c.workoutId,
+            date: c.dateStr,
+            zones: c.effort.zones,
+            pace_seconds: c.effort.paceSecPerKm,
+            prescribed_min: c.effort.prescribedPaceMin,
+            prescribed_max: c.effort.prescribedPaceMax,
+            delta_seconds: c.deltaSeconds,
+            implied_vdot: c.impliedVdot,
+            coverage: c.effort.coverage,
+          })),
+        },
       },
     });
 
+    if (!applied) {
+      // Conflito persistente ou erro: NADA foi gravado. Os treinos não foram
+      // marcados como já-votados, então a próxima semana tenta de novo com a
+      // mesma evidência. Preferível a anunciar um VDOT que os paces não
+      // refletem.
+      return null;
+    }
+
     this.logger.log(
       `[VDOT] Plano ${planId}: ${vdotBefore} → ${vdotAfter} (${reason}); ` +
-        `${repriced.count} treinos reprecificados, ${briefings} briefings invalidados`,
+        `${applied.workouts} treinos reprecificados, ${applied.briefings} briefings invalidados`,
     );
 
     return {
@@ -314,10 +333,127 @@ export class VdotService {
       reason,
       sampleSize: sample.length,
       avgDeltaSeconds: avgDelta,
-      workoutsRepriced: repriced.count,
-      briefingsInvalidated: briefings,
+      workoutsRepriced: applied.workouts,
+      briefingsInvalidated: applied.briefings,
       evidence: sample.map(toMeasured),
     };
+  }
+
+  /**
+   * Reprecificação + `vdot_current` + histórico, numa transação só.
+   *
+   * ── O RETRY ───────────────────────────────────────────────────────────────
+   *
+   * Um conflito aqui significa que o estado mudou entre carregar a janela e
+   * gravar (uma conclusão, uma adaptação da F6). Como isto roda no cron, a
+   * resposta certa é recarregar e tentar de novo UMA vez — não insistir. Se o
+   * segundo tento também conflitar, desiste: o próprio desenho da Fase 3 já
+   * assume "a próxima semana tenta de novo".
+   */
+  private async repriceThroughFoundation(params: {
+    userId: string;
+    planId: string;
+    vdotAfter: number;
+    todayStr: string;
+    historyRow: Record<string, unknown>;
+  }): Promise<{ workouts: number; briefings: number } | null> {
+    const MAX_ATTEMPTS = 2;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const editable = await this.planAdaptation.loadEditableWorkouts(
+        params.planId,
+        params.todayStr,
+      );
+      const patch = this.buildRepricePatch(editable, params.vdotAfter);
+
+      const digest = await this.planAdaptation.getStateDigest(
+        params.planId,
+        params.todayStr,
+      );
+      if (!digest) return null;
+
+      const result = await this.planAdaptation.apply({
+        userId: params.userId,
+        planId: params.planId,
+        kind: 'reprice',
+        patch,
+        expectedDigest: digest,
+        todayStr: params.todayStr,
+        // O briefing profundo é gerado UMA vez (`workout_id UNIQUE`). Sem
+        // apagar, o texto do treinador continuaria citando o pace antigo ao
+        // lado do card já atualizado.
+        invalidateBriefings: true,
+        planPatch: { vdot_current: params.vdotAfter },
+        vdotHistory: params.historyRow,
+        meta: {
+          source: 'vdot_reestimate',
+          reason: params.historyRow.reason as string,
+          weekNumber: (params.historyRow.week_number as number) ?? null,
+          metrics: {
+            vdot_before: params.historyRow.vdot_before,
+            vdot_after: params.historyRow.vdot_after,
+            sample_size: params.historyRow.sample_size,
+          },
+        },
+      });
+
+      if (result.applied) {
+        return result.affected ?? { workouts: patch.length, briefings: 0 };
+      }
+
+      const retriable =
+        result.reason === 'revision_conflict' || result.reason === 'row_conflict';
+      if (!retriable || attempt === MAX_ATTEMPTS) {
+        this.logger.warn(
+          `[VDOT] reprecificação não aplicada no plano ${params.planId}: ${result.reason}` +
+            (attempt === MAX_ATTEMPTS && retriable ? ' (após retry)' : ''),
+        );
+        return null;
+      }
+
+      this.logger.log(
+        `[VDOT] conflito no plano ${params.planId} (${result.reason}) — recarregando e tentando de novo`,
+      );
+    }
+
+    return null;
+  }
+
+  /**
+   * Monta o patch de reprecificação. FUNÇÃO PURA — nenhuma escrita.
+   *
+   * A matemática do pace não mudou uma linha: continua sendo
+   * `applyZonePacesToSegments`, com a zona que já vive dentro de cada segmento.
+   * O que mudou é só o TRANSPORTE da escrita.
+   *
+   * `expected.instructions_md5` vem do banco (`plan_editable_workouts`) e não é
+   * calculado aqui: o Postgres normaliza jsonb e `JSON.stringify` não
+   * reproduz isso — um md5 do Node nunca casaria no compare-and-swap.
+   */
+  private buildRepricePatch(
+    editable: EditableWorkout[],
+    vdot: number,
+  ): PatchItem[] {
+    const ranges = this.paceCalculator.getZonePaceRangesSeconds(vdot);
+    const patch: PatchItem[] = [];
+
+    for (const w of editable) {
+      if (!Array.isArray(w.instructions_json)) continue;
+
+      const segments = JSON.parse(
+        JSON.stringify(w.instructions_json),
+      ) as unknown[];
+      const changed = applyZonePacesToSegments(segments, ranges);
+      if (changed === 0) continue;
+
+      patch.push({
+        workout_id: w.id,
+        expected: { status: 'pending', instructions_md5: w.instructions_md5 },
+        set: { instructions_json: segments },
+      });
+    }
+
+    return patch;
   }
 
   /**
@@ -520,94 +656,43 @@ export class VdotService {
   // ──────────────────────────────────────────────────────────────────────────
 
   /**
-   * Reescreve `pace_min`/`pace_max` dos treinos AINDA NÃO REALIZADOS.
+   * ── A FRONTEIRA QUE SEPARA A FASE 3 DA FASE 6 ─────────────────────────────
    *
-   * ── O QUE NÃO É TOCADO, E POR QUÊ ────────────────────────────────────────
+   * A reprecificação toca SÓ pace. Nunca `distance_km`, nunca a estrutura de
+   * segmentos, nunca a zona. Pace é derivação pura `(zone, vdot)` com a zona já
+   * dentro do segmento; volume exigiria redistribuir km entre treinos,
+   * respeitar longão/deload/taper e reescalar segmentos — o pipeline de geração
+   * inteiro.
    *
-   * Só pace. Nunca `distance_km`, nunca a estrutura de segmentos, nunca a zona.
-   * É essa fronteira que separa a Fase 3 da Fase 6: pace é derivação pura
-   * `(zone, vdot)`, enquanto volume exigiria redistribuir km entre treinos,
-   * respeitar longão/deload/taper e reescalar segmentos.
-   *
-   * Treino passado ou de hoje não se toca: reescrever o alvo de algo que já foi
+   * Treino passado ou de HOJE não se toca: reescrever o alvo de algo que já foi
    * corrido reescreveria a história, e um insight semanal já fechado passaria a
-   * descrever uma prescrição que nunca existiu.
+   * descrever uma prescrição que nunca existiu. Essa fronteira agora é o helper
+   * compartilhado `isEditableWorkout` / `plan_editable_workouts`, e não mais um
+   * predicado local — a Fase 6 usa exatamente a mesma.
    *
-   * `plan_json` guarda uma cópia dos mesmos segmentos, mas nenhum consumidor lê
-   * pace de lá — `getPlanOverview` tira dali só `week.phase`, e todo o resto do
-   * app (coach in-workout, cards, briefing, insight) lê
-   * `workouts.instructions_json`. Reescrever os dois exigiria reconciliar
-   * índices de semana/treino sem chave estável, o que é risco sem retorno.
+   * `plan_json` guarda uma cópia dos mesmos segmentos e continua NÃO sendo
+   * reescrito: nenhum consumidor lê pace de lá. A Fase 6.1 tornou esse papel
+   * explícito — `plan_json` é snapshot de origem, `workouts` é a projeção
+   * vigente.
+   *
+   * A montagem do patch está em `buildRepricePatch`; a escrita, em
+   * `repriceThroughFoundation`. O loop de `UPDATE` linha a linha que existia
+   * aqui foi substituído por uma transação única — ele era O(n) round-trips e
+   * podia parar no meio deixando metade do plano com pace novo.
    */
-  async applyPacesToFutureWorkouts(
-    planId: string,
-    vdot: number,
-    todayStr: string,
-  ): Promise<{ count: number; workoutIds: string[] }> {
-    const client = this.supabaseService.getClient();
-    const ranges = this.paceCalculator.getZonePaceRangesSeconds(vdot);
-
-    const { data: workouts } = await client
-      .from('workouts')
-      .select('id, scheduled_date, instructions_json')
-      .eq('plan_id', planId)
-      .eq('status', 'pending')
-      .gt('scheduled_date', todayStr);
-
-    const touched: string[] = [];
-    for (const w of (workouts ?? []) as WorkoutRow[]) {
-      if (!Array.isArray(w.instructions_json)) continue;
-
-      const segments = JSON.parse(
-        JSON.stringify(w.instructions_json),
-      ) as unknown[];
-      const changed = applyZonePacesToSegments(segments, ranges);
-      if (changed === 0) continue;
-
-      const { error } = await client
-        .from('workouts')
-        .update({ instructions_json: segments })
-        .eq('id', w.id);
-
-      if (error) {
-        this.logger.warn(
-          `[VDOT] Falha ao reprecificar treino ${w.id}: ${error.message}`,
-        );
-        continue;
-      }
-      touched.push(w.id);
-    }
-
-    return { count: touched.length, workoutIds: touched };
-  }
 
   /**
-   * Apaga os briefings profundos dos treinos reprecificados.
+   * A invalidação dos briefings mudou de lugar, não de razão.
    *
-   * `workout_briefings` tem `workout_id UNIQUE` e é gerado UMA vez: sem isto, o
-   * texto do treinador continuaria citando "@ 6:12–6:30/km" ao lado de um card
-   * já mostrando o pace novo — a voz do coach contradizendo o próprio app. O
-   * texto regenera sob demanda na próxima abertura do treino.
+   * `workout_briefings` tem `workout_id UNIQUE` e é gerado UMA vez: sem apagar,
+   * o texto do treinador continuaria citando "@ 6:12–6:30/km" ao lado de um
+   * card já mostrando o pace novo — a voz do coach contradizendo o próprio app.
+   *
+   * Agora o DELETE acontece DENTRO da transação de `apply_plan_adaptation`
+   * (`p_invalidate_briefings`). Antes era uma chamada separada e best-effort:
+   * um erro ali era logado e seguia em frente, deixando o briefing velho
+   * descrevendo um treino que não existe mais.
    */
-  private async invalidateBriefings(workoutIds: string[]): Promise<number> {
-    if (workoutIds.length === 0) return 0;
-
-    const { data, error } = await this.supabaseService
-      .getClient()
-      .from('workout_briefings')
-      .delete()
-      .in('workout_id', workoutIds)
-      .select('id');
-
-    if (error) {
-      this.logger.warn(
-        `[VDOT] Falha ao invalidar briefings: ${error.message} — ` +
-          'o texto do coach pode citar o pace antigo até ser regenerado',
-      );
-      return 0;
-    }
-    return (data ?? []).length;
-  }
 
   /** Soma dias a uma data YYYY-MM-DD sem passar por `Date` (e sem fuso). */
   private shiftDays(dateStr: string, days: number): string {
