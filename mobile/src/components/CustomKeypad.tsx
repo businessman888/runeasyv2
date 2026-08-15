@@ -37,6 +37,9 @@ export function CustomKeypad({ onPress, onDelete, disabled, compact = false }: C
                             onPress={() => onPress(key)}
                             disabled={disabled}
                             activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Número ${key}`}
+                            accessibilityState={{ disabled: Boolean(disabled) }}
                         >
                             <Text style={[styles.keyText, disabled && styles.disabledText]}>{key}</Text>
                         </TouchableOpacity>
@@ -53,6 +56,9 @@ export function CustomKeypad({ onPress, onDelete, disabled, compact = false }: C
                     onPress={() => onPress('0')}
                     disabled={disabled}
                     activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel="Número zero"
+                    accessibilityState={{ disabled: Boolean(disabled) }}
                 >
                     <Text style={[styles.keyText, disabled && styles.disabledText]}>0</Text>
                 </TouchableOpacity>
@@ -62,6 +68,9 @@ export function CustomKeypad({ onPress, onDelete, disabled, compact = false }: C
                     onPress={onDelete}
                     disabled={disabled}
                     activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel="Apagar último dígito"
+                    accessibilityState={{ disabled: Boolean(disabled) }}
                 >
                     <MaterialCommunityIcons
                         name="backspace-outline"
@@ -102,7 +111,7 @@ const styles = StyleSheet.create({
         height: 60,
     },
     buttonCompact: {
-        height: 44,
+        height: 48,
     },
     disabledButton: {
         opacity: 0.5,

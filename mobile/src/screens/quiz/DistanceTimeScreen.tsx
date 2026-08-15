@@ -1,9 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { CustomKeypad } from '../../components/CustomKeypad';
-import { fonts } from '../../theme';
+import { borderRadius, colors, fonts, spacing } from '../../theme';
 
 // Design System
 const DS = {
@@ -176,29 +174,50 @@ export function DistanceTimeScreen({
                     styles.inputBlock,
                     mode === 'target' && styles.inputBlockTarget,
                     isActive && styles.inputBlockActive,
+                    mode === 'target' && isActive && styles.inputBlockTargetActive,
                 ]}
                 onPress={() => setActiveField(field)}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={`${label}: ${blockValue ? blockValue.padStart(2, '0') : '00'}`}
+                accessibilityHint="Toque para editar este campo do tempo"
+                accessibilityState={{ selected: isActive }}
             >
-                <Text style={[styles.inputValue, showPlaceholder && styles.inputValuePlaceholder]}>
+                <Text
+                    style={[
+                        styles.inputValue,
+                        mode === 'target' && styles.inputValueTarget,
+                        showPlaceholder && styles.inputValuePlaceholder,
+                    ]}
+                    maxFontSizeMultiplier={1.15}
+                >
                     {blockValue ? blockValue.padStart(2, '0') : '00'}
                 </Text>
-                <Text style={[styles.inputLabel, isActive && styles.inputLabelActive]}>{label}</Text>
+                <Text
+                    style={[
+                        styles.inputLabel,
+                        mode === 'target' && styles.inputLabelTarget,
+                        isActive && styles.inputLabelActive,
+                    ]}
+                    maxFontSizeMultiplier={1.15}
+                >
+                    {label}
+                </Text>
             </TouchableOpacity>
         );
     };
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, mode === 'target' && styles.containerTarget]}>
             {/* Title Section */}
             <View style={[styles.titleContainer, mode === 'target' && styles.titleContainerTarget]}>
                 {mode === 'target' ? (
                     <>
-                        <Text style={[styles.title, styles.titleTarget]}>
-                            Em <Text style={styles.titleHighlight}>quanto tempo</Text> você quer{'\n'}
+                        <Text style={[styles.title, styles.titleTarget]} maxFontSizeMultiplier={1.2}>
+                            Em <Text style={styles.titleHighlight}>quanto tempo</Text> você quer{' '}
                             correr {recentDistance >= 21 ? recentDistance.toFixed(1) : recentDistance} km?
                         </Text>
-                        <Text style={styles.subtitle}>
+                        <Text style={styles.subtitle} maxFontSizeMultiplier={1.25}>
                             O plano começa na sua aptidão atual e progride com segurança até esse destino.
                         </Text>
                     </>
@@ -219,12 +238,18 @@ export function DistanceTimeScreen({
                 <TimeInputBlock label="seg" blockValue={seconds} field="seconds" />
             </View>
 
-            {coaching}
-
-            <View style={{ flex: 1 }} />
-
-            {/* Custom Keypad */}
-            <CustomKeypad onPress={handlePressKey} onDelete={handleDelete} compact={mode === 'target'} />
+            {mode === 'target' ? (
+                <>
+                    <CustomKeypad onPress={handlePressKey} onDelete={handleDelete} compact />
+                    <View style={styles.coachingTarget}>{coaching}</View>
+                </>
+            ) : (
+                <>
+                    {coaching}
+                    <View style={styles.flexSpacer} />
+                    <CustomKeypad onPress={handlePressKey} onDelete={handleDelete} />
+                </>
+            )}
         </View>
     );
 }
@@ -233,14 +258,17 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
+    containerTarget: {
+        flex: 0,
+    },
     titleContainer: {
         marginTop: 20,
         marginBottom: 40,
         paddingHorizontal: 0,
     },
     titleContainerTarget: {
-        marginTop: 12,
-        marginBottom: 18,
+        marginTop: 0,
+        marginBottom: spacing.xl,
     },
     title: {
         fontFamily: fonts.bold,
@@ -249,18 +277,18 @@ const styles = StyleSheet.create({
         lineHeight: 36,
     },
     titleTarget: {
-        fontSize: 24,
-        lineHeight: 31,
+        fontSize: 26,
+        lineHeight: 34,
     },
     titleHighlight: {
         fontFamily: fonts.bold,
         color: DS.cyan,
     },
     subtitle: {
-        marginTop: 10,
+        marginTop: spacing.sm,
         fontFamily: fonts.regular,
-        fontSize: 14,
-        lineHeight: 21,
+        fontSize: 15,
+        lineHeight: 22,
         color: DS.textSecondary,
     },
     inputsContainer: {
@@ -270,7 +298,13 @@ const styles = StyleSheet.create({
         marginBottom: 24,
     },
     inputsContainerTarget: {
-        marginBottom: 14,
+        gap: spacing.sm,
+        marginBottom: spacing.base,
+        padding: spacing.sm,
+        borderRadius: borderRadius['2xl'],
+        backgroundColor: colors.glassLight,
+        borderWidth: 1,
+        borderColor: colors.border,
     },
     inputBlock: {
         width: 100,
@@ -288,19 +322,35 @@ const styles = StyleSheet.create({
         elevation: 5,
     },
     inputBlockTarget: {
-        height: 76,
-        borderRadius: 16,
+        flex: 1,
+        width: 'auto',
+        minWidth: 0,
+        height: 92,
+        borderRadius: borderRadius.xl,
+        backgroundColor: 'transparent',
+        borderColor: 'transparent',
+        shadowOpacity: 0,
+        elevation: 0,
     },
     inputBlockActive: {
         borderColor: DS.activeBorder,
         borderWidth: 1,
         backgroundColor: 'rgba(28, 28, 46, 0.9)',
     },
+    inputBlockTargetActive: {
+        backgroundColor: 'rgba(0, 212, 255, 0.09)',
+    },
     inputValue: {
         fontFamily: fonts.bold,
         fontSize: 32,
         color: DS.text,
         marginBottom: 4,
+        fontVariant: ['tabular-nums'],
+    },
+    inputValueTarget: {
+        fontSize: 36,
+        lineHeight: 44,
+        marginBottom: 0,
     },
     inputValuePlaceholder: {
         color: DS.textSecondary,
@@ -310,9 +360,20 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: DS.textSecondary,
     },
+    inputLabelTarget: {
+        fontSize: 13,
+        lineHeight: 18,
+    },
     inputLabelActive: {
         fontFamily: fonts.semibold,
         color: DS.cyan,
+    },
+    coachingTarget: {
+        marginTop: spacing.base,
+        marginBottom: spacing.sm,
+    },
+    flexSpacer: {
+        flex: 1,
     },
 });
 

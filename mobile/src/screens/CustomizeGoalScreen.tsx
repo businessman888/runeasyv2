@@ -505,7 +505,14 @@ export function CustomizeGoalScreen() {
                 ) : null}
 
                 {current === 'time' ? (
-                    <View style={styles.timeStep}>
+                    <ScrollView
+                        style={styles.timeStep}
+                        contentContainerStyle={styles.timeStepContent}
+                        showsVerticalScrollIndicator={false}
+                        keyboardShouldPersistTaps="handled"
+                        contentInsetAdjustmentBehavior="never"
+                        overScrollMode="never"
+                    >
                         <DistanceTimeScreen
                             key={timeKey}
                             mode="target"
@@ -521,7 +528,7 @@ export function CustomizeGoalScreen() {
                                 />
                             }
                         />
-                    </View>
+                    </ScrollView>
                 ) : null}
 
                 {current === 'days' ? (
@@ -695,9 +702,12 @@ const styles = StyleSheet.create({
     },
     timeStep: {
         flex: 1,
+    },
+    timeStepContent: {
+        flexGrow: 1,
         paddingHorizontal: spacing.xl,
-        paddingTop: 2,
-        paddingBottom: 84,
+        paddingTop: spacing.base,
+        paddingBottom: spacing['2xl'],
     },
     selectTrigger: {
         minHeight: 76,
@@ -775,39 +785,39 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
     },
     coachCard: {
-        padding: 14,
-        borderRadius: 18,
-        backgroundColor: colors.card,
+        padding: spacing.base,
+        borderRadius: borderRadius['2xl'],
+        backgroundColor: colors.glassLight,
         borderWidth: 1,
         borderColor: colors.border,
     },
-    coachTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    coachTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.textLight },
-    meterWrap: { height: 26, marginTop: 10, justifyContent: 'flex-end' },
+    coachTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    coachTitle: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 22, color: colors.textLight },
+    meterWrap: { height: 28, marginTop: spacing.md, justifyContent: 'flex-end' },
     meter: { height: 8, borderRadius: 999 },
     meterPointer: { position: 'absolute', top: 0, marginLeft: -9 },
     coachBody: {
-        marginTop: 10,
+        marginTop: spacing.md,
         fontFamily: fonts.regular,
-        fontSize: 12,
-        lineHeight: 18,
+        fontSize: 14,
+        lineHeight: 20,
         color: colors.textSecondary,
     },
     coachEvidence: {
-        marginTop: 4,
+        marginTop: spacing.sm,
         fontFamily: fonts.semibold,
-        fontSize: 12,
-        lineHeight: 18,
+        fontSize: 13,
+        lineHeight: 20,
         color: colors.textLight,
     },
     alternativeButton: {
-        marginTop: 10,
-        minHeight: 52,
+        marginTop: spacing.base,
+        minHeight: 60,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 12,
-        borderRadius: 14,
+        paddingHorizontal: spacing.md,
+        borderRadius: borderRadius.xl,
         backgroundColor: 'rgba(16,185,129,0.10)',
         borderWidth: 1,
         borderColor: 'rgba(16,185,129,0.32)',
