@@ -820,6 +820,37 @@ export class TrainingService {
     return { shifted: count, deltaDays };
   }
 
+  private async loadActivePlanId(userId: string): Promise<string | null> {
+    const { data, error } = await this.supabaseService
+      .from('training_plans')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (error) throw error;
+    return data?.id ?? null;
+  }
+
+  private isWorkoutVisibleInCalendar(
+    workout: {
+      plan_id?: string | null;
+      status?: string | null;
+      scheduled_date: string;
+    },
+    activePlanId: string | null,
+    todayStr: string,
+  ): boolean {
+    if (!workout.plan_id) return true;
+    if (workout.plan_id === activePlanId) return true;
+
+    // Mantém o histórico de ciclos anteriores. O único dado obsoleto é
+    // uma sessão ainda não concluída cuja data pertence ao presente/futuro.
+    return (
+      workout.status === 'completed' || workout.scheduled_date < todayStr
+    );
+  }
+
   /**
    * Get workouts for a specific month
    *
@@ -829,22 +860,38 @@ export class TrainingService {
    * CoachAnalysis screen instead of opening the upcoming-workout modal.
    */
   async getWorkouts(userId: string, startDate: string, endDate: string) {
-    const { data, error } = await this.supabaseService
-      .from('workouts')
-      .select('*')
-      .eq('user_id', userId)
-      .gte('scheduled_date', startDate)
-      .lte('scheduled_date', endDate)
-      .order('scheduled_date', { ascending: true });
+    const { dateStr: todayStr } = this.getSaoPauloToday();
+    const [activePlanId, workoutsResult] = await Promise.all([
+      this.loadActivePlanId(userId),
+      this.supabaseService
+        .from('workouts')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('scheduled_date', startDate)
+        .lte('scheduled_date', endDate)
+        .order('scheduled_date', { ascending: true }),
+    ]);
+    const { data, error } = workoutsResult;
 
     if (error) throw error;
 
-    const activityIds = (data || [])
+    // O calendário preserva todo o histórico e treinos avulsos, mas um plano
+    // encerrado pode manter sessões futuras pendentes (reaâncora ou harness).
+    // Essas sessões não pertencem mais à agenda vigente e não podem se somar
+    // às do novo plano ativo.
+    const visibleWorkouts = (data || []).filter((workout) =>
+      this.isWorkoutVisibleInCalendar(workout, activePlanId, todayStr),
+    );
+
+    const activityIds = visibleWorkouts
       .map((w: any) => w.activity_id)
       .filter((id: string | null): id is string => Boolean(id));
 
     if (activityIds.length === 0) {
-      return (data || []).map((w: any) => ({ ...w, feedback_id: null }));
+      return visibleWorkouts.map((w: any) => ({
+        ...w,
+        feedback_id: null,
+      }));
     }
 
     const { data: feedbacks } = await this.supabaseService
@@ -857,7 +904,7 @@ export class TrainingService {
       if (f.activity_id) feedbackByActivity.set(f.activity_id, f.id);
     });
 
-    return (data || []).map((w: any) => ({
+    return visibleWorkouts.map((w: any) => ({
       ...w,
       feedback_id: w.activity_id
         ? (feedbackByActivity.get(w.activity_id) ?? null)
@@ -870,15 +917,24 @@ export class TrainingService {
    */
   async getUpcomingWorkouts(userId: string, limit = 7) {
     const { dateStr: today } = this.getSaoPauloToday();
+    const activePlanId = await this.loadActivePlanId(userId);
 
     this.logger.debug(`[getUpcomingWorkouts] Using São Paulo date: ${today}`);
 
-    const { data, error } = await this.supabaseService
+    let query = this.supabaseService
       .from('workouts')
       .select('*')
       .eq('user_id', userId)
       .gte('scheduled_date', today)
-      .eq('status', 'pending')
+      .eq('status', 'pending');
+
+    // `plan_id IS NULL` cobre treinos manuais/livres. Treinos de plano no
+    // presente/futuro pertencem exclusivamente ao plano ativo.
+    query = activePlanId
+      ? query.or(`plan_id.is.null,plan_id.eq.${activePlanId}`)
+      : query.is('plan_id', null);
+
+    const { data, error } = await query
       .order('scheduled_date', { ascending: true })
       .limit(limit);
 
@@ -1976,9 +2032,17 @@ Gere o briefing aprofundado agora.`;
 
     if (workoutsError) throw workoutsError;
 
+    const visibleWorkouts = (workouts || []).filter((workout) =>
+      this.isWorkoutVisibleInCalendar(
+        workout,
+        activePlan?.id ?? null,
+        todayStr,
+      ),
+    );
+
     // Resolve feedback_id by activity_id so the schedule's primary workout
     // entry can route to CoachAnalysis when completed.
-    const activityIds = (workouts || [])
+    const activityIds = visibleWorkouts
       .map((w: any) => w.activity_id)
       .filter((id: string | null): id is string => Boolean(id));
     const feedbackByActivity = new Map<string, string>();
@@ -1997,7 +2061,7 @@ Gere o briefing aprofundado agora.`;
     // schedule's primary entry — the mobile Calendar fetches the full
     // workouts array separately to render every card.
     const workoutsByDate = new Map<string, any>();
-    for (const workout of workouts || []) {
+    for (const workout of visibleWorkouts) {
       const existing = workoutsByDate.get(workout.scheduled_date);
       if (
         !existing ||
@@ -2108,12 +2172,19 @@ Gere o briefing aprofundado agora.`;
       `[getNextWorkout] Searching for workouts after ${today} (São Paulo) for user ${userId}`,
     );
 
-    const { data, error } = await this.supabaseService
+    const activePlanId = await this.loadActivePlanId(userId);
+    let query = this.supabaseService
       .from('workouts')
       .select('*')
       .eq('user_id', userId)
       .gt('scheduled_date', today) // gt = strictly after today
-      .in('status', ['pending'])
+      .in('status', ['pending']);
+
+    query = activePlanId
+      ? query.or(`plan_id.is.null,plan_id.eq.${activePlanId}`)
+      : query.is('plan_id', null);
+
+    const { data, error } = await query
       .order('scheduled_date', { ascending: true })
       .limit(1)
       .single();

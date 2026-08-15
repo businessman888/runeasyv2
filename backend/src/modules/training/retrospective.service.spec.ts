@@ -591,4 +591,82 @@ describe('RetrospectiveService', () => {
       expect(planSelect).not.toContain('target_pace');
     });
   });
+
+  describe('customizePlan — criação manual do próximo ciclo', () => {
+    const manualTables = (): TableData => ({
+      plan_retrospectives: [
+        {
+          id: 'retro-1',
+          user_id: 'user-1',
+          plan_id: 'plan-1',
+          avg_pace_seconds: 330,
+        },
+      ],
+      training_plans: [
+        {
+          id: 'plan-1',
+          goal: '5k',
+          vdot_current: 40,
+        },
+      ],
+      user_onboarding: [
+        {
+          level: 'intermediate',
+          has_limitations: false,
+          current_pace_5k: 5.5,
+          calculated_pace: 5.5,
+          recent_distance: 10,
+          recent_frequency: '4x_plus',
+          current_weekly_km: '20_30',
+        },
+      ],
+      notifications: [],
+    });
+
+    it('cria meta manual de distância com dias e duração escolhidos', async () => {
+      await build(manualTables());
+
+      const result = await service.customizePlan('user-1', 'retro-1', {
+        goal_kind: 'distance',
+        distance_goal: '10k',
+        duration_weeks: 8,
+        training_days: ['Seg', 'Qua', 'Sex'],
+      });
+
+      const [, req] = trainingService.createQuickPlan.mock.calls[0];
+      expect(req.goal).toBe('10k');
+      expect(req.goalMode).toBe('distance');
+      expect(req.goalLabel).toBe('10 Km');
+      expect(req.targetWeeks).toBe(8);
+      expect(req.daysPerWeek).toBe(3);
+      expect(req.preferredDays).toEqual([1, 3, 5]);
+      expect(req.targetTime).toBeUndefined();
+      expect(req.targetVDOT).toBeUndefined();
+      expect(result).toMatchObject({ success: true, newPlanId: 'plan-2' });
+    });
+
+    it('cria meta manual de tempo com destino VDOT sem trocar o VDOT atual', async () => {
+      await build(manualTables());
+
+      const result = await service.customizePlan('user-1', 'retro-1', {
+        goal_kind: 'pace',
+        distance_goal: '10k',
+        time_goal: '48:00',
+        duration_weeks: 12,
+        training_days: ['Seg', 'Qua', 'Sex', 'Dom'],
+      });
+
+      const [, req] = trainingService.createQuickPlan.mock.calls[0];
+      expect(req.goal).toBe('10k');
+      expect(req.goalMode).toBe('time');
+      expect(req.currentVDOT).toBe(40);
+      expect(req.targetVDOT).toBeGreaterThan(req.currentVDOT);
+      expect(req.targetTime).toBe('48:00');
+      expect(req.targetPace).toBe('4:48');
+      expect(req.goalLabel).toBe('10 Km em 48:00');
+      expect(req.daysPerWeek).toBe(4);
+      expect(req.preferredDays).toEqual([1, 3, 5, 0]);
+      expect(result).toMatchObject({ success: true, newPlanId: 'plan-2' });
+    });
+  });
 });

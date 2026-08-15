@@ -52,6 +52,11 @@ export interface GlassSurfaceProps {
     disableBlur?: boolean;
     /** Premium cyan hairline edge (matches the tab bar). Default on. */
     bordered?: boolean;
+    /**
+     * Optional translucent veil over the blur. Defaults to the denser tab-bar
+     * material; content cards can lower it to let more backdrop show through.
+     */
+    veilColor?: string;
     style?: StyleProp<ViewStyle>;
 }
 
@@ -61,6 +66,7 @@ export const GlassSurface = memo(function GlassSurface({
     intensity = 40,
     disableBlur = false,
     bordered = true,
+    veilColor = colors.tabBarGlassFill,
     style,
 }: GlassSurfaceProps) {
     return (
@@ -83,7 +89,7 @@ export const GlassSurface = memo(function GlassSurface({
                     />
                     <View
                         pointerEvents="none"
-                        style={[StyleSheet.absoluteFill, { backgroundColor: colors.tabBarGlassFill }]}
+                        style={[StyleSheet.absoluteFill, { backgroundColor: veilColor }]}
                     />
                     <LinearGradient
                         colors={SHEEN_COLORS}

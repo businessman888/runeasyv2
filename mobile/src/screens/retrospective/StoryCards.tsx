@@ -290,26 +290,30 @@ export const CardNextGoal = memo(function CardNextGoal({
   compact?: boolean;
 }) {
   return (
-    <View style={[styles.center, compact && styles.ctaCenterCompact]}>
-      <Animated.Text
-        style={[storyType.title, styles.ctaTitle, compact && styles.ctaTitleCompact]}
-        entering={ENTER_SUPPORTING}
-      >
-        E agora?
-      </Animated.Text>
+    <View style={styles.ctaLayout}>
+      <View style={[styles.ctaIntro, compact && styles.ctaIntroCompact]}>
+        <Animated.Text
+          style={[storyType.title, styles.ctaTitle, compact && styles.ctaTitleCompact]}
+          entering={ENTER_SUPPORTING}
+          maxFontSizeMultiplier={1.15}
+        >
+          E agora?
+        </Animated.Text>
 
-      {data.suggestedNextGoal ? (
-        <>
-          <Eyebrow>O treinador sugere</Eyebrow>
-          <Animated.Text
-            style={[storyType.hero, styles.ctaGoal, compact && styles.ctaGoalCompact]}
-            allowFontScaling={false}
-            entering={ENTER_HERO}
-          >
-            {data.suggestedNextGoal}
-          </Animated.Text>
-        </>
-      ) : null}
+        {data.suggestedNextGoal ? (
+          <>
+            <Eyebrow>O treinador sugere</Eyebrow>
+            <Animated.Text
+              style={[storyType.hero, styles.ctaGoal, compact && styles.ctaGoalCompact]}
+              allowFontScaling={false}
+              entering={ENTER_HERO}
+              numberOfLines={2}
+            >
+              {data.suggestedNextGoal}
+            </Animated.Text>
+          </>
+        ) : null}
+      </View>
 
       <View style={[styles.ctaActions, compact && styles.ctaActionsCompact]}>
         {options.map((opt, optionIndex) => (
@@ -509,31 +513,45 @@ const styles = StyleSheet.create({
   },
   ctaTitle: {
     fontSize: 34,
+    lineHeight: 46,
+    paddingHorizontal: 4,
   },
   ctaTitleCompact: {
     fontSize: 28,
-    lineHeight: 34,
+    lineHeight: 40,
   },
   ctaGoal: {
     fontSize: 34,
-    lineHeight: 42,
+    lineHeight: 44,
     textAlign: 'center',
+    maxWidth: '94%',
   },
   ctaGoalCompact: {
-    fontSize: 30,
-    lineHeight: 36,
+    fontSize: 29,
+    lineHeight: 40,
   },
-  ctaActions: {
-    marginTop: 18,
+  ctaLayout: {
+    flex: 1,
     width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctaIntro: {
+    width: '100%',
+    alignItems: 'center',
     gap: 10,
   },
-  ctaCenterCompact: {
+  ctaIntroCompact: {
     gap: 8,
   },
+  ctaActions: {
+    marginTop: 24,
+    width: '100%',
+    gap: 12,
+  },
   ctaActionsCompact: {
-    marginTop: 10,
-    gap: 8,
+    marginTop: 18,
+    gap: 10,
   },
   ctaOption: {
     width: '100%',

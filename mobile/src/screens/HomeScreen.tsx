@@ -29,6 +29,7 @@ import { WorkoutCard } from '../components/WorkoutCard';
 import { HomeFab } from '../components/HomeFab';
 import { LevelCard } from '../components/level/LevelCard';
 import { OverviewSection } from '../components/home/OverviewSection';
+import { HomeRetrospectiveCard } from '../components/home/HomeRetrospectiveCard';
 import { Patent } from '../components/patents/Patent';
 import { getCurrentPatent } from '../utils/patents';
 import { paceValueToSecondsPerKm, formatPaceLabel } from '../utils/pace';
@@ -732,6 +733,14 @@ export function HomeScreen({ navigation }: any) {
                     </TouchableOpacity>
                 )}
 
+                {/* A retrospectiva fecha um ciclo inteiro e, enquanto estiver
+                    pronta, precede os insights recorrentes na hierarquia. */}
+                {retrospectiveReady && (
+                    <HomeRetrospectiveCard
+                        onPress={() => navigation.navigate('Retrospective')}
+                    />
+                )}
+
                 {/* Rede de segurança persistente para quem fechou a folha sem
                     abrir. Quando os resumos coincidem, mantém a mesma leitura
                     horizontal e os mesmos indicadores do sheet. */}
@@ -744,24 +753,6 @@ export function HomeScreen({ navigation }: any) {
                     />
                 )}
 
-                {/* Retrospective Card - Show when ready */}
-                {retrospectiveReady && (
-                    <TouchableOpacity
-                        style={styles.retrospectiveCard}
-                        onPress={() => navigation.navigate('Retrospective')}
-                    >
-                        <View style={styles.retrospectiveContent}>
-                            <View style={styles.retrospectiveBadge}>
-                                <MaterialCommunityIcons name="trophy" size={18} color="#00D4FF" />
-                            </View>
-                            <View style={styles.retrospectiveText}>
-                                <Text style={styles.retrospectiveTitle}>Sua retrospectiva está pronta!</Text>
-                                <Text style={styles.retrospectiveSubtitle}>Veja como foi seu desempenho no ciclo</Text>
-                            </View>
-                            <Ionicons name="chevron-forward" size={24} color="#00D4FF" />
-                        </View>
-                    </TouchableOpacity>
-                )}
         </>
     );
 
@@ -1608,41 +1599,6 @@ const styles = StyleSheet.create({
         fontSize: 13,
         fontWeight: '500' as const,
         color: '#EBEBF5',
-    },
-    // Retrospective Card
-    retrospectiveCard: {
-        backgroundColor: 'rgba(0, 212, 255, 0.08)',
-        borderRadius: borderRadius.lg,
-        borderWidth: 1,
-        borderColor: 'rgba(0, 212, 255, 0.3)',
-        padding: spacing.md,
-        marginBottom: spacing.md,
-    },
-    retrospectiveContent: {
-        flexDirection: 'row' as const,
-        alignItems: 'center' as const,
-    },
-    retrospectiveBadge: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(0, 212, 255, 0.15)',
-        alignItems: 'center' as const,
-        justifyContent: 'center' as const,
-        marginRight: spacing.md,
-    },
-    retrospectiveText: {
-        flex: 1,
-    },
-    retrospectiveTitle: {
-        fontSize: typography.fontSizes.base,
-        fontWeight: typography.fontWeights.semibold as any,
-        color: colors.textLight,
-        marginBottom: 2,
-    },
-    retrospectiveSubtitle: {
-        fontSize: typography.fontSizes.sm,
-        color: colors.textSecondary,
     },
     floatingFooter: {
         position: 'absolute',

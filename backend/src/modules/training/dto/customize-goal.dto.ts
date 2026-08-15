@@ -37,13 +37,22 @@ export class PaceGoalFeasibilityDto {
   duration_weeks: number;
 }
 
-export class CustomizePlanDto extends PaceGoalFeasibilityDto {
+export class CustomizePlanDto {
+  @IsIn(DISTANCE_GOALS)
+  distance_goal: string;
+
+  @IsInt()
+  @Min(4)
+  @Max(24)
+  duration_weeks: number;
+
   @IsIn(['distance', 'pace'])
   goal_kind: 'distance' | 'pace';
 
   @IsOptional()
   @IsString()
-  time_goal: string;
+  @Matches(/^(?:\d{1,2}:)?[0-5]?\d:[0-5]\d$/)
+  time_goal?: string;
 
   @IsArray()
   @ArrayMinSize(2)

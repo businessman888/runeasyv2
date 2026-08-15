@@ -46,9 +46,16 @@ describe('TrainingService', () => {
         eq: jest.fn().mockReturnThis(),
         gte: jest.fn().mockReturnThis(),
         lte: jest.fn().mockReturnThis(),
+        gt: jest.fn().mockReturnThis(),
+        in: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        is: jest.fn().mockReturnThis(),
         order: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue({ data: mockWorkouts, error: null }),
         single: jest.fn().mockResolvedValue({ data: mockPlan, error: null }),
+        maybeSingle: jest
+          .fn()
+          .mockResolvedValue({ data: mockPlan, error: null }),
       }),
       getClient: jest.fn().mockReturnValue({
         rpc: jest.fn().mockResolvedValue({ data: 0, error: null }),
@@ -208,6 +215,9 @@ describe('TrainingService', () => {
         eq: jest.fn().mockReturnThis(),
         gte: jest.fn().mockReturnThis(),
         lte: jest.fn().mockReturnThis(),
+        maybeSingle: jest
+          .fn()
+          .mockResolvedValue({ data: mockPlan, error: null }),
         order: jest.fn().mockResolvedValue({ data: mockWorkouts, error: null }),
       });
 
@@ -222,20 +232,99 @@ describe('TrainingService', () => {
       expect(result).toHaveLength(2);
       expect(result.map((w: { id: string }) => w.id)).toEqual(['w1', 'w2']);
     });
+
+    it('oculta sessão futura pendente de plano encerrado sem apagar o histórico', async () => {
+      const rows = [
+        {
+          id: 'active-future',
+          plan_id: 'plan-1',
+          status: 'pending',
+          scheduled_date: '2999-01-02',
+        },
+        {
+          id: 'old-future',
+          plan_id: 'plan-old',
+          status: 'pending',
+          scheduled_date: '2999-01-02',
+        },
+        {
+          id: 'old-completed',
+          plan_id: 'plan-old',
+          status: 'completed',
+          scheduled_date: '2999-01-02',
+        },
+        {
+          id: 'old-history',
+          plan_id: 'plan-old',
+          status: 'missed',
+          scheduled_date: '2000-01-02',
+        },
+        {
+          id: 'manual-future',
+          plan_id: null,
+          source: 'manual',
+          status: 'pending',
+          scheduled_date: '2999-01-02',
+        },
+      ];
+      const planQuery = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        maybeSingle: jest
+          .fn()
+          .mockResolvedValue({ data: mockPlan, error: null }),
+      };
+      const workoutQuery = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        gte: jest.fn().mockReturnThis(),
+        lte: jest.fn().mockReturnThis(),
+        order: jest.fn().mockResolvedValue({ data: rows, error: null }),
+      };
+      (mockSupabaseService.from as jest.Mock).mockImplementation(
+        (table: string) =>
+          table === 'training_plans' ? planQuery : workoutQuery,
+      );
+
+      const result = await service.getWorkouts(
+        'user-123',
+        '2000-01-01',
+        '2999-01-31',
+      );
+
+      expect(result.map((w: { id: string }) => w.id)).toEqual([
+        'active-future',
+        'old-completed',
+        'old-history',
+        'manual-future',
+      ]);
+      expect(result.map((w: { id: string }) => w.id)).not.toContain(
+        'old-future',
+      );
+    });
   });
 
   describe('getUpcomingWorkouts', () => {
     it('should return upcoming pending workouts', async () => {
-      (mockSupabaseService.from as jest.Mock).mockReturnValue({
+      const query = {
         select: jest.fn().mockReturnThis(),
         eq: jest.fn().mockReturnThis(),
         gte: jest.fn().mockReturnThis(),
+        maybeSingle: jest
+          .fn()
+          .mockResolvedValue({ data: mockPlan, error: null }),
+        or: jest.fn().mockReturnThis(),
+        is: jest.fn().mockReturnThis(),
         order: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue({ data: mockWorkouts, error: null }),
-      });
+      };
+      (mockSupabaseService.from as jest.Mock).mockReturnValue(query);
 
       const result = await service.getUpcomingWorkouts('user-123', 5);
       expect(result).toEqual(mockWorkouts);
+      expect(query.or).toHaveBeenCalledWith(
+        'plan_id.is.null,plan_id.eq.plan-1',
+      );
     });
   });
 

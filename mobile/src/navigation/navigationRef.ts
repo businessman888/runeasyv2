@@ -13,9 +13,16 @@ export type RootStackParamList = {
     Landing: undefined;
     Login: undefined;
     Onboarding: undefined;
-    Main: { initialTab?: string };
+    Main: { initialTab?: string } | undefined;
     PrePaywall: undefined;
     Retrospective: undefined;
+    WeeklyInsight: undefined;
+    MesoInsight: undefined;
+    CustomizeGoal: {
+        retrospectiveId: string;
+        goalKind: 'distance' | 'pace';
+        manual?: boolean;
+    };
     Feedback: { feedbackId: string };
     WorkoutDetail: { workoutId: string };
     // The screen consumes `feedbackId` (+ optional `activityId` for GPS

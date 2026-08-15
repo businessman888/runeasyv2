@@ -176,7 +176,7 @@ export const AnimatedStoryBackground = memo(function AnimatedStoryBackground({
         </Animated.View>
       )}
 
-      {(gradient.motion === 'orbit' || gradient.motion === 'rays') && (
+      {gradient.motion === 'orbit' && (
         <Animated.View
           style={[
             styles.ringGroup,
@@ -187,16 +187,6 @@ export const AnimatedStoryBackground = memo(function AnimatedStoryBackground({
           <View style={[styles.ring, styles.ringOuter, { borderColor: accentSoft }]} />
           <View style={[styles.ring, styles.ringMiddle, { borderColor: accentBright }]} />
           <View style={[styles.ring, styles.ringInner, { backgroundColor: accentSoft }]} />
-          {gradient.motion === 'rays' &&
-            RAY_ROTATIONS.map((rotation) => (
-              <LinearGradient
-                key={rotation}
-                colors={['transparent', accentSoft, 'transparent']}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={[styles.ray, { transform: [{ rotate: `${rotation}deg` }] }]}
-              />
-            ))}
         </Animated.View>
       )}
 
@@ -210,7 +200,6 @@ export const AnimatedStoryBackground = memo(function AnimatedStoryBackground({
 });
 
 const BAR_WIDTHS = [112, 88, 104, 74, 96, 82, 108] as const;
-const RAY_ROTATIONS = [0, 45, 90, 135] as const;
 
 function alpha(hex: string, opacity: number): string {
   const normalized = hex.replace('#', '');
@@ -262,11 +251,5 @@ const styles = StyleSheet.create({
   ringInner: {
     width: '26%',
     height: '26%',
-  },
-  ray: {
-    position: 'absolute',
-    width: '132%',
-    height: 22,
-    borderRadius: 9999,
   },
 });

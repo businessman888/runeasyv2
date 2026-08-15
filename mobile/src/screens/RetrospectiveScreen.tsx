@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator, useWindowDimensio
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
     FadeIn,
@@ -40,6 +41,7 @@ import { AnimatedStoryBackground } from './retrospective/AnimatedStoryBackground
 import { ShareSummaryCard } from './retrospective/ShareSummaryCard';
 import type { RetrospectiveData } from './retrospective/types';
 import { retrospectiveGoalService } from '../services/retrospectiveGoalService';
+import type { RootStackParamList } from '../navigation/navigationRef';
 
 /**
  * Retrospectiva de fim de ciclo em formato STORIES (Fase 1B).
@@ -66,7 +68,9 @@ const BACKGROUND_IN = FadeIn.duration(420).reduceMotion(ReduceMotion.System);
 const BACKGROUND_OUT = FadeOut.duration(320).reduceMotion(ReduceMotion.System);
 
 export function RetrospectiveScreen() {
-    const navigation = useNavigation();
+    const navigation = useNavigation<
+        NativeStackNavigationProp<RootStackParamList, 'Retrospective'>
+    >();
     const isFocused = useIsFocused();
     const insets = useSafeAreaInsets();
     const { height } = useWindowDimensions();
@@ -185,7 +189,10 @@ export function RetrospectiveScreen() {
         setGoalAction('coach');
         try {
             await retrospectiveGoalService.acceptSuggestion(data.id);
-            (navigation as any).reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+            // `MainTabs` is the component function/id; the RootStack route is
+            // registered as `Main`. Reset to the registered route so Home owns
+            // the generation overlay and polling after this screen unmounts.
+            navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
         } catch (error) {
             Alert.alert(
                 'Não foi possível gerar o plano',
@@ -199,7 +206,7 @@ export function RetrospectiveScreen() {
     const nextGoalOptions: NextGoalOption[] = React.useMemo(() => {
         if (!data) return [];
         const openWizard = (goalKind: 'distance' | 'pace', manual = false) =>
-            (navigation as any).navigate('CustomizeGoal', {
+            navigation.navigate('CustomizeGoal', {
                 retrospectiveId: data.id,
                 goalKind,
                 manual,

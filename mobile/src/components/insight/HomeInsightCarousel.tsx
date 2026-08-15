@@ -25,6 +25,9 @@ type Page =
     | { kind: 'meso'; id: string; insight: MesoInsight }
     | { kind: 'weekly'; id: string; insight: WeeklyInsight };
 
+const CARD_GAP = spacing.base;
+const HOME_INSIGHT_CARD_HEIGHT = 112;
+
 /** Compact, persistent counterpart of the insight sheet carousel. */
 export const HomeInsightCarousel = memo(function HomeInsightCarousel({
     weekly,
@@ -46,6 +49,7 @@ export const HomeInsightCarousel = memo(function HomeInsightCarousel({
     }, [meso, weekly]);
 
     const pageWidth = measuredWidth || Math.max(0, screenWidth - spacing.lg * 2);
+    const snapInterval = pageWidth + CARD_GAP;
 
     const handleLayout = useCallback(
         (event: LayoutChangeEvent) => {
@@ -53,7 +57,10 @@ export const HomeInsightCarousel = memo(function HomeInsightCarousel({
             if (nextWidth <= 0 || nextWidth === measuredWidth) return;
             setMeasuredWidth(nextWidth);
             requestAnimationFrame(() => {
-                scrollRef.current?.scrollTo({ x: index * nextWidth, animated: false });
+                scrollRef.current?.scrollTo({
+                    x: index * (nextWidth + CARD_GAP),
+                    animated: false,
+                });
             });
         },
         [index, measuredWidth],
@@ -61,18 +68,18 @@ export const HomeInsightCarousel = memo(function HomeInsightCarousel({
 
     const handleScrollEnd = useCallback(
         (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-            if (pageWidth <= 0) return;
+            if (snapInterval <= 0) return;
             setIndex(
                 Math.max(
                     0,
                     Math.min(
                         pages.length - 1,
-                        Math.round(event.nativeEvent.contentOffset.x / pageWidth),
+                        Math.round(event.nativeEvent.contentOffset.x / snapInterval),
                     ),
                 ),
             );
         },
-        [pageWidth, pages.length],
+        [pages.length, snapInterval],
     );
 
     if (pages.length === 0) return null;
@@ -82,7 +89,9 @@ export const HomeInsightCarousel = memo(function HomeInsightCarousel({
             <ScrollView
                 ref={scrollRef}
                 horizontal
-                pagingEnabled
+                snapToInterval={snapInterval}
+                snapToAlignment="start"
+                disableIntervalMomentum
                 nestedScrollEnabled
                 decelerationRate="fast"
                 showsHorizontalScrollIndicator={false}
@@ -140,12 +149,12 @@ const styles = StyleSheet.create({
         gap: spacing.sm,
     },
     card: {
-        minHeight: 88,
+        height: HOME_INSIGHT_CARD_HEIGHT,
     },
-    // O gutter vive dentro da largura usada pelo `pagingEnabled`: separa os
-    // cards durante o gesto sem alterar o ponto exato em que cada página para.
+    // O gutter fica entre páginas: ambos os cards preservam a largura total e
+    // `snapToInterval` inclui esse espaço ao calcular cada ponto de parada.
     pageWithGap: {
-        paddingRight: spacing.base,
+        marginRight: CARD_GAP,
     },
     dots: {
         minHeight: spacing.sm,

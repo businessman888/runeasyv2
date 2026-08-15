@@ -36,7 +36,7 @@ export interface StoryGradient {
   /** Rótulo de depuração — aparece só em comentário/teste. */
   name: string;
   /** Linguagem de movimento do fundo imersivo. */
-  motion: 'aurora' | 'bars' | 'orbit' | 'rays' | 'calm';
+  motion: 'aurora' | 'bars' | 'orbit' | 'calm';
 }
 
 /**
@@ -71,8 +71,9 @@ export const STORY_GRADIENTS: readonly StoryGradient[] = [
   gradient('indigo', '#6366F1', '#221F5C', '#12103A', 'bars'),
   // 5. Comparação lúdica — roxo
   gradient('roxo', colors.recovery, '#2E1A55', '#1A0E36', 'orbit'),
-  // 6. CLÍMAX — âmbar. Único tom quente; mais luminoso de propósito.
-  gradient('ambar', colors.accent, '#5C3A05', '#2E1D02', 'rays'),
+  // 6. CLÍMAX — aurora âmbar fluida. O movimento orgânico celebra o recorde
+  // sem sugerir alvo, radar ou precisão — metáforas erradas para dado passado.
+  gradient('ambar', colors.accent, '#5C3A05', '#2E1D02', 'aurora'),
   // 7. CTA — volta ao ciano da marca
   gradient('ciano', colors.primary, '#0B3A4A', '#071E28', 'calm'),
 ] as const;

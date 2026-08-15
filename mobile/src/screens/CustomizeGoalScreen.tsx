@@ -9,7 +9,8 @@ import {
     Text,
     View,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
@@ -20,13 +21,8 @@ import { QuizHeader, Hl } from '../components/onboarding/QuizHeader';
 import { DistanceTimeScreen } from './quiz/DistanceTimeScreen';
 import { AvailableDaysScreen } from './quiz/AvailableDaysScreen';
 import { borderRadius, colors, fonts, spacing } from '../theme';
-import { GoalKind, PaceGoalFeasibility, retrospectiveGoalService } from '../services/retrospectiveGoalService';
-
-interface CustomizeGoalScreenParams {
-    retrospectiveId: string;
-    goalKind: GoalKind;
-    manual?: boolean;
-}
+import { PaceGoalFeasibility, retrospectiveGoalService } from '../services/retrospectiveGoalService';
+import type { RootStackParamList } from '../navigation/navigationRef';
 
 interface TimeValue {
     hours: number;
@@ -343,13 +339,15 @@ function OverviewRow({
 }
 
 export function CustomizeGoalScreen() {
-    const navigation = useNavigation();
-    const route = useRoute();
+    const navigation = useNavigation<
+        NativeStackNavigationProp<RootStackParamList, 'CustomizeGoal'>
+    >();
+    const route = useRoute<RouteProp<RootStackParamList, 'CustomizeGoal'>>();
     const {
         retrospectiveId,
         goalKind = 'distance',
         manual = false,
-    } = (route.params ?? {}) as CustomizeGoalScreenParams;
+    } = route.params;
     const [distanceGoal, setDistanceGoal] = useState('5k');
     const [durationWeeks, setDurationWeeks] = useState(12);
     const [frequency, setFrequency] = useState(3);
@@ -427,7 +425,9 @@ export function CustomizeGoalScreen() {
                 duration_weeks: durationWeeks,
                 training_days: selectedDays.map((day) => DAY_LABELS[day]),
             });
-            (navigation as any).reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+            // RootStack registers the tab navigator under `Main`; `MainTabs`
+            // is only its component function/id and is not a navigable route.
+            navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
         } catch (error) {
             Alert.alert('Não foi possível gerar o plano', error instanceof Error ? error.message : 'Tente novamente.');
         } finally {
