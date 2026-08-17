@@ -12,6 +12,8 @@ import SwiftUI
 /// O FreeRunCard aparece nos TRÊS casos — corrida livre é gratuita em qualquer
 /// plano, e era a ausência dele que deixava o dia de descanso sem nenhuma ação.
 struct StartView: View {
+    @AppStorage(WatchLaunchDiagnostics.previousRiskKey) private var previousLaunchRisk = ""
+
     let userName: String
     let avatarUrl: String?
     let isPro: Bool
@@ -72,11 +74,29 @@ struct StartView: View {
                 FreeRunCard(isSecondary: hasPlanWorkout && !showUpgrade) {
                     onStartFreeRun()
                 }
+
+                diagnosticsFooter
             }
             .padding(.horizontal, 4)
             .padding(.vertical, 4)
         }
         .background(Color.runEasyNavy.ignoresSafeArea())
+    }
+
+    private var diagnosticsFooter: some View {
+        VStack(spacing: 2) {
+            if !previousLaunchRisk.isEmpty {
+                Label("Última abertura parou em: \(previousLaunchRisk)", systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundColor(.runEasyWarning)
+                    .multilineTextAlignment(.center)
+            }
+            Text(WatchBuildInfo.versionLabel)
+                .font(.system(size: 8, weight: .regular, design: .monospaced))
+                .foregroundColor(.runEasyText60)
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .padding(.top, 2)
     }
 }
 

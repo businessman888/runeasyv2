@@ -6,6 +6,7 @@ const plist = require('plist');
 const bplistParser = require('bplist-parser');
 
 const PRESENT = Symbol('present');
+const WATCH_RUNTIME_MARKER = 'RUNEASY_WATCH_TRACKING_HOST_V2_20260816';
 const input = process.argv[2] || process.env.RUNEASY_IPA_PATH;
 
 if (!input) {
@@ -62,6 +63,11 @@ function expectValue(object, key, expected, label) {
   const detail = valid || expected === PRESENT
     ? JSON.stringify(received)
     : `recebido=${JSON.stringify(received)} esperado=${JSON.stringify(expected)}`;
+  console.log(`${valid ? 'PASS' : 'FAIL'} ${label}: ${detail}`);
+  return valid ? 0 : 1;
+}
+
+function expectCondition(valid, label, detail) {
   console.log(`${valid ? 'PASS' : 'FAIL'} ${label}: ${detail}`);
   return valid ? 0 : 1;
 }
@@ -123,6 +129,21 @@ try {
     'CFBundleVersion',
     phoneInfo.CFBundleVersion,
     'build iPhone/Watch',
+  );
+
+  const watchExecutableName = watchInfo.CFBundleExecutable;
+  const watchExecutable = watchExecutableName
+    ? path.join(watchApp, watchExecutableName)
+    : null;
+  const hasRuntimeMarker = Boolean(
+    watchExecutable
+      && fs.existsSync(watchExecutable)
+      && fs.readFileSync(watchExecutable).includes(Buffer.from(WATCH_RUNTIME_MARKER)),
+  );
+  failures += expectCondition(
+    hasRuntimeMarker,
+    'runtime de tracking Watch',
+    hasRuntimeMarker ? WATCH_RUNTIME_MARKER : 'marker ausente no executável watchOS',
   );
 
   const entitlements = readCodeSignEntitlements(watchApp);

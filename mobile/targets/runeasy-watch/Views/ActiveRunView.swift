@@ -17,24 +17,14 @@ import WatchKit
 ///       Rodando → 1 botão cyan (pausar)
 ///       Pausado → 2 botões (resume outline + finish cyan)
 struct ActiveRunView: View {
+    @ObservedObject var workoutManager: WorkoutManager
     let workout: PlannedWorkout?
     let onFinish: (CompletedRun) -> Void
     let onCancel: () -> Void
 
-    @StateObject private var workoutManager = WorkoutManager()
     @State private var showStopConfirmation = false
 
     private var metrics: RunMetrics { workoutManager.metrics }
-
-    /// Só trava a saída enquanto há corrida em andamento — nos estados ocioso e
-    /// de erro o usuário precisa conseguir voltar (antes ficava preso em
-    /// "Preparando…" sem botão de voltar).
-    private var lockNavigation: Bool {
-        switch workoutManager.phase {
-        case .authorizing, .running, .starting: return true
-        default: return false
-        }
-    }
 
     var body: some View {
         Group {
@@ -54,7 +44,9 @@ struct ActiveRunView: View {
             }
         }
         .background(Color.runEasyNavy.ignoresSafeArea())
-        .navigationBarBackButtonHidden(lockNavigation)
+        .onAppear {
+            WatchLaunchDiagnostics.markTrackingVisible()
+        }
         .alert("Finalizar corrida?", isPresented: $showStopConfirmation) {
             Button("Cancelar", role: .cancel) { }
             Button("Finalizar", role: .destructive) { finalize() }
@@ -92,6 +84,14 @@ struct ActiveRunView: View {
                 Text("Toque para começar")
                     .font(.system(size: 9))
                     .foregroundColor(.runEasyText60)
+
+                PressScaleButton(action: onCancel, haptic: .click) {
+                    Text("Voltar")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.runEasyText60)
+                        .frame(minHeight: 24)
+                }
+                .buttonStyle(.plain)
 
                 if let permissionError = workoutManager.permissionError {
                     Text(permissionError)
@@ -313,6 +313,7 @@ struct ActiveRunView: View {
     // MARK: - Actions
 
     private func start() {
+        WatchLaunchDiagnostics.mark("play.tap")
         WKInterfaceDevice.current().play(.start)
         Task { await workoutManager.startWorkout(workoutId: workout?.id) }
     }
@@ -377,13 +378,19 @@ private struct PressScaleStyleLocal: ButtonStyle {
 }
 
 #Preview("Treino do plano") {
-    NavigationStack {
-        ActiveRunView(workout: .mock, onFinish: { _ in }, onCancel: { })
-    }
+    ActiveRunView(
+        workoutManager: WorkoutManager(),
+        workout: .mock,
+        onFinish: { _ in },
+        onCancel: { }
+    )
 }
 
 #Preview("Treino livre") {
-    NavigationStack {
-        ActiveRunView(workout: nil, onFinish: { _ in }, onCancel: { })
-    }
+    ActiveRunView(
+        workoutManager: WorkoutManager(),
+        workout: nil,
+        onFinish: { _ in },
+        onCancel: { }
+    )
 }
