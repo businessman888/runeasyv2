@@ -105,6 +105,7 @@ export function MesoInsightScreen() {
                     next={next}
                     onClose={goBack}
                     onOpenDetails={open}
+                    active={!dashboardReady}
                 />
             </Animated.View>
 

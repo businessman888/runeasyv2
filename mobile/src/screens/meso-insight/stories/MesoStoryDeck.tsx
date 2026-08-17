@@ -1,7 +1,20 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
+import {
+    View,
+    Text,
+    StyleSheet,
+    Pressable,
+    Alert,
+    ActivityIndicator,
+    useWindowDimensions,
+} from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+    FadeIn,
+    FadeInLeft,
+    FadeInRight,
+    FadeOut,
+    ReduceMotion,
     runOnJS,
     useAnimatedStyle,
     useSharedValue,
@@ -9,14 +22,14 @@ import Animated, {
 } from 'react-native-reanimated';
 import { captureRef } from 'react-native-view-shot';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, typography, fonts } from '../../../theme';
+import { colors, spacing, fonts } from '../../../theme';
 import { StoryProgressBar } from '../../retrospective/StoryProgressBar';
-import { StoryCardShell } from '../../retrospective/StoryCards';
+import { AnimatedStoryBackground } from '../../retrospective/AnimatedStoryBackground';
 import { gradientForCard } from '../../retrospective/storyTheme';
 import { openSystemShareSheet } from '../../sharing/utils/shareHandlers';
 import { GlassSurface } from '../../../components/ui/GlassSurface';
-import { DiffuseHeaderSurface } from '../../../components/ui/DiffuseHeaderSurface';
 import {
     MESO_GRADIENT_INDEX,
     MesoCardOpening,
@@ -48,7 +61,8 @@ import type { NextBlock } from '../hooks/useNextBlock';
  */
 
 const TOTAL_CARDS = 5;
-const STORY_HEADER_HEIGHT = 52;
+const BACKGROUND_IN = FadeIn.duration(420).reduceMotion(ReduceMotion.System);
+const BACKGROUND_OUT = FadeOut.duration(320).reduceMotion(ReduceMotion.System);
 
 interface MesoStoryDeckProps {
     model: MesoStoryModel;
@@ -56,6 +70,8 @@ interface MesoStoryDeckProps {
     onClose: () => void;
     /** Abre a Parte 2 — a transição vive na tela, não aqui. */
     onOpenDetails: () => void;
+    /** Suspende o fundo quando o dashboard cobre os stories. */
+    active: boolean;
 }
 
 export const MesoStoryDeck = memo(function MesoStoryDeck({
@@ -63,9 +79,13 @@ export const MesoStoryDeck = memo(function MesoStoryDeck({
     next,
     onClose,
     onOpenDetails,
+    active,
 }: MesoStoryDeckProps) {
     const insets = useSafeAreaInsets();
+    const isFocused = useIsFocused();
+    const { height } = useWindowDimensions();
     const [index, setIndex] = useState(0);
+    const [direction, setDirection] = useState<1 | -1>(1);
     const [sharing, setSharing] = useState(false);
     const cardRef = useRef<View>(null);
 
@@ -77,10 +97,11 @@ export const MesoStoryDeck = memo(function MesoStoryDeck({
     }, [index]);
 
     const goTo = useCallback((nextIndex: number) => {
-        setIndex((prev) => {
-            const clamped = Math.max(0, Math.min(TOTAL_CARDS - 1, nextIndex));
-            return clamped === prev ? prev : clamped;
-        });
+        const current = indexRef.current;
+        const clamped = Math.max(0, Math.min(TOTAL_CARDS - 1, nextIndex));
+        if (clamped === current) return;
+        setDirection(clamped > current ? 1 : -1);
+        setIndex(clamped);
     }, []);
 
     const advance = useCallback(() => goTo(indexRef.current + 1), [goTo]);
@@ -102,6 +123,16 @@ export const MesoStoryDeck = memo(function MesoStoryDeck({
     const cardAnimStyle = useAnimatedStyle(() => ({
         transform: [{ translateX: translateX.value }],
     }));
+
+    const storyEntering = React.useMemo(
+        () =>
+            (direction > 0 ? FadeInRight : FadeInLeft)
+                .springify()
+                .damping(20)
+                .stiffness(190)
+                .reduceMotion(ReduceMotion.System),
+        [direction],
+    );
 
     // ── Compartilhar ─────────────────────────────────────────────────────────
     //
@@ -126,49 +157,47 @@ export const MesoStoryDeck = memo(function MesoStoryDeck({
     }, [sharing]);
 
     const gradient = gradientForCard(gradientIndexFor(index, model.climax));
+    const compact = height < 720;
 
     return (
         <View style={styles.root}>
-            {/* Superfície sólida desde o topo físico do aparelho. O fade abaixo
-                separa navegação e conteúdo sem amostrar o card em movimento. */}
-            <DiffuseHeaderSurface style={styles.topBar}>
-                <View style={[styles.topBarInner, { paddingTop: insets.top }]}>
-                    <StoryProgressBar
-                        total={TOTAL_CARDS}
-                        current={index}
-                        accent={gradient.accent}
-                    />
-                    <Pressable
-                        onPress={onClose}
-                        hitSlop={12}
-                        style={styles.closeBtn}
-                        accessibilityRole="button"
-                        accessibilityLabel="Fechar"
-                    >
-                        <Ionicons name="close" size={22} color={colors.textLight} />
-                    </Pressable>
-                </View>
-            </DiffuseHeaderSurface>
-
             <GestureDetector gesture={swipe}>
-                <Animated.View
-                    style={[
-                        styles.cardWrap,
-                        { paddingTop: insets.top + STORY_HEADER_HEIGHT + spacing.sm },
-                        cardAnimStyle,
-                    ]}
-                >
-                    {/* `collapsable={false}`: sem isso o Android pode achatar a
-                        View e `captureRef` não encontra nada para capturar. */}
+                <Animated.View style={[styles.stage, cardAnimStyle]}>
+                    {/* A captura inclui a composição fullscreen, mas exclui o
+                        chrome de navegação que flutua por cima. */}
                     <View ref={cardRef} collapsable={false} style={styles.captureArea}>
-                        <StoryCardShell gradient={gradient} onShare={shareCard}>
+                        <Animated.View
+                            key={`meso-background-${index}`}
+                            entering={BACKGROUND_IN}
+                            exiting={BACKGROUND_OUT}
+                            collapsable={false}
+                            style={StyleSheet.absoluteFill}
+                        >
+                            <AnimatedStoryBackground
+                                gradient={gradient}
+                                active={active && isFocused}
+                            />
+                        </Animated.View>
+                        <Animated.View
+                            key={`meso-story-${index}`}
+                            entering={storyEntering}
+                            style={[
+                                styles.storyContent,
+                                {
+                                    paddingTop: insets.top + (compact ? 76 : 92),
+                                    paddingBottom: Math.max(
+                                        insets.bottom + 96,
+                                        compact ? 104 : 120,
+                                    ),
+                                },
+                            ]}
+                        >
                             <CardFor index={index} model={model} next={next} />
-                        </StoryCardShell>
+                        </Animated.View>
                     </View>
 
                     {/* Zonas de toque: metade esquerda volta, direita avança.
-                        Não cobrem o rodapé, senão engoliriam o botão de detalhes
-                        e o de compartilhar. */}
+                        Não cobrem o rodapé, senão engoliriam o botão de detalhes. */}
                     <Pressable
                         style={[styles.tapZone, styles.tapLeft]}
                         onPress={rewind}
@@ -184,22 +213,69 @@ export const MesoStoryDeck = memo(function MesoStoryDeck({
                 </Animated.View>
             </GestureDetector>
 
-            {/* O botão flutuante — a porta para o dashboard. */}
+            {/* Mesmo chrome flutuante da retrospectiva: o conteúdo segue
+                fullscreen e a navegação não rouba altura do story. */}
+            <View style={[styles.chrome, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+                <StoryProgressBar
+                    total={TOTAL_CARDS}
+                    current={index}
+                    accent={gradient.accent}
+                />
+                <View style={styles.header}>
+                    <View>
+                        <Text style={styles.brand}>Resumo do bloco</Text>
+                        <Text style={styles.counter}>{index + 1} de {TOTAL_CARDS}</Text>
+                    </View>
+                    <View style={styles.headerActions}>
+                        <Pressable
+                            onPress={shareCard}
+                            hitSlop={8}
+                            style={styles.headerBtn}
+                            disabled={sharing}
+                            accessibilityRole="button"
+                            accessibilityLabel="Compartilhar este resumo do bloco"
+                            accessibilityState={{ busy: sharing }}
+                        >
+                            {sharing ? (
+                                <ActivityIndicator size="small" color={colors.textLight} />
+                            ) : (
+                                <Ionicons name="share-outline" size={20} color={colors.textLight} />
+                            )}
+                        </Pressable>
+                        <Pressable
+                            onPress={onClose}
+                            hitSlop={8}
+                            style={styles.headerBtn}
+                            accessibilityRole="button"
+                            accessibilityLabel="Fechar resumo do bloco"
+                        >
+                            <Ionicons name="close" size={24} color={colors.textLight} />
+                        </Pressable>
+                    </View>
+                </View>
+            </View>
+
+            {/* O único material glass da view: um controle, não um card de
+                conteúdo. O rótulo permanece completo para leitor de tela. */}
             <Pressable
                 onPress={onOpenDetails}
-                style={[
+                style={({ pressed }) => [
                     styles.detailsWrap,
-                    { bottom: Math.max(spacing.xl, insets.bottom + spacing.sm) },
+                    { bottom: Math.max(spacing.xl, insets.bottom + spacing.base) },
+                    pressed && styles.detailsPressed,
                 ]}
                 accessibilityRole="button"
                 accessibilityLabel="Ver detalhes do bloco"
                 accessibilityHint="Abre o painel completo com os números das quatro semanas"
             >
-                <GlassSurface style={styles.detailsPill}>
-                    <View style={styles.detailsInner}>
-                        <Text style={styles.detailsText}>Ver detalhes</Text>
-                        <Ionicons name="chevron-down" size={18} color={colors.textLight} />
-                    </View>
+                <GlassSurface
+                    radius={26}
+                    intensity={32}
+                    bordered={false}
+                    veilColor="rgba(21, 21, 42, 0.28)"
+                    style={styles.detailsGlass}
+                >
+                    <Ionicons name="arrow-down" size={20} color={colors.textLight} />
                 </GlassSurface>
             </Pressable>
         </View>
@@ -251,51 +327,76 @@ function gradientIndexFor(index: number, climax: MesoStoryModel['climax']): numb
 const styles = StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.background },
 
-    topBar: {
+    stage: { flex: 1 },
+    captureArea: { flex: 1, overflow: 'hidden' },
+    storyContent: {
+        flex: 1,
+        width: '100%',
+        maxWidth: 560,
+        alignSelf: 'center',
+        paddingHorizontal: spacing.xl,
+    },
+
+    chrome: {
         position: 'absolute',
         top: 0,
         left: 0,
         right: 0,
-        zIndex: 3,
-        borderWidth: 0,
+        zIndex: 5,
     },
-    topBarInner: {
+    header: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.sm,
+        justifyContent: 'space-between',
         paddingHorizontal: spacing.base,
-        paddingBottom: spacing.sm,
+        paddingTop: 10,
     },
-    closeBtn: {
-        width: 44, // alvo mínimo da HIG
+    brand: {
+        fontFamily: fonts.semibold,
+        fontSize: 15,
+        color: colors.textLight,
+    },
+    counter: {
+        marginTop: 2,
+        fontFamily: fonts.medium,
+        fontSize: 11,
+        color: 'rgba(235,235,245,0.58)',
+    },
+    headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+    },
+    headerBtn: {
+        width: 44,
         height: 44,
+        borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
+        backgroundColor: 'rgba(10,10,24,0.24)',
     },
 
-    cardWrap: { flex: 1, padding: spacing.base },
-    captureArea: { flex: 1 },
-
-    tapZone: { position: 'absolute', top: 0, bottom: 120, width: '35%' },
+    tapZone: { position: 'absolute', top: 104, bottom: 112, width: '30%' },
     tapLeft: { left: 0 },
     tapRight: { right: 0 },
 
     detailsWrap: {
         position: 'absolute',
         alignSelf: 'center',
-        zIndex: 4,
+        zIndex: 6,
+        width: 52,
+        height: 52,
     },
-    detailsPill: { minHeight: 48 },
-    detailsInner: {
-        flexDirection: 'row',
+    detailsPressed: {
+        opacity: 0.78,
+        transform: [{ scale: 0.96 }],
+    },
+    detailsGlass: {
+        width: 52,
+        height: 52,
         alignItems: 'center',
-        gap: spacing.sm,
-        paddingHorizontal: spacing.lg,
-        paddingVertical: spacing.sm + 2,
-    },
-    detailsText: {
-        fontFamily: fonts.semibold,
-        fontSize: typography.fontSizes.md,
-        color: colors.textLight,
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: colors.proGlassBorder,
     },
 });
