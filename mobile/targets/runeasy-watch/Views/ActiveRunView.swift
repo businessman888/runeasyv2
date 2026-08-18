@@ -23,6 +23,7 @@ struct ActiveRunView: View {
     let onCancel: () -> Void
 
     @State private var showStopConfirmation = false
+    @State private var controlsArmed = false
 
     private var metrics: RunMetrics { workoutManager.metrics }
 
@@ -39,6 +40,8 @@ struct ActiveRunView: View {
                 runningContent
             case .failed(let message):
                 failedContent(message)
+            case .finalizing:
+                startingContent(label: "Finalizando…")
             case .finished:
                 startingContent(label: "Finalizando…")
             }
@@ -46,6 +49,14 @@ struct ActiveRunView: View {
         .background(Color.runEasyNavy.ignoresSafeArea())
         .onAppear {
             WatchLaunchDiagnostics.markTrackingVisible()
+        }
+        .task {
+            // Impede que o mesmo gesto que abriu a tela atravesse a troca de
+            // views e acione o Play recém-montado no mesmo ponto da tela.
+            try? await Task.sleep(for: .milliseconds(700))
+            guard !Task.isCancelled else { return }
+            controlsArmed = true
+            WatchLaunchDiagnostics.mark("tracking.controls-armed")
         }
         .alert("Finalizar corrida?", isPresented: $showStopConfirmation) {
             Button("Cancelar", role: .cancel) { }
@@ -79,9 +90,11 @@ struct ActiveRunView: View {
                 ) {
                     start()
                 }
+                .disabled(!controlsArmed)
+                .opacity(controlsArmed ? 1 : 0.55)
                 .padding(.top, 2)
 
-                Text("Toque para começar")
+                Text(controlsArmed ? "Toque para começar" : "Preparando controles…")
                     .font(.system(size: 9))
                     .foregroundColor(.runEasyText60)
 
@@ -167,6 +180,7 @@ struct ActiveRunView: View {
 
                 PrimaryActionButton("Tentar novamente", icon: "arrow.clockwise") {
                     workoutManager.reset()
+                    controlsArmed = true
                     start()
                 }
 
@@ -313,9 +327,16 @@ struct ActiveRunView: View {
     // MARK: - Actions
 
     private func start() {
+        guard controlsArmed else {
+            WatchLaunchDiagnostics.mark("play.ignored-not-armed")
+            return
+        }
+        controlsArmed = false
         WatchLaunchDiagnostics.mark("play.tap")
         WKInterfaceDevice.current().play(.start)
-        Task { await workoutManager.startWorkout(workoutId: workout?.id) }
+        Task {
+            await workoutManager.prepareWorkoutStart(workoutId: workout?.id)
+        }
     }
 
     private func togglePause() {

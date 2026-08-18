@@ -6,7 +6,7 @@ const plist = require('plist');
 const bplistParser = require('bplist-parser');
 
 const PRESENT = Symbol('present');
-const WATCH_RUNTIME_MARKER = 'RUNEASY_WATCH_TRACKING_HOST_V2_20260816';
+const WATCH_RUNTIME_MARKER = 'RUNEASY_WATCH_HEALTHKIT_FLOW_V3_20260818';
 const input = process.argv[2] || process.env.RUNEASY_IPA_PATH;
 
 if (!input) {
@@ -72,22 +72,50 @@ function expectCondition(valid, label, detail) {
   return valid ? 0 : 1;
 }
 
-function readCodeSignEntitlements(appPath) {
-  if (process.platform !== 'darwin') return null;
-  try {
+function readEmbeddedEntitlements(appPath, info) {
+  const executableName = info.CFBundleExecutable;
+  if (!executableName) return null;
+  const executablePath = path.join(appPath, executableName);
+  if (!fs.existsSync(executablePath)) return null;
+
+  // O blob de entitlements assinado é um plist XML dentro da assinatura
+  // Mach-O. Lê-lo assim funciona também no Windows, onde `codesign` não existe.
+  const binary = fs.readFileSync(executablePath).toString('latin1');
+  const candidates = binary.match(/<\?xml[\s\S]*?<\/plist>/g) ?? [];
+  for (const candidate of candidates) {
+    try {
+      const parsed = plist.parse(candidate);
+      if (
+        parsed
+        && parsed['application-identifier']
+        && Object.prototype.hasOwnProperty.call(parsed, 'com.apple.developer.healthkit')
+      ) {
+        return parsed;
+      }
+    } catch {
+      // O executável pode conter outros plists; só interessa o de assinatura.
+    }
+  }
+  return null;
+}
+
+function readCodeSignEntitlements(appPath, info) {
+  if (process.platform === 'darwin') {
+    try {
     const result = childProcess.spawnSync(
       'codesign',
       ['-d', '--entitlements', ':-', appPath],
       { encoding: 'utf8' },
     );
-    if (result.error) throw result.error;
-    const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
-    const start = output.indexOf('<?xml');
-    return start >= 0 ? plist.parse(output.slice(start)) : null;
-  } catch (error) {
-    console.warn(`WARN não foi possível ler entitlements assinados: ${error.message}`);
-    return null;
+      if (result.error) throw result.error;
+      const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+      const start = output.indexOf('<?xml');
+      if (start >= 0) return plist.parse(output.slice(start));
+    } catch (error) {
+      console.warn(`WARN codesign indisponível; usando leitura Mach-O: ${error.message}`);
+    }
   }
+  return readEmbeddedEntitlements(appPath, info);
 }
 
 try {
@@ -146,7 +174,7 @@ try {
     hasRuntimeMarker ? WATCH_RUNTIME_MARKER : 'marker ausente no executável watchOS',
   );
 
-  const entitlements = readCodeSignEntitlements(watchApp);
+  const entitlements = readCodeSignEntitlements(watchApp, watchInfo);
   if (entitlements) {
     failures += expectValue(
       entitlements,
@@ -154,8 +182,17 @@ try {
       true,
       'HealthKit entitlement assinado',
     );
+    failures += expectCondition(
+      String(entitlements['application-identifier'] ?? '').endsWith(`.${watchInfo.CFBundleIdentifier}`),
+      'application identifier assinado Watch',
+      JSON.stringify(entitlements['application-identifier']),
+    );
   } else {
-    console.warn('WARN entitlements assinados só são verificados no macOS.');
+    failures += expectCondition(
+      false,
+      'entitlements assinados Watch',
+      'blob de assinatura não encontrado no executável',
+    );
   }
 
   if (failures > 0) {

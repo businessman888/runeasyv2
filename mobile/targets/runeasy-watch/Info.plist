@@ -40,20 +40,5 @@
 	<string>RunEasy salva seus treinos do Apple Watch.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>RunEasy usa GPS no Apple Watch para rastrear a corrida quando o iPhone não está perto.</string>
-	<key>UIApplicationSceneManifest</key>
-	<dict>
-		<key>UIApplicationSupportsMultipleScenes</key>
-		<false/>
-		<key>UISceneConfigurations</key>
-		<dict>
-			<key>UIWindowSceneSessionRoleApplication</key>
-			<array>
-				<dict>
-					<key>UISceneConfigurationName</key>
-					<string>Default Configuration</string>
-				</dict>
-			</array>
-		</dict>
-	</dict>
 </dict>
 </plist>

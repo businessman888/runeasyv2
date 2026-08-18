@@ -86,7 +86,7 @@ struct StartView: View {
     private var diagnosticsFooter: some View {
         VStack(spacing: 2) {
             if !previousLaunchRisk.isEmpty {
-                Label("Última abertura parou em: \(previousLaunchRisk)", systemImage: "exclamationmark.triangle.fill")
+                Label(previousLaunchMessage, systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 8, weight: .semibold))
                     .foregroundColor(.runEasyWarning)
                     .multilineTextAlignment(.center)
@@ -97,6 +97,13 @@ struct StartView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(.top, 2)
+    }
+
+    private var previousLaunchMessage: String {
+        if previousLaunchRisk == "health.auth.request-will-present" {
+            return "A autorização de Saúde anterior não foi concluída."
+        }
+        return "Última abertura parou em: \(previousLaunchRisk)"
     }
 }
 

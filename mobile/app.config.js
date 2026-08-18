@@ -20,7 +20,7 @@ export default {
   owner: "businessman23",
   name: "RunEasy",
   slug: "runeasy",
-  version: "1.0.5",
+  version: "1.0.6",
   // "default" libera rotação no nível nativo; o lock por device (phone trava em
   // portrait, tablet/iPad rotaciona) é feito em runtime no App.tsx via
   // expo-screen-orientation. Ver TABLET_RESPONSIVENESS_PLAN.md.
