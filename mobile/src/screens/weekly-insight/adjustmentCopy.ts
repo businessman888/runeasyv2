@@ -103,7 +103,19 @@ export function isActionable(cls: AdjustmentClass): boolean {
     return cls === 'schedule';
 }
 
-/** Mensagens de recusa do backend, traduzidas para o usuário. */
+/**
+ * Mensagens de recusa do backend, traduzidas para o usuário.
+ *
+ * ── CONFLITO NÃO É "TENTE DE NOVO" ───────────────────────────────────────────
+ *
+ * As duas últimas chaves entraram na Fase 6.2 e são as mais importantes do mapa.
+ * Sem elas, um conflito caía no fallback genérico ("Tente novamente em
+ * instantes") — conselho ERRADO e um beco sem saída: repetir a mesma requisição
+ * contra o mesmo estado velho falha para sempre, e o corredor ficava preso.
+ *
+ * O texto precisa dizer o que aconteceu (o plano mudou) e o que fazer (olhar de
+ * novo), nunca insistir.
+ */
 export const APPLY_ERROR_COPY: Record<string, string> = {
     already_applied: 'Este ajuste já foi aplicado.',
     nothing_to_shift:
@@ -111,4 +123,8 @@ export const APPLY_ERROR_COPY: Record<string, string> = {
     not_actionable: 'Esta sugestão é uma orientação, não um ajuste automático.',
     not_completed: 'Este insight ainda está sendo processado.',
     not_found: 'Não encontramos este insight.',
+    revision_conflict:
+        'Seu plano mudou desde que você abriu esta tela. Puxe para atualizar e confira a sugestão nova antes de aplicar.',
+    row_conflict:
+        'Um dos treinos mudou enquanto você decidia. Puxe para atualizar e confira a sugestão nova antes de aplicar.',
 };

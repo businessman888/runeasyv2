@@ -224,6 +224,7 @@ export function WeeklyInsightScreen() {
                         applied={latest.adjustment_applied_at !== null}
                         applying={applying}
                         onApply={handleApply}
+                        onConflict={onRefresh}
                     />
                 )}
             </ScrollView>

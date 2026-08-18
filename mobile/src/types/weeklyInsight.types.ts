@@ -121,6 +121,21 @@ export interface WeeklyInsight {
     adjustment_applied_at: string | null;
 }
 
+/**
+ * Motivos de conflito da fundação da Fase 6 — o estado mudou entre o que o
+ * corredor viu e o que ele tentou aplicar.
+ *
+ * Tratamento OBRIGATORIAMENTE diferente das outras recusas: mandar "tente
+ * novamente" aqui é um loop, porque repetir a mesma requisição contra o mesmo
+ * estado velho falha para sempre. A saída é recarregar e reconfirmar.
+ */
+export const CONFLICT_REASONS = ['revision_conflict', 'row_conflict'] as const;
+export type ConflictReason = (typeof CONFLICT_REASONS)[number];
+
+export function isConflictReason(reason?: string): reason is ConflictReason {
+    return (CONFLICT_REASONS as readonly string[]).includes(reason ?? '');
+}
+
 /** Resposta de `POST /training/weekly-insight/:id/apply`. */
 export interface ApplyAdjustmentResult {
     applied: boolean;
@@ -129,7 +144,8 @@ export interface ApplyAdjustmentResult {
         | 'not_completed'
         | 'already_applied'
         | 'not_actionable'
-        | 'nothing_to_shift';
+        | 'nothing_to_shift'
+        | ConflictReason;
     code?: AdjustmentCode;
     shifted?: number;
     deltaDays?: number;

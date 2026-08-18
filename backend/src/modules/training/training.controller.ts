@@ -34,6 +34,8 @@ import { GamificationService } from '../gamification/gamification.service';
 import { CreateManualWorkoutDto } from './dto/create-manual-workout.dto';
 import { CompleteFreeWorkoutDto } from './dto/complete-free-workout.dto';
 import { SetWorkoutRpeDto } from './dto/set-workout-rpe.dto';
+import { ApplyReliefDto } from './dto/apply-relief.dto';
+import { VolumeReliefService } from './volume-relief.service';
 
 interface CreatePlanDto {
   // Biometrics (New)
@@ -114,6 +116,7 @@ export class TrainingController {
     private readonly usersService: UsersService,
     private readonly gamificationService: GamificationService,
     private readonly trainingAIService: TrainingAIService,
+    private readonly volumeReliefService: VolumeReliefService,
   ) {}
 
   /**
@@ -914,6 +917,58 @@ export class TrainingController {
       dto.reason,
     );
     return { workout };
+  }
+
+  /**
+   * Fase 6.2 — PREVIEW do alívio de volume de um treino futuro.
+   *
+   * Devolve o treino como está, as opções de alívio JÁ CALCULADAS (o número
+   * resultante, não o percentual pedido) e o `digest` — o token de versão que o
+   * apply tem de devolver.
+   *
+   * Indisponibilidade é `{ available: false, reason, message }` com HTTP 200:
+   * "hoje não dá para aliviar" é um estado normal da tela, não uma falha.
+   */
+  @Get('workouts/:id/relief-preview')
+  @UseGuards(ProGuard)
+  async getReliefPreview(
+    @User('id') userId: string,
+    @Param('id') workoutId: string,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+    return this.volumeReliefService.preview(userId, workoutId);
+  }
+
+  /**
+   * Fase 6.2 — APLICA o alívio, pela primitiva atômica da fundação.
+   *
+   * ── SEMPRE HTTP 200 ───────────────────────────────────────────────────────
+   *
+   * Conflito e recusa saem no CORPO (`applied: false`), nunca como status de
+   * erro. Um 409 seria traduzido pela camada de rede do app em "verifique sua
+   * conexão" — foi exatamente esse o defeito que a reauditoria encontrou no
+   * caminho da Fase 2. Quando o conflito é de versão, a resposta já carrega a
+   * preview RECALCULADA, para o app pedir reconfirmação em vez de mandar o
+   * corredor tentar de novo contra um estado que não existe mais.
+   */
+  @Post('workouts/:id/relief')
+  @UseGuards(ProGuard)
+  async applyRelief(
+    @User('id') userId: string,
+    @Param('id') workoutId: string,
+    @Body() dto: ApplyReliefDto,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+    return this.volumeReliefService.apply(
+      userId,
+      workoutId,
+      dto.level,
+      dto.expected_digest,
+    );
   }
 
   /**

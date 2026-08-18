@@ -10,7 +10,7 @@
  *   - workout: the raw API workout object (already in memory from the calendar)
  *   - showStartButton: whether to render the start CTA (today's plan/manual only)
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     View,
     Text,
@@ -27,6 +27,7 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import { PremiumBackground } from '../components/ui/PremiumBackground';
 import { DashedDivider } from '../components/ui/DashedDivider';
 import { CoachDeepDiveSection } from '../components/training/CoachDeepDiveSection';
+import { ReliefSheet } from '../components/training/ReliefSheet';
 import { useStartWorkoutFlow } from '../hooks/useStartWorkoutFlow';
 import { useTrainingStore } from '../stores';
 import { transformWorkoutToUI } from '../utils/workoutTransform';
@@ -87,6 +88,7 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
 
     const [raw, setRaw] = useState<any | null>(paramWorkout);
     const [isFetching, setIsFetching] = useState(!paramWorkout && !!paramWorkoutId);
+    const [reliefOpen, setReliefOpen] = useState(false);
 
     useEffect(() => {
         if (raw || !paramWorkoutId) return;
@@ -106,6 +108,35 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
 
     const data = useMemo(() => (raw ? transformWorkoutToUI(raw) : null), [raw]);
     const metadata = raw?.metadata ?? null;
+
+    /**
+     * Pode aliviar? — A FRONTEIRA DA FASE 6, VIRANDO UI.
+     *
+     * Espelho leve da regra do servidor (amanhã em diante, pendente, treino de
+     * plano, não-prova). É só para não oferecer um botão que sempre recusa: quem
+     * DECIDE é `isEditableWorkout` no backend e o `WHERE` da função Postgres. Se
+     * as duas discordarem, a folha explica o motivo em vez de aplicar.
+     *
+     * Comparação entre strings YYYY-MM-DD, nunca `Date`: o app roda no fuso do
+     * aparelho e o plano é agendado em São Paulo — converter para `Date` aqui
+     * deslocaria o dia para quem estiver fora do fuso.
+     */
+    const canRelieve = useMemo(() => {
+        if (!raw?.scheduled_date || raw?.source !== 'plan') return false;
+        if (raw?.status !== 'pending' || raw?.is_race_day === true) return false;
+
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        return String(raw.scheduled_date) > todayStr;
+    }, [raw]);
+
+    const handleRelieved = useCallback(() => {
+        // O treino mudou no servidor; recarrega esta tela pelo mesmo caminho do
+        // deep-link. `invalidatePlanCaches` (dentro da folha) já cuidou das
+        // outras telas.
+        if (!paramWorkoutId) return;
+        void fetchWorkoutDetails(paramWorkoutId).then((w) => w && setRaw(w));
+    }, [paramWorkoutId, fetchWorkoutDetails]);
 
     if (isFetching) {
         return (
@@ -296,8 +327,40 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
                 {/* Deep-dive coach briefing (Pro) */}
                 <CoachDeepDiveSection workoutId={raw?.id} />
 
-                <View style={{ height: showStartButton ? 20 : 40 }} />
+                <View style={{ height: showStartButton || canRelieve ? 20 : 40 }} />
             </ScrollView>
+
+            {/* Treino FUTURO: o slot onde não havia botão nenhum ("Iniciar" só
+                aparece no dia). É a fronteira da Fase 6 virando affordance —
+                editável é exatamente o que se pode aliviar. */}
+            {!showStartButton && canRelieve && (
+                <View style={[styles.startContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+                    <TouchableOpacity
+                        style={styles.relieveButton}
+                        onPress={() => setReliefOpen(true)}
+                        activeOpacity={0.85}
+                        accessibilityRole="button"
+                        accessibilityLabel="Aliviar este treino"
+                        accessibilityHint="Reduz a distância mantendo o ritmo alvo"
+                    >
+                        <MaterialCommunityIcons
+                            name="arrow-collapse-down"
+                            size={20}
+                            color={colors.primary}
+                        />
+                        <Text style={styles.relieveText}>Aliviar este treino</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            {paramWorkoutId && (
+                <ReliefSheet
+                    visible={reliefOpen}
+                    workoutId={paramWorkoutId}
+                    onClose={() => setReliefOpen(false)}
+                    onApplied={handleRelieved}
+                />
+            )}
 
             {/* Fixed Start button */}
             {showStartButton && (
@@ -541,5 +604,25 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.lg,
         fontWeight: typography.fontWeights.bold as any,
         color: '#0E0E1F',
+    },
+    // Contorno, não preenchido: aliviar é uma ação SECUNDÁRIA. O ciano sólido é
+    // do "Iniciar treino", e dar o mesmo peso visual às duas sugeriria que
+    // reduzir o volume é o caminho esperado do dia.
+    relieveButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.sm,
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.xl,
+        borderRadius: 28,
+        borderWidth: 1,
+        borderColor: 'rgba(0,212,255,0.35)',
+        backgroundColor: 'rgba(0,212,255,0.06)',
+    },
+    relieveText: {
+        fontSize: typography.fontSizes.md,
+        fontWeight: typography.fontWeights.semibold as any,
+        color: colors.primary,
     },
 });

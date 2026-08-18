@@ -62,6 +62,18 @@ export async function markWeeklyInsightSeen(insightId: string): Promise<void> {
  *
  * O backend recusa a classe `prescription` com `not_actionable`; a UI nunca
  * deveria chegar a chamar isso, porque conselho não tem botão.
+ *
+ * ── POR QUE 409 NÃO É ERRO ───────────────────────────────────────────────────
+ *
+ * Até a Fase 6.2 esta função lançava em qualquer `!res.ok`. Com a fundação da
+ * Fase 6 no ar, o servidor pode responder CONFLITO — "o plano mudou desde que
+ * você viu isto" — e engolir esse caso num `throw` fazia a bandeja cair no
+ * `catch` genérico e exibir "verifique sua conexão" para um problema que não
+ * tem nada a ver com rede. O corredor então tentava de novo, contra o mesmo
+ * estado velho, para sempre.
+ *
+ * Conflito é RESULTADO: volta como `{ applied: false, reason }` e a UI mostra a
+ * situação nova. Só falha de verdade (rede, 5xx, resposta ilegível) lança.
  */
 export async function applyWeeklyInsightAdjustment(
     insightId: string,
@@ -72,10 +84,21 @@ export async function applyWeeklyInsightAdjustment(
         { method: 'POST', headers },
     );
 
-    if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        throw new Error(`Falha ao aplicar o ajuste (${res.status}): ${text}`);
+    // 409 (e qualquer 4xx com corpo tratável) é decisão do servidor sobre o
+    // estado, não falha de transporte.
+    if (res.ok || (res.status >= 400 && res.status < 500)) {
+        const body = await res.json().catch(() => null);
+        if (body && typeof body.applied === 'boolean') {
+            return body as ApplyAdjustmentResult;
+        }
+        if (res.status === 409) {
+            return { applied: false, reason: 'revision_conflict' };
+        }
+        if (res.ok) {
+            throw new Error('Resposta inesperada ao aplicar o ajuste.');
+        }
     }
 
-    return (await res.json()) as ApplyAdjustmentResult;
+    const text = await res.text().catch(() => '');
+    throw new Error(`Falha ao aplicar o ajuste (${res.status}): ${text}`);
 }

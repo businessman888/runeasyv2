@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
     View,
     Text,
@@ -8,7 +8,7 @@ import {
     ActivityIndicator,
     RefreshControl,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -55,12 +55,22 @@ export function PlanGoalsScreen() {
     const fetchPlanOverview = useTrainingStore((s) => s.fetchPlanOverview);
     const { isProUser } = useProFeature();
 
-    useEffect(() => {
-        // Avoid hitting the backend for users that don't have a plan
-        if (isProUser && !planOverview && !loading) {
-            fetchPlanOverview();
-        }
-    }, [planOverview, loading, fetchPlanOverview, isProUser]);
+    // ── REVALIDA A CADA FOCO ─────────────────────────────────────────────────
+    //
+    // Antes: `useEffect` com guarda `!planOverview` — buscava UMA vez e nunca
+    // mais. Qualquer coisa que mudasse o plano depois disso (o `adiar_semana`
+    // da Fase 2, que já está em produção; o alívio de volume da 6.2) deixava
+    // esta tela mostrando o plano velho pela sessão inteira, e só um kill do app
+    // corrigia. É a classe de bug da MesoInsightScreen: telas com ciclos de
+    // cache diferentes sobre o mesmo dado.
+    //
+    // Calendar e Home já revalidam no foco — esta tela passa a seguir o mesmo
+    // padrão. A guarda de `isProUser` continua: sem plano não há o que buscar.
+    useFocusEffect(
+        useCallback(() => {
+            if (isProUser) void fetchPlanOverview();
+        }, [isProUser, fetchPlanOverview]),
+    );
 
     if (!isProUser) {
         return (

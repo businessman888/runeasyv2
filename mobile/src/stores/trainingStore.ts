@@ -430,6 +430,11 @@ interface TrainingState {
     fetchSchedule: (startDate: string, endDate: string) => Promise<void>;
     fetchPlanOverview: () => Promise<void>;
     clearPlanOverview: () => void;
+    /**
+     * Invalida TODO cache derivado do plano. Chamar depois de QUALQUER adaptação
+     * aplicada (Fase 6) — é o que faz calendário, home e Metas convergirem.
+     */
+    invalidatePlanCaches: () => Promise<void>;
     skipWorkout: (workoutId: string, reason: string) => Promise<void>;
     /** RPE reportado (Borg CR10, 1–10). Lança em falha — o card oferece retry. */
     setWorkoutRpe: (workoutId: string, rpe: number) => Promise<void>;
@@ -473,6 +478,46 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
     clearScheduleData: () => set({ today: null, nextWorkout: null, schedule: [] }),
 
     clearPlanOverview: () => set({ planOverview: null, planOverviewError: null }),
+
+    /**
+     * ── A INVALIDAÇÃO ÚNICA (Fase 6.2) ───────────────────────────────────────
+     *
+     * Uma adaptação muda `workouts` no servidor, e este store guarda CINCO
+     * projeções desses mesmos treinos — `workouts`, `schedule`/`today`/
+     * `nextWorkout`, `upcomingWorkouts`, `plan` e `planOverview`. Sem um lugar
+     * só que as derrube todas, cada tela precisaria lembrar de se atualizar, e
+     * foi exatamente assim que o `planOverview` ficou para trás (buscava uma vez
+     * por sessão e nunca mais).
+     *
+     * UMA ação, UM chamador: o handler de sucesso do apply. Telas não chamam
+     * isto — elas só revalidam no foco, como sempre.
+     *
+     * A janela é a mesma que Home e Calendar usam (mês corrente → +1 mês): o
+     * objetivo é repovoar exatamente o que elas leem, não inventar um recorte
+     * próprio que divergisse do delas.
+     */
+    invalidatePlanCaches: async () => {
+        // Zera antes de buscar: `planOverview` é o único campo cuja tela ainda
+        // decide por presença, então limpá-lo garante o skeleton em vez de um
+        // número velho piscando enquanto a resposta não chega.
+        set({ planOverview: null, planOverviewError: null });
+
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(now);
+        end.setMonth(end.getMonth() + 1);
+        const startStr = start.toISOString().split('T')[0];
+        const endStr = end.toISOString().split('T')[0];
+
+        // Paralelo: são leituras independentes, e serializá-las multiplicaria a
+        // espera logo depois de um gesto do usuário.
+        await Promise.all([
+            get().fetchSchedule(startStr, endStr),
+            get().fetchWorkouts(startStr, endStr),
+            get().fetchUpcomingWorkouts(),
+            get().fetchPlanOverview(),
+        ]);
+    },
 
     fetchPlanOverview: async () => {
         try {

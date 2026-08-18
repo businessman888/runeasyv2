@@ -14,7 +14,10 @@ import {
     APPLY_ERROR_COPY,
     isActionable,
 } from '../adjustmentCopy';
-import type { SuggestedAdjustment } from '../../../types/weeklyInsight.types';
+import {
+    isConflictReason,
+    type SuggestedAdjustment,
+} from '../../../types/weeklyInsight.types';
 
 /**
  * BANDEJA DE REAJUSTE — a peça central da tela.
@@ -47,6 +50,13 @@ interface AdjustmentTrayProps {
     applied: boolean;
     applying: boolean;
     onApply: () => Promise<{ applied: boolean; reason?: string }>;
+    /**
+     * Chamado quando o servidor recusa por CONFLITO — o estado mudou entre o que
+     * a tela mostra e o que o corredor tentou aplicar. Recarrega a tela para ele
+     * decidir sobre a situação real, em vez de tentar de novo contra um estado
+     * que não existe mais.
+     */
+    onConflict?: () => void;
 }
 
 export const AdjustmentTray = memo(function AdjustmentTray({
@@ -54,6 +64,7 @@ export const AdjustmentTray = memo(function AdjustmentTray({
     applied,
     applying,
     onApply,
+    onConflict,
 }: AdjustmentTrayProps) {
     const [justApplied, setJustApplied] = useState(false);
     const copy = ADJUSTMENT_COPY[adjustment.code];
@@ -75,19 +86,40 @@ export const AdjustmentTray = memo(function AdjustmentTray({
                         void (async () => {
                             try {
                                 const result = await onApply();
+                                // `justApplied` SÓ sob confirmação explícita do
+                                // servidor: marcá-lo sobre um conflito faria o
+                                // botão anunciar um ajuste que não aconteceu.
                                 if (result.applied) {
                                     setJustApplied(true);
                                     Alert.alert(
                                         'Pronto',
                                         'Seu calendário foi reorganizado. Os treinos que faltavam voltam a partir de hoje.',
                                     );
-                                } else {
-                                    Alert.alert(
-                                        'Não foi possível aplicar',
-                                        APPLY_ERROR_COPY[result.reason ?? ''] ??
-                                            'Tente novamente em instantes.',
-                                    );
+                                    return;
                                 }
+
+                                // Conflito tem saída própria: recarregar, não
+                                // repetir. Repetir contra o estado velho falha
+                                // sempre — seria um beco sem fim.
+                                if (isConflictReason(result.reason)) {
+                                    Alert.alert(
+                                        'Seu plano mudou',
+                                        APPLY_ERROR_COPY[result.reason],
+                                        [
+                                            {
+                                                text: 'Ver o que mudou',
+                                                onPress: () => onConflict?.(),
+                                            },
+                                        ],
+                                    );
+                                    return;
+                                }
+
+                                Alert.alert(
+                                    'Não foi possível aplicar',
+                                    APPLY_ERROR_COPY[result.reason ?? ''] ??
+                                        'Tente novamente em instantes.',
+                                );
                             } catch {
                                 Alert.alert(
                                     'Não foi possível aplicar',
