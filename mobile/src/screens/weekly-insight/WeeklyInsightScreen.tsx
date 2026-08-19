@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -25,6 +25,7 @@ import { IntensityCard } from './components/IntensityCard';
 import { ZonesRadar } from './components/ZonesRadar';
 import { AdjustmentTray } from './components/AdjustmentTray';
 import { InsightSkeleton } from './components/InsightSkeleton';
+import { WeekReliefSheet } from '../../components/training/WeekReliefSheet';
 
 /**
  * INSIGHT SEMANAL — o dashboard da semana do plano.
@@ -92,6 +93,16 @@ export function WeeklyInsightScreen() {
         if (!latest) return { applied: false };
         return applyAdjustment(latest.id);
     }, [latest, applyAdjustment]);
+
+    // ── Fase 6.3 — o alívio da semana ────────────────────────────────────────
+    //
+    // Estado local, e não no store: `adjustment_applied_at` só é carimbado no
+    // caminho `schedule` (dentro da transação do shift). Para volume, quem sabe
+    // que já foi aplicado é o histórico (`plan_adaptations`), que a preview
+    // consulta — este booleano é só o eco imediato para o botão não ficar
+    // convidando de novo antes do próximo refetch.
+    const [weekReliefOpen, setWeekReliefOpen] = useState(false);
+    const [weekRelieved, setWeekRelieved] = useState(false);
 
     const onRefresh = useCallback(() => {
         void fetch(true);
@@ -221,13 +232,29 @@ export function WeeklyInsightScreen() {
                 {latest.suggested_adjustment && (
                     <AdjustmentTray
                         adjustment={latest.suggested_adjustment}
-                        applied={latest.adjustment_applied_at !== null}
+                        applied={
+                            latest.adjustment_applied_at !== null || weekRelieved
+                        }
                         applying={applying}
                         onApply={handleApply}
                         onConflict={onRefresh}
+                        onOpenWeekRelief={() => setWeekReliefOpen(true)}
                     />
                 )}
             </ScrollView>
+
+            <WeekReliefSheet
+                visible={weekReliefOpen}
+                insightId={latest.id}
+                onClose={() => setWeekReliefOpen(false)}
+                onApplied={() => {
+                    setWeekRelieved(true);
+                    // A trajetória do topo vem do `planOverview`, que o alívio
+                    // acabou de invalidar — refazer aqui evita a tela ficar
+                    // mostrando o volume velho no gráfico.
+                    void fetchPlanOverview();
+                }}
+            />
         </ScreenContainer>
     );
 }

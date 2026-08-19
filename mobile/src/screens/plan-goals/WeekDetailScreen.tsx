@@ -6,7 +6,12 @@ import {
     Pressable,
     FlatList,
 } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import {
+    useFocusEffect,
+    useNavigation,
+    useRoute,
+    RouteProp,
+} from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, {
     FadeInDown,
@@ -80,10 +85,17 @@ export function WeekDetailScreen() {
     const badges = useGamificationStore((s) => s.badges) ?? [];
     const { startRun } = useStartWorkoutFlow();
 
-    // Safety net: if user deep-links or refreshes, hydrate the overview.
-    useEffect(() => {
-        if (!planOverview) fetchPlanOverview();
-    }, [planOverview, fetchPlanOverview]);
+    // ── REVALIDA A CADA FOCO (Fase 6.3) ──────────────────────────────────────
+    //
+    // Era `if (!planOverview) fetchPlanOverview()` — hidratava uma vez e nunca
+    // mais, o MESMO defeito que a 6.2 corrigiu no `PlanGoalsScreen`. Esta é a
+    // tela onde o corredor vem conferir a semana depois de aliviá-la; sem
+    // revalidar, ela seria a última a mostrar o resultado.
+    useFocusEffect(
+        useCallback(() => {
+            void fetchPlanOverview();
+        }, [fetchPlanOverview]),
+    );
 
     const week = useMemo(
         () => planOverview?.weeks.find((w) => w.week_number === weekNumber) ?? null,

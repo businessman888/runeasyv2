@@ -20,6 +20,7 @@ import {
   RACE_WARNING_INCREASE_THRESHOLD,
 } from '../../common/volume-planner';
 import { selectArchetypeKey } from '../../common/archetype';
+import { QUALITY_TYPES } from '../../common/workout-types';
 import { PlanPreviewDto, PreviewViabilityDto } from './dto/plan-preview.dto';
 import { PaceGoalFeasibility } from './pace-goal.service';
 
@@ -1290,14 +1291,10 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
   ): void {
     const byWeek = new Map<number, WeekSkeleton>();
     for (const s of skeleton) byWeek.set(s.weekNumber, s);
-    const QUALITY = new Set<GeneratedWorkoutType>([
-      'intervals',
-      'tempo',
-      'fartlek',
-      'hill_repeats',
-      'repetition',
-      'progressive',
-    ]);
+    // O conjunto mora em `common/workout-types` desde a Fase 6.3: a política de
+    // alívio de volume precisa da MESMA classificação para decidir o que não
+    // cortar, e duas cópias da mesma regra é como a mina 2 nasceu.
+    const QUALITY = QUALITY_TYPES;
     const floor = MIN_WARMUP_KM + MIN_COOLDOWN_KM;
     const synthSlot = (dist: number): WorkoutSlot => ({
       slotIndex: 0,

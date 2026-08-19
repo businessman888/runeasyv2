@@ -115,7 +115,7 @@ describe('decideAdjustment', () => {
         }),
       );
       expect(r.code).toBe('reduzir_volume');
-      expect(r.class).toBe('prescription');
+      expect(r.class).toBe('volume');
       expect(r.reason).toBe('volume_abaixo_do_prescrito');
     });
   });
@@ -170,11 +170,13 @@ describe('decideAdjustment', () => {
     });
   });
 
-  describe('volume — classe prescription', () => {
+  describe('volume — classe volume (aplicável desde a Fase 6.3)', () => {
     it('5 de 5 a 80% da distância → reduzir_volume', () => {
       const r = decideAdjustment(withInput({ executionRatio: 80 }));
       expect(r.code).toBe('reduzir_volume');
-      expect(r.class).toBe('prescription');
+      // `volume`, não `prescription`: desde a 6.3 esta sugestão TEM botão. A
+      // classe é o que governa a forma do card no app.
+      expect(r.class).toBe('volume');
     });
 
     it('exatamente no limiar NÃO dispara', () => {
@@ -207,8 +209,12 @@ describe('decideAdjustment', () => {
           expect(r.class).toBe('schedule');
         } else if (r.code === 'manter') {
           expect(r.class).toBe('none');
+        } else if (r.code === 'reduzir_volume') {
+          // Aplicável desde a 6.3, sobre a fundação da Fase 6.
+          expect(r.class).toBe('volume');
         } else {
-          // Volume e ritmo mexem na prescrição — represados até a Fase 6.
+          // Só o ritmo continua represado: pace é da Fase 3, e escrevê-lo aqui
+          // reabriria a corrida F3×F6. É a 6.4.
           expect(r.class).toBe('prescription');
         }
       }

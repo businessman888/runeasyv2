@@ -1,6 +1,5 @@
 import type {
     AdjustmentCode,
-    AdjustmentClass,
 } from '../../types/weeklyInsight.types';
 
 /**
@@ -10,27 +9,31 @@ import type {
  *
  * A classe do enum (decidida no backend, Fase 2A) governa o formato:
  *
- *   `schedule`     → botão sólido que EXECUTA (re-ancora o plano)
+ *   `schedule`     → botão sólido que EXECUTA na hora (re-ancora o plano)
+ *   `volume`       → botão sólido que ABRE A PREVIEW (alívio da semana, Fase 6.3)
  *   `prescription` → card de orientação SEM botão
  *
- * Regra de ouro: botão sólido executa; card sem botão é para ler e aplicar. O
- * usuário nunca toca esperando ação e não recebe nada.
+ * Regra de ouro: botão sólido leva a algo real; card sem botão é para ler e
+ * aplicar na perna. O usuário nunca toca esperando ação e não recebe nada.
  *
- * ── POR QUE `prescription` NÃO TEM BOTÃO ─────────────────────────────────────
+ * ── POR QUE `reduzir_volume` ESPEROU ATÉ AGORA ───────────────────────────────
  *
- * Aplicar de verdade um "reduzir volume" significa reescrever os treinos
- * futuros — o que é Fase 6. Se o app oferecesse o botão hoje, ele mudaria o
- * texto sem mudar o plano, e a pessoa abriria o calendário no dia seguinte com
- * os mesmos números de antes. Conselho que o próprio app contradiz é pior que
- * conselho nenhum.
+ * Este bloco registrava que aplicar "reduzir volume" significaria reescrever os
+ * treinos futuros, e que oferecer o botão antes disso mudaria o texto sem mudar
+ * o plano — a pessoa abriria o calendário no dia seguinte com os mesmos números.
+ * Conselho que o próprio app contradiz é pior que conselho nenhum.
  *
- * ── O ENQUADRAMENTO ──────────────────────────────────────────────────────────
+ * A Fase 6 construiu o que faltava: a primitiva atômica reescreve N treinos numa
+ * transação, com versão, histórico e conflito tratado. Desde a **6.3** este
+ * código É acionável, e o texto virou ação. O registro fica porque explica por
+ * que a espera existiu — não era omissão.
  *
- * Por isso o texto de `prescription` é sempre "MIRE NO SEU ALVO", nunca "mude o
- * plano". O alvo já está prescrito em cada treino; o conselho é sobre executá-lo
- * melhor, não sobre desviar dele. É a diferença entre "segure o ritmo no pace
- * que já está lá" (verdadeiro, acionável hoje) e "reduza seu volume" (que o
- * plano não vai refletir).
+ * ── O ENQUADRAMENTO DO QUE CONTINUA CONSELHO ─────────────────────────────────
+ *
+ * `aliviar_ritmo` segue sem botão, e o texto continua "MIRE NO SEU ALVO", nunca
+ * "mude o plano". Pace é da Fase 3; a Fase 6 escrevê-lo reabriria a corrida que
+ * a fundação existe para fechar. É a diferença entre "segure o ritmo no pace que
+ * já está lá" (verdadeiro, acionável hoje) e prometer um plano diferente.
  */
 
 export interface AdjustmentCopy {
@@ -75,10 +78,12 @@ export const ADJUSTMENT_COPY: Record<AdjustmentCode, AdjustmentCopy> = {
         body: 'Seus treinos leves saíram mais rápidos que o pace prescrito. O ganho da rodagem leve vem justamente de correr devagar — na próxima, mire no ritmo que já está no treino.',
         icon: 'trending-down-outline',
     },
+    // ── Ação desde a 6.3 ──
     reduzir_volume: {
-        badge: 'Dica da semana',
-        title: 'Feche a distância dos treinos',
-        body: 'Você apareceu, mas encurtou as sessões. Antes de buscar mais volume, mire em completar a distância que cada treino já pede — é ela que sustenta a progressão.',
+        badge: 'Ação disponível',
+        title: 'Aliviar a próxima semana',
+        body: 'Você apareceu, mas encurtou as sessões — sinal de que o volume prescrito está acima do que sua rotina comporta agora. Podemos reduzir a próxima semana mantendo o ritmo alvo e preservando seu treino de qualidade.',
+        actionLabel: 'Ver como ficaria',
         icon: 'resize-outline',
     },
 
@@ -95,12 +100,44 @@ export const ADJUSTMENT_SHORT: Record<AdjustmentCode, string> = {
     adiar_semana: 'Sugerimos adiar a semana',
     repetir_semana: 'Sugerimos repetir a semana',
     aliviar_ritmo: 'Segure o ritmo nos dias fáceis',
-    reduzir_volume: 'Feche a distância dos treinos',
+    reduzir_volume: 'Sugerimos aliviar a próxima semana',
     manter: 'Semana no trilho',
 };
 
-export function isActionable(cls: AdjustmentClass): boolean {
-    return cls === 'schedule';
+/**
+ * Códigos que levam a alguma ação — decidido pelo CÓDIGO, não pela classe.
+ *
+ * ── POR QUE NÃO PELA CLASSE ──────────────────────────────────────────────────
+ *
+ * `suggested_adjustment` é gravado como jsonb em `plan_week_insights` no momento
+ * em que o insight é gerado. Insights criados ANTES da Fase 6.3 têm
+ * `class: 'prescription'` congelado ali para `reduzir_volume` — a classe mudou
+ * no código, mas as linhas antigas não. Decidir pelo código faz esses insights
+ * continuarem acionáveis sem backfill nenhum.
+ */
+const ACTIONABLE_CODES: ReadonlySet<AdjustmentCode> = new Set<AdjustmentCode>([
+    'adiar_semana',
+    'repetir_semana',
+    'reduzir_volume',
+]);
+
+export function isActionable(code: AdjustmentCode): boolean {
+    return ACTIONABLE_CODES.has(code);
+}
+
+/**
+ * O tipo de ação: aplicar direto ou abrir a preview.
+ *
+ * `schedule` move o calendário e cabe num diálogo de confirmação. `volume`
+ * reescreve treinos e precisa que o corredor VEJA o resultado antes — daí a
+ * folha, o mesmo contrato da 6.2.
+ */
+export function actionKindOf(
+    code: AdjustmentCode,
+): 'schedule' | 'volume' | null {
+    if (code === 'adiar_semana' || code === 'repetir_semana') return 'schedule';
+    if (code === 'reduzir_volume') return 'volume';
+    return null;
 }
 
 /**

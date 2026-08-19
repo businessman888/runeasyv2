@@ -12,6 +12,7 @@ import { colors, typography, spacing, borderRadius, fonts } from '../../../theme
 import {
     ADJUSTMENT_COPY,
     APPLY_ERROR_COPY,
+    actionKindOf,
     isActionable,
 } from '../adjustmentCopy';
 import {
@@ -57,6 +58,14 @@ interface AdjustmentTrayProps {
      * que não existe mais.
      */
     onConflict?: () => void;
+    /**
+     * Fase 6.3 — abre a folha de alívio da semana.
+     *
+     * `volume` não aplica no toque como `schedule`: reescrever treinos exige que
+     * o corredor VEJA o resultado antes. Quem mostra é a folha, com o mesmo
+     * contrato de preview/digest/conflito que a 6.2 estabeleceu.
+     */
+    onOpenWeekRelief?: () => void;
 }
 
 export const AdjustmentTray = memo(function AdjustmentTray({
@@ -65,13 +74,28 @@ export const AdjustmentTray = memo(function AdjustmentTray({
     applying,
     onApply,
     onConflict,
+    onOpenWeekRelief,
 }: AdjustmentTrayProps) {
     const [justApplied, setJustApplied] = useState(false);
     const copy = ADJUSTMENT_COPY[adjustment.code];
-    const actionable = isActionable(adjustment.class);
+    // Pelo CÓDIGO, não pela classe: insights gerados antes da 6.3 têm
+    // `class: 'prescription'` congelado no jsonb para `reduzir_volume`.
+    const actionable = isActionable(adjustment.code);
+    const kind = actionKindOf(adjustment.code);
     const done = applied || justApplied;
 
     const handlePress = useCallback(() => {
+        // ── `volume` abre a preview em vez de aplicar ─────────────────────────
+        //
+        // Reescrever o volume de N treinos não cabe num diálogo de confirmação:
+        // o corredor precisa ver quanto cada treino fica e — principalmente —
+        // que o treino de qualidade dele continua de pé. Quem mostra isso é a
+        // folha, com o mesmo contrato de digest/conflito da 6.2.
+        if (kind === 'volume') {
+            onOpenWeekRelief?.();
+            return;
+        }
+
         // Confirmação obrigatória: a ação MOVE O CALENDÁRIO INTEIRO e não tem
         // desfazer. Nunca aplicar direto no primeiro toque.
         Alert.alert(
@@ -131,7 +155,7 @@ export const AdjustmentTray = memo(function AdjustmentTray({
                 },
             ],
         );
-    }, [copy, onApply]);
+    }, [copy, kind, onApply, onConflict, onOpenWeekRelief]);
 
     if (adjustment.code === 'manter') {
         return (
@@ -189,7 +213,11 @@ export const AdjustmentTray = memo(function AdjustmentTray({
                             size={18}
                             color={colors.success}
                         />
-                        <Text style={styles.appliedText}>Ajuste aplicado</Text>
+                        <Text style={styles.appliedText}>
+                            {kind === 'volume'
+                                ? 'Semana aliviada'
+                                : 'Ajuste aplicado'}
+                        </Text>
                     </View>
                 ) : (
                     <Pressable
@@ -197,7 +225,11 @@ export const AdjustmentTray = memo(function AdjustmentTray({
                         disabled={applying}
                         accessibilityRole="button"
                         accessibilityLabel={copy.actionLabel}
-                        accessibilityHint="Reorganiza os treinos pendentes do seu plano a partir de hoje"
+                        accessibilityHint={
+                            kind === 'volume'
+                                ? 'Mostra como a próxima semana ficaria, sem aplicar nada ainda'
+                                : 'Reorganiza os treinos pendentes do seu plano a partir de hoje'
+                        }
                         accessibilityState={{ busy: applying, disabled: applying }}
                         style={({ pressed }) => [
                             styles.button,

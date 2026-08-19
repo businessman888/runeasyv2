@@ -35,6 +35,7 @@ import { CreateManualWorkoutDto } from './dto/create-manual-workout.dto';
 import { CompleteFreeWorkoutDto } from './dto/complete-free-workout.dto';
 import { SetWorkoutRpeDto } from './dto/set-workout-rpe.dto';
 import { ApplyReliefDto } from './dto/apply-relief.dto';
+import { ApplyWeekReliefDto } from './dto/apply-week-relief.dto';
 import { VolumeReliefService } from './volume-relief.service';
 
 interface CreatePlanDto {
@@ -968,6 +969,54 @@ export class TrainingController {
       workoutId,
       dto.level,
       dto.expected_digest,
+    );
+  }
+
+  /**
+   * Fase 6.3 — PREVIEW do alívio de volume da SEMANA SEGUINTE.
+   *
+   * Não recebe o número da semana: o backend resolve (a seguinte à corrente).
+   * Devolve o total da semana, as opções já calculadas e — para cada treino —
+   * se ele cede ou se é **qualidade preservada**, que é a coisa mais importante
+   * a comunicar nesta tela.
+   *
+   * `insight_id` é opcional e serve a duas coisas: marcar a origem no histórico
+   * e responder `already_applied` sem precisar de carimbo novo no banco.
+   */
+  @Get('plan/week-relief-preview')
+  @UseGuards(ProGuard)
+  async getWeekReliefPreview(
+    @User('id') userId: string,
+    @Query('insight_id') insightId?: string,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+    return this.volumeReliefService.previewWeek(userId, insightId ?? null);
+  }
+
+  /**
+   * Fase 6.3 — APLICA o alívio da semana: UM patch com N treinos, atômico.
+   *
+   * Se qualquer um dos N tiver mudado desde a preview, a primitiva desfaz o
+   * bloco inteiro — "aliviou 3 de 4" não é um estado possível. Como na 6.2,
+   * conflito é RESULTADO com a preview recalculada no corpo, e a resposta é
+   * **sempre 200**.
+   */
+  @Post('plan/week-relief')
+  @UseGuards(ProGuard)
+  async applyWeekRelief(
+    @User('id') userId: string,
+    @Body() dto: ApplyWeekReliefDto,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+    return this.volumeReliefService.applyWeek(
+      userId,
+      dto.level,
+      dto.expected_digest,
+      dto.insight_id ?? null,
     );
   }
 

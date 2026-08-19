@@ -29,6 +29,41 @@ export function segments(paceMin = 459, paceMax = 509): unknown[] {
   ];
 }
 
+/** Contínuo com `main` parametrizável — para montar semanas com folgas diferentes. */
+export function continuousSegments(mainKm: number, paceMin = 400): unknown[] {
+  return [
+    { type: 'warmup', zone: 'Z1', distance_km: 2, pace_min: paceMin, pace_max: paceMin + 40 },
+    { type: 'main', zone: 'Z2', distance_km: mainKm, pace_min: paceMin - 40, pace_max: paceMin },
+    { type: 'cooldown', zone: 'Z1', distance_km: 2, pace_min: paceMin, pace_max: paceMin + 40 },
+  ];
+}
+
+/**
+ * INTERVALADO — o formato que a validação da 6.2 no device nunca exercitou.
+ *
+ * O plano de teste de staging era 100% contínuo, então a regra de reduzir
+ * repetições e o piso de 2 tiros nunca rodaram contra dado real. Este fixture
+ * existe para fechar esse ponto cego na 6.3.
+ *
+ * Total = 2 + reps×(work+recovery) + 2.
+ */
+export function intervalSegments(
+  reps = 6,
+  workKm = 0.8,
+  recoveryKm = 0.4,
+): unknown[] {
+  return [
+    { type: 'warmup', zone: 'Z1', distance_km: 2, pace_min: 400, pace_max: 440 },
+    {
+      type: 'repeat',
+      reps,
+      work: { distance_km: workKm, pace_min: 240, pace_max: 250, zone: 'Z4' },
+      recovery: { distance_km: recoveryKm, pace_min: 420, pace_max: 460, zone: 'Z1' },
+    },
+    { type: 'cooldown', zone: 'Z1', distance_km: 2, pace_min: 400, pace_max: 440 },
+  ];
+}
+
 export interface SeedWorkout {
   /** Deslocamento em dias a partir de `today`. Negativo = passado. */
   offset: number;
@@ -40,6 +75,13 @@ export interface SeedWorkout {
   /** `true` desliga o `plan_id` — simula corrida manual/livre. */
   orphan?: boolean;
   instructions?: unknown[];
+  /**
+   * `long_run` · `tempo` · `intervals` · `race_simulation` · `easy_run`…
+   *
+   * Só passa a importar na Fase 6.3: é o `type` que decide quem cede volume e
+   * quem é qualidade protegida.
+   */
+  type?: string;
 }
 
 export interface SeedPlanOptions {
@@ -124,7 +166,7 @@ export async function seedPlan(
       `INSERT INTO public.workouts
          (plan_id, user_id, type, week_number, scheduled_date, distance_km,
           instructions_json, status, source, is_race_day, metadata)
-       VALUES ($1, $2, 'easy_run', $3, $4, $5, $6, $7, $8, $9, $10)
+       VALUES ($1, $2, $11, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING id`,
       [
         w.orphan ? null : planId,
@@ -137,6 +179,7 @@ export async function seedPlan(
         w.source ?? (w.orphan ? 'free' : 'plan'),
         w.isRaceDay ?? false,
         JSON.stringify({ zone: 'Z1', week_phase: 'base' }),
+        w.type ?? 'easy_run',
       ],
     );
     byOffset[w.offset] = wr[0].id;

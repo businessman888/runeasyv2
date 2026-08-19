@@ -5,6 +5,8 @@ import type {
     ReliefApplyResult,
     ReliefLevel,
     ReliefPreviewResult,
+    WeekReliefApplyResult,
+    WeekReliefPreviewResult,
 } from '../types/planAdaptation.types';
 
 /**
@@ -95,4 +97,71 @@ export async function applyRelief(
 
     const text = await res.text().catch(() => '');
     throw new Error(`Falha ao aplicar o ajuste (${res.status}): ${text}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fase 6.3 — a SEMANA
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Preview do alívio da semana SEGUINTE.
+ *
+ * Não recebe o número da semana: quem resolve é o backend. Um app que não pede
+ * semana não tem como pedir a semana errada.
+ *
+ * `insightId` marca a origem no histórico e é o que permite responder
+ * `already_applied` numa segunda abertura do mesmo insight.
+ */
+export async function getWeekReliefPreview(
+    insightId?: string,
+): Promise<WeekReliefPreviewResult> {
+    const headers = await getHeaders();
+    const qs = insightId ? `?insight_id=${encodeURIComponent(insightId)}` : '';
+    const res = await authedFetch(
+        `${BASE_API_URL}/training/plan/week-relief-preview${qs}`,
+        { headers },
+    );
+
+    if (res.status === 403) {
+        return {
+            available: false,
+            reason: 'not_pro',
+            message: 'Ajustar o plano faz parte do RunEasy Pro.',
+        };
+    }
+
+    const body = await decisionBody<WeekReliefPreviewResult>(res);
+    if (body && typeof body.available === 'boolean') return body;
+
+    const text = await res.text().catch(() => '');
+    throw new Error(`Falha ao carregar a semana (${res.status}): ${text}`);
+}
+
+/**
+ * Aplica o alívio da semana. `expectedDigest` é o da preview que o corredor viu.
+ *
+ * O backend manda N treinos num patch só; se qualquer um deles tiver mudado, o
+ * conflito volta com a preview recalculada — nunca um estado parcial.
+ */
+export async function applyWeekRelief(
+    level: ReliefLevel,
+    expectedDigest: string,
+    insightId?: string,
+): Promise<WeekReliefApplyResult> {
+    const headers = await getHeaders();
+    const res = await authedFetch(`${BASE_API_URL}/training/plan/week-relief`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+            level,
+            expected_digest: expectedDigest,
+            ...(insightId ? { insight_id: insightId } : {}),
+        }),
+    });
+
+    const body = await decisionBody<WeekReliefApplyResult>(res);
+    if (body && typeof body.applied === 'boolean') return body;
+
+    const text = await res.text().catch(() => '');
+    throw new Error(`Falha ao aliviar a semana (${res.status}): ${text}`);
 }

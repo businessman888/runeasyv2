@@ -198,6 +198,52 @@ export function computeRelief(
     ? (before.seconds * pct) / 100
     : (before.km * pct) / 100;
 
+  return reduceByAmount(segments, targetCut);
+}
+
+/**
+ * O mesmo corte, pedido em VALOR ABSOLUTO em vez de percentual.
+ *
+ * ── POR QUE ESTA VARIANTE EXISTE (Fase 6.3) ───────────────────────────────────
+ *
+ * O alívio de UM treino (6.2) pergunta "reduza 20%". O alívio de uma SEMANA
+ * precisa perguntar "tire 2,4 km DESTE treino" — porque quem decide o quanto
+ * cada treino cede é a política de distribuição semanal, não o próprio treino.
+ *
+ * `computeRelief` virou um wrapper: converte o percentual em alvo e chama esta.
+ * As duas compartilham a escada inteira, então a política por tipo de bloco —
+ * aquecimento intacto, `main` encolhe, `repeat` perde reps, pace nunca tocado —
+ * é literalmente a mesma nos dois níveis, não duas implementações que precisam
+ * concordar.
+ *
+ * `targetCut` é em km, ou em segundos quando o treino é por tempo. A unidade é
+ * inferida do próprio treino (`byTime`), e não passada pelo chamador: pedir um
+ * corte em km a um treino medido em minutos não é um caso a suportar, é um bug
+ * a impedir.
+ */
+export function reduceByAmount(
+  segments: unknown,
+  targetCut: number,
+): ReliefResult | null {
+  if (!Array.isArray(segments) || segments.length === 0) return null;
+
+  const before = totalsOfSegments(segments);
+  if (before.km <= 0 && before.seconds <= 0) return null;
+
+  const byTime = before.km <= 0;
+  if (!(targetCut > 0)) {
+    // Alvo zero ou negativo: nada a fazer, mas devolve um resultado íntegro
+    // (cópia intacta) para o chamador tratar como "este treino não cedeu".
+    const copy = JSON.parse(JSON.stringify(segments)) as Seg[];
+    return {
+      segments: copy,
+      distanceKm: before.km,
+      durationSeconds: before.seconds,
+      achievedPct: 0,
+      changed: false,
+    };
+  }
+
   // Cópia profunda ANTES de qualquer escrita — o md5 do original é a base do CAS.
   const out = JSON.parse(JSON.stringify(segments)) as Seg[];
 

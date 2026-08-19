@@ -25,16 +25,19 @@
  *
  * ── AS CLASSES ────────────────────────────────────────────────────────────────
  *
- * `schedule`     — mexe só em data/status dos treinos. APLICÁVEL HOJE, com
- *                  segurança, via `shift_pending_workouts`: `plan_json` não
- *                  guarda data nem status, então não há o que dessincronizar.
- * `prescription` — mexe em volume/pace prescritos. SÓ SUGESTÃO até a Fase 6:
- *                  seria o primeiro write a dessincronizar `plan_json` de
- *                  `workouts` (hoje eles batem em 100% das semanas), e exigiria
- *                  redistribuir os segmentos de `instructions_json`, o que é o
- *                  pipeline de geração inteiro.
+ * `schedule`     — mexe só em data/status dos treinos. Aplicável desde a Fase 2B
+ *                  via re-âncora: `plan_json` não guarda data nem status, então
+ *                  não há o que dessincronizar.
+ * `volume`       — mexe no volume prescrito da próxima semana. Aplicável desde a
+ *                  Fase 6.3, sobre a fundação: a primitiva atômica reescreve os
+ *                  segmentos de N treinos numa transação, com versão e histórico,
+ *                  e `plan_json` virou snapshot de origem (6.1) em vez de estado
+ *                  vigente — era ele o motivo de esta classe ter esperado.
+ * `prescription` — mexe no PACE prescrito. Continua só sugestão: pace é da Fase
+ *                  3, e a Fase 6 escrevê-lo reabriria a corrida F3×F6 que a
+ *                  fundação existe para fechar. É a Fase 6.4.
  *
- * O botão que APLICA a classe `schedule` é a Fase 2B. A 2A só decide e persiste.
+ * A 2A só decide e persiste; quem aplica são as fases de edição.
  *
  * ── FORA DE ESCOPO ────────────────────────────────────────────────────────────
  *
@@ -49,7 +52,11 @@ export type AdjustmentCode =
   | 'repetir_semana'
   | 'adiar_semana';
 
-export type AdjustmentClass = 'schedule' | 'prescription' | 'none';
+export type AdjustmentClass =
+  | 'schedule'
+  | 'prescription'
+  | 'volume'
+  | 'none';
 
 export type AdjustmentReason =
   | 'semana_sem_treino'
@@ -178,7 +185,11 @@ export function decideAdjustment(input: AdjustmentInput): SuggestedAdjustment {
   if (executionRatio > 0 && executionRatio < VOLUME_SHORTFALL_EXECUTION_PCT) {
     return {
       code: 'reduzir_volume',
-      class: 'prescription',
+      // `volume` desde a Fase 6.3 — antes era `prescription`, quando não havia
+      // como aplicar. Linhas de `plan_week_insights` gravadas antes disso ainda
+      // trazem `prescription` no jsonb; por isso o app decide se a sugestão é
+      // acionável pelo CODE, não pela classe armazenada.
+      class: 'volume',
       reason: 'volume_abaixo_do_prescrito',
       metrics: {
         ...base,

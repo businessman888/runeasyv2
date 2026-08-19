@@ -22,12 +22,18 @@ export type AdjustmentCode =
     | 'adiar_semana';
 
 /**
- * `schedule`     — mexe em data/status. APLICÁVEL: vira botão sólido.
- * `prescription` — mexe em volume/pace prescritos. SÓ CONSELHO até a Fase 6:
- *                  vira card sem botão.
+ * `schedule`     — mexe em data/status. Botão sólido que aplica direto.
+ * `volume`       — mexe no volume da próxima semana. Botão que abre a folha de
+ *                  alívio (preview → confirmação), desde a Fase 6.3.
+ * `prescription` — mexe no PACE prescrito. Continua só conselho: pace é da Fase
+ *                  3, e escrevê-lo aqui reabriria a corrida F3×F6. É a 6.4.
  * `none`         — nada a sugerir.
  */
-export type AdjustmentClass = 'schedule' | 'prescription' | 'none';
+export type AdjustmentClass =
+    | 'schedule'
+    | 'volume'
+    | 'prescription'
+    | 'none';
 
 export interface SuggestedAdjustment {
     code: AdjustmentCode;
