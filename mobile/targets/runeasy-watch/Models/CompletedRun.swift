@@ -2,7 +2,7 @@ import Foundation
 
 // Payload final enviado do Watch ao iPhone via WatchConnectivity (Phase 4).
 // Os nomes em snake_case batem com os DTOs do backend (workout-tracking.dto.ts).
-struct CompletedRun: Codable, Equatable {
+struct CompletedRun: Codable, Equatable, Sendable {
     let runId: String                  // UUID imutável para dedup e ACK ponta a ponta
     let workoutId: String?              // UUID do treino do plano, nil para corrida livre
     let totalDistanceMeters: Double

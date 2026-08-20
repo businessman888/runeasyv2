@@ -1,7 +1,9 @@
 import SwiftUI
+import WatchKit
 
 @main
 struct RunEasyWatchApp: App {
+    @WKApplicationDelegateAdaptor private var appDelegate: WatchAppDelegate
     @StateObject private var phoneBridge = PhoneBridge()
 
     init() {
@@ -10,7 +12,7 @@ struct RunEasyWatchApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(workoutManager: appDelegate.workoutManager)
                 .environmentObject(phoneBridge)
         }
     }

@@ -3,7 +3,7 @@ import CoreLocation
 
 // Espelha exatamente runeasyv2/mobile/src/stores/trainingStore.ts:10-17
 // para que o payload caia direto na fila offline existente do iPhone (MMKV).
-struct RoutePoint: Codable, Equatable {
+struct RoutePoint: Codable, Equatable, Sendable {
     let latitude: Double
     let longitude: Double
     let altitude: Double?     // null no JSON quando indisponível

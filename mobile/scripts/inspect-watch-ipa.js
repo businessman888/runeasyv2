@@ -6,7 +6,7 @@ const plist = require('plist');
 const bplistParser = require('bplist-parser');
 
 const PRESENT = Symbol('present');
-const WATCH_RUNTIME_MARKER = 'RUNEASY_WATCH_HEALTHKIT_FLOW_V3_20260818';
+const WATCH_RUNTIME_MARKER = 'RUNEASY_WATCH_PHASE0_V4_20260820';
 const input = process.argv[2] || process.env.RUNEASY_IPA_PATH;
 
 if (!input) {
@@ -142,7 +142,19 @@ try {
     phoneInfo.CFBundleIdentifier,
     'companion bundle',
   );
-  failures += expectValue(watchInfo, 'WKBackgroundModes', ['workout-processing'], 'workout background mode');
+  failures += expectCondition(
+    Array.isArray(watchInfo.WKBackgroundModes)
+      && watchInfo.WKBackgroundModes.includes('workout-processing'),
+    'workout background mode',
+    JSON.stringify(watchInfo.WKBackgroundModes),
+  );
+  failures += expectCondition(
+    Array.isArray(watchInfo.UIBackgroundModes)
+      && watchInfo.UIBackgroundModes.includes('location'),
+    'location background mode',
+    JSON.stringify(watchInfo.UIBackgroundModes),
+  );
+  failures += expectValue(watchInfo, 'MinimumOSVersion', '10.0', 'watchOS mínimo');
   failures += expectValue(watchInfo, 'NSHealthShareUsageDescription', PRESENT, 'Health read usage');
   failures += expectValue(watchInfo, 'NSHealthUpdateUsageDescription', PRESENT, 'Health write usage');
   failures += expectValue(watchInfo, 'NSLocationWhenInUseUsageDescription', PRESENT, 'Location usage');

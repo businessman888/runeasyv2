@@ -9,11 +9,12 @@ private let navLog = Logger(
 private enum RunLaunch {
     case planned(workout: PlannedWorkout)
     case free
+    case recovered
 
     var workout: PlannedWorkout? {
         switch self {
         case .planned(let workout): return workout
-        case .free: return nil
+        case .free, .recovered: return nil
         }
     }
 }
@@ -31,7 +32,7 @@ struct ContentView: View {
     /// O manager pertence à raiz estável. A tela de destino apenas o observa;
     /// assim o primeiro toque não cria/destroi objetos de workout junto com a
     /// transição do pager.
-    @StateObject private var workoutManager = WorkoutManager()
+    @ObservedObject var workoutManager: WorkoutManager
     @State private var activeRun: RunLaunch?
     @State private var lastCompletedRun: CompletedRun?
     @State private var launchPending = false
@@ -48,6 +49,12 @@ struct ContentView: View {
             if let activeRun {
                 activeRunScreen(activeRun)
                     .zIndex(2)
+            } else if workoutManager.hasRecoveredSession {
+                activeRunScreen(.recovered)
+                    .zIndex(2)
+            } else if workoutManager.isRecoveryPending {
+                recoveryScreen
+                    .zIndex(2)
             } else if let run = lastCompletedRun {
                 summaryScreen(run)
                     .zIndex(1)
@@ -60,11 +67,15 @@ struct ContentView: View {
         }
         .task {
             phoneBridge.activate()
+            await drainPendingCompletion()
         }
     }
 
     private var isShowingHome: Bool {
-        activeRun == nil && lastCompletedRun == nil
+        activeRun == nil
+            && lastCompletedRun == nil
+            && !workoutManager.hasRecoveredSession
+            && !workoutManager.isRecoveryPending
     }
 
     // MARK: - Página 1 — Hoje
@@ -130,13 +141,20 @@ struct ContentView: View {
     /// continua existindo no ZStack e o destino entra somente no próximo turno
     /// do MainActor, sem animação estrutural implícita.
     private func scheduleLaunch(_ launch: RunLaunch) {
-        guard !launchPending, activeRun == nil, lastCompletedRun == nil else { return }
+        guard !launchPending,
+              activeRun == nil,
+              lastCompletedRun == nil,
+              !workoutManager.hasRecoveredSession,
+              !workoutManager.isRecoveryPending else { return }
         launchPending = true
         WatchLaunchDiagnostics.mark("launch.scheduled")
 
         Task { @MainActor in
             await Task.yield()
-            guard activeRun == nil, lastCompletedRun == nil else {
+            guard activeRun == nil,
+                  lastCompletedRun == nil,
+                  !workoutManager.hasRecoveredSession,
+                  !workoutManager.isRecoveryPending else {
                 launchPending = false
                 return
             }
@@ -160,7 +178,11 @@ struct ContentView: View {
             workout: launch.workout,
             onFinish: { run in
                 lastCompletedRun = run
-                phoneBridge.sendCompletedRun(run)
+                if phoneBridge.sendCompletedRun(run) {
+                    Task {
+                        await workoutManager.confirmCompletionEnqueued(runId: run.runId)
+                    }
+                }
                 activeRun = nil
             },
             onCancel: {
@@ -182,9 +204,43 @@ struct ContentView: View {
         )
     }
 
+    private var recoveryScreen: some View {
+        VStack(spacing: 8) {
+            ProgressView()
+                .tint(.runEasyCyan)
+            Text("Recuperando treino…")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.runEasyTextPrimary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.runEasyNavy.ignoresSafeArea())
+    }
+
+    private func drainPendingCompletion() async {
+        await workoutManager.restorePendingCompletion()
+        guard let pendingRun = workoutManager.pendingCompletedRun else { return }
+
+        if activeRun == nil,
+           lastCompletedRun == nil,
+           !workoutManager.hasRecoveredSession,
+           !workoutManager.isRecoveryPending {
+            lastCompletedRun = pendingRun
+        }
+
+        for _ in 0..<10 {
+            if phoneBridge.sendCompletedRun(pendingRun) {
+                await workoutManager.confirmCompletionEnqueued(runId: pendingRun.runId)
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            phoneBridge.activate()
+        }
+    }
+
 }
 
 #Preview {
-    ContentView()
+    ContentView(workoutManager: WorkoutManager())
         .environmentObject(PhoneBridge())
 }

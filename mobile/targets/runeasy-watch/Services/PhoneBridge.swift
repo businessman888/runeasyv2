@@ -87,16 +87,17 @@ final class PhoneBridge: NSObject, ObservableObject {
     // MARK: - Send (Watch → iPhone)
 
     /// Envia o `CompletedRun` ao iPhone com persistência (retry automático até entrega).
-    func sendCompletedRun(_ run: CompletedRun) {
+    @discardableResult
+    func sendCompletedRun(_ run: CompletedRun) -> Bool {
         guard let session, session.activationState == .activated else {
             lastError = "Sessão WatchConnectivity inativa"
-            return
+            return false
         }
         do {
             let data = try JSONEncoder().encode(run)
             guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 lastError = "Falha ao serializar payload"
-                return
+                return false
             }
             let envelope: [String: Any] = [
                 "type": "completed_run",
@@ -107,8 +108,10 @@ final class PhoneBridge: NSObject, ObservableObject {
             pendingTransfers = session.outstandingUserInfoTransfers.count
             lastSentAt = Date()
             lastError = nil
+            return true
         } catch {
             lastError = "Erro ao serializar: \(error.localizedDescription)"
+            return false
         }
     }
 

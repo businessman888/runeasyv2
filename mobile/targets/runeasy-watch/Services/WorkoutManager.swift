@@ -56,6 +56,9 @@ final class WorkoutManager: NSObject, ObservableObject {
     @Published var sessionState: HKWorkoutSessionState = .notStarted
     @Published var hasPermission: Bool = false
     @Published var permissionError: String?
+    @Published private(set) var hasRecoveredSession: Bool = false
+    @Published private(set) var isRecoveryPending: Bool = false
+    @Published private(set) var pendingCompletedRun: CompletedRun?
 
     var isRunning: Bool { phase == .running }
 
@@ -65,14 +68,18 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     /// Uma única store, com a mesma vida útil do manager raiz.
     private let authorizationStore = HKHealthStore()
+    private let checkpointStore = ActiveWorkoutCheckpointStore()
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
     private var routeBuilder: HKWorkoutRouteBuilder?
+    private lazy var routeRecorder = WorkoutRouteRecorder(checkpointStore: checkpointStore)
     private lazy var locationManager: CLLocationManager = {
         let lm = CLLocationManager()
         lm.delegate = self
         lm.desiredAccuracy = kCLLocationAccuracyBest
         lm.activityType = .fitness
+        lm.allowsBackgroundLocationUpdates = true
+        lm.pausesLocationUpdatesAutomatically = false
         return lm
     }()
 
@@ -89,9 +96,11 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var finalizationTask: Task<CompletedRun, Never>?
     private var finalizedRun: CompletedRun?
     private var stopTimeoutTask: Task<Void, Never>?
-    private var stoppedContinuation: CheckedContinuation<Date, Never>?
+    private var stoppedContinuation: CheckedContinuation<WorkoutStopResult, Never>?
     /// A sessão já começou e queremos pontos de GPS assim que a autorização sair.
     private var wantsLocationUpdates = false
+    /// Descarta coordenadas que o Core Location tenha armazenado antes do resume.
+    private var locationCutoffDate = Date.distantPast
 
     // Tipos lidos/escritos
     private var authorizationShareTypes: Set<HKSampleType> {
@@ -109,7 +118,6 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     override init() {
         super.init()
-        WatchLaunchDiagnostics.mark("health.store.ready")
     }
 
     // MARK: - Authorization
@@ -131,13 +139,13 @@ final class WorkoutManager: NSObject, ObservableObject {
         hasPermission = true
         permissionError = nil
         WatchLaunchDiagnostics.mark("health.auth.simulator-granted")
-        beginPreparedWorkout()
+        guard await beginPreparedWorkout() else { return }
         await startSimulatedWorkout()
         return
         #else
         switch await prepareHealthAuthorization() {
         case .ready:
-            beginPreparedWorkout()
+            guard await beginPreparedWorkout() else { return }
             await startRealWorkout()
             return
         case .request:
@@ -169,7 +177,7 @@ final class WorkoutManager: NSObject, ObservableObject {
             hasPermission = true
             permissionError = nil
             WatchLaunchDiagnostics.mark("health.auth.ready")
-            beginPreparedWorkout()
+            guard await beginPreparedWorkout() else { return }
             await startRealWorkout()
         } catch {
             workoutLog.error("autorização HealthKit falhou: \(error.localizedDescription, privacy: .public)")
@@ -258,10 +266,29 @@ final class WorkoutManager: NSObject, ObservableObject {
         WatchLaunchDiagnostics.mark("workout.failed")
     }
 
-    private func beginPreparedWorkout() {
-        runId = UUID().uuidString
-        startDate = Date()
-        phase = .starting
+    private func beginPreparedWorkout() async -> Bool {
+        let nextRunId = UUID().uuidString
+        let nextStartDate = Date()
+        let context = ActiveWorkoutContext(
+            runId: nextRunId,
+            workoutId: workoutId,
+            startDate: nextStartDate
+        )
+
+        do {
+            try await checkpointStore.begin(context)
+            runId = nextRunId
+            startDate = nextStartDate
+            routePoints = []
+            phase = .starting
+            WatchLaunchDiagnostics.mark("workout.checkpoint-created")
+            return true
+        } catch {
+            workoutLog.error("falha ao criar checkpoint: \(error.localizedDescription, privacy: .public)")
+            phase = .failed("Não foi possível preparar o armazenamento seguro do treino.")
+            WatchLaunchDiagnostics.mark("workout.checkpoint-error")
+            return false
+        }
     }
 
     // MARK: - Lifecycle
@@ -273,11 +300,18 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     /// Volta ao estado ocioso para o usuário poder tentar de novo sem sair da tela.
     func reset() {
+        if phase == .running || phase == .starting || phase == .finalizing
+            || sessionState == .running || sessionState == .paused {
+            workoutLog.error("reset() recusado: sessão ativa exige finalização coordenada")
+            WatchLaunchDiagnostics.mark("workout.reset-refused-active-session")
+            return
+        }
+
         watchdogTask?.cancel(); watchdogTask = nil
         finalizationTask?.cancel(); finalizationTask = nil
         finalizedRun = nil
         stopTimeoutTask?.cancel(); stopTimeoutTask = nil
-        resolveStoppedContinuation(with: Date())
+        resolveStoppedContinuation(with: Date(), confirmed: false)
         displayTask?.cancel(); displayTask = nil
         simulatorTickTask?.cancel(); simulatorTickTask = nil
         if session != nil {
@@ -287,9 +321,13 @@ final class WorkoutManager: NSObject, ObservableObject {
         session = nil
         builder = nil
         routeBuilder = nil
+        routeRecorder.invalidate()
         workoutId = nil
         runId = nil
         wantsLocationUpdates = false
+        locationCutoffDate = .distantPast
+        hasRecoveredSession = false
+        isRecoveryPending = false
         metrics = RunMetrics()
         routePoints = []
         heartRateSamples = []
@@ -317,6 +355,7 @@ final class WorkoutManager: NSObject, ObservableObject {
             session = newSession
             builder = newBuilder
             routeBuilder = newBuilder.seriesBuilder(for: HKSeriesType.workoutRoute()) as? HKWorkoutRouteBuilder
+            routeRecorder.open(routeBuilder: routeBuilder)
 
             newSession.delegate = self
             newBuilder.delegate = self
@@ -341,6 +380,7 @@ final class WorkoutManager: NSObject, ObservableObject {
             watchdogTask?.cancel(); watchdogTask = nil
 
             wantsLocationUpdates = true
+            locationCutoffDate = now
             phase = .running
             startDisplayTimer()
             WatchLaunchDiagnostics.mark("workout.running")
@@ -353,10 +393,116 @@ final class WorkoutManager: NSObject, ObservableObject {
             session = nil
             builder = nil
             routeBuilder = nil
+            routeRecorder.invalidate()
+            await checkpointStore.clear()
             workoutLog.error("falha ao iniciar: \(error.localizedDescription, privacy: .public)")
             WatchLaunchDiagnostics.mark("workout.start.error")
             phase = .failed("Não foi possível iniciar o treino: \(error.localizedDescription)")
             WatchLaunchDiagnostics.mark("workout.failed")
+        }
+    }
+
+    /// Reconecta a UI ao workout que o watchOS manteve ativo após o processo
+    /// ser encerrado. Não reinicia a sessão nem a coleta do builder.
+    func beginRecovery() -> Bool {
+        guard session == nil, phase == .idle, !isRecoveryPending else { return false }
+        isRecoveryPending = true
+        WatchLaunchDiagnostics.mark("recovery.requested")
+        return true
+    }
+
+    func recoverActiveWorkout() async {
+        #if targetEnvironment(simulator)
+        isRecoveryPending = false
+        return
+        #else
+        guard isRecoveryPending, session == nil, phase == .idle else { return }
+
+        do {
+            guard let recoveredSession = try await authorizationStore.recoverActiveWorkoutSession() else {
+                await checkpointStore.clear()
+                isRecoveryPending = false
+                WatchLaunchDiagnostics.mark("recovery.none")
+                return
+            }
+            let recoveredBuilder = recoveredSession.associatedWorkoutBuilder()
+            let recoveredRouteBuilder = recoveredBuilder.seriesBuilder(
+                for: HKSeriesType.workoutRoute()
+            ) as? HKWorkoutRouteBuilder
+            session = recoveredSession
+            builder = recoveredBuilder
+            routeBuilder = recoveredRouteBuilder
+
+            recoveredSession.delegate = self
+            recoveredBuilder.delegate = self
+            recoveredBuilder.dataSource = HKLiveWorkoutDataSource(
+                healthStore: authorizationStore,
+                workoutConfiguration: recoveredSession.workoutConfiguration
+            )
+
+            let snapshot = await checkpointStore.load()
+            let recoveredRunId = snapshot.context?.runId ?? UUID().uuidString
+            let recoveredStartDate = snapshot.context?.startDate
+                ?? recoveredSession.startDate
+                ?? Date()
+            runId = recoveredRunId
+            workoutId = snapshot.context?.workoutId
+            startDate = recoveredStartDate
+            if snapshot.context == nil {
+                try? await checkpointStore.updateContextPreservingRoute(
+                    ActiveWorkoutContext(
+                        runId: recoveredRunId,
+                        workoutId: nil,
+                        startDate: recoveredStartDate
+                    )
+                )
+            }
+            routePoints = snapshot.routePoints
+            routeRecorder.open(
+                routeBuilder: recoveredRouteBuilder,
+                mayContainPreexistingRouteData: true
+            )
+
+            sessionState = recoveredSession.state
+            metrics.elapsedSeconds = Int(recoveredBuilder.elapsedTime.rounded())
+            hydrateMetrics(from: recoveredBuilder)
+            metrics.isPaused = recoveredSession.state == .paused
+            hasPermission = true
+            hasRecoveredSession = true
+            isRecoveryPending = false
+            phase = .running
+            locationCutoffDate = Date()
+            wantsLocationUpdates = recoveredSession.state == .running
+            startDisplayTimer()
+
+            if wantsLocationUpdates {
+                startLocationUpdatesIfAuthorized()
+            }
+            WatchLaunchDiagnostics.mark("recovery.attached")
+        } catch {
+            workoutLog.info("nenhuma sessão ativa recuperável: \(error.localizedDescription, privacy: .public)")
+            await checkpointStore.clear()
+            isRecoveryPending = false
+            WatchLaunchDiagnostics.mark("recovery.none")
+        }
+        #endif
+    }
+
+    private func hydrateMetrics(from builder: HKLiveWorkoutBuilder) {
+        let types: [HKQuantityType] = [
+            HKQuantityType(.heartRate),
+            HKQuantityType(.activeEnergyBurned),
+            HKQuantityType(.distanceWalkingRunning)
+        ]
+        for type in types {
+            updateMetrics(from: builder.statistics(for: type))
+        }
+
+        if let heartRate = builder.statistics(for: HKQuantityType(.heartRate)) {
+            let unit = HKUnit.count().unitDivided(by: .minute())
+            if let maximum = heartRate.maximumQuantity()?.doubleValue(for: unit) {
+                metrics.maxHeartRate = Int(maximum.rounded())
+            }
         }
     }
 
@@ -451,8 +597,22 @@ final class WorkoutManager: NSObject, ObservableObject {
         #if !targetEnvironment(simulator)
         healthKitSaved = false
         routeSaved = false
-        locationManager.stopUpdatingLocation()
+        // Fecha a entrada antes de parar o Core Location: callbacks que já
+        // estavam a caminho serão recusados, e os lotes aceitos são drenados.
         wantsLocationUpdates = false
+        locationManager.stopUpdatingLocation()
+        WatchLaunchDiagnostics.mark("route.drain.begin")
+        let routeDrain = await routeRecorder.sealAndDrain()
+        WatchLaunchDiagnostics.mark(routeDrain.timedOut ? "route.drain.timeout" : "route.drain.completed")
+        workoutLog.info(
+            "route drain accepted=\(routeDrain.acceptedPointCount, privacy: .public) inserted=\(routeDrain.insertedPointCount, privacy: .public) rejected=\(routeDrain.rejectedPointCount, privacy: .public) timeout=\(routeDrain.timedOut, privacy: .public)"
+        )
+        if let insertionError = routeDrain.insertionError {
+            workoutLog.error("route insert parcial: \(insertionError, privacy: .public)")
+        }
+        if let journalError = routeDrain.journalError {
+            workoutLog.error("route journal parcial: \(journalError, privacy: .public)")
+        }
         do {
             guard let session else {
                 throw WorkoutFinalizationError.missingSession
@@ -464,27 +624,35 @@ final class WorkoutManager: NSObject, ObservableObject {
             // `.stopped` mantém o builder vivo para persistir a amostra. Chamar
             // `session.end()` antes de finishWorkout perde/racea o treino.
             WatchLaunchDiagnostics.mark("workout.stop-requested")
-            let stoppedAt = await stopWorkoutSession(session, at: endDate)
+            let stopResult = await stopWorkoutSession(session, at: endDate)
+            guard stopResult.confirmed else {
+                throw WorkoutFinalizationError.stopNotConfirmed
+            }
 
             WatchLaunchDiagnostics.mark("builder.end-collection")
-            try await builder.endCollection(at: stoppedAt)
+            try await builder.endCollection(at: stopResult.date)
             WatchLaunchDiagnostics.mark("builder.finish-workout")
             guard let savedWorkout = try await builder.finishWorkout() else {
                 throw WorkoutFinalizationError.workoutNotSaved
             }
             healthKitSaved = true
-            session.end()
-            WatchLaunchDiagnostics.mark("session.ended")
 
-            if routePoints.isEmpty {
+            if !routeDrain.hasRouteData {
                 completionWarning = "Treino salvo sem rota GPS. Verifique a permissão de Localização."
+            } else if routeDrain.timedOut {
+                completionWarning = "Treino salvo, mas a rota GPS excedeu o tempo de finalização."
             } else {
                 if let routeBuilder {
                     do {
+                        WatchLaunchDiagnostics.mark("route.finish.begin")
                         _ = try await routeBuilder.finishRoute(with: savedWorkout, metadata: [
                             "com.oytotec.runeasy.run_id": runId ?? "unknown"
                         ])
-                        routeSaved = true
+                        routeSaved = routeDrain.isComplete
+                        if !routeDrain.isComplete {
+                            completionWarning = "Treino salvo com rota GPS parcial."
+                        }
+                        WatchLaunchDiagnostics.mark("route.finish.completed")
                     } catch {
                         routeSaved = false
                         completionWarning = "Treino salvo, mas a rota GPS não pôde ser anexada."
@@ -496,6 +664,8 @@ final class WorkoutManager: NSObject, ObservableObject {
                     workoutLog.error("route builder indisponível durante a finalização")
                 }
             }
+            session.end()
+            WatchLaunchDiagnostics.mark("session.ended")
         } catch {
             session?.end()
             healthKitSaved = false
@@ -505,9 +675,14 @@ final class WorkoutManager: NSObject, ObservableObject {
         }
         #endif
 
-        let avgHr = heartRateSamples.isEmpty
-            ? nil
-            : heartRateSamples.reduce(0, +) / heartRateSamples.count
+        let heartRateStatistics = builder?.statistics(for: HKQuantityType(.heartRate))
+        let heartRateUnit = HKUnit.count().unitDivided(by: .minute())
+        let avgHr = heartRateStatistics?.averageQuantity().map {
+            Int($0.doubleValue(for: heartRateUnit).rounded())
+        } ?? (heartRateSamples.isEmpty ? nil : heartRateSamples.reduce(0, +) / heartRateSamples.count)
+        let recoveredMaxHr = heartRateStatistics?.maximumQuantity().map {
+            Int($0.doubleValue(for: heartRateUnit).rounded())
+        }
 
         let payload = CompletedRun(
             runId: runId ?? UUID().uuidString,
@@ -516,7 +691,7 @@ final class WorkoutManager: NSObject, ObservableObject {
             durationSeconds: metrics.elapsedSeconds,
             avgPaceSecondsPerKm: metrics.avgPaceSecondsPerKm,
             avgHeartRate: avgHr,
-            maxHeartRate: metrics.maxHeartRate > 0 ? metrics.maxHeartRate : nil,
+            maxHeartRate: recoveredMaxHr ?? (metrics.maxHeartRate > 0 ? metrics.maxHeartRate : nil),
             calories: metrics.calories > 0 ? metrics.calories : nil,
             routePoints: routePoints,
             startedAt: ISO8601DateFormatter().string(from: startDate ?? endDate),
@@ -527,11 +702,40 @@ final class WorkoutManager: NSObject, ObservableObject {
         )
         workoutLog.info("endWorkout dist=\(self.metrics.distanceMeters, privacy: .public)m dur=\(self.metrics.elapsedSeconds, privacy: .public)s pts=\(self.routePoints.count, privacy: .public)")
         WatchLaunchDiagnostics.mark("workout.finished")
+        hasRecoveredSession = false
+        isRecoveryPending = false
+        routeRecorder.invalidate()
+        do {
+            try await checkpointStore.savePendingCompletedRun(payload)
+            pendingCompletedRun = payload
+            await checkpointStore.clear()
+            WatchLaunchDiagnostics.mark("completion.persisted")
+        } catch {
+            // Mantém context + rota como último recurso se nem o payload final
+            // pôde ser persistido.
+            workoutLog.error("falha ao persistir conclusão pendente: \(error.localizedDescription, privacy: .public)")
+            WatchLaunchDiagnostics.mark("completion.persist-error")
+        }
         phase = .finished
         return payload
     }
 
-    private func stopWorkoutSession(_ session: HKWorkoutSession, at date: Date) async -> Date {
+    func restorePendingCompletion() async {
+        pendingCompletedRun = await checkpointStore.loadPendingCompletedRun()
+    }
+
+    func confirmCompletionEnqueued(runId: String) async {
+        await checkpointStore.clearPendingCompletedRun(runId: runId)
+        if pendingCompletedRun?.runId == runId {
+            pendingCompletedRun = nil
+        }
+        WatchLaunchDiagnostics.mark("completion.enqueued")
+    }
+
+    private func stopWorkoutSession(_ session: HKWorkoutSession, at date: Date) async -> WorkoutStopResult {
+        if session.state == .stopped {
+            return WorkoutStopResult(date: session.endDate ?? date, confirmed: true)
+        }
         await withCheckedContinuation { continuation in
             stoppedContinuation = continuation
             stopTimeoutTask?.cancel()
@@ -540,18 +744,18 @@ final class WorkoutManager: NSObject, ObservableObject {
                 guard let self, !Task.isCancelled else { return }
                 workoutLog.error("timeout aguardando HKWorkoutSession.stopped")
                 WatchLaunchDiagnostics.mark("workout.stop-timeout")
-                self.resolveStoppedContinuation(with: date)
+                self.resolveStoppedContinuation(with: date, confirmed: false)
             }
             session.stopActivity(with: date)
         }
     }
 
-    private func resolveStoppedContinuation(with date: Date) {
+    private func resolveStoppedContinuation(with date: Date, confirmed: Bool) {
         stopTimeoutTask?.cancel()
         stopTimeoutTask = nil
         let continuation = stoppedContinuation
         stoppedContinuation = nil
-        continuation?.resume(returning: date)
+        continuation?.resume(returning: WorkoutStopResult(date: date, confirmed: confirmed))
     }
 
     // MARK: - Helpers (real device)
@@ -685,9 +889,20 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
             workoutLog.info("session \(fromState.rawValue, privacy: .public) → \(toState.rawValue, privacy: .public)")
             sessionState = toState
             metrics.isPaused = (toState == .paused)
-            if toState == .stopped {
+            if toState == .paused {
+                wantsLocationUpdates = false
+                locationManager.stopUpdatingLocation()
+                WatchLaunchDiagnostics.mark("workout.paused")
+            } else if toState == .running, phase == .running {
+                locationCutoffDate = date
+                wantsLocationUpdates = true
+                startLocationUpdatesIfAuthorized()
+                WatchLaunchDiagnostics.mark(fromState == .paused ? "workout.resumed" : "workout.session-running")
+            } else if toState == .stopped {
+                wantsLocationUpdates = false
+                locationManager.stopUpdatingLocation()
                 WatchLaunchDiagnostics.mark("workout.stopped")
-                resolveStoppedContinuation(with: date)
+                resolveStoppedContinuation(with: date, confirmed: true)
             }
         }
     }
@@ -704,7 +919,7 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
             permissionError = error.localizedDescription
             if phase == .finalizing {
                 WatchLaunchDiagnostics.mark("workout.finalization-session-error")
-                resolveStoppedContinuation(with: Date())
+                resolveStoppedContinuation(with: Date(), confirmed: false)
                 return
             }
             phase = .failed("A sessão de treino falhou: \(error.localizedDescription)")
@@ -751,20 +966,34 @@ extension WorkoutManager: CLLocationManagerDelegate {
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        let filtered = locations.filter { $0.horizontalAccuracy >= 0 && $0.horizontalAccuracy < 50 }
-        guard !filtered.isEmpty else { return }
-
-        let points = filtered.map { RoutePoint(from: $0) }
         Task { @MainActor in
-            self.routePoints.append(contentsOf: points)
-            // Acessar routeBuilder no MainActor (insertRouteData é async, await ok aqui)
-            if let builder = self.routeBuilder {
-                do {
-                    try await builder.insertRouteData(filtered)
-                } catch {
-                    workoutLog.error("erro ao inserir rota: \(error.localizedDescription, privacy: .public)")
+            guard self.phase == .running,
+                  self.sessionState == .running,
+                  !self.metrics.isPaused,
+                  self.wantsLocationUpdates else { return }
+
+            var newestTimestamp = max(
+                self.locationCutoffDate.timeIntervalSince1970,
+                (self.routePoints.last?.timestamp ?? 0) / 1000.0
+            )
+            let filtered = locations
+                .filter {
+                    $0.horizontalAccuracy >= 0
+                        && $0.horizontalAccuracy <= 50
+                        && $0.timestamp.timeIntervalSince1970 >= newestTimestamp
                 }
-            }
+                .sorted { $0.timestamp < $1.timestamp }
+                .filter { location in
+                    let timestamp = location.timestamp.timeIntervalSince1970
+                    guard timestamp > newestTimestamp else { return false }
+                    newestTimestamp = timestamp
+                    return true
+                }
+            guard !filtered.isEmpty else { return }
+
+            let points = filtered.map { RoutePoint(from: $0) }
+            self.routePoints.append(contentsOf: points)
+            self.routeRecorder.enqueue(locations: filtered, points: points)
         }
     }
 
@@ -776,13 +1005,20 @@ extension WorkoutManager: CLLocationManagerDelegate {
 private enum WorkoutFinalizationError: LocalizedError {
     case missingSession
     case missingBuilder
+    case stopNotConfirmed
     case workoutNotSaved
 
     var errorDescription: String? {
         switch self {
         case .missingSession: return "Sessão de treino indisponível"
         case .missingBuilder: return "Workout builder indisponível"
+        case .stopNotConfirmed: return "HealthKit não confirmou a interrupção da sessão"
         case .workoutNotSaved: return "HealthKit não retornou o workout salvo"
         }
     }
+}
+
+private struct WorkoutStopResult {
+    let date: Date
+    let confirmed: Bool
 }

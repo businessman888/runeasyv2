@@ -34,6 +34,12 @@
 	<array>
 		<string>workout-processing</string>
 	</array>
+	<!-- Core Location exige esta declaração antes de permitir
+	     allowsBackgroundLocationUpdates no processo do app Watch. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 	<key>NSHealthShareUsageDescription</key>
 	<string>RunEasy precisa ler dados de saúde no Apple Watch para mostrar frequência cardíaca durante a corrida.</string>
 	<key>NSHealthUpdateUsageDescription</key>

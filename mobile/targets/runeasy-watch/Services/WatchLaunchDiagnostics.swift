@@ -9,7 +9,7 @@ private let launchDiagnosticsLog = Logger(
 /// Identifica de forma verificável a implementação de tracking contida no IPA.
 /// O inspetor procura este valor no executável watchOS, não apenas no Info.plist.
 enum WatchBuildInfo {
-    static let runtimeMarker = "RUNEASY_WATCH_HEALTHKIT_FLOW_V3_20260818"
+    static let runtimeMarker = "RUNEASY_WATCH_PHASE0_V4_20260820"
 
     static var versionLabel: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
@@ -81,5 +81,9 @@ enum WatchLaunchDiagnostics {
             || checkpoint == "workout.stop-requested"
             || checkpoint == "builder.end-collection"
             || checkpoint == "builder.finish-workout"
+            || checkpoint == "route.drain.begin"
+            || checkpoint == "route.finish.begin"
+            || checkpoint == "recovery.callback"
+            || checkpoint == "recovery.requested"
     }
 }
