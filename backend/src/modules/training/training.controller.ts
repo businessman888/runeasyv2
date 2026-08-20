@@ -1392,9 +1392,12 @@ export class TrainingController {
    * Aplica o reajuste sugerido — SÓ da classe `schedule` (adiar/repetir semana).
    *
    * Re-ancora o plano a partir de hoje, em semanas inteiras, preservando o dia
-   * da semana. A classe `prescription` é recusada com `not_actionable`: mexer em
-   * volume/pace prescritos é Fase 6, e o app nunca deve oferecer um botão que
-   * contradiz o plano que ele mesmo mostra.
+   * da semana.
+   *
+   * Qualquer classe que não seja `schedule` é recusada com `not_actionable`, e
+   * isso continua correto depois da Fase 6.3: `volume` tem endpoint próprio
+   * (`/plan/week-relief`), porque reescrever treinos exige preview, digest e
+   * reconfirmação — não cabe num apply de um toque só.
    */
   @Post('weekly-insight/:id/apply')
   @UseGuards(ProGuard)
