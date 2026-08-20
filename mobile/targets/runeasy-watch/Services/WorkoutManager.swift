@@ -79,7 +79,6 @@ final class WorkoutManager: NSObject, ObservableObject {
         lm.desiredAccuracy = kCLLocationAccuracyBest
         lm.activityType = .fitness
         lm.allowsBackgroundLocationUpdates = true
-        lm.pausesLocationUpdatesAutomatically = false
         return lm
     }()
 
@@ -736,7 +735,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         if session.state == .stopped {
             return WorkoutStopResult(date: session.endDate ?? date, confirmed: true)
         }
-        await withCheckedContinuation { continuation in
+        return await withCheckedContinuation { continuation in
             stoppedContinuation = continuation
             stopTimeoutTask?.cancel()
             stopTimeoutTask = Task { @MainActor [weak self] in
