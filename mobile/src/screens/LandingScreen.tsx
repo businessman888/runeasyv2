@@ -2,10 +2,13 @@ import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
     Dimensions,
     Image,
+    ImageStyle,
     Pressable,
+    StyleProp,
     StatusBar,
     StyleSheet,
     Text,
+    TextStyle,
     View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,10 +20,11 @@ import Animated, {
     useAnimatedStyle,
     useReducedMotion,
     useSharedValue,
+    withDelay,
     withSpring,
     withTiming,
 } from 'react-native-reanimated';
-import { borderRadius, colors, fonts, shadows } from '../theme';
+import { borderRadius, colors, fonts } from '../theme';
 import { StoryProgressBars } from '../components/landing/StoryProgressBars';
 import { PrePaywallBackground } from '../components/upgrade/PrePaywallBackground';
 import {
@@ -50,6 +54,81 @@ const scaleFont = (size: number) => {
 
 const TOTAL = LANDING_SLIDES.length;
 const FADE_DURATION = 350;
+const IMAGE_SIZE = Math.min(BASE_W, scaleY(350));
+const CTA_WIDTH = Math.min(SCREEN_WIDTH - scaleX(40), 440);
+
+type TypewriterTextProps = {
+    active: boolean;
+    reducedMotion: boolean;
+    style: StyleProp<TextStyle>;
+    text: string;
+};
+
+/**
+ * Reserves the final title height before revealing it, so the image never jumps
+ * while the copy is being written. Screen readers receive the complete phrase.
+ */
+const TypewriterText = memo(({ active, reducedMotion, style, text }: TypewriterTextProps) => {
+    const [visibleCharacters, setVisibleCharacters] = useState(reducedMotion ? text.length : 0);
+
+    useEffect(() => {
+        if (!active) return;
+        if (reducedMotion) {
+            setVisibleCharacters(text.length);
+            return;
+        }
+
+        setVisibleCharacters(0);
+        let interval: ReturnType<typeof setInterval> | null = null;
+        const start = setTimeout(() => {
+            interval = setInterval(() => {
+                setVisibleCharacters((current) => {
+                    if (current >= text.length) {
+                        if (interval) clearInterval(interval);
+                        return text.length;
+                    }
+                    return current + 1;
+                });
+            }, 24);
+        }, 140);
+
+        return () => {
+            clearTimeout(start);
+            if (interval) clearInterval(interval);
+        };
+    }, [active, reducedMotion, text]);
+
+    return (
+        <View
+            accessible
+            accessibilityRole="header"
+            accessibilityLabel={text.replace(/\n/g, ' ')}
+            style={styles.typewriterFrame}
+        >
+            <Text
+                accessible={false}
+                accessibilityElementsHidden
+                importantForAccessibility="no"
+                style={[style, styles.typewriterMeasure]}
+                allowFontScaling
+                maxFontSizeMultiplier={1.2}
+            >
+                {text}
+            </Text>
+            <Text
+                accessible={false}
+                accessibilityElementsHidden
+                importantForAccessibility="no"
+                style={[style, styles.typewriterVisible]}
+                allowFontScaling
+                maxFontSizeMultiplier={1.2}
+            >
+                {text.slice(0, visibleCharacters)}
+            </Text>
+        </View>
+    );
+});
+TypewriterText.displayName = 'LandingTypewriterText';
 
 // ---------------------------------------------------------------------------
 // Single slide — all slides stay mounted; only opacity cross-fades. Mounting
@@ -61,13 +140,99 @@ type SlideProps = {
     activeIndex: number;
     padTop: number;
     padBottom: number;
+    reducedMotion: boolean;
 };
 
-const Slide = memo(({ slide, index, activeIndex, padTop, padBottom }: SlideProps) => {
+const Slide = memo(({ slide, index, activeIndex, padTop, padBottom, reducedMotion }: SlideProps) => {
+    const isActive = index === activeIndex;
+    const startsVisible = reducedMotion && index === 0;
+    const imageOpacity = useSharedValue(startsVisible ? 1 : 0);
+    const imageScale = useSharedValue(startsVisible ? slide.imageScale : slide.imageScale * 0.93);
+    const imageTranslateY = useSharedValue(startsVisible ? 0 : scaleY(14));
+    const copyOpacity = useSharedValue(startsVisible ? 1 : 0);
+    const copyTranslateY = useSharedValue(startsVisible ? 0 : scaleY(8));
+
     const fadeStyle = useAnimatedStyle(
-        () => ({ opacity: withTiming(index === activeIndex ? 1 : 0, { duration: FADE_DURATION }) }),
-        [index, activeIndex],
+        () => ({
+            opacity: withTiming(isActive ? 1 : 0, {
+                duration: reducedMotion ? 120 : FADE_DURATION,
+                easing: Easing.out(Easing.cubic),
+            }),
+        }),
+        [isActive, reducedMotion],
     );
+
+    const imageStyle = useAnimatedStyle<ImageStyle>(() => {
+        const transform: NonNullable<ImageStyle['transform']> = [
+            { translateY: imageTranslateY.value },
+            { scale: imageScale.value },
+        ];
+
+        return {
+            opacity: imageOpacity.value,
+            transform,
+        };
+    });
+
+    const copyStyle = useAnimatedStyle(() => ({
+        opacity: copyOpacity.value,
+        transform: [{ translateY: copyTranslateY.value }],
+    }));
+
+    useEffect(() => {
+        if (!isActive) return;
+
+        cancelAnimation(imageOpacity);
+        cancelAnimation(imageScale);
+        cancelAnimation(imageTranslateY);
+        cancelAnimation(copyOpacity);
+        cancelAnimation(copyTranslateY);
+
+        if (reducedMotion) {
+            imageOpacity.value = 1;
+            imageScale.value = slide.imageScale;
+            imageTranslateY.value = 0;
+            copyOpacity.value = 1;
+            copyTranslateY.value = 0;
+            return;
+        }
+
+        copyOpacity.value = 0;
+        copyTranslateY.value = scaleY(8);
+        imageOpacity.value = 0;
+        imageScale.value = slide.imageScale * 0.93;
+        imageTranslateY.value = scaleY(14);
+
+        copyOpacity.value = withTiming(1, {
+            duration: 360,
+            easing: Easing.out(Easing.cubic),
+        });
+        copyTranslateY.value = withSpring(0, { damping: 22, stiffness: 180 });
+        imageOpacity.value = withDelay(
+            160,
+            withTiming(1, { duration: 640, easing: Easing.out(Easing.cubic) }),
+        );
+        imageScale.value = withDelay(
+            120,
+            withTiming(slide.imageScale, { duration: 1800, easing: Easing.out(Easing.cubic) }),
+        );
+        imageTranslateY.value = withDelay(
+            120,
+            withSpring(0, { damping: 24, stiffness: 150 }),
+        );
+    }, [
+        copyOpacity,
+        copyTranslateY,
+        imageOpacity,
+        imageScale,
+        imageTranslateY,
+        isActive,
+        reducedMotion,
+        slide.imageScale,
+    ]);
+
+    const isCentered = slide.titleAlign === 'center';
+    const titleStyle = slide.titleTone === 'brand' ? styles.titleBrand : styles.titleFeature;
 
     return (
         <Animated.View
@@ -81,35 +246,70 @@ const Slide = memo(({ slide, index, activeIndex, padTop, padBottom }: SlideProps
             accessibilityElementsHidden={index !== activeIndex}
             importantForAccessibility={index === activeIndex ? 'auto' : 'no-hide-descendants'}
         >
-            <View style={styles.slideHeader}>
+            <Animated.View
+                style={[
+                    styles.slideHeader,
+                    isCentered ? styles.slideHeaderCentered : styles.slideHeaderLeading,
+                    copyStyle,
+                ]}
+            >
                 {slide.variant === 'logo' && (
-                    <Image source={LANDING_LOGO} style={styles.logo} resizeMode="contain" />
+                    <Image
+                        accessible
+                        accessibilityLabel="RunEasy"
+                        source={LANDING_LOGO}
+                        style={styles.logo}
+                        resizeMode="contain"
+                    />
                 )}
-                <Text style={styles.title}>{slide.title}</Text>
-                {slide.subtitle && <Text style={styles.subtitle}>{slide.subtitle}</Text>}
-            </View>
+                {slide.eyebrow && (
+                    <Text
+                        style={[styles.eyebrow, isCentered ? styles.textCentered : styles.textLeading]}
+                        allowFontScaling
+                        maxFontSizeMultiplier={1.2}
+                    >
+                        {slide.eyebrow}
+                    </Text>
+                )}
+                <TypewriterText
+                    active={isActive}
+                    reducedMotion={reducedMotion}
+                    text={slide.title}
+                    style={[titleStyle, isCentered ? styles.textCentered : styles.textLeading]}
+                />
+                {slide.subtitle && (
+                    <Text
+                        style={[styles.subtitle, isCentered ? styles.textCentered : styles.textLeading]}
+                        allowFontScaling
+                        maxFontSizeMultiplier={1.25}
+                    >
+                        {slide.subtitle}
+                    </Text>
+                )}
+            </Animated.View>
 
             <View style={styles.imageStage}>
-                {slide.imageMode === 'bleed' ? (
-                    <Image
-                        source={slide.image}
-                        style={styles.bleedImage}
-                        resizeMode="contain"
-                    />
-                ) : (
-                    <Image
-                        source={slide.image}
-                        style={styles.containedImage}
-                        resizeMode="contain"
-                    />
-                )}
+                <Animated.Image
+                    accessible
+                    accessibilityLabel={`Ilustração: ${slide.title.replace(/\n/g, ' ')}`}
+                    source={slide.image}
+                    style={[
+                        slide.imageMode === 'bleed' ? styles.bleedImage : styles.containedImage,
+                        imageStyle,
+                    ]}
+                    resizeMode="contain"
+                />
             </View>
         </Animated.View>
     );
 });
 Slide.displayName = 'LandingSlide';
 
-export function LandingScreen({ navigation }: { navigation: any }) {
+type LandingScreenProps = {
+    navigation: { navigate: (screen: 'Login') => void };
+};
+
+export function LandingScreen({ navigation }: LandingScreenProps) {
     const insets = useSafeAreaInsets();
     const reducedMotion = useReducedMotion();
 
@@ -180,7 +380,7 @@ export function LandingScreen({ navigation }: { navigation: any }) {
         [goNext, goPrev, play, progress],
     );
 
-    // Get started button press feedback
+    // Primary CTA press feedback
     const btnScale = useSharedValue(1);
     const btnStyle = useAnimatedStyle(() => ({ transform: [{ scale: btnScale.value }] }));
 
@@ -206,6 +406,7 @@ export function LandingScreen({ navigation }: { navigation: any }) {
                         activeIndex={activeIndex}
                         padTop={slidePadTop}
                         padBottom={slidePadBottom}
+                        reducedMotion={reducedMotion}
                     />
                 ))}
             </View>
@@ -224,18 +425,20 @@ export function LandingScreen({ navigation }: { navigation: any }) {
                     onPressIn={handlePressIn}
                     onPressOut={() => handlePressOut('left')}
                     accessibilityRole="button"
-                    accessibilityLabel="Slide anterior"
+                    accessibilityLabel="Story anterior"
+                    accessibilityHint="Exibe o conteúdo anterior da apresentação"
                 />
                 <Pressable
                     style={styles.tapRight}
                     onPressIn={handlePressIn}
                     onPressOut={() => handlePressOut('right')}
                     accessibilityRole="button"
-                    accessibilityLabel="Próximo slide"
+                    accessibilityLabel="Próximo story"
+                    accessibilityHint="Avança para o próximo conteúdo da apresentação"
                 />
             </View>
 
-            {/* Bottom: shadow gradient + Get started */}
+            {/* Bottom: shadow gradient + primary CTA */}
             <LinearGradient
                 colors={['transparent', 'rgba(10, 10, 24, 0.85)', colors.background] as const}
                 locations={[0, 0.55, 1]}
@@ -243,16 +446,34 @@ export function LandingScreen({ navigation }: { navigation: any }) {
                 pointerEvents="box-none"
             >
                 <View style={[styles.bottomContent, { paddingBottom: insets.bottom + scaleY(34) }]}>
-                    <Animated.View style={btnStyle}>
+                    <Animated.View style={[styles.buttonDiffuseContainer, btnStyle]}>
                         <Pressable
                             onPress={() => navigation.navigate('Login')}
-                            onPressIn={() => { btnScale.value = withSpring(0.96); }}
-                            onPressOut={() => { btnScale.value = withSpring(1); }}
+                            onPressIn={() => {
+                                btnScale.value = withSpring(0.97, { damping: 18, stiffness: 220 });
+                            }}
+                            onPressOut={() => {
+                                btnScale.value = withSpring(1, { damping: 18, stiffness: 220 });
+                            }}
                             style={styles.getStartedButton}
                             accessibilityRole="button"
-                            accessibilityLabel="Get started"
+                            accessibilityLabel="Começar"
+                            accessibilityHint="Abre as opções de acesso ao RunEasy"
                         >
-                            <Text style={styles.getStartedText}>Get started</Text>
+                            <LinearGradient
+                                colors={[colors.primary, colors.primary, colors.primaryDark] as const}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={StyleSheet.absoluteFill}
+                                pointerEvents="none"
+                            />
+                            <Text
+                                style={styles.getStartedText}
+                                allowFontScaling
+                                maxFontSizeMultiplier={1.2}
+                            >
+                                começar
+                            </Text>
                         </Pressable>
                     </Animated.View>
                 </View>
@@ -273,43 +494,85 @@ const styles = StyleSheet.create({
     },
     slideHeader: {
         width: '100%',
+        paddingHorizontal: scaleX(24),
+    },
+    slideHeaderCentered: {
         alignItems: 'center',
-        paddingHorizontal: scaleX(28),
+        paddingHorizontal: scaleX(32),
+    },
+    slideHeaderLeading: {
+        alignItems: 'flex-start',
     },
     logo: {
-        width: scaleX(196),
-        height: scaleY(86),
-        marginBottom: scaleY(18),
+        width: scaleX(184),
+        height: scaleY(72),
+        marginBottom: scaleY(16),
     },
-    title: {
+    eyebrow: {
+        width: '100%',
+        marginBottom: scaleY(8),
+        color: colors.primary,
+        fontFamily: fonts.semibold,
+        fontSize: scaleFont(12),
+        lineHeight: scaleFont(16),
+        letterSpacing: 1.35,
+    },
+    typewriterFrame: {
+        position: 'relative',
+        width: '100%',
+    },
+    typewriterMeasure: {
+        opacity: 0,
+    },
+    typewriterVisible: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+    },
+    titleBrand: {
         fontFamily: fonts.extrabold,
-        fontSize: scaleFont(25),
-        lineHeight: scaleFont(32),
+        fontSize: scaleFont(26),
+        lineHeight: scaleFont(33),
         color: colors.white,
+        letterSpacing: -0.35,
+    },
+    titleFeature: {
+        fontFamily: fonts.bold,
+        fontSize: scaleFont(28),
+        lineHeight: scaleFont(35),
+        color: colors.white,
+        letterSpacing: -0.55,
+    },
+    textCentered: {
         textAlign: 'center',
-        letterSpacing: 0.2,
+    },
+    textLeading: {
+        textAlign: 'left',
     },
     subtitle: {
+        width: '100%',
         fontFamily: fonts.regular,
         fontSize: scaleFont(15),
         lineHeight: scaleFont(22),
-        color: colors.textSecondary,
-        textAlign: 'center',
+        color: colors.textLight,
+        opacity: 0.72,
         marginTop: scaleY(12),
+        letterSpacing: -0.1,
     },
     imageStage: {
         width: '100%',
         justifyContent: 'center',
         alignItems: 'center',
-        marginTop: scaleY(12),
+        marginTop: scaleY(16),
     },
     bleedImage: {
-        width: BASE_W,
-        height: BASE_W,
+        width: IMAGE_SIZE,
+        height: IMAGE_SIZE,
     },
     containedImage: {
         width: '86%',
-        height: scaleY(360),
+        height: IMAGE_SIZE,
     },
     // --- progress ---
     progressWrap: {
@@ -340,19 +603,31 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: scaleX(20),
     },
+    buttonDiffuseContainer: {
+        width: CTA_WIDTH,
+        padding: scaleX(5),
+        borderRadius: borderRadius.full,
+        backgroundColor: colors.glassLight,
+        borderWidth: 1,
+        borderColor: colors.proGlassBorderCyan,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.22,
+        shadowRadius: 26,
+        elevation: 10,
+    },
     getStartedButton: {
-        width: SCREEN_WIDTH - scaleX(40),
+        width: '100%',
         height: scaleY(56),
-        backgroundColor: colors.primary,
         borderRadius: borderRadius.full,
         alignItems: 'center',
         justifyContent: 'center',
-        ...shadows.neon,
+        overflow: 'hidden',
     },
     getStartedText: {
         fontFamily: fonts.bold,
-        fontSize: scaleFont(18),
+        fontSize: scaleFont(17),
         color: colors.backgroundLight,
-        letterSpacing: 0.3,
+        letterSpacing: 0.15,
     },
 });
