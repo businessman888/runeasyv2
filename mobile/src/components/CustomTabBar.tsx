@@ -1,50 +1,39 @@
 import React, { useMemo } from 'react';
-import { View, TouchableOpacity, StyleSheet, Image, Text, Platform } from 'react-native';
+import { View, StyleSheet, Image, Text, Platform } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
 import { TabBarIcon } from './TabBarIcon';
-import { colors } from '../theme';
+import { AppPressable } from './ui/AppPressable';
+import { fonts } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { useAuthStore, getAvatarUrl, getDisplayName } from '../stores';
 
 // Real frosted blur on Android needs expo-blur's experimental RenderEffect method
 // (API 31+); the default Android path barely blurs. Safe here because the blur
-// layer sits UNDER the touchable items and is pointerEvents="none" — taps land on
-// the items directly and never fall through the (touch-stealing) blur surface.
+// layer sits under the interactive items and is pointerEvents="none" — taps land
+// on the controls and never fall through the blur surface.
 const ANDROID_BLUR_METHOD: 'dimezisBlurView' | undefined =
     Platform.OS === 'android' ? 'dimezisBlurView' : undefined;
-
-// Top-light → bottom-shade sheen that sells the "frosted glass" depth (mirrors
-// the sheen used by GlassTeaseOverlay so the tab bar reads as the same material).
-const SHEEN_COLORS = [
-    'rgba(255, 255, 255, 0.06)',
-    'rgba(255, 255, 255, 0)',
-    'rgba(0, 0, 0, 0.12)',
-] as const;
-const SHEEN_LOCATIONS = [0, 0.5, 1] as const;
 
 const PILL_RADIUS = 40;
 const RAIL_WIDTH = 84;
 
-type IconName = 'home' | 'calendar' | 'trophy' | 'brain' | 'profile';
+type IconName = 'home' | 'calendar' | 'trophy' | 'wellness' | 'profile';
 
 function getIconName(routeName: string): IconName {
     switch (routeName) {
         case 'Home': return 'home';
         case 'Calendar': return 'calendar';
         case 'Ranking': return 'trophy';
-        case 'Wellness': return 'brain';
+        case 'Wellness': return 'wellness';
         case 'Settings': return 'profile';
         default: return 'home';
     }
 }
 
-/** Circular profile photo for the "Settings" tab. Renders the user's avatar (or
- *  their initials as a fallback) inside a ring that lights up cyan with a neon
- *  glow when the Profile tab is active — the premium avatar indicator used in
- *  apps like Instagram/Strava, replacing the generic person glyph. */
+/** Profile avatar with a neutral ring that strengthens when selected. */
 function ProfileTabAvatar({ isFocused }: { isFocused: boolean }) {
     const { user } = useAuthStore();
     const avatarUrl = getAvatarUrl(user);
@@ -105,40 +94,40 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                     pointerEvents="none"
                     style={StyleSheet.absoluteFill}
                 />
-                <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: colors.tabBarGlassFill }]} />
-                <LinearGradient colors={SHEEN_COLORS} locations={SHEEN_LOCATIONS} pointerEvents="none" style={StyleSheet.absoluteFill} />
+                <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.glassVeil]} />
 
                 {state.routes.map((route, index) => {
                     const { options } = descriptors[route.key];
                     const isFocused = state.index === index;
-                    const isCenterTab = route.name === 'Ranking';
                     const isProfileTab = route.name === 'Settings';
                     const { onPress, onLongPress } = makeHandlers(route, isFocused);
 
                     return (
-                        <TouchableOpacity
+                        <AppPressable
                             key={route.key}
                             accessibilityRole="button"
-                            accessibilityState={isFocused ? { selected: true } : {}}
-                            accessibilityLabel={options.tabBarAccessibilityLabel}
+                            accessibilityState={{ selected: isFocused }}
+                            accessibilityLabel={options.tabBarAccessibilityLabel ?? route.name}
                             onPress={onPress}
                             onLongPress={onLongPress}
-                            style={styles.railItem}
+                            hapticFeedback={isFocused ? 'none' : 'selection'}
+                            style={({ pressed }) => [
+                                styles.railItem,
+                                pressed && styles.itemPressed,
+                            ]}
                         >
-                            {/* Indicador ativo — barra de glow vertical na borda esquerda do rail */}
-                            {isFocused && !isCenterTab && <View style={styles.railActiveIndicator} />}
-                            <View style={[styles.iconContainer, isCenterTab && styles.centerIconContainer]}>
+                            <View style={styles.iconContainer}>
                                 {isProfileTab ? (
                                     <ProfileTabAvatar isFocused={isFocused} />
                                 ) : (
                                     <TabBarIcon
                                         name={getIconName(route.name)}
-                                        color={isCenterTab ? '#FFFFFF' : isFocused ? '#00D4FF' : '#6B6B8D'}
-                                        size={isCenterTab ? 27 : 26}
+                                        isFocused={isFocused}
+                                        size={28}
                                     />
                                 )}
                             </View>
-                        </TouchableOpacity>
+                        </AppPressable>
                     );
                 })}
             </View>
@@ -149,8 +138,8 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
     // Phone idêntico ao original; tablet portrait apenas alarga o teto da pill
     // (de 360 → 520) para os ícones respirarem numa tela maior.
     return (
-        // Outer wrapper carries positioning + shadow (kept off the inner glass
-        // container, whose overflow:hidden would otherwise clip the iOS glow).
+        // Outer wrapper carries positioning and the subtle neutral shadow while
+        // the inner container clips the frosted material.
         <View
             style={[styles.shadowWrap, { bottom: bottomPosition }, isTablet && styles.shadowWrapTablet]}
             pointerEvents="box-none"
@@ -164,23 +153,11 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                     pointerEvents="none"
                     style={StyleSheet.absoluteFill}
                 />
-                {/* Navy veil keeps icons/labels legible over the blur. */}
-                <View
-                    pointerEvents="none"
-                    style={[StyleSheet.absoluteFill, { backgroundColor: colors.tabBarGlassFill }]}
-                />
-                {/* Glass sheen for depth. */}
-                <LinearGradient
-                    colors={SHEEN_COLORS}
-                    locations={SHEEN_LOCATIONS}
-                    pointerEvents="none"
-                    style={StyleSheet.absoluteFill}
-                />
+                <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.glassVeil]} />
 
                 {state.routes.map((route, index) => {
                     const { options } = descriptors[route.key];
                     const isFocused = state.index === index;
-                    const isCenterTab = route.name === 'Ranking';
                     const isProfileTab = route.name === 'Settings';
 
                     const onPress = () => {
@@ -202,48 +179,33 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                         });
                     };
 
-                    const getIconName = (): 'home' | 'calendar' | 'trophy' | 'brain' | 'profile' => {
-                        switch (route.name) {
-                            case 'Home': return 'home';
-                            case 'Calendar': return 'calendar';
-                            case 'Ranking': return 'trophy';
-                            case 'Wellness': return 'brain';
-                            case 'Settings': return 'profile';
-                            default: return 'home';
-                        }
-                    };
 
                     return (
-                        <TouchableOpacity
+                        <AppPressable
                             key={route.key}
                             accessibilityRole="button"
-                            accessibilityState={isFocused ? { selected: true } : {}}
-                            accessibilityLabel={options.tabBarAccessibilityLabel}
+                            accessibilityState={{ selected: isFocused }}
+                            accessibilityLabel={options.tabBarAccessibilityLabel ?? route.name}
                             onPress={onPress}
                             onLongPress={onLongPress}
-                            style={styles.tabItem}
+                            hapticFeedback={isFocused ? 'none' : 'selection'}
+                            style={({ pressed }) => [
+                                styles.tabItem,
+                                pressed && styles.itemPressed,
+                            ]}
                         >
-                            {/* Active indicator - glow line at top */}
-                            {isFocused && !isCenterTab && (
-                                <View style={styles.activeIndicator} />
-                            )}
-
-                            {/* Icon — Profile shows the user's circular avatar instead of a glyph */}
-                            <View style={[
-                                styles.iconContainer,
-                                isCenterTab && styles.centerIconContainer,
-                            ]}>
+                            <View style={styles.iconContainer}>
                                 {isProfileTab ? (
                                     <ProfileTabAvatar isFocused={isFocused} />
                                 ) : (
                                     <TabBarIcon
-                                        name={getIconName()}
-                                        color={isCenterTab ? '#FFFFFF' : (isFocused ? '#00D4FF' : '#6B6B8D')}
-                                        size={isCenterTab ? 25 : 24}
+                                        name={getIconName(route.name)}
+                                        isFocused={isFocused}
+                                        size={24}
                                     />
                                 )}
                             </View>
-                        </TouchableOpacity>
+                        </AppPressable>
                     );
                 })}
             </View>
@@ -261,9 +223,7 @@ const styles = StyleSheet.create({
         maxWidth: 360,
         alignSelf: 'center',
         borderRadius: PILL_RADIUS,
-        // Floating effect: subtle neutral drop only — the cyan reads from the
-        // hairline border alone (clean/minimal, no neon glow).
-        shadowColor: '#000',
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.18,
         shadowRadius: 10,
@@ -282,9 +242,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'flex-start',
         overflow: 'hidden',
-        // Hairline cyan na borda direita (espelha o contorno da pill).
-        borderRightWidth: 1,
-        borderRightColor: colors.proGlassBorderCyan,
+        backgroundColor: semanticColors.surface1,
+        borderRightWidth: StyleSheet.hairlineWidth,
+        borderRightColor: semanticColors.borderSubtle,
     },
     railItem: {
         width: '100%',
@@ -292,21 +252,9 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         position: 'relative',
         height: 64,
+        minWidth: 44,
+        minHeight: 44,
         marginVertical: 6,
-    },
-    railActiveIndicator: {
-        position: 'absolute',
-        left: 0,
-        width: 4,
-        height: 24,
-        backgroundColor: '#00D4FF',
-        borderTopRightRadius: 4,
-        borderBottomRightRadius: 4,
-        shadowColor: '#00D4FF',
-        shadowOffset: { width: 2, height: 0 },
-        shadowOpacity: 0.8,
-        shadowRadius: 6,
-        elevation: 5,
     },
     glassPill: {
         flexDirection: 'row',
@@ -316,9 +264,12 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         justifyContent: 'space-around',
         alignItems: 'center',
-        // Premium cyan hairline edge.
-        borderWidth: 1,
-        borderColor: colors.proGlassBorderCyan,
+        backgroundColor: semanticColors.glass,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: semanticColors.borderSubtle,
+    },
+    glassVeil: {
+        backgroundColor: semanticColors.glass,
     },
     tabItem: {
         flex: 1,
@@ -326,20 +277,11 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         position: 'relative',
         height: 50,
+        minWidth: 44,
+        minHeight: 44,
     },
-    activeIndicator: {
-        position: 'absolute',
-        top: -12,
-        width: 24,
-        height: 4,
-        backgroundColor: '#00D4FF',
-        borderBottomLeftRadius: 4,
-        borderBottomRightRadius: 4,
-        shadowColor: '#00D4FF',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.8,
-        shadowRadius: 6,
-        elevation: 5,
+    itemPressed: {
+        opacity: 0.72,
     },
     iconContainer: {
         width: 44,
@@ -347,17 +289,6 @@ const styles = StyleSheet.create({
         borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
-    },
-    centerIconContainer: {
-        backgroundColor: '#00C4E8',
-        width: 52,
-        height: 52,
-        borderRadius: 26,
-        elevation: 8,
-        shadowColor: '#00D4FF',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 10,
     },
     // Profile avatar ring
     avatarRing: {
@@ -370,11 +301,10 @@ const styles = StyleSheet.create({
         borderWidth: 2,
     },
     avatarRingIdle: {
-        borderColor: colors.tabBarIdleBorder,
+        borderColor: semanticColors.borderStrong,
     },
     avatarRingActive: {
-        // Clean cyan ring only — no glow, matching the HomeFixedHeader avatar.
-        borderColor: colors.primary,
+        borderColor: semanticColors.textPrimary,
     },
     avatarImage: {
         width: '100%',
@@ -383,14 +313,14 @@ const styles = StyleSheet.create({
     avatarFallback: {
         width: '100%',
         height: '100%',
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface3,
         alignItems: 'center',
         justifyContent: 'center',
     },
     avatarInitials: {
         fontSize: 13,
-        fontWeight: '600',
-        color: colors.primary,
+        fontFamily: fonts.semibold,
+        color: semanticColors.textPrimary,
     },
 });
 

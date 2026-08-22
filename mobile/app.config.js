@@ -119,6 +119,7 @@ export default {
     facebookAppId: process.env.EXPO_PUBLIC_FACEBOOK_APP_ID || ""
   },
   plugins: [
+    "@react-native-vector-icons/ionicons",
     "expo-apple-authentication",
     "./plugins/withMapboxAndroid",
     "expo-secure-store",
