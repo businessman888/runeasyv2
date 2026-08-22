@@ -31,14 +31,10 @@ export const ResultRoutePreview = memo(function ResultRoutePreview({
     }),
     [route],
   );
-  const bounds = useMemo(() => {
+  const streetCenter = useMemo(() => {
     if (route.length < 2) return null;
-    const lng = route.map((point) => point.longitude);
-    const lat = route.map((point) => point.latitude);
-    return {
-      ne: [Math.max(...lng), Math.max(...lat)] as [number, number],
-      sw: [Math.min(...lng), Math.min(...lat)] as [number, number],
-    };
+    const midpoint = route[Math.floor(route.length / 2)];
+    return [midpoint.longitude, midpoint.latitude] as [number, number];
   }, [route]);
 
   if (isTreadmill || route.length < 2) {
@@ -48,7 +44,7 @@ export const ResultRoutePreview = memo(function ResultRoutePreview({
   // Inactive pages sit off-screen. Keeping them as a neutral surface avoids
   // five simultaneous native maps; once selected, the exact Mapbox map below
   // mounts. No streets or geography are ever synthesized.
-  if (!isActive || !bounds) {
+  if (!isActive || !streetCenter) {
     return <View style={styles.inactiveSurface} />;
   }
 
@@ -70,14 +66,8 @@ export const ResultRoutePreview = memo(function ResultRoutePreview({
         zoomEnabled={false}
       >
         <Mapbox.Camera
-          bounds={{
-            ne: bounds.ne,
-            sw: bounds.sw,
-            paddingTop: 20,
-            paddingBottom: 28,
-            paddingLeft: 24,
-            paddingRight: 24,
-          }}
+          centerCoordinate={streetCenter}
+          zoomLevel={14}
           animationDuration={0}
         />
         <Mapbox.ShapeSource id={`homeResultSource${id}`} shape={shape}>

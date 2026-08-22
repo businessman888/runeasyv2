@@ -837,6 +837,8 @@ export function HomeScreen({ navigation }: any) {
                 </View>
                 {/* ── fim Seus treinos ─────────────────────────────────────────── */}
 
+                <Text style={[styles.sectionTitle, styles.resultsSectionTitle]}>Resultados</Text>
+
                 {/* Análise / resultados de treino do plano.
                     Free: SEMPRE upsell premium — nunca exibe dados reais, mesmo
                     que exista plan-activity órfã (treino feito antes do gating
@@ -917,6 +919,7 @@ export function HomeScreen({ navigation }: any) {
                 </View>
 
                 {/* Resultados das atividades (resumo da corrida, sem feedback do Coach) */}
+                <Text style={[styles.sectionTitle, styles.resultsSectionTitle]}>Resultados</Text>
                 {recentActivityResultsLoading ? (
                     <ResultCardsSkeleton />
                 ) : recentActivityResults.length > 0 ? (
@@ -1161,6 +1164,9 @@ const styles = StyleSheet.create({
         color: '#EBEBF5',
         marginLeft: 17,
         marginBottom: 11,
+    },
+    resultsSectionTitle: {
+        marginTop: spacing.lg,
     },
 
     // "Treinos | Atividades" tabs above the workouts/results sections

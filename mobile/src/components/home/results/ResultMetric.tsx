@@ -45,7 +45,7 @@ export const ResultMetric = memo(function ResultMetric({
 }: ResultMetricProps) {
   const rawId = useId();
   const gradientId = `resultMetric${rawId.replace(/[^a-zA-Z0-9]/g, "")}`;
-  const paths = useMemo(() => buildPaths(series, 92, 26), [series]);
+  const paths = useMemo(() => buildPaths(series, 62, 20), [series]);
 
   return (
     <View
@@ -61,10 +61,10 @@ export const ResultMetric = memo(function ResultMetric({
       </Text>
       <View style={styles.chart}>
         {paths ? (
-          <Svg width="100%" height={26} viewBox="0 0 92 26">
+          <Svg width={62} height={20} viewBox="0 0 62 20">
             <Defs>
               <LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0" stopColor={color} stopOpacity={0.08} />
+                <Stop offset="0" stopColor={color} stopOpacity={0.05} />
                 <Stop offset="1" stopColor={color} stopOpacity={0} />
               </LinearGradient>
             </Defs>
@@ -73,8 +73,8 @@ export const ResultMetric = memo(function ResultMetric({
               d={paths.stroke}
               fill="none"
               stroke={color}
-              strokeOpacity={0.82}
-              strokeWidth={1.15}
+              strokeOpacity={0.68}
+              strokeWidth={0.9}
               strokeLinecap="round"
               strokeLinejoin="round"
             />
@@ -103,7 +103,13 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
     marginTop: 2,
   },
-  chart: { height: 26, marginTop: 4, justifyContent: "center" },
+  chart: {
+    width: 62,
+    height: 20,
+    marginTop: 4,
+    justifyContent: "center",
+    alignSelf: "flex-start",
+  },
   emptyLine: {
     width: "64%",
     height: StyleSheet.hairlineWidth,

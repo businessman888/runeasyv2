@@ -1,9 +1,10 @@
-import React, { memo, useCallback, useState } from "react";
+import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
+  Animated,
   LayoutChangeEvent,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  ScrollView,
   StyleSheet,
   View,
 } from "react-native";
@@ -24,7 +25,7 @@ interface StackedResultCardsProps {
  *
  * Home already owns the vertical ScrollView, so this intentionally avoids
  * FlatList/VirtualizedList and vertical gestures. Five cards are small enough
- * to render eagerly, and only the active card mounts Mapbox.
+ * to render eagerly; only the active card and its neighbors mount Mapbox.
  */
 export const StackedResultCards = memo(function StackedResultCards({
   results,
@@ -32,6 +33,18 @@ export const StackedResultCards = memo(function StackedResultCards({
 }: StackedResultCardsProps) {
   const [viewportWidth, setViewportWidth] = useState(0);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const scrollX = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    const subscription = AccessibilityInfo.addEventListener(
+      "reduceMotionChanged",
+      setReduceMotion,
+    );
+
+    return () => subscription.remove();
+  }, []);
 
   const onLayout = useCallback((event: LayoutChangeEvent) => {
     setViewportWidth(Math.round(event.nativeEvent.layout.width));
@@ -63,27 +76,49 @@ export const StackedResultCards = memo(function StackedResultCards({
 
       <View style={styles.viewport} onLayout={onLayout}>
         {viewportWidth > 0 ? (
-          <ScrollView
+          <Animated.ScrollView
             horizontal
             pagingEnabled
             nestedScrollEnabled
             directionalLockEnabled
             showsHorizontalScrollIndicator={false}
             scrollEnabled={results.length > 1}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+              { useNativeDriver: true },
+            )}
             onMomentumScrollEnd={onMomentumScrollEnd}
             scrollEventThrottle={16}
             overScrollMode="never"
             bounces={false}
           >
-            {results.map((item, index) => (
-              <View
-                key={item.activity?.id ?? item.workout_id ?? String(index)}
-                style={{ width: viewportWidth }}
-              >
-                {renderCard(item, index, index === activeIndex)}
-              </View>
-            ))}
-          </ScrollView>
+            {results.map((item, index) => {
+              const opacity = reduceMotion
+                ? 1
+                : scrollX.interpolate({
+                    inputRange: [
+                      (index - 1) * viewportWidth,
+                      index * viewportWidth,
+                      (index + 1) * viewportWidth,
+                    ],
+                    outputRange: [0.72, 1, 0.72],
+                    extrapolate: "clamp",
+                  });
+
+              return (
+                <Animated.View
+                  key={item.activity?.id ?? item.workout_id ?? String(index)}
+                  style={{ width: viewportWidth, opacity }}
+                >
+                  {renderCard(
+                    item,
+                    index,
+                    Math.abs(index - activeIndex) <= 1,
+                  )}
+                </Animated.View>
+              );
+            })}
+          </Animated.ScrollView>
         ) : null}
       </View>
 
