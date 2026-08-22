@@ -8,6 +8,7 @@ import {
     Platform,
 } from 'react-native';
 import { colors, typography, spacing } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import Svg, { Path, Rect } from 'react-native-svg';
 
 const { width } = Dimensions.get('window');
@@ -220,7 +221,7 @@ export function TimeframeScreen({ paceMinutes: initialMinutes, paceSeconds: init
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.background,
+        backgroundColor: semanticColors.canvas,
     },
     content: {
         flex: 1,
@@ -233,15 +234,15 @@ const styles = StyleSheet.create({
     progressText: {
         fontSize: 13,
         fontWeight: '400',
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
         marginBottom: 12,
     },
     progressNumber: {
-        color: '#00D4FF',
+        color: semanticColors.accent,
         fontWeight: '600',
     },
     progressTotal: {
-        color: '#00D4FF',
+        color: semanticColors.accent,
     },
     progressSteps: {
         flexDirection: 'row',
@@ -254,12 +255,12 @@ const styles = StyleSheet.create({
     stepLine: {
         width: 44,
         height: 4,
-        backgroundColor: 'rgba(235, 235, 245, 0.1)',
+        backgroundColor: semanticColors.borderSubtle,
         borderRadius: 20,
         marginTop: 8,
     },
     stepLineActive: {
-        backgroundColor: '#00D4FF',
+        backgroundColor: semanticColors.accent,
     },
     titleContainer: {
         marginBottom: 24,
@@ -267,29 +268,29 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 28,
         fontWeight: '700',
-        color: colors.white,
+        color: semanticColors.textPrimary,
         lineHeight: 36,
         marginBottom: 8,
     },
     subtitle: {
         fontSize: 15,
         fontWeight: '400',
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
         lineHeight: 22,
     },
     paceCard: {
-        backgroundColor: '#15152A',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 20,
         padding: 20,
         marginBottom: 16,
         alignItems: 'center',
         borderWidth: 2,
-        borderColor: '#00D4FF',
+        borderColor: semanticColors.accent,
     },
     paceCardTitle: {
         fontSize: 15,
         fontWeight: '600',
-        color: '#00D4FF',
+        color: semanticColors.accent,
         marginBottom: 12,
     },
     paceInputRow: {
@@ -299,38 +300,38 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     timeInputContainer: {
-        backgroundColor: 'rgba(235, 235, 245, 0.05)',
+        backgroundColor: semanticColors.glass,
         borderRadius: 12,
         paddingVertical: 12,
         paddingHorizontal: 16,
         borderWidth: 1,
-        borderColor: 'rgba(235, 235, 245, 0.3)',
+        borderColor: semanticColors.borderStrong,
         minWidth: 90,
         alignItems: 'center',
     },
     timeInputActive: {
-        borderColor: '#00D4FF',
-        backgroundColor: 'rgba(0, 212, 255, 0.05)',
+        borderColor: semanticColors.accent,
+        backgroundColor: semanticColors.accentSubtle,
     },
     paceColon: {
         fontSize: 36,
         fontWeight: '700',
-        color: colors.white,
+        color: semanticColors.textPrimary,
         textAlignVertical: 'center',
         marginTop: -6, // Visual alignment
     },
     paceInputText: {
         fontSize: 36,
         fontWeight: '700',
-        color: colors.white,
+        color: semanticColors.textPrimary,
     },
     paceInputDisabled: {
-        color: 'rgba(235, 235, 245, 0.3)',
+        color: semanticColors.textTertiary,
     },
     paceUnit: {
         fontSize: 15,
         fontWeight: '400',
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
     checkboxContainer: {
         flexDirection: 'row',
@@ -343,19 +344,19 @@ const styles = StyleSheet.create({
         height: 20,
         borderRadius: 4,
         borderWidth: 1,
-        borderColor: 'rgba(235, 235, 245, 0.3)',
+        borderColor: semanticColors.borderStrong,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
     },
     checkboxChecked: {
-        backgroundColor: '#00D4FF',
-        borderColor: '#00D4FF',
+        backgroundColor: semanticColors.accent,
+        borderColor: semanticColors.accent,
     },
     checkboxLabel: {
         fontSize: 14,
         fontWeight: '400',
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
     keypad: {
         flex: 1,
@@ -376,10 +377,10 @@ const styles = StyleSheet.create({
     keypadText: {
         fontSize: 24,
         fontWeight: '700',
-        color: colors.white,
+        color: semanticColors.textPrimary,
     },
     keypadTextDisabled: {
-        color: 'rgba(235, 235, 245, 0.3)',
+        color: semanticColors.textTertiary,
     },
     // Number pad styles (used in JSX)
     numberPad: {
@@ -405,10 +406,10 @@ const styles = StyleSheet.create({
     numberText: {
         fontSize: 24,
         fontWeight: '700',
-        color: colors.white,
+        color: semanticColors.textPrimary,
     },
     numberTextDisabled: {
-        color: 'rgba(235, 235, 245, 0.3)',
+        color: semanticColors.textTertiary,
     },
     nextButtonContainer: {
         position: 'absolute',

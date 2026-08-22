@@ -265,7 +265,7 @@ export function WorkoutProcessingScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.cardDark, // #0E0E1F — matches PlanLoadingScreen
+        backgroundColor: colors.cardDark, // Semantic canvas alias shared with PlanLoadingScreen.
     },
     content: {
         flex: 1,

@@ -10,33 +10,34 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { useFeedbackStore } from '../stores/feedbackStore';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { WorkoutHistorySkeleton } from '../components/skeletons/ScreenSkeletons';
 
 // Icon components using @expo/vector-icons
-function BackIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
+function BackIcon({ size = 24, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
     return <Ionicons name="chevron-back" size={size} color={color} />;
 }
 
-function SearchIcon({ size = 20, color = 'rgba(235,235,245,0.6)' }: { size?: number; color?: string }) {
+function SearchIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
     return <Ionicons name="search-outline" size={size} color={color} />;
 }
 
-function FilterIcon({ size = 20, color = 'rgba(235,235,245,0.6)' }: { size?: number; color?: string }) {
+function FilterIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
     return <Ionicons name="options-outline" size={size} color={color} />;
 }
 
-function ChevronRightIcon({ size = 20, color = 'rgba(235,235,245,0.6)' }: { size?: number; color?: string }) {
+function ChevronRightIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
     return <Ionicons name="chevron-forward" size={size} color={color} />;
 }
 
-function CheckIcon({ size = 14, color = '#FFFFFF' }: { size?: number; color?: string }) {
+function CheckIcon({ size = 14, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
     return <Ionicons name="checkmark" size={size} color={color} />;
 }
 
 // Colored dot icon with glow effect
-function BolinhaIcon({ color = '#00D4FF' }: { color?: string }) {
+function BolinhaIcon({ color = semanticColors.accent }: { color?: string }) {
     return (
         <View style={{
             width: 10,
@@ -56,12 +57,12 @@ function BolinhaIcon({ color = '#00D4FF' }: { color?: string }) {
 
 const getWorkoutDotColor = (type: string): string => {
     if (type.includes('Long') || type.toLowerCase().includes('longa')) {
-        return '#00D4FF';
+        return semanticColors.accent;
     }
     if (type.includes('Interval') || type.toLowerCase().includes('velocidade')) {
         return '#FFC400';
     }
-    return '#00D4FF';
+    return semanticColors.accent;
 };
 
 export function TrainingHistoryScreen({ navigation }: any) {
@@ -138,7 +139,7 @@ export function TrainingHistoryScreen({ navigation }: any) {
                     style={styles.backButton}
                     onPress={() => navigation.goBack()}
                 >
-                    <BackIcon size={24} color="#FFFFFF" />
+                    <BackIcon size={24} color={semanticColors.textPrimary} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Histórico de Treinos</Text>
                 <View style={styles.headerSpacer} />
@@ -155,7 +156,7 @@ export function TrainingHistoryScreen({ navigation }: any) {
                         <View style={styles.summaryHeader}>
                             <Text style={styles.summaryTitle}>Resumo do Mês</Text>
                             <View style={styles.progressBadge}>
-                                <CheckIcon size={12} color="#FFFFFF" />
+                                <CheckIcon size={12} color={semanticColors.textPrimary} />
                                 <Text style={styles.progressBadgeText}>Em progresso</Text>
                             </View>
                         </View>
@@ -191,17 +192,17 @@ export function TrainingHistoryScreen({ navigation }: any) {
                 {/* Search Bar */}
                 <View style={styles.searchContainer}>
                     <View style={styles.searchInputContainer}>
-                        <SearchIcon size={20} color="rgba(235,235,245,0.6)" />
+                        <SearchIcon size={20} color={semanticColors.textSecondary} />
                         <TextInput
                             style={styles.searchInput}
                             placeholder="Buscar treinos..."
-                            placeholderTextColor="rgba(235,235,245,0.4)"
+                            placeholderTextColor={semanticColors.textTertiary}
                             value={searchQuery}
                             onChangeText={setSearchQuery}
                         />
                     </View>
                     <TouchableOpacity style={styles.filterButton}>
-                        <FilterIcon size={20} color="rgba(235,235,245,0.6)" />
+                        <FilterIcon size={20} color={semanticColors.textSecondary} />
                     </TouchableOpacity>
                 </View>
 
@@ -220,7 +221,7 @@ export function TrainingHistoryScreen({ navigation }: any) {
                 {/* Empty State */}
                 {!workoutHistoryLoading && workoutHistory.length === 0 && !workoutHistoryError && (
                     <View style={styles.emptyStateContainer}>
-                        <Ionicons name="fitness-outline" size={64} color="rgba(235,235,245,0.3)" />
+                        <Ionicons name="fitness-outline" size={64} color={semanticColors.textTertiary} />
                         <Text style={styles.emptyStateText}>
                             Comece a treinar para ver o seu histórico de treinos
                         </Text>
@@ -248,7 +249,7 @@ export function TrainingHistoryScreen({ navigation }: any) {
                                 <View style={styles.workoutContent}>
                                     <View style={styles.workoutTitleRow}>
                                         <View style={styles.workoutTitleWithIcon}>
-                                            <MaterialCommunityIcons name="run" size={16} color="#00D4FF" />
+                                            <MaterialCommunityIcons name="run" size={16} color={semanticColors.accent} />
                                             <Text style={styles.workoutTitle}>{workout.name}</Text>
                                         </View>
                                         <BolinhaIcon color={getWorkoutDotColor(workout.type)} />
@@ -270,7 +271,7 @@ export function TrainingHistoryScreen({ navigation }: any) {
                                     </View>
                                 </View>
                                 <View style={styles.workoutRightSection}>
-                                    <ChevronRightIcon size={20} color="rgba(235,235,245,0.6)" />
+                                    <ChevronRightIcon size={20} color={semanticColors.textSecondary} />
                                 </View>
                             </TouchableOpacity>
                         ))}
@@ -285,7 +286,7 @@ export function TrainingHistoryScreen({ navigation }: any) {
                     >
                         <Text style={styles.loadMoreText}>Carregar mais treinos</Text>
                         <View style={styles.loadMoreIcon}>
-                            <Ionicons name="chevron-down" size={16} color="#00D4FF" />
+                            <Ionicons name="chevron-down" size={16} color={semanticColors.accent} />
                         </View>
                     </TouchableOpacity>
                 )}
@@ -314,7 +315,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 18,
         fontWeight: '600',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
     },
     headerSpacer: {
         width: 40,
@@ -351,10 +352,10 @@ const styles = StyleSheet.create({
     },
     // Summary Card
     summaryCard: {
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: '#00D4FF',
+        borderColor: semanticColors.accent,
         padding: spacing.lg,
         marginBottom: spacing.lg,
     },
@@ -367,12 +368,12 @@ const styles = StyleSheet.create({
     summaryTitle: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
     },
     progressBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#00D4FF',
+        backgroundColor: semanticColors.accent,
         paddingHorizontal: spacing.sm,
         paddingVertical: 4,
         borderRadius: 12,
@@ -381,7 +382,7 @@ const styles = StyleSheet.create({
     progressBadgeText: {
         fontSize: 11,
         fontWeight: '600',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
     },
     summaryMetrics: {
         flexDirection: 'row',
@@ -395,7 +396,7 @@ const styles = StyleSheet.create({
     summaryMetricValue: {
         fontSize: 28,
         fontWeight: '700',
-        color: '#00D4FF',
+        color: semanticColors.accent,
     },
     summaryMetricUnit: {
         fontSize: 14,
@@ -404,13 +405,13 @@ const styles = StyleSheet.create({
     summaryMetricLabel: {
         fontSize: 12,
         fontWeight: '400',
-        color: 'rgba(235,235,245,0.6)',
+        color: semanticColors.textSecondary,
         marginTop: 4,
     },
     summaryDivider: {
         width: 1,
         height: 40,
-        backgroundColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: semanticColors.glass,
     },
     // Search
     searchContainer: {
@@ -422,7 +423,7 @@ const styles = StyleSheet.create({
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         paddingHorizontal: spacing.md,
         height: 44,
@@ -431,12 +432,12 @@ const styles = StyleSheet.create({
     searchInput: {
         flex: 1,
         fontSize: 14,
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
     },
     filterButton: {
         width: 44,
         height: 44,
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         justifyContent: 'center',
         alignItems: 'center',
@@ -448,14 +449,14 @@ const styles = StyleSheet.create({
     monthHeader: {
         fontSize: 14,
         fontWeight: '600',
-        color: 'rgba(235,235,245,0.6)',
+        color: semanticColors.textSecondary,
         marginBottom: spacing.sm,
     },
     // Workout Card
     workoutCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         padding: spacing.md,
         marginBottom: spacing.sm,
@@ -467,17 +468,17 @@ const styles = StyleSheet.create({
     workoutDay: {
         fontSize: 20,
         fontWeight: '700',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
     },
     workoutDayName: {
         fontSize: 10,
         fontWeight: '500',
-        color: 'rgba(235,235,245,0.6)',
+        color: semanticColors.textSecondary,
     },
     workoutDivider: {
         width: 1,
         height: 36,
-        backgroundColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: semanticColors.glass,
         marginHorizontal: spacing.md,
     },
     workoutContent: {
@@ -492,7 +493,7 @@ const styles = StyleSheet.create({
     workoutTitle: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
     },
     workoutMetrics: {
         flexDirection: 'row',
@@ -505,12 +506,12 @@ const styles = StyleSheet.create({
     workoutMetric: {
         fontSize: 13,
         fontWeight: '400',
-        color: 'rgba(235,235,245,0.6)',
+        color: semanticColors.textSecondary,
     },
     metricDivider: {
         width: 1,
         height: 12,
-        backgroundColor: 'rgba(255,255,255,0.2)',
+        backgroundColor: semanticColors.glass,
         marginHorizontal: spacing.sm,
     },
     workoutRightSection: {
@@ -529,7 +530,7 @@ const styles = StyleSheet.create({
     loadMoreText: {
         fontSize: 14,
         fontWeight: '500',
-        color: '#00D4FF',
+        color: semanticColors.accent,
     },
     loadMoreIcon: {
         // No rotation needed with chevron-down

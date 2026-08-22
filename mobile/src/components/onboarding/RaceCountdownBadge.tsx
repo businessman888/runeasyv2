@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { formatRaceDateLong, weeksUntilRace } from '../../utils/raceFormat';
 import { fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 const GOLD = '#FFB800';
 
@@ -54,13 +55,13 @@ const styles = StyleSheet.create({
     name: {
         fontFamily: fonts.bold,
         fontSize: 16,
-        color: '#EBEBF5',
+        color: semanticColors.textPrimary,
         flex: 1,
     },
     detail: {
         fontFamily: fonts.medium,
         fontSize: 14,
-        color: 'rgba(235, 235, 245, 0.85)',
+        color: semanticColors.textSecondary,
         flex: 1,
     },
 });

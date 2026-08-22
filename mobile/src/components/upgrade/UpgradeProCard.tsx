@@ -12,6 +12,7 @@ import { BlurView } from 'expo-blur';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, borderRadius, spacing, fonts, shadows } from '../../theme';
 import { useProFeature } from '../../hooks/useProFeature';
+import { semanticColors } from '../../theme/semanticColors';
 import { AnimatedBorder } from './AnimatedBorder';
 import { ProCtaButton } from './ProCtaButton';
 
@@ -198,7 +199,7 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS,
     overflow: 'hidden',
     borderWidth: 1.5,
-    borderColor: 'rgba(0, 212, 255, 0.35)',
+    borderColor: semanticColors.borderSubtle,
     ...shadows.neon,
   },
   bgImage: {
@@ -308,7 +309,7 @@ const styles = StyleSheet.create({
   // Fullscreen overlay
   fullscreenOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(10, 10, 24, 0.92)',
+    backgroundColor: semanticColors.scrim,
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.lg,

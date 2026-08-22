@@ -1,6 +1,7 @@
 import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { mapViz, fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 export type GpsQuality = 'excellent' | 'good' | 'weak' | 'poor' | 'acquiring';
 
@@ -89,7 +90,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 12,
-    backgroundColor: 'rgba(14, 14, 31, 0.72)',
+    backgroundColor: semanticColors.surface1,
   },
   label: {
     fontSize: 11,

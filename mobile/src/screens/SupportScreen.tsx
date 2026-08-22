@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { spacing } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { ScreenContainer } from '../components/ScreenContainer';
 
 const SUPPORT_EMAIL = 'contato@oyto.com.br';
@@ -27,7 +28,7 @@ export function SupportScreen({ navigation }: any) {
                     accessibilityRole="button"
                     accessibilityLabel="Voltar"
                 >
-                    <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+                    <Ionicons name="chevron-back" size={24} color={semanticColors.textPrimary} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Falar com Suporte</Text>
                 <View style={styles.headerSpacer} />
@@ -36,7 +37,7 @@ export function SupportScreen({ navigation }: any) {
             <View style={styles.content}>
                 {/* Icon */}
                 <View style={styles.iconContainer}>
-                    <Ionicons name="headset-outline" size={56} color="#00D4FF" />
+                    <Ionicons name="headset-outline" size={56} color={semanticColors.accent} />
                 </View>
 
                 {/* Title */}
@@ -48,7 +49,7 @@ export function SupportScreen({ navigation }: any) {
                 {/* Email Card */}
                 <View style={styles.emailCard}>
                     <View style={styles.emailIconWrapper}>
-                        <Ionicons name="mail-outline" size={24} color="#00D4FF" />
+                        <Ionicons name="mail-outline" size={24} color={semanticColors.accent} />
                     </View>
                     <View style={styles.emailInfo}>
                         <Text style={styles.emailLabel}>E-mail de suporte</Text>
@@ -64,7 +65,7 @@ export function SupportScreen({ navigation }: any) {
                     accessibilityRole="button"
                     accessibilityLabel={`Enviar e-mail para ${SUPPORT_EMAIL}`}
                 >
-                    <Ionicons name="send-outline" size={18} color="#0A0A18" />
+                    <Ionicons name="send-outline" size={18} color={semanticColors.textOnAccent} />
                     <Text style={styles.emailButtonText}>Enviar E-mail</Text>
                 </TouchableOpacity>
 
@@ -93,7 +94,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 18,
         fontWeight: '600',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
     },
     headerSpacer: {
         width: 40,
@@ -108,7 +109,7 @@ const styles = StyleSheet.create({
         width: 100,
         height: 100,
         borderRadius: 50,
-        backgroundColor: 'rgba(0,212,255,0.12)',
+        backgroundColor: semanticColors.accentSubtle,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: spacing.xl,
@@ -116,14 +117,14 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 22,
         fontWeight: '700',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
         textAlign: 'center',
         marginBottom: spacing.md,
     },
     description: {
         fontSize: 14,
         fontWeight: '400',
-        color: 'rgba(235,235,245,0.6)',
+        color: semanticColors.textSecondary,
         textAlign: 'center',
         lineHeight: 22,
         marginBottom: spacing.xl,
@@ -132,10 +133,10 @@ const styles = StyleSheet.create({
     emailCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: 'rgba(0,212,255,0.2)',
+        borderColor: semanticColors.borderSubtle,
         padding: spacing.lg,
         width: '100%',
         marginBottom: spacing.xl,
@@ -145,7 +146,7 @@ const styles = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: 'rgba(0,212,255,0.12)',
+        backgroundColor: semanticColors.accentSubtle,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -155,19 +156,19 @@ const styles = StyleSheet.create({
     emailLabel: {
         fontSize: 12,
         fontWeight: '500',
-        color: 'rgba(235,235,245,0.5)',
+        color: semanticColors.textTertiary,
         marginBottom: 2,
     },
     emailAddress: {
         fontSize: 15,
         fontWeight: '600',
-        color: '#00D4FF',
+        color: semanticColors.accent,
     },
     emailButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#00D4FF',
+        backgroundColor: semanticColors.accent,
         borderRadius: 16,
         paddingVertical: 14,
         width: '100%',
@@ -177,11 +178,11 @@ const styles = StyleSheet.create({
     emailButtonText: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#0A0A18',
+        color: semanticColors.textOnAccent,
     },
     hint: {
         fontSize: 12,
-        color: 'rgba(235,235,245,0.35)',
+        color: semanticColors.textTertiary,
         textAlign: 'center',
         lineHeight: 18,
         paddingHorizontal: spacing.md,

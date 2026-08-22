@@ -11,6 +11,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { useGamificationStore } from '../stores';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { BadgesGridSkeleton } from '../components/skeletons/ScreenSkeletons';
@@ -225,7 +226,7 @@ export function BadgesScreen({ navigation }: any) {
                                                 {badge.name.toUpperCase()}
                                             </Text>
                                             <View style={[styles.statPill, { backgroundColor: `${sc}${badge.earned ? '30' : '12'}` }]}>
-                                                <Text style={[styles.statPillText, { color: badge.earned ? sc : 'rgba(235,235,245,0.4)' }]}>
+                                                <Text style={[styles.statPillText, { color: badge.earned ? sc : semanticColors.textTertiary }]}>
                                                     {stat}
                                                 </Text>
                                             </View>
@@ -299,7 +300,7 @@ const styles = StyleSheet.create({
     countChip: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         paddingHorizontal: spacing.md,
         paddingVertical: 6,
         borderRadius: borderRadius.xl,
@@ -345,7 +346,7 @@ const styles = StyleSheet.create({
     },
     badgeCard: {
         width: '47%',
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius['2xl'],
         padding: spacing.md,
         alignItems: 'center',
@@ -353,7 +354,7 @@ const styles = StyleSheet.create({
         borderColor: 'transparent',
     },
     badgeCardEarned: {
-        borderColor: 'rgba(255,255,255,0.08)',
+        borderColor: semanticColors.borderSubtle,
     },
     badgeName: {
         fontSize: 10,
@@ -365,7 +366,7 @@ const styles = StyleSheet.create({
         letterSpacing: 0.5,
     },
     badgeNameLocked: {
-        color: 'rgba(235,235,245,0.3)',
+        color: semanticColors.textTertiary,
     },
     statPill: {
         paddingHorizontal: spacing.sm,
@@ -380,14 +381,14 @@ const styles = StyleSheet.create({
     // ── Detail Modal ──────────────────────────────────────────────────────
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.75)',
+        backgroundColor: semanticColors.scrim,
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: spacing.xl,
     },
     modalCard: {
         width: '100%',
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius['2xl'],
         padding: spacing.xl,
         alignItems: 'center',
@@ -433,7 +434,7 @@ const styles = StyleSheet.create({
     },
     lockedHintText: {
         fontSize: typography.fontSizes.xs,
-        color: 'rgba(235,235,245,0.4)',
+        color: semanticColors.textTertiary,
         textAlign: 'center',
     },
     modalCloseButton: {

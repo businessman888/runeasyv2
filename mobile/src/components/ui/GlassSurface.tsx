@@ -9,6 +9,7 @@ import {
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 /**
  * Reusable frosted-glass surface — the exact material identity used by the
@@ -111,7 +112,7 @@ const styles = StyleSheet.create({
     },
     bordered: {
         borderWidth: 1,
-        borderColor: colors.proGlassBorderCyan,
+        borderColor: semanticColors.borderSubtle,
     },
 });
 

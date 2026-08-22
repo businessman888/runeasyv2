@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ScreenContainer } from '../ScreenContainer';
 import { colors, fonts, spacing } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import {
     WEARABLES,
     type ReadMoreBlock,
@@ -119,14 +120,14 @@ const styles = StyleSheet.create({
         fontFamily: fonts.bold,
         fontSize: 26,
         lineHeight: 32,
-        color: colors.text,
+        color: semanticColors.textPrimary,
         marginBottom: spacing.md,
     },
     heading: {
         fontFamily: fonts.bold,
         fontSize: 18,
         lineHeight: 24,
-        color: colors.text,
+        color: semanticColors.textPrimary,
         marginTop: spacing.lg,
         marginBottom: spacing.xs,
     },
@@ -134,7 +135,7 @@ const styles = StyleSheet.create({
         fontFamily: fonts.semibold,
         fontSize: 15,
         lineHeight: 22,
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
         marginTop: spacing.md,
         marginBottom: spacing.xs,
     },
@@ -142,7 +143,7 @@ const styles = StyleSheet.create({
         fontFamily: fonts.regular,
         fontSize: 15,
         lineHeight: 22,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         marginTop: spacing.xs,
     },
     steps: {
@@ -166,13 +167,13 @@ const styles = StyleSheet.create({
         fontFamily: fonts.regular,
         fontSize: 15,
         lineHeight: 22,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
     },
     note: {
         marginTop: spacing.md,
         padding: spacing.md,
         borderRadius: 12,
-        backgroundColor: colors.glassLight,
+        backgroundColor: semanticColors.glass,
         borderLeftWidth: 3,
         borderLeftColor: colors.primary,
     },
@@ -180,7 +181,7 @@ const styles = StyleSheet.create({
         fontFamily: fonts.regular,
         fontSize: 14,
         lineHeight: 21,
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
     },
     noteLabel: {
         fontFamily: fonts.bold,

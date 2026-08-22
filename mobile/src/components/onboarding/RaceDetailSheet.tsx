@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, borderRadius, fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import type { Race } from '../../types/races.types';
 import { formatRaceDateLong, raceLevelLabel } from '../../utils/raceFormat';
 import { RaceDistanceSelectorSheet } from './RaceDistanceSelectorSheet';
@@ -66,7 +67,7 @@ export function RaceDetailSheet({ race, visible, onClose, onConfirm }: RaceDetai
                         imageStyle={styles.imageRadius}
                     >
                         <LinearGradient
-                            colors={['rgba(10,10,24,0.1)', 'rgba(14,14,31,1)']}
+                            colors={[semanticColors.transparent, semanticColors.surface1]}
                             locations={[0, 1]}
                             style={StyleSheet.absoluteFill}
                         />
@@ -158,14 +159,14 @@ function InfoRow({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: s
 }
 
 const styles = StyleSheet.create({
-    backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.55)' },
+    backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: semanticColors.scrim },
     sheet: {
         position: 'absolute',
         left: 0,
         right: 0,
         bottom: 0,
         maxHeight: '90%',
-        backgroundColor: colors.cardDark,
+        backgroundColor: semanticColors.surface1,
         borderTopLeftRadius: borderRadius['2xl'],
         borderTopRightRadius: borderRadius['2xl'],
         overflow: 'hidden',
@@ -180,7 +181,7 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: 'rgba(0,0,0,0.45)',
+        backgroundColor: semanticColors.scrim,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -188,7 +189,7 @@ const styles = StyleSheet.create({
     name: {
         fontFamily: fonts.bold,
         fontSize: typography.fontSizes['2xl'],
-        color: colors.text,
+        color: semanticColors.textPrimary,
         marginBottom: 14,
     },
     pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 18 },
@@ -196,25 +197,25 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         paddingHorizontal: 14,
         borderRadius: borderRadius.full,
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface2,
     },
     pillText: {
         fontFamily: fonts.medium,
         fontSize: typography.fontSizes.md,
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
     },
     infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
     infoText: {
         fontFamily: fonts.regular,
         fontSize: typography.fontSizes.lg,
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
         flex: 1,
     },
     description: {
         fontFamily: fonts.regular,
         fontSize: typography.fontSizes.md,
         lineHeight: 20,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         marginTop: 8,
         marginBottom: 16,
     },
@@ -222,25 +223,25 @@ const styles = StyleSheet.create({
     linkText: {
         fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.md,
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
     },
     footer: {
         paddingHorizontal: 20,
         paddingTop: 12,
         borderTopWidth: StyleSheet.hairlineWidth,
-        borderTopColor: colors.border,
+        borderTopColor: semanticColors.borderSubtle,
     },
     cta: {
         height: 56,
         borderRadius: borderRadius.full,
-        backgroundColor: colors.primary,
+        backgroundColor: semanticColors.accent,
         alignItems: 'center',
         justifyContent: 'center',
     },
     ctaText: {
         fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.xl,
-        color: '#0F0F1E',
+        color: semanticColors.textOnAccent,
     },
 });
 

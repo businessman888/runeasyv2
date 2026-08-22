@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     textInput: {
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        backgroundColor: QUIZ.color.glass,
         borderRadius: 12,
         borderWidth: 1,
         borderColor: QUIZ.color.stroke,

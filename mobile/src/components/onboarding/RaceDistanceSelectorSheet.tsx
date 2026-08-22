@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, borderRadius, fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 interface RaceDistanceSelectorSheetProps {
     visible: boolean;
@@ -70,13 +71,13 @@ export function RaceDistanceSelectorSheet({
 }
 
 const styles = StyleSheet.create({
-    backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.55)' },
+    backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: semanticColors.scrim },
     sheet: {
         position: 'absolute',
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: colors.cardDark,
+        backgroundColor: semanticColors.surface1,
         borderTopLeftRadius: borderRadius['2xl'],
         borderTopRightRadius: borderRadius['2xl'],
         paddingHorizontal: 20,
@@ -87,13 +88,13 @@ const styles = StyleSheet.create({
         width: 40,
         height: 4,
         borderRadius: 2,
-        backgroundColor: colors.border,
+        backgroundColor: semanticColors.borderStrong,
         marginBottom: 20,
     },
     title: {
         fontFamily: fonts.bold,
         fontSize: typography.fontSizes.xl,
-        color: colors.text,
+        color: semanticColors.textPrimary,
         marginBottom: 20,
     },
     pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 28 },
@@ -101,34 +102,34 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         paddingHorizontal: 20,
         borderRadius: borderRadius.full,
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface2,
         borderWidth: 2,
-        borderColor: 'transparent',
+        borderColor: semanticColors.transparent,
     },
     pillSelected: {
-        borderColor: colors.primary,
-        backgroundColor: 'rgba(0, 212, 255, 0.08)',
+        borderColor: semanticColors.accent,
+        backgroundColor: semanticColors.accentSubtle,
     },
     pillText: {
         fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.lg,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
     },
-    pillTextSelected: { color: colors.primary },
+    pillTextSelected: { color: semanticColors.accent },
     cta: {
         height: 56,
         borderRadius: borderRadius.full,
-        backgroundColor: colors.primary,
+        backgroundColor: semanticColors.accent,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    ctaDisabled: { backgroundColor: colors.card },
+    ctaDisabled: { backgroundColor: semanticColors.surface3 },
     ctaText: {
         fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.xl,
-        color: '#0F0F1E',
+        color: semanticColors.textOnAccent,
     },
-    ctaTextDisabled: { color: colors.textSecondary },
+    ctaTextDisabled: { color: semanticColors.textSecondary },
 });
 
 export default RaceDistanceSelectorSheet;

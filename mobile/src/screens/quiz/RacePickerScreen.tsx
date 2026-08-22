@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, borderRadius, fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useRaces } from '../../hooks/useRaces';
 import { RaceCard } from '../../components/onboarding/RaceCard';
@@ -312,7 +313,7 @@ const styles = StyleSheet.create({
         borderColor: 'transparent',
         flexShrink: 1,
     },
-    pillActive: { borderColor: colors.primary, backgroundColor: 'rgba(0, 212, 255, 0.08)' },
+    pillActive: { borderColor: semanticColors.accent, backgroundColor: semanticColors.accentSubtle },
     pillText: { fontSize: typography.fontSizes.md, color: colors.textSecondary, flexShrink: 1 },
     pillTextActive: { color: colors.primary },
     divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginBottom: 16 },
@@ -345,7 +346,7 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         marginTop: 2,
     },
-    backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.55)' },
+    backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: semanticColors.scrim },
     optionSheet: {
         position: 'absolute',
         left: 20,

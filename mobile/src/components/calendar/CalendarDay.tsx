@@ -10,8 +10,8 @@ import { DayIndicator, type CalendarDayStatus } from './DayIndicator';
  *   [circle with the day number]
  *   [status indicator icon]
  *
- * Selection uses a neutral elevated capsule; status remains communicated by
- * its semantic icon, keeping accent color focused on actions and today.
+ * Selection uses cyan for workout/common days and purple for recovery days.
+ * The status icon remains visible, so meaning never depends on color alone.
  *
  * `weekday` is passed only in week mode (month mode has a shared header row).
  */
@@ -48,6 +48,9 @@ function CalendarDayInner({
     if (!inMonth) return <View style={styles.cell} />;
 
     const hasLabel = weekday != null;
+    const selectionColor = status === 'recovery'
+        ? semanticColors.recovery
+        : semanticColors.accent;
 
     return (
         <Pressable
@@ -57,9 +60,12 @@ function CalendarDayInner({
             accessibilityLabel={accessibilityLabel ?? String(date.getDate())}
             accessibilityState={{ selected: isSelected }}
         >
-            {/* Neutral elevated capsule behind the selected day. */}
+            {/* Status-colored capsule with icon as an independent signal. */}
             {isSelected && (
-                <View style={styles.capsule} pointerEvents="none" />
+                <View
+                    style={[styles.capsule, { backgroundColor: selectionColor }]}
+                    pointerEvents="none"
+                />
             )}
 
             {hasLabel && (
@@ -81,7 +87,7 @@ function CalendarDayInner({
 
             <View style={styles.indicatorSlot}>
                 {status && (
-                    <DayIndicator status={status} />
+                    <DayIndicator status={status} selected={isSelected} />
                 )}
             </View>
         </Pressable>
@@ -110,9 +116,6 @@ const styles = StyleSheet.create({
         left: 2,
         right: 2,
         borderRadius: 20,
-        backgroundColor: semanticColors.surface3,
-        borderWidth: 1,
-        borderColor: semanticColors.borderStrong,
     },
     weekday: {
         fontFamily: fonts.medium,
@@ -121,7 +124,7 @@ const styles = StyleSheet.create({
         marginBottom: 3,
     },
     weekdaySelected: {
-        color: semanticColors.textPrimary,
+        color: semanticColors.textOnAccent,
     },
     circle: {
         width: CIRCLE,

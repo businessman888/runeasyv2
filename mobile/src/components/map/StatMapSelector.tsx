@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { mapViz, colors, fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import type { StatMapMetric } from '../../utils/runMetrics';
 
 export type StatMapMode = StatMapMetric | 'default';
@@ -101,21 +102,21 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: 10,
     borderRadius: 12,
-    backgroundColor: colors.card,
+    backgroundColor: semanticColors.surface1,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: semanticColors.borderSubtle,
   },
   chipActive: {
     borderColor: colors.primary,
-    backgroundColor: 'rgba(0, 212, 255, 0.10)',
+    backgroundColor: semanticColors.accentSubtle,
   },
   chipText: {
-    color: colors.textSecondary,
+    color: semanticColors.textSecondary,
     fontSize: 13,
     fontFamily: fonts.medium,
   },
   chipTextActive: {
-    color: colors.primary,
+    color: semanticColors.accent,
     fontFamily: fonts.semibold,
   },
   legend: {
@@ -124,7 +125,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   legendLabel: {
-    color: colors.textSecondary,
+    color: semanticColors.textSecondary,
     fontSize: 11,
     fontFamily: fonts.medium,
   },

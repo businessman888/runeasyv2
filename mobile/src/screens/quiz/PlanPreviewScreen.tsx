@@ -10,6 +10,7 @@ import {
     ScrollView,
 } from 'react-native';
 import { colors } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -255,7 +256,7 @@ export function PlanPreviewScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.background,
+        backgroundColor: semanticColors.canvas,
     },
     scrollView: {
         flex: 1,
@@ -270,15 +271,15 @@ const styles = StyleSheet.create({
     progressText: {
         fontSize: 13,
         fontWeight: '400',
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
         marginBottom: 12,
     },
     progressNumber: {
-        color: '#00D4FF',
+        color: semanticColors.accent,
         fontWeight: '600',
     },
     progressTotal: {
-        color: '#00D4FF',
+        color: semanticColors.accent,
     },
     progressSteps: {
         flexDirection: 'row',
@@ -291,12 +292,12 @@ const styles = StyleSheet.create({
     stepLine: {
         width: 44,
         height: 4,
-        backgroundColor: 'rgba(235, 235, 245, 0.1)',
+        backgroundColor: semanticColors.borderSubtle,
         borderRadius: 20,
         marginTop: 8,
     },
     stepLineActive: {
-        backgroundColor: '#00D4FF',
+        backgroundColor: semanticColors.accent,
     },
     titleContainer: {
         marginBottom: 24,
@@ -304,14 +305,14 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 28,
         fontWeight: '700',
-        color: colors.white,
+        color: semanticColors.textPrimary,
         lineHeight: 36,
         marginBottom: 8,
     },
     subtitle: {
         fontSize: 15,
         fontWeight: '400',
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
         lineHeight: 22,
     },
     optionsContainer: {
@@ -320,21 +321,21 @@ const styles = StyleSheet.create({
     optionCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#15152A',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         padding: 16,
         borderWidth: 2,
-        borderColor: 'transparent',
+        borderColor: semanticColors.transparent,
     },
     optionCardSelected: {
-        borderColor: '#00D4FF',
-        backgroundColor: 'rgba(0, 212, 255, 0.05)',
+        borderColor: semanticColors.accent,
+        backgroundColor: semanticColors.accentSubtle,
     },
     optionIconContainer: {
         width: 47,
         height: 47,
         borderRadius: 10,
-        backgroundColor: '#15152A',
+        backgroundColor: semanticColors.surface3,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -345,31 +346,31 @@ const styles = StyleSheet.create({
     optionTitle: {
         fontSize: 17,
         fontWeight: '600',
-        color: colors.white,
+        color: semanticColors.textPrimary,
         marginBottom: 2,
     },
     optionSubtitle: {
         fontSize: 13,
         fontWeight: '400',
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
     radioButton: {
         width: 30,
         height: 30,
         borderRadius: 15,
         borderWidth: 2,
-        borderColor: 'rgba(235, 235, 245, 0.3)',
+        borderColor: semanticColors.borderStrong,
         alignItems: 'center',
         justifyContent: 'center',
     },
     radioButtonSelected: {
-        borderColor: '#00D4FF',
+        borderColor: semanticColors.accent,
     },
     radioButtonInner: {
         width: 20,
         height: 20,
         borderRadius: 10,
-        backgroundColor: '#00D4FF',
+        backgroundColor: semanticColors.accent,
     },
     bottomButtonContainer: {
         position: 'absolute',
@@ -378,37 +379,37 @@ const styles = StyleSheet.create({
         right: 0,
         paddingHorizontal: 20,
         paddingTop: 20,
-        backgroundColor: colors.background,
+        backgroundColor: semanticColors.canvas,
     },
     unlockButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#00D4FF',
+        backgroundColor: semanticColors.accent,
         borderRadius: 16,
         paddingVertical: 16,
         gap: 12,
     },
     unlockButtonDisabled: {
-        backgroundColor: 'rgba(0, 212, 255, 0.3)',
+        backgroundColor: semanticColors.surface3,
     },
     unlockButtonText: {
         fontSize: 17,
         fontWeight: '600',
-        color: '#0E0E1F',
+        color: semanticColors.textOnAccent,
     },
     unlockButtonTextDisabled: {
-        color: 'rgba(14, 14, 31, 0.5)',
+        color: semanticColors.textTertiary,
     },
     errorContainer: {
-        backgroundColor: 'rgba(255, 59, 48, 0.1)',
+        backgroundColor: semanticColors.dangerSubtle,
         borderRadius: 12,
         padding: 12,
         marginHorizontal: 20,
         marginBottom: 10,
     },
     errorText: {
-        color: '#FF3B30',
+        color: colors.error,
         fontSize: 14,
         textAlign: 'center',
     },

@@ -8,6 +8,7 @@ import Animated, {
     withDelay,
     Easing,
 } from 'react-native-reanimated';
+import { semanticColors } from '../theme/semanticColors';
 import Svg, { Path } from 'react-native-svg';
 
 const FORCED_CYAN = '#00D4FF';
@@ -107,7 +108,7 @@ const styles = StyleSheet.create({
     badge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#0A0A14',
+        backgroundColor: semanticColors.canvas,
         borderWidth: 2,
         borderColor: FORCED_CYAN,
         borderRadius: 20,

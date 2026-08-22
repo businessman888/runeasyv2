@@ -16,6 +16,7 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, fonts, shadows, spacing } from '../../theme';
 import { RippleLoader } from './RippleLoader';
+import { semanticColors } from '../../theme/semanticColors';
 
 // Real frosted blur on Android needs expo-blur's experimental method; iOS
 // ignores it and uses native blur. Same approach as GlassTeaseOverlay.
@@ -186,13 +187,13 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: fonts.extrabold,
     fontSize: 20,
-    color: colors.text,
+    color: semanticColors.textPrimary,
     textAlign: 'center',
   },
   subtitle: {
     fontFamily: fonts.medium,
     fontSize: 14,
-    color: colors.proMutedText,
+    color: semanticColors.textSecondary,
     textAlign: 'center',
   },
   retryButton: {
@@ -201,8 +202,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderRadius: 30,
     borderWidth: 1,
-    borderColor: colors.proGlassBorderCyan,
-    backgroundColor: 'rgba(0, 212, 255, 0.08)',
+    borderColor: semanticColors.borderSubtle,
+    backgroundColor: semanticColors.accentSubtle,
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.neon,

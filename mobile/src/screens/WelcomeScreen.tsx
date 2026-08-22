@@ -18,16 +18,17 @@ import Animated, {
     runOnJS,
 } from 'react-native-reanimated';
 import { useAuthStore, getDisplayName } from '../stores/authStore';
+import { semanticColors } from '../theme/semanticColors';
 import { fonts } from '../theme';
 
 // ============================================
 // FORCED COLORS (Figma 1391:1686)
 // ============================================
-const OVERLAY = 'rgba(0, 0, 0, 0.65)'; // película escura sobre a imagem (fill exato do Figma)
-const CYAN = '#00D4FF';
-const TEXT = '#EBEBF5';
-const TEXT_SECONDARY = 'rgba(235, 235, 245, 0.6)';
-const BTN_TEXT = '#0E0E1F';
+const OVERLAY = semanticColors.scrim;
+const CYAN = semanticColors.accent;
+const TEXT = semanticColors.textPrimary;
+const TEXT_SECONDARY = semanticColors.textSecondary;
+const BTN_TEXT = semanticColors.textOnAccent;
 
 const FADE_IN_MS = 500;
 const FADE_OUT_MS = 300;
@@ -101,7 +102,7 @@ export function WelcomeScreen({ navigation }: any) {
                 <View style={[StyleSheet.absoluteFill, styles.overlay]} pointerEvents="none" />
                 {/* Gradiente sutil topo→base apenas para legibilidade premium */}
                 <LinearGradient
-                    colors={['rgba(0,0,0,0.45)', 'transparent', 'rgba(0,0,0,0.55)']}
+                    colors={[semanticColors.scrim, semanticColors.transparent, semanticColors.scrim]}
                     locations={[0, 0.45, 1]}
                     style={StyleSheet.absoluteFill}
                     pointerEvents="none"
@@ -144,7 +145,7 @@ export function WelcomeScreen({ navigation }: any) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0A0A18',
+        backgroundColor: semanticColors.canvas,
     },
     overlay: {
         backgroundColor: OVERLAY,

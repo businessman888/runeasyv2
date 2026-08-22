@@ -1,6 +1,7 @@
 import React, { memo, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, StyleProp, ViewStyle } from 'react-native';
-import { colors, typography } from '../../theme';
+import { typography } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 /**
  * Two-or-more-segment tab control matching the Figma `componentSelectWorkout`
@@ -64,7 +65,7 @@ const styles = StyleSheet.create({
     container: {
         flexDirection: 'row',
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(235, 235, 245, 0.1)', // Figma hairline divider
+        borderBottomColor: semanticColors.borderSubtle,
     },
     tab: {
         flex: 1,
@@ -75,15 +76,15 @@ const styles = StyleSheet.create({
         borderBottomColor: 'transparent',
     },
     tabActive: {
-        borderBottomColor: colors.primary, // #00D4FF
+        borderBottomColor: semanticColors.accent,
     },
     tabText: {
         fontSize: typography.fontSizes.md,
         fontWeight: typography.fontWeights.semibold,
-        color: 'rgba(235, 235, 245, 0.6)', // Figma inactive label
+        color: semanticColors.textSecondary,
     },
     tabTextActive: {
-        color: colors.primary,
+        color: semanticColors.accent,
     },
 });
 

@@ -10,6 +10,7 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { useAuthStore } from '../stores';
 import * as Storage from '../utils/storage';
 
@@ -221,7 +222,7 @@ export function PlanPreviewScreen({ navigation, route }: any) {
                     disabled={isUnlocking}
                 >
                     {isUnlocking ? (
-                        <ActivityIndicator color="#0F172A" />
+                        <ActivityIndicator color={semanticColors.textOnAccent} />
                     ) : (
                         <>
                             <Text style={styles.unlockIcon}>🔓</Text>
@@ -240,7 +241,7 @@ export function PlanPreviewScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0F172A',
+        backgroundColor: semanticColors.canvas,
     },
     scrollView: {
         flex: 1,
@@ -265,18 +266,18 @@ const styles = StyleSheet.create({
     },
     headerSubtitle: {
         fontSize: typography.fontSizes.md,
-        color: 'rgba(255, 255, 255, 0.6)',
+        color: semanticColors.textSecondary,
         marginTop: spacing.xs,
     },
     summaryCard: {
         position: 'relative',
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius['2xl'],
         padding: spacing.lg,
         marginBottom: spacing['2xl'],
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: 'rgba(0, 212, 255, 0.3)',
+        borderColor: semanticColors.borderSubtle,
     },
     summaryCardGradient: {
         position: 'absolute',
@@ -286,10 +287,10 @@ const styles = StyleSheet.create({
         height: '100%',
         ...Platform.select({
             web: {
-                backgroundImage: 'linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.1))',
+                backgroundColor: semanticColors.transparent,
             },
             default: {
-                backgroundColor: 'rgba(0, 212, 255, 0.05)',
+                backgroundColor: semanticColors.transparent,
             },
         }),
     },
@@ -305,12 +306,12 @@ const styles = StyleSheet.create({
     },
     summaryDivider: {
         width: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: semanticColors.borderSubtle,
     },
     summaryLabel: {
         fontSize: 10,
         fontWeight: typography.fontWeights.bold,
-        color: 'rgba(255, 255, 255, 0.5)',
+        color: semanticColors.textTertiary,
         letterSpacing: 1,
         marginBottom: spacing.xs,
     },
@@ -337,13 +338,13 @@ const styles = StyleSheet.create({
         color: colors.white,
     },
     analysisCard: {
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius.xl,
         padding: spacing.lg,
     },
     analysisText: {
         fontSize: typography.fontSizes.md,
-        color: 'rgba(255, 255, 255, 0.8)',
+        color: semanticColors.textPrimary,
         lineHeight: 24,
         marginBottom: spacing.lg,
     },
@@ -364,13 +365,13 @@ const styles = StyleSheet.create({
     },
     featureText: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(255, 255, 255, 0.7)',
+        color: semanticColors.textSecondary,
     },
     previewSection: {
         marginBottom: spacing['2xl'],
     },
     workoutPreviewCard: {
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius.xl,
         padding: spacing.lg,
         position: 'relative',
@@ -404,7 +405,7 @@ const styles = StyleSheet.create({
     },
     workoutMeta: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(255, 255, 255, 0.5)',
+        color: semanticColors.textTertiary,
     },
     blurOverlay: {
         position: 'absolute',
@@ -416,10 +417,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         ...Platform.select({
             web: {
-                backgroundImage: 'linear-gradient(transparent, rgba(15, 23, 42, 0.95))',
+                backgroundColor: semanticColors.scrim,
             },
             default: {
-                backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                backgroundColor: semanticColors.scrim,
             },
         }),
     },
@@ -434,7 +435,7 @@ const styles = StyleSheet.create({
     },
     statCard: {
         flex: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius.xl,
         padding: spacing.lg,
         alignItems: 'center',
@@ -446,7 +447,7 @@ const styles = StyleSheet.create({
     },
     statLabel: {
         fontSize: typography.fontSizes.xs,
-        color: 'rgba(255, 255, 255, 0.5)',
+        color: semanticColors.textTertiary,
         marginTop: spacing.xs,
     },
     footer: {
@@ -455,9 +456,9 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         padding: spacing.lg,
-        backgroundColor: '#0F172A',
+        backgroundColor: semanticColors.canvas,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(255, 255, 255, 0.1)',
+        borderTopColor: semanticColors.borderSubtle,
     },
     unlockButton: {
         flexDirection: 'row',
@@ -475,11 +476,11 @@ const styles = StyleSheet.create({
     unlockText: {
         fontSize: typography.fontSizes.lg,
         fontWeight: typography.fontWeights.bold,
-        color: '#0F172A',
+        color: semanticColors.textOnAccent,
     },
     footerNote: {
         fontSize: typography.fontSizes.xs,
-        color: 'rgba(255, 255, 255, 0.4)',
+        color: semanticColors.textTertiary,
         textAlign: 'center',
         marginTop: spacing.sm,
     },

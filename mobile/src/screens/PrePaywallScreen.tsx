@@ -12,6 +12,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, shadows } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { useProFeature } from '../hooks/useProFeature';
 import { PrePaywallBackground } from '../components/upgrade/PrePaywallBackground';
 
@@ -151,7 +152,7 @@ export default PrePaywallScreen;
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: semanticColors.canvas,
   },
   scrollContent: {
     paddingHorizontal: 24,
@@ -168,7 +169,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     lineHeight: 32,
     letterSpacing: -0.3,
-    color: colors.textLight,
+    color: semanticColors.textPrimary,
     textAlign: 'center',
     marginTop: 20,
   },
@@ -176,7 +177,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
     fontSize: 13,
     lineHeight: 19,
-    color: colors.proMutedText,
+    color: semanticColors.textSecondary,
     textAlign: 'center',
     marginTop: 12,
   },
@@ -191,10 +192,10 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.proDivider,
+    borderColor: semanticColors.borderSubtle,
   },
   benefitVeil: {
-    backgroundColor: colors.proCardGlassFill,
+    backgroundColor: semanticColors.glass,
   },
   benefitContent: {
     padding: 16,
@@ -208,13 +209,13 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontFamily: fonts.bold,
     fontSize: 15,
-    color: colors.primary,
+    color: semanticColors.textPrimary,
   },
   benefitBody: {
     fontFamily: fonts.medium,
     fontSize: 13,
     lineHeight: 19,
-    color: colors.proMutedText,
+    color: semanticColors.textSecondary,
     marginTop: 12,
   },
 
@@ -223,7 +224,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
     fontSize: 16,
     lineHeight: 24,
-    color: colors.textLight,
+    color: semanticColors.textPrimary,
     textAlign: 'center',
     marginTop: 28,
   },
@@ -245,7 +246,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: colors.streakCard,
+    backgroundColor: semanticColors.surface1,
     paddingHorizontal: 24,
     paddingTop: 20,
     shadowColor: '#000',
@@ -257,7 +258,7 @@ const styles = StyleSheet.create({
   cta: {
     height: 51,
     borderRadius: 30,
-    backgroundColor: colors.primary,
+    backgroundColor: semanticColors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.neon,
@@ -268,6 +269,6 @@ const styles = StyleSheet.create({
   ctaText: {
     fontFamily: fonts.semibold,
     fontSize: 16,
-    color: colors.backgroundLight,
+    color: semanticColors.textOnAccent,
   },
 });

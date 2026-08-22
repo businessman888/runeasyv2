@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, fonts } from '../../../theme';
+import { semanticColors } from '../../../theme/semanticColors';
 import {
     ADJUSTMENT_COPY,
     APPLY_ERROR_COPY,
@@ -238,7 +239,7 @@ export const AdjustmentTray = memo(function AdjustmentTray({
                         ]}
                     >
                         {applying ? (
-                            <ActivityIndicator size="small" color="#0F0F1E" />
+                            <ActivityIndicator size="small" color={semanticColors.textOnAccent} />
                         ) : (
                             <Text style={styles.buttonText}>{copy.actionLabel}</Text>
                         )}
@@ -323,7 +324,7 @@ const styles = StyleSheet.create({
     buttonText: {
         fontFamily: fonts.bold,
         fontSize: typography.fontSizes.lg,
-        color: '#0F0F1E',
+        color: semanticColors.textOnAccent,
     },
     appliedRow: {
         marginTop: spacing.sm,

@@ -1,7 +1,8 @@
 import React, { memo, type ReactNode } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, spacing } from '../../theme';
+import { spacing } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 interface DiffuseHeaderSurfaceProps {
     children: ReactNode;
@@ -24,13 +25,13 @@ export const DiffuseHeaderSurface = memo(function DiffuseHeaderSurface({
         <View style={[styles.surface, style]}>
             <LinearGradient
                 pointerEvents="none"
-                colors={[colors.backgroundLight, colors.background]}
+                colors={[semanticColors.surface1, semanticColors.canvas]}
                 style={StyleSheet.absoluteFill}
             />
             {children}
             <LinearGradient
                 pointerEvents="none"
-                colors={[colors.background, 'transparent']}
+                colors={[semanticColors.canvas, semanticColors.transparent]}
                 style={styles.diffuseShadow}
             />
         </View>
@@ -39,7 +40,7 @@ export const DiffuseHeaderSurface = memo(function DiffuseHeaderSurface({
 
 const styles = StyleSheet.create({
     surface: {
-        backgroundColor: colors.backgroundLight,
+        backgroundColor: semanticColors.surface1,
     },
     diffuseShadow: {
         position: 'absolute',

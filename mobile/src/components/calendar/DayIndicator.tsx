@@ -15,16 +15,17 @@ const INDICATOR: Record<CalendarDayStatus, IndicatorConfig> = {
     planned: { name: 'running', tone: 'accent', variant: 'outline' },
     completed: { name: 'check', tone: 'success', variant: 'filled' },
     missed: { name: 'close', tone: 'danger', variant: 'filled' },
-    recovery: { name: 'sleep', tone: 'secondary', variant: 'filled' },
+    recovery: { name: 'sleep', tone: 'recovery', variant: 'filled' },
 };
 
 interface DayIndicatorProps {
     status: CalendarDayStatus;
+    selected?: boolean;
 }
 
-export const DayIndicator = memo(function DayIndicator({ status }: DayIndicatorProps) {
+export const DayIndicator = memo(function DayIndicator({ status, selected = false }: DayIndicatorProps) {
     const icon = INDICATOR[status];
-    return <AppIcon {...icon} size={16} />;
+    return <AppIcon {...icon} size={16} tone={selected ? 'onAccent' : icon.tone} />;
 });
 
 DayIndicator.displayName = 'DayIndicator';

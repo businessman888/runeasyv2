@@ -26,6 +26,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import { useAuthActions } from '../../hooks/useAuthActions';
 import { AuthBackground } from '../../components/auth/AuthBackground';
 import { GlassSurface } from '../../components/ui/GlassSurface';
@@ -663,7 +664,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
     },
     googleText: {
-        color: '#1F1F1F',
+        color: semanticColors.textOnAccent,
         fontSize: 16,
         fontFamily: fonts.semibold,
     },
@@ -706,7 +707,7 @@ const styles = StyleSheet.create({
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(10, 10, 24, 0.55)',
+        backgroundColor: semanticColors.scrim,
         borderRadius: borderRadius.lg,
         borderWidth: 1,
         borderColor: colors.border,

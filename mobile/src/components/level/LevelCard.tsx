@@ -1,8 +1,9 @@
-import React, { ReactNode } from 'react';
+import React, { type ReactNode } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
+import { AppIcon } from '../ui/AppIcon';
 import { LevelProgressBar } from './LevelProgressBar';
 
 export interface LevelCardStats {
@@ -32,27 +33,18 @@ export function LevelCard({ stats, patentSlot, patentName, variant = 'home' }: L
 
     return (
         <LinearGradient
-            colors={['#1A1A2E', '#1E2540', '#0F1A35']}
+            colors={[semanticColors.surface1, semanticColors.surface2, semanticColors.surface3]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.card}
         >
-            {/* subtle cyan glow overlay */}
-            <LinearGradient
-                colors={['rgba(0,212,255,0.18)', 'transparent']}
-                start={{ x: 1, y: 0 }}
-                end={{ x: 0.2, y: 1 }}
-                style={StyleSheet.absoluteFill}
-                pointerEvents="none"
-            />
-
             <View style={styles.topRow}>
                 <View style={styles.eliteChip}>
-                    <Ionicons name="flash" size={12} color={colors.primary} />
+                    <AppIcon name="energy" size={16} tone="accent" variant="filled" />
                     <Text style={styles.eliteChipText}>Elite status</Text>
                 </View>
                 <View style={styles.patentSlot}>
-                    {patentSlot ?? <Ionicons name="diamond" size={26} color={colors.primary} />}
+                    {patentSlot ?? <AppIcon name="medal" size={28} tone="accent" variant="filled" />}
                 </View>
             </View>
 
@@ -84,7 +76,7 @@ export function LevelCard({ stats, patentSlot, patentName, variant = 'home' }: L
 
             {variant === 'badges' && streak > 0 ? (
                 <View style={styles.streakRow}>
-                    <Ionicons name="flame" size={16} color={colors.completed} />
+                    <AppIcon name="flame" size={16} tone="success" variant="filled" />
                     <Text style={styles.streakText}>Combo: {streak} dias</Text>
                 </View>
             ) : null}
@@ -98,9 +90,9 @@ const styles = StyleSheet.create({
         padding: spacing.lg,
         gap: spacing.md,
         borderWidth: 1,
-        borderColor: 'rgba(0,212,255,0.18)',
+        borderColor: semanticColors.borderSubtle,
         overflow: 'hidden',
-        ...shadows.neon,
+        ...shadows.md,
     },
     topRow: {
         flexDirection: 'row',
@@ -111,17 +103,17 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: 'rgba(0,212,255,0.14)',
+        backgroundColor: semanticColors.glass,
         paddingHorizontal: spacing.md,
         paddingVertical: 6,
         borderRadius: borderRadius.full,
         borderWidth: 1,
-        borderColor: 'rgba(0,212,255,0.28)',
+        borderColor: semanticColors.borderSubtle,
     },
     eliteChipText: {
         fontSize: typography.fontSizes.xs,
         fontWeight: typography.fontWeights.semibold,
-        color: colors.primary,
+        color: semanticColors.accent,
         letterSpacing: 0.4,
     },
     patentSlot: {
@@ -138,19 +130,19 @@ const styles = StyleSheet.create({
     },
     levelLabel: {
         fontSize: typography.fontSizes.md,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         fontWeight: typography.fontWeights.medium,
     },
     levelNumber: {
         fontSize: typography.fontSizes['3xl'],
         fontWeight: typography.fontWeights.bold,
-        color: colors.text,
+        color: semanticColors.textPrimary,
         lineHeight: typography.fontSizes['3xl'] * 1.05,
     },
     patentName: {
         fontSize: typography.fontSizes.lg,
         fontWeight: typography.fontWeights.semibold,
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
         marginLeft: spacing.xs,
     },
     xpRow: {
@@ -162,14 +154,14 @@ const styles = StyleSheet.create({
     xpCurrent: {
         fontSize: typography.fontSizes.base,
         fontWeight: typography.fontWeights.bold,
-        color: colors.text,
+        color: semanticColors.textPrimary,
     },
     xpDivider: {
-        color: colors.textMuted,
+        color: semanticColors.textTertiary,
     },
     xpNext: {
         fontSize: typography.fontSizes.xs,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         flexShrink: 1,
     },
     footerRow: {
@@ -180,12 +172,12 @@ const styles = StyleSheet.create({
     },
     footerText: {
         fontSize: typography.fontSizes.xs,
-        color: colors.textMuted,
+        color: semanticColors.textTertiary,
         fontWeight: typography.fontWeights.medium,
     },
     footerProgressText: {
         fontSize: typography.fontSizes.xs,
-        color: colors.primary,
+        color: semanticColors.accent,
         fontWeight: typography.fontWeights.bold,
     },
     streakRow: {

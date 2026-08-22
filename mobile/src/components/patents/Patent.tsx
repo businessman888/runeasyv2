@@ -3,6 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import Svg, { Defs, RadialGradient, Stop, Path, Circle, G } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { PATENTS, PatentDef } from '../../constants/patents';
+import { semanticColors } from '../../theme/semanticColors';
 
 interface PatentProps {
     /** Patent id (e.g. 'patent-4') OR patent definition. */
@@ -124,7 +125,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     lockBadge: {
-        backgroundColor: 'rgba(10,10,24,0.85)',
+        backgroundColor: semanticColors.overlayStrong,
         borderWidth: 1.5,
         borderColor: 'rgba(255,255,255,0.25)',
         alignItems: 'center',

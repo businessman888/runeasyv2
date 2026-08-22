@@ -26,13 +26,14 @@ import { WeekRow } from './components/WeekRow';
 import { UpgradeProCard } from '../../components/upgrade/UpgradeProCard';
 import { useProFeature } from '../../hooks/useProFeature';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import { semanticColors } from '../../theme/semanticColors';
 
 // ─── Figma tokens ────────────────────────────────────────────────────────────
-const BG = '#0E0E1F';
-const TEXT_PRIMARY = '#EBEBF5';
-const TEXT_SECONDARY = 'rgba(235, 235, 245, 0.65)';
-const TEXT_DIM = 'rgba(235, 235, 245, 0.45)';
-const CYAN = '#00D4FF';
+const BG = semanticColors.canvas;
+const TEXT_PRIMARY = semanticColors.textPrimary;
+const TEXT_SECONDARY = semanticColors.textSecondary;
+const TEXT_DIM = semanticColors.textTertiary;
+const CYAN = semanticColors.accent;
 
 const MONTH_PT_LONG = [
     'jan', 'fev', 'mar', 'abr', 'mai', 'jun',
@@ -250,7 +251,7 @@ function PlanSummaryCard({
     return (
         <View style={styles.summaryWrapper}>
             <LinearGradient
-                colors={['#1A1A38', '#15152A']}
+                colors={[semanticColors.surface2, semanticColors.surface1]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.summaryCard}
@@ -291,7 +292,7 @@ function PlanSummaryCard({
                     <View style={styles.distanceProgressTrack}>
                         <Animated.View style={[styles.distanceProgressFill, fillStyle]}>
                             <LinearGradient
-                                colors={['#00D4FF', '#4FB8FF']}
+                                colors={[semanticColors.accent, semanticColors.accent]}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 0 }}
                                 style={StyleSheet.absoluteFill}
@@ -367,7 +368,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
     },
     retryBtnText: {
-        color: '#0E0E1F',
+        color: semanticColors.textOnAccent,
         fontSize: 14,
         fontWeight: '700',
     },
@@ -392,7 +393,7 @@ const styles = StyleSheet.create({
         padding: 18,
         gap: 16,
         borderWidth: 1,
-        borderColor: 'rgba(0, 212, 255, 0.12)',
+        borderColor: semanticColors.borderSubtle,
         overflow: 'hidden',
     },
     summaryAccent: {
@@ -402,7 +403,7 @@ const styles = StyleSheet.create({
         width: 140,
         height: 140,
         borderRadius: 70,
-        backgroundColor: 'rgba(0, 212, 255, 0.06)',
+        backgroundColor: semanticColors.glass,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -410,7 +411,7 @@ const styles = StyleSheet.create({
         width: 60,
         height: 60,
         borderRadius: 30,
-        backgroundColor: 'rgba(0, 212, 255, 0.06)',
+        backgroundColor: semanticColors.glass,
     },
     summaryTopRow: {
         flexDirection: 'row',
@@ -438,12 +439,12 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'flex-end',
         gap: 2,
-        backgroundColor: 'rgba(0, 212, 255, 0.12)',
+        backgroundColor: semanticColors.accentSubtle,
         borderRadius: 14,
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderWidth: 1,
-        borderColor: 'rgba(0, 212, 255, 0.25)',
+        borderColor: semanticColors.borderSubtle,
     },
     weekCounterValue: {
         fontSize: 22,
@@ -494,7 +495,7 @@ const styles = StyleSheet.create({
     },
     distanceProgressTrack: {
         height: 8,
-        backgroundColor: 'rgba(235, 235, 245, 0.08)',
+        backgroundColor: semanticColors.borderSubtle,
         borderRadius: 999,
         overflow: 'hidden',
         marginTop: 6,
@@ -508,7 +509,7 @@ const styles = StyleSheet.create({
     // bottom strip
     bottomStrip: {
         flexDirection: 'row',
-        backgroundColor: 'rgba(0, 0, 0, 0.18)',
+        backgroundColor: semanticColors.surface1,
         borderRadius: 14,
         paddingVertical: 12,
         paddingHorizontal: 14,
@@ -521,7 +522,7 @@ const styles = StyleSheet.create({
     stripDivider: {
         width: 1,
         height: 28,
-        backgroundColor: 'rgba(235, 235, 245, 0.1)',
+        backgroundColor: semanticColors.borderSubtle,
         marginHorizontal: 8,
     },
     stripLabel: {

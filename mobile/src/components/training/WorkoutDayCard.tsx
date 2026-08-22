@@ -2,6 +2,7 @@ import React, { memo, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { typography, spacing, borderRadius } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import { paceValueToSecondsPerKm, formatPaceLabel } from '../../utils/pace';
 import {
     workoutDurationSeconds,
@@ -66,7 +67,7 @@ function WorkoutDayCardInner({ workout: w, onPress }: WorkoutDayCardProps) {
     const statusBadge = (() => {
         if (w.status === 'completed') return { color: '#32CD32', label: 'Concluído' };
         if (w.status === 'missed') return { color: '#FF4444', label: 'Não realizado' };
-        if (w.status === 'skipped') return { color: 'rgba(235,235,245,0.4)', label: 'Ignorado' };
+        if (w.status === 'skipped') return { color: semanticColors.textTertiary, label: 'Ignorado' };
         return { color: '#FFC107', label: 'Pendente' };
     })();
 
@@ -89,9 +90,9 @@ function WorkoutDayCardInner({ workout: w, onPress }: WorkoutDayCardProps) {
                         <Text style={styles.intensityText}>{intensityText}</Text>
                     </View>
                     {src === 'plan' ? (
-                        <View style={[styles.sourceBadge, { borderColor: '#00D4FF' }]}>
-                            <Ionicons name="flash" size={12} color="#00D4FF" />
-                            <Text style={[styles.sourceBadgeText, { color: '#00D4FF' }]}>PLANO</Text>
+                        <View style={[styles.sourceBadge, { borderColor: semanticColors.accent }]}>
+                            <Ionicons name="flash" size={12} color={semanticColors.accent} />
+                            <Text style={[styles.sourceBadgeText, { color: semanticColors.accent }]}>PLANO</Text>
                         </View>
                     ) : src === 'manual' ? (
                         <View style={[styles.sourceBadge, { borderColor: '#A78BFA' }]}>
@@ -118,13 +119,13 @@ function WorkoutDayCardInner({ workout: w, onPress }: WorkoutDayCardProps) {
                         </Text>
                         <View style={styles.workoutMetrics}>
                             <View style={styles.metricItem}>
-                                <MaterialCommunityIcons name="timer-outline" size={20} color="#00D4FF" />
+                                <MaterialCommunityIcons name="timer-outline" size={20} color={semanticColors.accent} />
                                 <Text style={styles.metricText}>
                                     {durationLabel}
                                 </Text>
                             </View>
                             <View style={styles.metricItem}>
-                                <MaterialCommunityIcons name="speedometer" size={20} color="#00D4FF" />
+                                <MaterialCommunityIcons name="speedometer" size={20} color={semanticColors.accent} />
                                 <Text style={styles.metricText}>{paceText}</Text>
                             </View>
                         </View>
@@ -151,7 +152,7 @@ function WorkoutDayCardInner({ workout: w, onPress }: WorkoutDayCardProps) {
                 <Text style={styles.viewDetailsText}>
                     {w.status === 'completed' ? 'Ver resumo do treino' : 'Ver detalhes do treino'}
                 </Text>
-                <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+                <Ionicons name="arrow-forward" size={20} color={semanticColors.textPrimary} />
             </TouchableOpacity>
         </View>
     );
@@ -164,7 +165,7 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
     cardTopSection: {
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         padding: spacing.lg,
@@ -178,7 +179,7 @@ const styles = StyleSheet.create({
     intensityBadge: {
         backgroundColor: 'transparent',
         borderWidth: 1,
-        borderColor: '#00D4FF',
+        borderColor: semanticColors.borderStrong,
         paddingHorizontal: spacing.md,
         paddingVertical: spacing.xs,
         borderRadius: borderRadius.md,
@@ -186,7 +187,7 @@ const styles = StyleSheet.create({
     intensityText: {
         fontSize: 11,
         fontWeight: typography.fontWeights.bold,
-        color: '#00D4FF',
+        color: semanticColors.accent,
         letterSpacing: 0.5,
     },
     sourceBadge: {
@@ -217,7 +218,7 @@ const styles = StyleSheet.create({
     },
     pendingText: {
         fontSize: typography.fontSizes.xs,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
     workoutDetailBody: {
         flexDirection: 'row',
@@ -234,12 +235,12 @@ const styles = StyleSheet.create({
     workoutTitle: {
         fontSize: typography.fontSizes.lg,
         fontWeight: typography.fontWeights.bold,
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
         marginBottom: 4,
     },
     workoutDescription: {
         fontSize: typography.fontSizes.xs,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
         marginBottom: spacing.sm,
     },
     workoutMetrics: {
@@ -253,7 +254,7 @@ const styles = StyleSheet.create({
     },
     metricText: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
     viewDetailsButton: {
         flexDirection: 'row',
@@ -261,14 +262,14 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingVertical: spacing.lg,
         paddingHorizontal: spacing.lg,
-        backgroundColor: '#0E0E1F',
+        backgroundColor: semanticColors.surface1,
         borderBottomLeftRadius: 30,
         borderBottomRightRadius: 30,
     },
     viewDetailsText: {
         fontSize: typography.fontSizes.base,
         fontWeight: typography.fontWeights.semibold,
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
     },
 });
 

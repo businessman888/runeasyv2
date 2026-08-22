@@ -27,14 +27,15 @@ import { useTrainingStore, useGamificationStore } from '../../stores';
 import { useStartWorkoutFlow } from '../../hooks/useStartWorkoutFlow';
 import type { PlanWorkout } from '../../types/plan-overview.types';
 import { getPhaseStyle } from './phaseTokens';
+import { semanticColors } from '../../theme/semanticColors';
 
 // ─── Figma tokens ────────────────────────────────────────────────────────────
-const BG = '#0E0E1F';
-const TEXT_PRIMARY = '#FFFFFF';
-const TEXT_TITLE = '#EBEBF5';
-const TEXT_SECONDARY = 'rgba(235, 235, 245, 0.65)';
-const PROGRESS_TRACK = 'rgba(235, 235, 245, 0.08)';
-const CYAN = '#00D4FF';
+const BG = semanticColors.canvas;
+const TEXT_PRIMARY = semanticColors.textPrimary;
+const TEXT_TITLE = semanticColors.textPrimary;
+const TEXT_SECONDARY = semanticColors.textSecondary;
+const PROGRESS_TRACK = semanticColors.borderSubtle;
+const CYAN = semanticColors.accent;
 
 const MONTH_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -166,7 +167,7 @@ export function WeekDetailScreen() {
                     <MaterialCommunityIcons
                         name="calendar-question"
                         size={48}
-                        color="rgba(235,235,245,0.4)"
+                        color={semanticColors.textTertiary}
                     />
                     <Text style={styles.centeredText}>Semana não encontrada.</Text>
                 </View>
@@ -207,7 +208,7 @@ export function WeekDetailScreen() {
                         <MaterialCommunityIcons
                             name="weather-night"
                             size={42}
-                            color="rgba(235,235,245,0.35)"
+                            color={semanticColors.textTertiary}
                         />
                         <Text style={styles.emptyText}>Sem treinos nesta semana.</Text>
                         <Text style={styles.emptySubtext}>Semana de descanso 💤</Text>
@@ -385,14 +386,14 @@ const styles = StyleSheet.create({
 
     // summary card
     summaryCard: {
-        backgroundColor: '#15152A',
+        backgroundColor: semanticColors.surface1,
         borderRadius: 20,
         paddingHorizontal: 18,
         paddingVertical: 16,
         gap: 14,
         marginBottom: 16,
         borderWidth: 1,
-        borderColor: 'rgba(235, 235, 245, 0.06)',
+        borderColor: semanticColors.borderSubtle,
     },
     summaryTopRow: {
         flexDirection: 'row',

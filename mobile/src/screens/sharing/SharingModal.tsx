@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import { useSharingStore } from '../../stores/sharingStore';
 import { CardTemplateId, ShareCardData } from '../../types/sharing.types';
 import { getAvailableCards, CardEntry } from './components/cards';
@@ -390,7 +391,7 @@ function ActionButton({ label, icon, onPress, disabled }: ActionButtonProps) {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#0E0E1F',
+    backgroundColor: semanticColors.canvas,
   },
   header: {
     height: 56,
@@ -398,7 +399,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.base,
-    backgroundColor: '#1C1C2E',
+    backgroundColor: semanticColors.surface2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -487,7 +488,7 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
   },
   actionBar: {
-    backgroundColor: '#1C1C2E',
+    backgroundColor: semanticColors.surface2,
     paddingTop: spacing.md,
     paddingBottom: spacing.md,
   },

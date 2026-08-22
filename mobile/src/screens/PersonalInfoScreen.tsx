@@ -15,32 +15,33 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, typography, spacing } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { useAuthStore, getDisplayName, getAvatarUrl } from '../stores';
 import { CustomCalendar } from '../components/CustomCalendar';
 import { ScreenContainer } from '../components/ScreenContainer';
 
 // Icon components using @expo/vector-icons
-function BackIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
+function BackIcon({ size = 24, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
     return <Ionicons name="chevron-back" size={size} color={color} />;
 }
 
-function PersonIcon({ size = 20, color = 'rgba(235,235,245,0.6)' }: { size?: number; color?: string }) {
+function PersonIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
     return <Ionicons name="person-outline" size={size} color={color} />;
 }
 
-function LockIcon({ size = 20, color = 'rgba(235,235,245,0.6)' }: { size?: number; color?: string }) {
+function LockIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
     return <Ionicons name="lock-closed-outline" size={size} color={color} />;
 }
 
-function CalendarIcon({ size = 20, color = 'rgba(235,235,245,0.6)' }: { size?: number; color?: string }) {
+function CalendarIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
     return <Ionicons name="calendar-outline" size={size} color={color} />;
 }
 
-function EditIcon({ size = 16, color = '#0A0A18' }: { size?: number; color?: string }) {
+function EditIcon({ size = 16, color = semanticColors.textOnAccent }: { size?: number; color?: string }) {
     return <MaterialCommunityIcons name="pencil" size={size} color={color} />;
 }
 
-function InfoIcon({ size = 20, color = '#00D4FF' }: { size?: number; color?: string }) {
+function InfoIcon({ size = 20, color = semanticColors.accent }: { size?: number; color?: string }) {
     return <Ionicons name="information-circle-outline" size={size} color={color} />;
 }
 
@@ -275,7 +276,7 @@ export function PersonalInfoScreen({ navigation }: any) {
                     style={styles.backButton}
                     onPress={() => navigation.goBack()}
                 >
-                    <BackIcon size={24} color="#FFFFFF" />
+                    <BackIcon size={24} color={semanticColors.textPrimary} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Informações pessoais</Text>
                 <TouchableOpacity
@@ -309,7 +310,7 @@ export function PersonalInfoScreen({ navigation }: any) {
                         )}
                         {isUploadingPhoto && (
                             <View style={styles.avatarUploadOverlay}>
-                                <ActivityIndicator size="large" color="#00D4FF" />
+                                <ActivityIndicator size="large" color={semanticColors.accent} />
                             </View>
                         )}
                         <TouchableOpacity
@@ -317,7 +318,7 @@ export function PersonalInfoScreen({ navigation }: any) {
                             onPress={handleSelectPhoto}
                             disabled={isUploadingPhoto}
                         >
-                            <EditIcon size={14} color="#0A0A18" />
+                            <EditIcon size={14} color={semanticColors.textOnAccent} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -332,9 +333,9 @@ export function PersonalInfoScreen({ navigation }: any) {
                                 style={styles.textInput}
                                 value={fullName}
                                 onChangeText={setFullName}
-                                placeholderTextColor="rgba(235,235,245,0.4)"
+                                placeholderTextColor={semanticColors.textTertiary}
                             />
-                            <PersonIcon size={20} color="rgba(235,235,245,0.6)" />
+                            <PersonIcon size={20} color={semanticColors.textSecondary} />
                         </View>
                     </View>
 
@@ -346,9 +347,9 @@ export function PersonalInfoScreen({ navigation }: any) {
                                 style={[styles.textInput, styles.textInputDisabled]}
                                 value={email}
                                 editable={false}
-                                placeholderTextColor="rgba(235,235,245,0.4)"
+                                placeholderTextColor={semanticColors.textTertiary}
                             />
-                            <LockIcon size={20} color="rgba(235,235,245,0.6)" />
+                            <LockIcon size={20} color={semanticColors.textSecondary} />
                         </View>
                     </View>
 
@@ -361,7 +362,7 @@ export function PersonalInfoScreen({ navigation }: any) {
                             activeOpacity={0.7}
                         >
                             <Text style={styles.dateText}>{formatDate(birthDateObj)}</Text>
-                            <CalendarIcon size={20} color="rgba(235,235,245,0.6)" />
+                            <CalendarIcon size={20} color={semanticColors.textSecondary} />
                         </TouchableOpacity>
 
                         <CustomCalendar
@@ -384,7 +385,7 @@ export function PersonalInfoScreen({ navigation }: any) {
                                     value={weight}
                                     onChangeText={setWeight}
                                     keyboardType="numeric"
-                                    placeholderTextColor="rgba(235,235,245,0.4)"
+                                    placeholderTextColor={semanticColors.textTertiary}
                                 />
                             </View>
                         </View>
@@ -396,7 +397,7 @@ export function PersonalInfoScreen({ navigation }: any) {
                                     value={height}
                                     onChangeText={setHeight}
                                     keyboardType="numeric"
-                                    placeholderTextColor="rgba(235,235,245,0.4)"
+                                    placeholderTextColor={semanticColors.textTertiary}
                                 />
                             </View>
                         </View>
@@ -405,7 +406,7 @@ export function PersonalInfoScreen({ navigation }: any) {
 
                 {/* Info Banner */}
                 <View style={styles.infoBanner}>
-                    <InfoIcon size={20} color="#00D4FF" />
+                    <InfoIcon size={20} color={semanticColors.accent} />
                     <Text style={styles.infoBannerText}>
                         Seus dados biométricos são usados apenas para calcular métricas de performance, como VO2 Max e zonas de frequência cardíaca, além da estimativa de queima calórica.
                     </Text>
@@ -435,7 +436,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 18,
         fontWeight: '600',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
     },
     saveButton: {
         paddingHorizontal: spacing.sm,
@@ -444,7 +445,7 @@ const styles = StyleSheet.create({
     saveButtonText: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#00D4FF',
+        color: semanticColors.accent,
     },
     saveButtonDisabled: {
         opacity: 0.5,
@@ -469,22 +470,22 @@ const styles = StyleSheet.create({
         height: 100,
         borderRadius: 50,
         borderWidth: 3,
-        borderColor: '#00D4FF',
+        borderColor: semanticColors.accent,
     },
     avatarInitials: {
         width: 100,
         height: 100,
         borderRadius: 50,
         borderWidth: 3,
-        borderColor: '#00D4FF',
-        backgroundColor: '#1C1C2E',
+        borderColor: semanticColors.accent,
+        backgroundColor: semanticColors.surface2,
         justifyContent: 'center',
         alignItems: 'center',
     },
     initialsText: {
         fontSize: 36,
         fontWeight: '600',
-        color: '#00D4FF',
+        color: semanticColors.accent,
         textTransform: 'uppercase',
     },
     editAvatarButton: {
@@ -494,11 +495,11 @@ const styles = StyleSheet.create({
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: '#00D4FF',
+        backgroundColor: semanticColors.accent,
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 3,
-        borderColor: '#0A0A18',
+        borderColor: semanticColors.canvas,
     },
     editAvatarButtonDisabled: {
         opacity: 0.5,
@@ -510,7 +511,7 @@ const styles = StyleSheet.create({
         width: 100,
         height: 100,
         borderRadius: 50,
-        backgroundColor: 'rgba(10,10,24,0.55)',
+        backgroundColor: semanticColors.scrim,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -523,23 +524,23 @@ const styles = StyleSheet.create({
     inputLabel: {
         fontSize: 14,
         fontWeight: '400',
-        color: 'rgba(235,235,245,0.6)',
+        color: semanticColors.textSecondary,
     },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: 'rgba(235,235,245,0.2)',
+        borderColor: semanticColors.borderStrong,
         paddingHorizontal: spacing.md,
         height: 52,
     },
     inputContainerSmall: {
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: 'rgba(235,235,245,0.2)',
+        borderColor: semanticColors.borderStrong,
         paddingHorizontal: spacing.md,
         height: 52,
         justifyContent: 'center',
@@ -552,16 +553,16 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 16,
         fontWeight: '400',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
         paddingVertical: 0,
     },
     textInputDisabled: {
-        color: 'rgba(235,235,245,0.6)',
+        color: semanticColors.textSecondary,
     },
     textInputCenter: {
         fontSize: 16,
         fontWeight: '500',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
         textAlign: 'center',
         width: '100%',
     },
@@ -569,7 +570,7 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 16,
         fontWeight: '400',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
     },
     rowInputs: {
         flexDirection: 'row',
@@ -582,20 +583,20 @@ const styles = StyleSheet.create({
     infoBanner: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        backgroundColor: 'rgba(0,212,255,0.1)',
+        backgroundColor: semanticColors.accentSubtle,
         borderRadius: 16,
         padding: spacing.md,
         marginTop: spacing.xl,
         marginHorizontal: 0,
         gap: spacing.sm,
         borderWidth: 1,
-        borderColor: 'rgba(0,212,255,0.2)',
+        borderColor: semanticColors.borderSubtle,
     },
     infoBannerText: {
         flex: 1,
         fontSize: 12,
         fontWeight: '400',
-        color: 'rgba(235,235,245,0.8)',
+        color: semanticColors.textSecondary,
         lineHeight: 18,
     },
     bottomSpacer: {

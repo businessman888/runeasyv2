@@ -8,6 +8,7 @@ import {
     Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { semanticColors } from '../theme/semanticColors';
 
 interface CustomCalendarProps {
     visible: boolean;
@@ -122,7 +123,7 @@ export function CustomCalendar({
                                 accessibilityRole="button"
                                 accessibilityLabel="Mês anterior"
                             >
-                                <Ionicons name="chevron-back" size={22} color="#EBEBF5" />
+                                <Ionicons name="chevron-back" size={22} color={semanticColors.textPrimary} />
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={goNextMonth}
@@ -130,7 +131,7 @@ export function CustomCalendar({
                                 accessibilityRole="button"
                                 accessibilityLabel="Próximo mês"
                             >
-                                <Ionicons name="chevron-forward" size={22} color="#EBEBF5" />
+                                <Ionicons name="chevron-forward" size={22} color={semanticColors.textPrimary} />
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -207,16 +208,16 @@ export function CustomCalendar({
     );
 }
 
-const COLOR_BG = '#1C1C2E';
-const COLOR_ACCENT = '#00D4FF';
-const COLOR_TEXT = '#EBEBF5';
-const COLOR_TEXT_MUTED = 'rgba(235, 235, 245, 0.6)';
-const COLOR_TEXT_DARK = '#0E0E1F';
+const COLOR_BG = semanticColors.surface2;
+const COLOR_ACCENT = semanticColors.accent;
+const COLOR_TEXT = semanticColors.textPrimary;
+const COLOR_TEXT_MUTED = semanticColors.textSecondary;
+const COLOR_TEXT_DARK = semanticColors.textOnAccent;
 
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        backgroundColor: semanticColors.scrim,
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 16,
@@ -300,7 +301,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     dayTextDisabled: {
-        color: 'rgba(235, 235, 245, 0.3)',
+        color: semanticColors.textTertiary,
     },
     actions: {
         height: 52,

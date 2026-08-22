@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import type { LatestActivityData } from "../../../stores/feedbackStore";
 import { RESULT_CARD_HEIGHT } from "./WorkoutResultCard";
+import { semanticColors } from "../../../theme/semanticColors";
 
 interface StackedResultCardsProps {
   results: LatestActivityData[];
@@ -158,16 +159,16 @@ const styles = StyleSheet.create({
     height: RESULT_CARD_HEIGHT - 4,
     borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(235,235,245,0.08)",
+    borderColor: semanticColors.borderSubtle,
   },
   depthLayerBack: {
     top: 9,
-    backgroundColor: "rgba(28,28,46,0.42)",
+    backgroundColor: semanticColors.surface1,
   },
   depthLayerMiddle: {
     top: 5,
     right: 4,
-    backgroundColor: "rgba(28,28,46,0.76)",
+    backgroundColor: semanticColors.surface2,
   },
   counter: {
     position: "absolute",
@@ -176,7 +177,7 @@ const styles = StyleSheet.create({
     minHeight: 24,
     paddingHorizontal: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(14,14,31,0.78)",
+    backgroundColor: semanticColors.surface1,
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
@@ -185,7 +186,7 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "rgba(235,235,245,0.32)",
+    backgroundColor: semanticColors.textTertiary,
   },
-  dotActive: { width: 10, backgroundColor: "#00D4FF" },
+  dotActive: { width: 10, backgroundColor: semanticColors.accent },
 });

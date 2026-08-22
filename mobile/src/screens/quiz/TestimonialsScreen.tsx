@@ -14,6 +14,7 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import Carousel from 'react-native-reanimated-carousel';
 import { fonts, colors } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import { InterstitialBase } from './_InterstitialBase';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -27,8 +28,8 @@ const CARD_GAP = 8;
 const CARD_HEIGHT = 380;
 
 const CYAN = colors.primary;
-const TEXT = '#EBEBF5';
-const TEXT_DIM = 'rgba(235, 235, 245, 0.6)';
+const TEXT = semanticColors.textPrimary;
+const TEXT_DIM = semanticColors.textSecondary;
 
 const ANDROID_BLUR_METHOD: 'dimezisBlurView' | undefined =
     Platform.OS === 'android' ? 'dimezisBlurView' : undefined;
@@ -105,7 +106,7 @@ const TestimonialCard = memo(({ item }: { item: Testimonial }) => (
     <View style={styles.cardWrapper}>
         <ImageBackground source={item.background} style={styles.cardImage} imageStyle={styles.cardImageRadius}>
             <LinearGradient
-                colors={['rgba(10,10,24,0.15)', 'rgba(10,10,24,0.35)', 'rgba(10,10,24,0.85)']}
+                colors={[semanticColors.transparent, semanticColors.glass, semanticColors.canvas]}
                 locations={[0, 0.5, 1]}
                 style={StyleSheet.absoluteFill}
             />
@@ -191,7 +192,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: colors.proGlassBorderCyan,
         borderRadius: 16,
-        backgroundColor: 'rgba(0, 212, 255, 0.04)',
+        backgroundColor: semanticColors.accentSubtle,
         paddingVertical: 18,
         paddingHorizontal: 12,
         marginTop: 8,
@@ -246,7 +247,7 @@ const styles = StyleSheet.create({
         padding: 14,
     },
     glassVeil: {
-        backgroundColor: 'rgba(14, 14, 30, 0.35)',
+        backgroundColor: semanticColors.glass,
     },
     glassHeader: {
         flexDirection: 'row',
@@ -258,7 +259,7 @@ const styles = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: semanticColors.borderSubtle,
     },
     glassHeaderText: {
         flex: 1,
@@ -283,7 +284,7 @@ const styles = StyleSheet.create({
         fontFamily: fonts.regular,
         fontSize: 13,
         lineHeight: 19,
-        color: 'rgba(235, 235, 245, 0.85)',
+        color: semanticColors.textSecondary,
     },
 });
 

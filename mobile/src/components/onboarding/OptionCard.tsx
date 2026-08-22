@@ -8,8 +8,9 @@ import Animated, {
     withTiming,
     Easing,
 } from 'react-native-reanimated';
+import { semanticColors } from '../../theme/semanticColors';
 
-const FORCED_CYAN = '#00D4FF';
+const FORCED_CYAN = semanticColors.accent;
 
 interface OptionCardProps {
     selected?: boolean;

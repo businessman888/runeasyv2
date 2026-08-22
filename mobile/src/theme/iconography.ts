@@ -20,6 +20,7 @@ export const iconToneColors = {
   secondary: semanticColors.textSecondary,
   tertiary: semanticColors.textTertiary,
   accent: semanticColors.accent,
+  recovery: semanticColors.recovery,
   success: colors.success,
   onAccent: semanticColors.textOnAccent,
   warning: colors.warning,

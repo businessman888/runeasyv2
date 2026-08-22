@@ -21,6 +21,7 @@ import { QuizHeader, Hl } from '../components/onboarding/QuizHeader';
 import { DistanceTimeScreen } from './quiz/DistanceTimeScreen';
 import { AvailableDaysScreen } from './quiz/AvailableDaysScreen';
 import { borderRadius, colors, fonts, spacing } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { PaceGoalFeasibility, retrospectiveGoalService } from '../services/retrospectiveGoalService';
 import type { RootStackParamList } from '../navigation/navigationRef';
 
@@ -724,7 +725,7 @@ const styles = StyleSheet.create({
         width: 42,
         height: 42,
         borderRadius: 14,
-        backgroundColor: 'rgba(0,212,255,0.10)',
+        backgroundColor: semanticColors.accentSubtle,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -757,7 +758,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 14,
         gap: 12,
     },
-    selectOptionActive: { backgroundColor: 'rgba(0,212,255,0.09)' },
+    selectOptionActive: { backgroundColor: semanticColors.accentSubtle },
     optionLabel: {
         fontFamily: fonts.semibold,
         fontSize: 15,
@@ -818,9 +819,9 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: spacing.md,
         borderRadius: borderRadius.xl,
-        backgroundColor: 'rgba(16,185,129,0.10)',
+        backgroundColor: semanticColors.successSubtle,
         borderWidth: 1,
-        borderColor: 'rgba(16,185,129,0.32)',
+        borderColor: colors.success,
     },
     alternativeEyebrow: {
         fontFamily: fonts.bold,
@@ -853,7 +854,7 @@ const styles = StyleSheet.create({
     },
     frequencyButtonActive: {
         borderColor: colors.primary,
-        backgroundColor: 'rgba(0,212,255,0.10)',
+        backgroundColor: semanticColors.accentSubtle,
     },
     frequencyValue: {
         fontFamily: fonts.bold,
@@ -882,9 +883,9 @@ const styles = StyleSheet.create({
         borderRadius: 17,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(0,212,255,0.10)',
+        backgroundColor: semanticColors.accentSubtle,
         borderWidth: 1,
-        borderColor: 'rgba(0,212,255,0.25)',
+        borderColor: colors.primary,
     },
     timelineLine: { flex: 1, width: 1, backgroundColor: colors.border },
     timelineCopy: { flex: 1, paddingLeft: 10, paddingBottom: 20 },

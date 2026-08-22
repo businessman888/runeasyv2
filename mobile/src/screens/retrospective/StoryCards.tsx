@@ -9,6 +9,7 @@ import Animated, {
   ZoomIn,
 } from 'react-native-reanimated';
 import { colors, fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import { storyType, StoryGradient } from './storyTheme';
 import type { RetrospectiveData } from './types';
 
@@ -614,6 +615,6 @@ const styles = StyleSheet.create({
     color: 'rgba(235,235,245,0.55)',
   },
   ctaBtnDescriptionPrimary: {
-    color: 'rgba(10,10,24,0.68)',
+    color: semanticColors.textOnAccentMuted,
   },
 });

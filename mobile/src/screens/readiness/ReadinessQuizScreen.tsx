@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import { BASE_API_URL, API_URL, API_ENDPOINTS } from '../../config/api.config';
 import { authedFetch } from '../../services/apiClient';
 import * as Storage from '../../utils/storage';
@@ -216,9 +217,9 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
     if (isLoading) {
         return (
             <View style={[styles.container, { paddingTop: insets.top + 20, justifyContent: 'center', alignItems: 'center' }]}>
-                <StatusBar barStyle="light-content" backgroundColor="#0E0E1F" />
+                <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={{ color: 'rgba(255,255,255,0.7)', marginTop: 16 }}>Carregando perguntas...</Text>
+                <Text style={{ color: semanticColors.textSecondary, marginTop: 16 }}>Carregando perguntas...</Text>
             </View>
         );
     }
@@ -227,7 +228,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
     if (lockReason === 'first_workout') {
         return (
             <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
-                <StatusBar barStyle="light-content" backgroundColor="#0E0E1F" />
+                <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
                 <View style={styles.lockedContainer}>
                     <View style={styles.lockedIconWrap}>
                         <Ionicons name="footsteps-outline" size={36} color={colors.primary} />
@@ -244,7 +245,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
                         accessibilityLabel="Voltar para a Home"
                     >
                         <Text style={styles.lockedCtaText}>Voltar para a Home</Text>
-                        <Ionicons name="arrow-forward" size={16} color="#0E0E1F" />
+                        <Ionicons name="arrow-forward" size={16} color={semanticColors.textOnAccent} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -254,10 +255,10 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
     if (!currentQuestion || questions.length === 0) {
         return (
             <View style={[styles.container, { paddingTop: insets.top + 20, justifyContent: 'center', alignItems: 'center' }]}>
-                <StatusBar barStyle="light-content" backgroundColor="#0E0E1F" />
+                <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
                 <Ionicons name="cloud-offline-outline" size={48} color={colors.error} />
                 <Text style={{ color: colors.white, marginTop: 16, fontSize: 16, fontWeight: '600' }}>Erro ao carregar perguntas</Text>
-                <Text style={{ color: 'rgba(255,255,255,0.6)', marginTop: 8, textAlign: 'center', maxWidth: 300 }}>
+                <Text style={{ color: semanticColors.textSecondary, marginTop: 8, textAlign: 'center', maxWidth: 300 }}>
                     Verifique sua conexão e tente novamente.
                 </Text>
                 <TouchableOpacity
@@ -277,7 +278,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
 
     return (
         <View style={[styles.container, { paddingTop: insets.top }]}>
-            <StatusBar barStyle="light-content" backgroundColor="#0A0A18" />
+            <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
 
             {/* Top bar — back + step counter */}
             <View style={styles.topBar}>
@@ -355,7 +356,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
                                     ]}
                                 >
                                     {isSelected && (
-                                        <Ionicons name="checkmark" size={14} color="#0A0A18" />
+                                        <Ionicons name="checkmark" size={14} color={semanticColors.textOnAccent} />
                                     )}
                                 </View>
                             </TouchableOpacity>
@@ -388,7 +389,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
                     <Ionicons
                         name="arrow-forward"
                         size={18}
-                        color={selectedValue ? '#0A0A18' : 'rgba(255,255,255,0.3)'}
+                        color={selectedValue ? semanticColors.textOnAccent : semanticColors.textTertiary}
                     />
                 </TouchableOpacity>
             </View>
@@ -399,7 +400,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0A0A18',
+        backgroundColor: semanticColors.canvas,
     },
     // ---------- top bar
     topBar: {
@@ -415,7 +416,7 @@ const styles = StyleSheet.create({
         borderRadius: 18,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(255,255,255,0.04)',
+        backgroundColor: semanticColors.glass,
     },
     topBarTitle: {
         flex: 1,
@@ -437,7 +438,7 @@ const styles = StyleSheet.create({
         marginHorizontal: spacing.base,
         height: 3,
         borderRadius: 2,
-        backgroundColor: 'rgba(255,255,255,0.06)',
+        backgroundColor: semanticColors.glass,
         overflow: 'hidden',
     },
     progressFill: {
@@ -475,12 +476,12 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.lg,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.04)',
+        borderColor: semanticColors.borderSubtle,
         minHeight: 56,
     },
     optionSelected: {
         borderColor: colors.primary,
-        backgroundColor: 'rgba(0,212,255,0.06)',
+        backgroundColor: semanticColors.accentSubtle,
     },
     optionTextWrap: {
         flex: 1,
@@ -507,7 +508,7 @@ const styles = StyleSheet.create({
         height: 22,
         borderRadius: 11,
         borderWidth: 1.5,
-        borderColor: 'rgba(255,255,255,0.2)',
+        borderColor: semanticColors.borderStrong,
         alignItems: 'center',
         justifyContent: 'center',
         marginLeft: spacing.md,
@@ -520,9 +521,9 @@ const styles = StyleSheet.create({
     bottomBar: {
         paddingHorizontal: spacing.base,
         paddingTop: spacing.md,
-        backgroundColor: '#0A0A18',
+        backgroundColor: semanticColors.canvas,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(255,255,255,0.04)',
+        borderTopColor: semanticColors.borderSubtle,
     },
     continueBtn: {
         flexDirection: 'row',
@@ -534,16 +535,16 @@ const styles = StyleSheet.create({
         borderRadius: 28,
     },
     continueBtnDisabled: {
-        backgroundColor: 'rgba(255,255,255,0.06)',
+        backgroundColor: semanticColors.glass,
     },
     continueBtnText: {
         fontSize: typography.fontSizes.md,
         fontWeight: '700',
-        color: '#0A0A18',
+        color: semanticColors.textOnAccent,
         letterSpacing: 0.2,
     },
     continueBtnTextDisabled: {
-        color: 'rgba(255,255,255,0.4)',
+        color: semanticColors.textTertiary,
     },
     retryButton: {
         backgroundColor: colors.primary,
@@ -555,7 +556,7 @@ const styles = StyleSheet.create({
     retryButtonText: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#0A0A14',
+        color: semanticColors.textOnAccent,
     },
     lockedContainer: {
         flex: 1,
@@ -570,9 +571,9 @@ const styles = StyleSheet.create({
         borderRadius: 40,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(0,212,255,0.10)',
+        backgroundColor: semanticColors.accentSubtle,
         borderWidth: 1,
-        borderColor: 'rgba(0,212,255,0.25)',
+        borderColor: semanticColors.borderSubtle,
     },
     lockedHeading: {
         fontSize: typography.fontSizes['2xl'],
@@ -582,7 +583,7 @@ const styles = StyleSheet.create({
     },
     lockedBody: {
         fontSize: typography.fontSizes.md,
-        color: 'rgba(255,255,255,0.65)',
+        color: semanticColors.textSecondary,
         textAlign: 'center',
         lineHeight: 22,
         maxWidth: 320,
@@ -600,7 +601,7 @@ const styles = StyleSheet.create({
     lockedCtaText: {
         fontSize: typography.fontSizes.md,
         fontWeight: '700',
-        color: '#0E0E1F',
+        color: semanticColors.textOnAccent,
     },
 });
 

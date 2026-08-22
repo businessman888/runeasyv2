@@ -11,10 +11,11 @@ import {
     Animated,
 } from 'react-native';
 import { colors, typography, spacing } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { useAuthStore } from '../stores';
 
 // SVG Icons
-function BackIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
+function BackIcon({ size = 24, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
     if (Platform.OS === 'web') {
         return (
             <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
@@ -25,7 +26,7 @@ function BackIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: str
     return <Text style={{ fontSize: size, color }}>‹</Text>;
 }
 
-function InfoIcon({ size = 20, color = '#00D4FF' }: { size?: number; color?: string }) {
+function InfoIcon({ size = 20, color = semanticColors.accent }: { size?: number; color?: string }) {
     if (Platform.OS === 'web') {
         return (
             <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
@@ -219,13 +220,13 @@ export function NotificationSettingsScreen({ navigation }: any) {
                         style={styles.backButton}
                         onPress={() => navigation.goBack()}
                     >
-                        <BackIcon size={24} color="#FFFFFF" />
+                        <BackIcon size={24} color={semanticColors.textPrimary} />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Notificações</Text>
                     <View style={styles.headerSpacer} />
                 </View>
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                    <Text style={{ color: '#FFFFFF' }}>Carregando...</Text>
+                    <Text style={{ color: semanticColors.textPrimary }}>Carregando...</Text>
                 </View>
             </SafeAreaView>
         );
@@ -239,7 +240,7 @@ export function NotificationSettingsScreen({ navigation }: any) {
                     style={styles.backButton}
                     onPress={() => navigation.goBack()}
                 >
-                    <BackIcon size={24} color="#FFFFFF" />
+                    <BackIcon size={24} color={semanticColors.textPrimary} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Notificações</Text>
                 <View style={styles.headerSpacer} />
@@ -277,7 +278,7 @@ export function NotificationSettingsScreen({ navigation }: any) {
 
                 {/* Info Banner */}
                 <View style={styles.infoBanner}>
-                    <InfoIcon size={20} color="#00D4FF" />
+                    <InfoIcon size={20} color={semanticColors.accent} />
                     <Text style={styles.infoBannerText}>
                         As notificações são essenciais para que a IA ajuste sua planilha de treinos em tempo real, garantindo que você treine na intensidade correta.
                     </Text>
@@ -292,7 +293,7 @@ export function NotificationSettingsScreen({ navigation }: any) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0E0E1F',
+        backgroundColor: semanticColors.canvas,
     },
     header: {
         flexDirection: 'row',
@@ -310,7 +311,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 18,
         fontWeight: '600',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
     },
     headerSpacer: {
         width: 40,
@@ -327,15 +328,15 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 14,
         fontWeight: '600',
-        color: 'rgba(235,235,245,0.6)',
+        color: semanticColors.textSecondary,
         marginBottom: spacing.sm,
         marginLeft: spacing.xs,
     },
     settingsCard: {
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: 'rgba(235,235,245,0.1)',
+        borderColor: semanticColors.borderSubtle,
         overflow: 'hidden',
     },
     settingRow: {
@@ -352,17 +353,17 @@ const styles = StyleSheet.create({
     settingTitle: {
         fontSize: 16,
         fontWeight: '500',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
         marginBottom: 4,
     },
     settingDescription: {
         fontSize: 13,
         fontWeight: '400',
-        color: 'rgba(235,235,245,0.6)',
+        color: semanticColors.textSecondary,
     },
     settingDivider: {
         height: 1,
-        backgroundColor: 'rgba(235,235,245,0.1)',
+        backgroundColor: semanticColors.glass,
         marginLeft: spacing.lg,
     },
     // Custom Toggle Styles
@@ -374,10 +375,10 @@ const styles = StyleSheet.create({
         paddingHorizontal: 2,
     },
     toggleTrackActive: {
-        backgroundColor: '#00D4FF',
+        backgroundColor: semanticColors.accent,
     },
     toggleTrackInactive: {
-        backgroundColor: '#39393D',
+        backgroundColor: semanticColors.surface3,
     },
     toggleThumb: {
         width: 28,
@@ -395,7 +396,7 @@ const styles = StyleSheet.create({
     infoBanner: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        backgroundColor: 'rgba(0,212,255,0.1)',
+        backgroundColor: semanticColors.accentSubtle,
         borderRadius: 12,
         padding: spacing.md,
         marginTop: spacing.md,
@@ -405,7 +406,7 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 12,
         fontWeight: '400',
-        color: 'rgba(235,235,245,0.8)',
+        color: semanticColors.textSecondary,
         lineHeight: 18,
     },
     spacer: {

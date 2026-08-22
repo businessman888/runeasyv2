@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenContainer } from '../../components/ScreenContainer';
+import { semanticColors } from '../../theme/semanticColors';
 import { useCoachStore } from '../../stores/coachStore';
 import {
   checkPtBrVoice,
@@ -33,12 +34,12 @@ import {
 } from '../../services/coach/ttsVoice';
 
 const T = {
-  bg: '#0E0E1F',
-  cyan: '#00D4FF',
-  textPrimary: '#EBEBF5',
-  textSecondary: 'rgba(235, 235, 245, 0.60)',
-  buttonOff: '#EBEBF5',
-  buttonOffText: '#1C1C2E',
+  bg: semanticColors.canvas,
+  cyan: semanticColors.accent,
+  textPrimary: semanticColors.textPrimary,
+  textSecondary: semanticColors.textSecondary,
+  buttonOff: semanticColors.textPrimary,
+  buttonOffText: semanticColors.surface2,
   warnBg: 'rgba(255, 196, 0, 0.12)',
   warnBorder: 'rgba(255, 196, 0, 0.40)',
   warnText: '#FFC400',
@@ -270,7 +271,7 @@ const styles = StyleSheet.create({
     backgroundColor: T.buttonOff,
   },
   ctaOn: {
-    backgroundColor: 'rgba(0, 212, 255, 0.12)',
+    backgroundColor: semanticColors.accentSubtle,
     borderWidth: 1,
     borderColor: T.cyan,
   },

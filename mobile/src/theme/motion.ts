@@ -36,6 +36,16 @@ export const motionScale = {
   icon: 0.94,
 } as const;
 
+export const motionOpacity = {
+  pressed: 0.86,
+  disabled: 0.48,
+} as const;
+
+export const navigationMotion = {
+  card: motionDuration.standard,
+  modal: motionDuration.deliberate,
+} as const;
+
 export const motionEasing = {
   standard: Easing.bezier(0.2, 0, 0, 1),
   enter: Easing.bezier(0, 0, 0, 1),
@@ -45,7 +55,7 @@ export const motionEasing = {
 export type MotionDuration = keyof typeof motionDuration;
 export type MotionScale = keyof typeof motionScale;
 
-export function createTimingConfig(duration = motionDuration.standard) {
+export function createTimingConfig(duration: number = motionDuration.standard) {
   return {
     duration,
     easing: motionEasing.standard,

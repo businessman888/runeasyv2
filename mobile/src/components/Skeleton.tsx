@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
@@ -168,10 +169,10 @@ export function SkeletonCard({
 
 const styles = StyleSheet.create({
     skeleton: {
-        backgroundColor: colors.border || '#2A2A3E',
+        backgroundColor: semanticColors.borderStrong,
     },
     base: {
-        backgroundColor: colors.border || '#2A2A3E',
+        backgroundColor: semanticColors.borderStrong,
     },
     cardContainer: {
         width: '100%',

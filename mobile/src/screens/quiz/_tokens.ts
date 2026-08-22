@@ -10,18 +10,27 @@
  * useFonts). The previous `Poppins-*` / `Inter-*` references silently fell back
  * to the system font, so we standardize on the loaded brand font via `fonts`.
  */
-import { fonts } from '../../theme';
+import { colors, fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 export const QUIZ = {
     color: {
-        bg: '#0F0F1E',
-        card: '#1C1C2E',
-        cyan: '#00D4FF',
-        text: '#EBEBF5',
-        textDim: 'rgba(235, 235, 245, 0.6)',
-        selectedFill: 'rgba(0, 212, 255, 0.10)',
-        stroke: 'rgba(235, 235, 245, 0.1)',
-        border: 'rgba(235, 235, 245, 0.16)',
+        bg: semanticColors.canvas,
+        card: semanticColors.surface2,
+        glass: semanticColors.glass,
+        surface1: semanticColors.surface1,
+        surface3: semanticColors.surface3,
+        scrim: semanticColors.scrim,
+        textOnAccent: semanticColors.textOnAccent,
+        cyan: semanticColors.accent,
+        text: semanticColors.textPrimary,
+        textDim: semanticColors.textSecondary,
+        selectedFill: semanticColors.accentSubtle,
+        stroke: semanticColors.borderSubtle,
+        border: semanticColors.borderStrong,
+        danger: colors.error,
+        dangerSubtle: semanticColors.dangerSubtle,
+        warningSubtle: semanticColors.warningSubtle,
     },
     // Title/subtitle scale — one size everywhere (was 20/24/28/30 across screens).
     title: {

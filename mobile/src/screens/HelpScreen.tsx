@@ -9,22 +9,23 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { ScreenContainer } from '../components/ScreenContainer';
 
 // Icon components using @expo/vector-icons
-function BackIcon({ size = 24, color = '#FFFFFF' }: { size?: number; color?: string }) {
+function BackIcon({ size = 24, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
     return <Ionicons name="chevron-back" size={size} color={color} />;
 }
 
-function ChevronDownIcon({ size = 20, color = '#00D4FF' }: { size?: number; color?: string }) {
+function ChevronDownIcon({ size = 20, color = semanticColors.accent }: { size?: number; color?: string }) {
     return <Ionicons name="chevron-down" size={size} color={color} />;
 }
 
-function ChatIcon({ size = 20, color = '#0A0A18' }: { size?: number; color?: string }) {
+function ChatIcon({ size = 20, color = semanticColors.textOnAccent }: { size?: number; color?: string }) {
     return <Ionicons name="chatbubbles-outline" size={size} color={color} />;
 }
 
-function ExternalLinkIcon({ size = 18, color = 'rgba(235,235,245,0.4)' }: { size?: number; color?: string }) {
+function ExternalLinkIcon({ size = 18, color = semanticColors.textTertiary }: { size?: number; color?: string }) {
     return <Ionicons name="open-outline" size={size} color={color} />;
 }
 
@@ -67,7 +68,7 @@ export function HelpScreen({ navigation }: any) {
                     style={styles.backButton}
                     onPress={() => navigation.goBack()}
                 >
-                    <BackIcon size={24} color="#FFFFFF" />
+                    <BackIcon size={24} color={semanticColors.textPrimary} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Ajuda</Text>
                 <View style={styles.headerSpacer} />
@@ -95,7 +96,7 @@ export function HelpScreen({ navigation }: any) {
                                         styles.chevronContainer,
                                         expandedFaq === faq.id && styles.chevronRotated
                                     ]}>
-                                        <ChevronDownIcon size={20} color="#00D4FF" />
+                                        <ChevronDownIcon size={20} color={semanticColors.accent} />
                                     </View>
                                 </View>
                                 {expandedFaq === faq.id && (
@@ -119,7 +120,7 @@ export function HelpScreen({ navigation }: any) {
                         >
                             <View style={styles.legalItemLeft}>
                                 <View style={styles.legalIconContainer}>
-                                    <Ionicons name="shield-checkmark-outline" size={20} color="#00D4FF" />
+                                    <Ionicons name="shield-checkmark-outline" size={20} color={semanticColors.accent} />
                                 </View>
                                 <Text style={styles.legalItemText}>Política de Privacidade</Text>
                             </View>
@@ -137,7 +138,7 @@ export function HelpScreen({ navigation }: any) {
                         >
                             <View style={styles.legalItemLeft}>
                                 <View style={styles.legalIconContainer}>
-                                    <Ionicons name="document-text-outline" size={20} color="#00D4FF" />
+                                    <Ionicons name="document-text-outline" size={20} color={semanticColors.accent} />
                                 </View>
                                 <Text style={styles.legalItemText}>Termos de Uso</Text>
                             </View>
@@ -155,7 +156,7 @@ export function HelpScreen({ navigation }: any) {
                         >
                             <View style={styles.legalItemLeft}>
                                 <View style={styles.legalIconContainer}>
-                                    <Ionicons name="information-circle-outline" size={20} color="#00D4FF" />
+                                    <Ionicons name="information-circle-outline" size={20} color={semanticColors.accent} />
                                 </View>
                                 <Text style={styles.legalItemText}>Sobre</Text>
                             </View>
@@ -177,7 +178,7 @@ export function HelpScreen({ navigation }: any) {
                         accessibilityRole="button"
                         accessibilityLabel="Falar com Suporte"
                     >
-                        <ChatIcon size={18} color="#0A0A18" />
+                        <ChatIcon size={18} color={semanticColors.textOnAccent} />
                         <Text style={styles.supportButtonText}>Falar com Suporte</Text>
                     </TouchableOpacity>
                 </View>
@@ -206,7 +207,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 18,
         fontWeight: '600',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
     },
     headerSpacer: {
         width: 40,
@@ -225,7 +226,7 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
         marginBottom: spacing.md,
     },
     // FAQs
@@ -233,10 +234,10 @@ const styles = StyleSheet.create({
         gap: spacing.sm,
     },
     faqCard: {
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: 'rgba(235,235,245,0.1)',
+        borderColor: semanticColors.borderSubtle,
         paddingVertical: spacing.md,
         paddingHorizontal: spacing.lg,
     },
@@ -249,7 +250,7 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 14,
         fontWeight: '500',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
         marginRight: spacing.sm,
     },
     chevronContainer: {
@@ -264,16 +265,16 @@ const styles = StyleSheet.create({
     faqAnswer: {
         fontSize: 13,
         fontWeight: '400',
-        color: 'rgba(235,235,245,0.6)',
+        color: semanticColors.textSecondary,
         marginTop: spacing.sm,
         lineHeight: 20,
     },
     // Legal Section
     legalCard: {
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: 'rgba(235,235,245,0.1)',
+        borderColor: semanticColors.borderSubtle,
         overflow: 'hidden',
     },
     legalItem: {
@@ -292,7 +293,7 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: 'rgba(0,212,255,0.1)',
+        backgroundColor: semanticColors.accentSubtle,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: spacing.md,
@@ -300,32 +301,32 @@ const styles = StyleSheet.create({
     legalItemText: {
         fontSize: 15,
         fontWeight: '500',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
     },
     legalDivider: {
         height: 1,
-        backgroundColor: 'rgba(255,255,255,0.08)',
+        backgroundColor: semanticColors.glass,
         marginLeft: 60,
     },
     // Support Section
     supportSection: {
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: 'rgba(235,235,245,0.1)',
+        borderColor: semanticColors.borderSubtle,
         padding: spacing.lg,
         alignItems: 'center',
     },
     supportTitle: {
         fontSize: 18,
         fontWeight: '600',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
         marginBottom: spacing.xs,
     },
     supportDescription: {
         fontSize: 13,
         fontWeight: '400',
-        color: 'rgba(235,235,245,0.6)',
+        color: semanticColors.textSecondary,
         textAlign: 'center',
         marginBottom: spacing.lg,
     },
@@ -333,7 +334,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#00D4FF',
+        backgroundColor: semanticColors.accent,
         borderRadius: 16,
         paddingVertical: 14,
         paddingHorizontal: spacing.xl,
@@ -343,7 +344,7 @@ const styles = StyleSheet.create({
     supportButtonText: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#0A0A18',
+        color: semanticColors.textOnAccent,
     },
     bottomSpacer: {
         height: 120,

@@ -13,6 +13,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import { useWorkoutBriefing } from '../../hooks/useWorkoutBriefing';
 import { useTypingReveal } from '../../hooks/useTypingReveal';
 import { useProFeature } from '../../hooks/useProFeature';
@@ -133,13 +134,13 @@ export function CoachDeepDiveSection({ workoutId }: { workoutId: string | undefi
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: 'rgba(235, 235, 245, 0.1)',
+        backgroundColor: semanticColors.borderSubtle,
         borderRadius: 15,
         padding: spacing.md,
         marginTop: spacing.md,
         marginBottom: spacing.lg,
         borderWidth: 1,
-        borderColor: 'rgba(235, 235, 245, 0.1)',
+        borderColor: semanticColors.borderSubtle,
     },
     row: {
         flexDirection: 'row',
@@ -151,12 +152,12 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 14,
         fontWeight: typography.fontWeights.bold as any,
-        color: '#EBEBF5',
+        color: semanticColors.textPrimary,
         marginBottom: 4,
     },
     subtitle: {
         fontSize: 11,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
     plusButton: {
         width: 40,
@@ -164,9 +165,9 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(0, 127, 153, 0.3)',
+        backgroundColor: semanticColors.surface2,
         borderWidth: 1,
-        borderColor: colors.primary,
+        borderColor: semanticColors.borderSubtle,
     },
     loadingRow: {
         flexDirection: 'row',
@@ -176,7 +177,7 @@ const styles = StyleSheet.create({
     loadingText: {
         flex: 1,
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(235, 235, 245, 0.75)',
+        color: semanticColors.textSecondary,
         fontWeight: typography.fontWeights.medium as any,
     },
     coachHeader: {
@@ -188,16 +189,16 @@ const styles = StyleSheet.create({
     coachLabel: {
         fontSize: typography.fontSizes.sm,
         fontWeight: typography.fontWeights.bold as any,
-        color: colors.primary,
+        color: semanticColors.accent,
         letterSpacing: 0.5,
     },
     coachText: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(235, 235, 245, 0.85)',
+        color: semanticColors.textPrimary,
         lineHeight: 21,
     },
     cursor: {
-        color: colors.primary,
+        color: semanticColors.accent,
     },
     seal: {
         flexDirection: 'row',
@@ -207,7 +208,7 @@ const styles = StyleSheet.create({
     },
     sealText: {
         fontSize: typography.fontSizes.xs,
-        color: 'rgba(235, 235, 245, 0.55)',
+        color: semanticColors.textTertiary,
         fontWeight: typography.fontWeights.medium as any,
     },
 });

@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -20,13 +21,13 @@ const WEEKDAYS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
 
 // Design System — Figma node 414:663 exact tokens
 const DS = {
-    bg: '#0F0F1E',
-    cardBg: '#1C1C2E',
-    cyan: '#00D4FF',
-    text: '#EBEBF5',
-    textSecondary: 'rgba(235, 235, 245, 0.6)',
-    glassBorder: 'rgba(235, 235, 245, 0.1)',
-    pastDay: 'rgba(235, 235, 245, 0.1)',      // Figma: neutral/glass-stroke for past days
+    bg: semanticColors.canvas,
+    cardBg: semanticColors.surface2,
+    cyan: semanticColors.accent,
+    text: semanticColors.textPrimary,
+    textSecondary: semanticColors.textSecondary,
+    glassBorder: semanticColors.borderSubtle,
+    pastDay: semanticColors.borderSubtle,
 };
 
 // Card internal padding
@@ -151,9 +152,6 @@ export function StartDateScreen({ value, onChange }: StartDateScreenProps) {
                 </Text>
             </View>
 
-            {/* =========================================
-                DARK CARD CONTAINER — Figma: #1C1C2E, 20px radius
-                ========================================= */}
             <View style={styles.card}>
                 {/* —— CALENDAR HEADER —— */}
                 <View style={styles.header}>
@@ -351,7 +349,6 @@ const styles = StyleSheet.create({
         color: DS.text,
     },
     dayTextPast: {
-        // Figma: neutral/glass-stroke rgba(235,235,245,0.1) — very faded
         color: DS.pastDay,
     },
     dayTextToday: {

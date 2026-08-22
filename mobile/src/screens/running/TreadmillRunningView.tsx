@@ -37,18 +37,19 @@ import { useWorkoutGoals } from '../../hooks/useWorkoutGoals';
 import { GoalsModal } from '../../components/GoalsModal';
 import type { WorkoutBlockAPI } from '../../types/workoutGoals';
 import { fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 // ─── Visual tokens (Figma-aligned) ────────────────────────────────────────────
 const T = {
-  bg: '#0E0E1F',
-  cardSurface: '#1C1C2E',
-  cardBorder: 'rgba(235, 235, 245, 0.10)',
-  cyan: '#00D4FF',
-  textPrimary: '#EBEBF5',
-  textSecondary: 'rgba(235, 235, 245, 0.60)',
-  textMuted: 'rgba(235, 235, 245, 0.40)',
+  bg: semanticColors.canvas,
+  cardSurface: semanticColors.surface2,
+  cardBorder: semanticColors.borderSubtle,
+  cyan: semanticColors.accent,
+  textPrimary: semanticColors.textPrimary,
+  textSecondary: semanticColors.textSecondary,
+  textMuted: semanticColors.textTertiary,
   warning: '#FFC400',
-  warningBg: 'rgba(255, 196, 0, 0.10)',
+  warningBg: semanticColors.warningSubtle,
   warningBorder: 'rgba(255, 196, 0, 0.4)',
 };
 
@@ -277,12 +278,12 @@ export function TreadmillRunningView({
           and finished states show no gradient (solid bg only). */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         <AnimatedLinearGradient
-          colors={['#0E0E1F', 'rgba(0, 212, 255, 0.32)', '#0E0E1F']}
+          colors={[semanticColors.canvas, semanticColors.accentSubtle, semanticColors.canvas]}
           locations={[0, 0.5, 1]}
           style={[StyleSheet.absoluteFill, cyanOverlayStyle]}
         />
         <AnimatedLinearGradient
-          colors={['#0E0E1F', 'rgba(255, 199, 0, 0.55)', '#0E0E1F']}
+          colors={[semanticColors.canvas, semanticColors.warningSubtle, semanticColors.canvas]}
           locations={[0, 0.5, 1]}
           style={[StyleSheet.absoluteFill, amberOverlayStyle]}
         />
@@ -678,7 +679,7 @@ const styles = StyleSheet.create({
     backgroundColor: T.cardSurface,
     borderRadius: 26,
     borderWidth: 1,
-    borderColor: 'rgba(235, 235, 245, 0.18)',
+    borderColor: semanticColors.borderSubtle,
     paddingHorizontal: 18,
     paddingVertical: 7,
     alignItems: 'center',
@@ -847,7 +848,7 @@ const styles = StyleSheet.create({
     backgroundColor: T.cardSurface,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
-    shadowColor: '#000',
+    shadowColor: semanticColors.canvas,
     shadowOffset: { width: 0, height: -8 },
     shadowOpacity: 0.35,
     shadowRadius: 18,
@@ -864,7 +865,7 @@ const styles = StyleSheet.create({
     height: 58,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: 'rgba(235, 235, 245, 0.55)',
+    borderColor: semanticColors.borderStrong,
     paddingHorizontal: 20,
     backgroundColor: 'transparent',
   },
@@ -888,7 +889,7 @@ const styles = StyleSheet.create({
   // Finishing overlay
   finishingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(14, 14, 31, 0.92)',
+    backgroundColor: semanticColors.scrim,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,

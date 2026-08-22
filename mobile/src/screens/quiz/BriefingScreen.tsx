@@ -35,6 +35,7 @@ import { formatPaceRangeLabel } from '../../utils/pace';
 import type { PlanPreview } from '../../stores/onboardingStore';
 import { RaceCountdownBadge } from '../../components/onboarding/RaceCountdownBadge';
 import { weeksUntilRace } from '../../utils/raceFormat';
+import { semanticColors } from '../../theme/semanticColors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -42,16 +43,16 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // Design System — Figma node 180:848
 // =============================================
 const DS = {
-    bg: '#0E0E1F',
-    card: '#1C1C2E',
-    cardL2: '#15152A',
-    cyan: '#00D4FF',
-    cyanMuted: 'rgba(0, 127, 153, 0.3)',
-    text: '#EBEBF5',
+    bg: semanticColors.onboardingIconInk,
+    card: semanticColors.surface2,
+    cardL2: semanticColors.surface1,
+    cyan: semanticColors.accent,
+    cyanMuted: semanticColors.accentSubtle,
+    text: semanticColors.textPrimary,
     textSecondary: 'rgba(235, 235, 245, 0.6)',
-    glassBorder: 'rgba(235, 235, 245, 0.1)',
+    glassBorder: semanticColors.borderSubtle,
     gold: '#FFC400',
-    goldMuted: 'rgba(255, 196, 0, 0.5)',
+    goldMuted: semanticColors.warningSubtle,
 };
 
 // =============================================
@@ -704,7 +705,7 @@ export function BriefingScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: DS.bg,
+        backgroundColor: semanticColors.canvas,
     },
     scrollView: {
         flex: 1,
@@ -747,7 +748,7 @@ const styles = StyleSheet.create({
     subtitle: {
         fontSize: 16,
         fontWeight: '400',
-        color: DS.textSecondary,
+        color: semanticColors.textSecondary,
         lineHeight: 24,
     },
     goalHighlight: {
@@ -756,7 +757,7 @@ const styles = StyleSheet.create({
     tagline: {
         fontSize: 14,
         fontWeight: '500',
-        color: DS.textSecondary,
+        color: semanticColors.textSecondary,
         fontStyle: 'italic',
         marginTop: 8,
     },
@@ -783,7 +784,7 @@ const styles = StyleSheet.create({
     metricLabel: {
         fontSize: 13,
         fontWeight: '400',
-        color: DS.textSecondary,
+        color: semanticColors.textSecondary,
         marginBottom: 4,
     },
     metricValue: {
@@ -820,7 +821,7 @@ const styles = StyleSheet.create({
     chartMetaLabel: {
         fontSize: 14,
         fontWeight: '600',
-        color: DS.textSecondary,
+        color: semanticColors.textSecondary,
     },
     chartMetaValue: {
         fontSize: 24,
@@ -838,7 +839,7 @@ const styles = StyleSheet.create({
     chartGainSub: {
         fontSize: 14,
         fontWeight: '400',
-        color: DS.textSecondary,
+        color: semanticColors.textSecondary,
     },
     chartCanvasContainer: {
         alignItems: 'center',
@@ -853,7 +854,7 @@ const styles = StyleSheet.create({
     chartLabelLeft: {
         fontSize: 14,
         fontWeight: '500',
-        color: DS.textSecondary,
+        color: semanticColors.textSecondary,
     },
     chartLabelRight: {
         fontSize: 14,
@@ -863,7 +864,7 @@ const styles = StyleSheet.create({
     chartHonestNote: {
         fontSize: 13,
         fontWeight: '400',
-        color: DS.textSecondary,
+        color: semanticColors.textSecondary,
         lineHeight: 19,
         paddingHorizontal: 8,
         paddingTop: 10,
@@ -965,7 +966,7 @@ const styles = StyleSheet.create({
     workoutLabel: {
         fontSize: 13,
         fontWeight: '400',
-        color: DS.textSecondary,
+        color: semanticColors.textSecondary,
         marginBottom: 8,
     },
     workoutTitle: {
@@ -986,12 +987,12 @@ const styles = StyleSheet.create({
     wMetricText: {
         fontSize: 13,
         fontWeight: '400',
-        color: DS.textSecondary,
+        color: semanticColors.textSecondary,
     },
     workoutNote: {
         fontSize: 13,
         fontWeight: '400',
-        color: DS.textSecondary,
+        color: semanticColors.textSecondary,
         lineHeight: 18,
         marginTop: 10,
     },
@@ -1086,7 +1087,7 @@ const styles = StyleSheet.create({
     weeksBadgeText: {
         fontSize: 13,
         fontWeight: '600',
-        color: DS.textSecondary,
+        color: semanticColors.textSecondary,
     },
     paywallCard: {
         backgroundColor: DS.cardL2,
@@ -1106,7 +1107,7 @@ const styles = StyleSheet.create({
         width: 77,
         height: 77,
         borderRadius: 38,
-        backgroundColor: DS.bg,
+        backgroundColor: semanticColors.canvas,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 18,
@@ -1126,14 +1127,14 @@ const styles = StyleSheet.create({
     paywallSubtitle: {
         fontSize: 15,
         fontWeight: '500',
-        color: DS.textSecondary,
+        color: semanticColors.textSecondary,
         textAlign: 'center',
         lineHeight: 22,
         marginBottom: 20,
     },
     paywallButtonArea: {
         width: '100%',
-        backgroundColor: DS.bg,
+        backgroundColor: semanticColors.canvas,
         borderRadius: 20,
         paddingTop: 20,
         paddingBottom: 16,
@@ -1154,12 +1155,12 @@ const styles = StyleSheet.create({
     unlockButtonText: {
         fontSize: 18,
         fontWeight: '700',
-        color: DS.bg,
+        color: semanticColors.textOnAccent,
     },
     trialText: {
         fontSize: 11,
         fontWeight: '500',
-        color: DS.textSecondary,
+        color: semanticColors.textSecondary,
         textAlign: 'center',
         lineHeight: 16,
     },
@@ -1172,7 +1173,7 @@ const styles = StyleSheet.create({
         right: 0,
         paddingHorizontal: 22,
         paddingTop: 16,
-        backgroundColor: DS.bg,
+        backgroundColor: semanticColors.canvas,
     },
     ctaButton: {
         backgroundColor: DS.cyan,
@@ -1180,16 +1181,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 14,
-        shadowColor: '#33cfff',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 4,
-        elevation: 4,
     },
     ctaButtonText: {
         fontSize: 15,
         fontWeight: '700',
-        color: DS.bg,
+        color: semanticColors.textOnAccent,
     },
     ctaLoadingRow: {
         flexDirection: 'row',
@@ -1202,7 +1198,7 @@ const styles = StyleSheet.create({
     ctaButtonSub: {
         fontSize: 11,
         fontWeight: '400',
-        color: DS.bg,
+        color: semanticColors.textOnAccent,
         marginTop: 2,
     },
 });

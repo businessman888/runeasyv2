@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { ScheduleDay } from '../stores/trainingStore';
 
 interface WeeklyStreakCardProps {
@@ -208,11 +209,11 @@ function getDayTextColor(day: WeekDay): string {
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: colors.streakCard,
+        backgroundColor: semanticColors.surface1,
         borderRadius: 25,
         paddingVertical: 16,
         gap: 16,
-        shadowColor: '#000',
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 2, height: 2 },
         shadowOpacity: 0.25,
         shadowRadius: 4,
@@ -243,7 +244,7 @@ const styles = StyleSheet.create({
     streakLabel: {
         fontSize: 10,
         fontWeight: typography.fontWeights.medium,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
     counters: {
         flexDirection: 'row',
@@ -258,7 +259,7 @@ const styles = StyleSheet.create({
     counterTextRest: {
         fontSize: 12,
         fontWeight: typography.fontWeights.semibold,
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
     },
     counterTextWorkout: {
         fontSize: 12,
@@ -276,7 +277,7 @@ const styles = StyleSheet.create({
     dayCard: {
         flex: 1,
         height: 76,
-        backgroundColor: colors.streakDayCard,
+        backgroundColor: semanticColors.surface2,
         borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',

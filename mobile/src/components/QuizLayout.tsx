@@ -9,7 +9,8 @@ import {
     ScrollView,
     Platform,
 } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../theme';
+import { typography, spacing, borderRadius } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 
 
@@ -47,7 +48,7 @@ export function QuizLayout({
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+            <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
 
             {/* Header with Progress */}
             <View style={styles.header}>
@@ -177,7 +178,7 @@ export function NumberSelector({ min, max, value, onChange, unit }: NumberSelect
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0F172A',
+        backgroundColor: semanticColors.canvas,
     },
     header: {
         paddingHorizontal: spacing.lg,
@@ -209,24 +210,19 @@ const styles = StyleSheet.create({
         width: '100%',
         height: 4,
         borderRadius: 2,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: semanticColors.borderSubtle,
     },
     stepBarActive: {
-        backgroundColor: colors.primary,
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 4,
-        elevation: 2,
+        backgroundColor: semanticColors.accent,
     },
     stepText: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(255, 255, 255, 0.5)',
+        color: semanticColors.textTertiary,
         fontWeight: typography.fontWeights.medium,
         textTransform: 'uppercase',
     },
     stepHighlight: {
-        color: colors.primary,
+        color: semanticColors.accent,
     },
     content: {
         flex: 1,
@@ -252,12 +248,12 @@ const styles = StyleSheet.create({
     title: {
         fontSize: typography.fontSizes['2xl'],
         fontWeight: typography.fontWeights.bold,
-        color: colors.white,
+        color: semanticColors.textPrimary,
         marginBottom: spacing.sm,
     },
     subtitle: {
         fontSize: typography.fontSizes.md,
-        color: 'rgba(255, 255, 255, 0.6)',
+        color: semanticColors.textSecondary,
         marginBottom: spacing['2xl'],
     },
     optionsContainer: {
@@ -266,15 +262,15 @@ const styles = StyleSheet.create({
     optionCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        backgroundColor: semanticColors.glass,
         padding: spacing.lg,
         borderRadius: borderRadius.xl,
         borderWidth: 2,
-        borderColor: 'transparent',
+        borderColor: semanticColors.transparent,
     },
     optionCardSelected: {
-        borderColor: colors.primary,
-        backgroundColor: 'rgba(0, 212, 255, 0.1)',
+        borderColor: semanticColors.accent,
+        backgroundColor: semanticColors.accentSubtle,
     },
     optionIcon: {
         fontSize: 32,
@@ -286,14 +282,14 @@ const styles = StyleSheet.create({
     optionLabel: {
         fontSize: typography.fontSizes.lg,
         fontWeight: typography.fontWeights.semibold,
-        color: colors.white,
+        color: semanticColors.textPrimary,
     },
     optionLabelSelected: {
-        color: colors.primary,
+        color: semanticColors.accent,
     },
     optionDescription: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(255, 255, 255, 0.5)',
+        color: semanticColors.textTertiary,
         marginTop: 2,
     },
     radioOuter: {
@@ -301,25 +297,25 @@ const styles = StyleSheet.create({
         height: 24,
         borderRadius: 12,
         borderWidth: 2,
-        borderColor: 'rgba(255, 255, 255, 0.3)',
+        borderColor: semanticColors.borderStrong,
         alignItems: 'center',
         justifyContent: 'center',
     },
     radioOuterSelected: {
-        borderColor: colors.primary,
+        borderColor: semanticColors.accent,
     },
     radioInner: {
         width: 12,
         height: 12,
         borderRadius: 6,
-        backgroundColor: colors.primary,
+        backgroundColor: semanticColors.accent,
     },
     footer: {
         flexDirection: 'row',
         padding: spacing.lg,
         gap: spacing.md,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(255, 255, 255, 0.1)',
+        borderTopColor: semanticColors.borderSubtle,
     },
     backButton: {
         flex: 1,
@@ -328,12 +324,12 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         borderRadius: borderRadius.xl,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.2)',
+        borderColor: semanticColors.borderStrong,
     },
     backButtonText: {
         fontSize: typography.fontSizes.md,
         fontWeight: typography.fontWeights.medium,
-        color: colors.white,
+        color: semanticColors.textPrimary,
     },
     nextButton: {
         flex: 2,
@@ -341,18 +337,18 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: borderRadius.xl,
-        backgroundColor: colors.primary,
+        backgroundColor: semanticColors.accent,
     },
     nextButtonFull: {
         flex: 1,
     },
     nextButtonDisabled: {
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: semanticColors.surface3,
     },
     nextButtonText: {
         fontSize: typography.fontSizes.md,
         fontWeight: typography.fontWeights.semibold,
-        color: '#0F172A',
+        color: semanticColors.textOnAccent,
     },
     // Number Selector Styles
     numberSelectorContainer: {
@@ -362,13 +358,13 @@ const styles = StyleSheet.create({
     numberSelectorValue: {
         fontSize: 64,
         fontWeight: typography.fontWeights.bold,
-        color: colors.primary,
+        color: semanticColors.accent,
         marginBottom: spacing['2xl'],
     },
     numberSelectorUnit: {
         fontSize: typography.fontSizes['2xl'],
         fontWeight: typography.fontWeights.medium,
-        color: 'rgba(255, 255, 255, 0.5)',
+        color: semanticColors.textTertiary,
     },
     numberButtons: {
         flexDirection: 'row',
@@ -378,19 +374,19 @@ const styles = StyleSheet.create({
         width: 56,
         height: 56,
         borderRadius: 28,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: semanticColors.surface3,
         alignItems: 'center',
         justifyContent: 'center',
     },
     numberButtonSelected: {
-        backgroundColor: colors.primary,
+        backgroundColor: semanticColors.accent,
     },
     numberButtonText: {
         fontSize: typography.fontSizes.xl,
         fontWeight: typography.fontWeights.bold,
-        color: colors.white,
+        color: semanticColors.textPrimary,
     },
     numberButtonTextSelected: {
-        color: '#0F172A',
+        color: semanticColors.textOnAccent,
     },
 });

@@ -6,16 +6,17 @@ import {
     TouchableOpacity,
 } from 'react-native';
 import { colors, typography, borderRadius, fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import Svg, { Path } from 'react-native-svg';
 
 // Design System Colors (Figma)
 const DS = {
-    bg: '#0F0F1E',
-    card: '#1C1C2E',
-    cyan: '#00D4FF',
-    cyanSelected: 'rgba(0, 212, 255, 0.1)',
-    text: '#EBEBF5',
-    textSecondary: 'rgba(235, 235, 245, 0.6)',
+    bg: semanticColors.canvas,
+    card: semanticColors.surface2,
+    cyan: semanticColors.accent,
+    cyanSelected: semanticColors.accentSubtle,
+    text: semanticColors.textPrimary,
+    textSecondary: semanticColors.textSecondary,
     warning: '#FFC400',
 };
 
@@ -264,12 +265,12 @@ const styles = StyleSheet.create({
     warningCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255, 196, 0, 0.1)',
+        backgroundColor: semanticColors.warningSubtle,
         borderRadius: 12,
         paddingVertical: 12,
         paddingHorizontal: 16,
         borderWidth: 1,
-        borderColor: 'rgba(255, 196, 0, 0.3)',
+        borderColor: DS.warning,
         gap: 12,
     },
     warningText: {

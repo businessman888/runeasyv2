@@ -4,11 +4,12 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { getGoalAchievableCopy } from '../../utils/onboardingCopyMatrix';
 import { fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 const DS = {
-    text: '#EBEBF5',
-    textSecondary: 'rgba(235, 235, 245, 0.6)',
-    cyan: '#00D4FF',
+    text: semanticColors.textPrimary,
+    textSecondary: semanticColors.textSecondary,
+    cyan: semanticColors.accent,
 };
 
 export function GoalAchievableScreen() {

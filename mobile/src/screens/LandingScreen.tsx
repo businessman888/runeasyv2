@@ -25,6 +25,7 @@ import Animated, {
     withTiming,
 } from 'react-native-reanimated';
 import { borderRadius, colors, fonts } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { StoryProgressBars } from '../components/landing/StoryProgressBars';
 import { PrePaywallBackground } from '../components/upgrade/PrePaywallBackground';
 import {
@@ -440,7 +441,7 @@ export function LandingScreen({ navigation }: LandingScreenProps) {
 
             {/* Bottom: shadow gradient + primary CTA */}
             <LinearGradient
-                colors={['transparent', 'rgba(10, 10, 24, 0.85)', colors.background] as const}
+                colors={[semanticColors.transparent, semanticColors.overlayStrong, semanticColors.canvas] as const}
                 locations={[0, 0.55, 1]}
                 style={[styles.bottomGradient, { height: scaleY(280) }]}
                 pointerEvents="box-none"
@@ -610,11 +611,11 @@ const styles = StyleSheet.create({
         backgroundColor: colors.glassLight,
         borderWidth: 1,
         borderColor: colors.proGlassBorderCyan,
-        shadowColor: colors.primary,
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.22,
-        shadowRadius: 26,
-        elevation: 10,
+        shadowOpacity: 0.28,
+        shadowRadius: 12,
+        elevation: 4,
     },
     getStartedButton: {
         width: '100%',

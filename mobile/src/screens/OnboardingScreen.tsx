@@ -24,6 +24,7 @@ import { useOnboardingStore } from '../stores/onboardingStore';
 import type { ViabilityCheck } from '../stores/onboardingStore';
 import { useCoachStore } from '../stores/coachStore';
 import { FeasibilityModal } from '../components/onboarding/FeasibilityModal';
+import { semanticColors } from '../theme/semanticColors';
 
 // Question screens
 import { ObjectiveScreen } from './quiz/ObjectiveScreen';
@@ -68,12 +69,12 @@ const CHEVRON_SIZE = 32;
 // ============================================
 // FORCED COLORS (Figma exact values)
 // ============================================
-const FORCED_BG = '#0F0F1E';
-const FORCED_BG_DEEP = '#0A0A18';
-const FORCED_CYAN = '#00D4FF';
+const FORCED_BG = semanticColors.canvas;
+const FORCED_BG_DEEP = semanticColors.surface1;
+const FORCED_CYAN = semanticColors.accent;
 const FORCED_TEXT = '#EBEBF5';
-const FORCED_TEXT_SECONDARY = 'rgba(235, 235, 245, 0.6)';
-const FORCED_GLASS_STROKE = 'rgba(235, 235, 245, 0.1)';
+const FORCED_TEXT_SECONDARY = semanticColors.textSecondary;
+const FORCED_GLASS_STROKE = semanticColors.borderSubtle;
 
 // XP economy
 const XP_PER_QUESTION = 5;        // ~15 questions × 5 = 75
@@ -603,7 +604,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             />
             {/* Subtle radial-feel cyan glow at the top */}
             <LinearGradient
-                colors={['rgba(0,212,255,0.07)', 'transparent']}
+                colors={[semanticColors.accentSubtle, semanticColors.transparent]}
                 locations={[0, 1]}
                 start={{ x: 0.5, y: 0 }}
                 end={{ x: 0.5, y: 1 }}

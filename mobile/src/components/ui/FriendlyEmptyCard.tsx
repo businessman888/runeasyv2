@@ -2,6 +2,7 @@ import React, { memo } from 'react';
 import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 /**
  * Friendly empty-state card for the "Atividades" tab — shown when the user has
@@ -40,10 +41,10 @@ function FriendlyEmptyCardInner({
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface1,
         borderRadius: borderRadius.xl,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
         paddingVertical: spacing.xl,
         paddingHorizontal: spacing.lg,
         alignItems: 'center',
@@ -54,18 +55,18 @@ const styles = StyleSheet.create({
         borderRadius: 26,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(0, 212, 255, 0.10)',
+        backgroundColor: semanticColors.accentSubtle,
         marginBottom: spacing.md,
     },
     title: {
         fontSize: typography.fontSizes.lg,
         fontWeight: typography.fontWeights.semibold,
-        color: colors.text,
+        color: semanticColors.textPrimary,
         textAlign: 'center',
     },
     subtitle: {
         fontSize: typography.fontSizes.sm,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         textAlign: 'center',
         marginTop: spacing.xs,
         lineHeight: typography.fontSizes.sm * typography.lineHeights.normal,

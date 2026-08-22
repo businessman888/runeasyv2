@@ -10,6 +10,7 @@ import {
 } from '../../config/wearables.config';
 import type { RootStackParamList } from '../../navigation/navigationRef';
 import { fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -19,10 +20,10 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 const PICKER_DISMISS_MS = 350;
 
 const DS = {
-    bg: '#0F0F1E',
-    cyan: '#00D4FF',
-    text: '#EBEBF5',
-    textSecondary: 'rgba(235, 235, 245, 0.6)',
+    bg: semanticColors.canvas,
+    cyan: semanticColors.accent,
+    text: semanticColors.textPrimary,
+    textSecondary: semanticColors.textSecondary,
 };
 
 interface WearableConnectionScreenProps {

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ImageBackground, Pressable } from 'react-native
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, borderRadius, fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import type { Race } from '../../types/races.types';
 import { formatRaceDateShort, formatDistances, raceLevelLabel } from '../../utils/raceFormat';
 
@@ -29,7 +30,7 @@ function RaceCardComponent({ race, onPress }: RaceCardProps) {
             >
                 {/* Dark gradient so text stays legible over any photo */}
                 <LinearGradient
-                    colors={['rgba(10,10,24,0.2)', 'rgba(10,10,24,0.85)']}
+                    colors={[semanticColors.transparent, semanticColors.canvas]}
                     locations={[0, 1]}
                     style={StyleSheet.absoluteFill}
                 />
@@ -62,7 +63,7 @@ const styles = StyleSheet.create({
         borderRadius: borderRadius.xl,
         overflow: 'hidden',
         marginBottom: 12,
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface2,
     },
     pressed: { opacity: 0.85 },
     image: {
@@ -72,7 +73,7 @@ const styles = StyleSheet.create({
     imageRadius: { borderRadius: borderRadius.xl },
     fallbackBg: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface2,
     },
     content: {
         flexDirection: 'row',
@@ -84,19 +85,19 @@ const styles = StyleSheet.create({
     metaLine: {
         fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.md,
-        color: colors.primary,
+        color: semanticColors.textSecondary,
         marginBottom: 4,
     },
     name: {
         fontFamily: fonts.bold,
         fontSize: typography.fontSizes.xl,
-        color: colors.white,
+        color: semanticColors.textPrimary,
         marginBottom: 2,
     },
     location: {
         fontFamily: fonts.regular,
         fontSize: typography.fontSizes.md,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
     },
 });
 

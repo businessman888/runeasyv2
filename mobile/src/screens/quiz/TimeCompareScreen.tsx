@@ -3,17 +3,18 @@ import { View, Text, StyleSheet, Dimensions, AccessibilityInfo } from 'react-nat
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const DS = {
-    text: '#EBEBF5',
-    textSecondary: 'rgba(235, 235, 245, 0.6)',
-    cyan: '#00D4FF',
-    card: '#1C1C2E',
+    text: semanticColors.textPrimary,
+    textSecondary: semanticColors.textSecondary,
+    cyan: semanticColors.accent,
+    card: semanticColors.surface2,
     muted: 'rgba(235, 235, 245, 0.45)',
-    cyanFill: 'rgba(0, 212, 255, 0.06)',
-    cyanBorder: 'rgba(0, 212, 255, 0.35)',
+    cyanFill: semanticColors.accentSubtle,
+    cyanBorder: semanticColors.accent,
 };
 
 const CARD_WIDTH = Math.min(SCREEN_WIDTH - 40, 360);

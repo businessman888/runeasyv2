@@ -10,6 +10,7 @@ import {
 import LottieView from 'lottie-react-native';
 import { useOnboardingStore, PlanPreview } from '../../stores/onboardingStore';
 import { fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 const { width } = Dimensions.get('window');
 
@@ -146,7 +147,7 @@ export function PlanLoadingScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0E0E1F',
+        backgroundColor: semanticColors.canvas,
     },
     progressBarContainer: {
         position: 'absolute',
@@ -154,12 +155,12 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         height: 10,
-        backgroundColor: 'rgba(0, 127, 153, 0.3)',
+        backgroundColor: semanticColors.accentSubtle,
         overflow: 'hidden',
     },
     progressBarFill: {
         height: '100%',
-        backgroundColor: '#00D4FF',
+        backgroundColor: semanticColors.accent,
     },
     content: {
         flex: 1,
@@ -185,14 +186,14 @@ const styles = StyleSheet.create({
     loadingMessage: {
         fontFamily: fonts.bold,
         fontSize: 20,
-        color: '#EBEBF5',
+        color: semanticColors.textPrimary,
         textAlign: 'center',
         marginBottom: 20,
     },
     subtitleText: {
         fontFamily: fonts.regular,
         fontSize: 15,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
         textAlign: 'center',
     },
 });

@@ -2,6 +2,7 @@ import React, { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts } from "../../../theme";
+import { semanticColors } from "../../../theme/semanticColors";
 
 interface NoRoutePreviewProps {
   isTreadmill: boolean;
@@ -15,7 +16,7 @@ export const NoRoutePreview = memo(function NoRoutePreview({
       <MaterialCommunityIcons
         name={isTreadmill ? "run-fast" : "map-marker-off-outline"}
         size={42}
-        color="rgba(235,235,245,0.28)"
+        color={semanticColors.textTertiary}
       />
       <View style={styles.badge}>
         <MaterialCommunityIcons
@@ -37,7 +38,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingBottom: 20,
-    backgroundColor: "#12151D",
+    backgroundColor: semanticColors.surface1,
   },
   badge: {
     marginTop: 10,
@@ -45,14 +46,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(235,235,245,0.18)",
-    backgroundColor: "rgba(14,14,31,0.78)",
+    borderColor: semanticColors.borderStrong,
+    backgroundColor: semanticColors.surface2,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
   badgeText: {
-    color: colors.textLight,
+    color: semanticColors.textPrimary,
     fontFamily: fonts.medium,
     fontSize: 11,
   },

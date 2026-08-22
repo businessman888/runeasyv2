@@ -9,14 +9,15 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { PlanWeek } from '../../../types/plan-overview.types';
 import { getPhaseStyle } from '../phaseTokens';
+import { semanticColors } from '../../../theme/semanticColors';
 
 // ─── Figma tokens ────────────────────────────────────────────────────────────
-const CARD_BG = '#15152A';
-const CARD_BG_PAST = '#13132A';
-const TEXT_PRIMARY = '#FFFFFF';
-const TEXT_TITLE = '#EBEBF5';
-const TEXT_SECONDARY = 'rgba(235, 235, 245, 0.6)';
-const PROGRESS_TRACK = 'rgba(235, 235, 245, 0.08)';
+const CARD_BG = semanticColors.surface1;
+const CARD_BG_PAST = semanticColors.canvas;
+const TEXT_PRIMARY = semanticColors.textPrimary;
+const TEXT_TITLE = semanticColors.textPrimary;
+const TEXT_SECONDARY = semanticColors.textSecondary;
+const PROGRESS_TRACK = semanticColors.borderSubtle;
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -187,7 +188,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 14,
         gap: 14,
         borderWidth: 1,
-        borderColor: 'rgba(235, 235, 245, 0.06)',
+        borderColor: semanticColors.borderSubtle,
     },
     cardPast: {
         backgroundColor: CARD_BG_PAST,
@@ -311,7 +312,7 @@ const styles = StyleSheet.create({
         width: 26,
         height: 26,
         borderRadius: 13,
-        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+        backgroundColor: semanticColors.glass,
         alignItems: 'center',
         justifyContent: 'center',
     },

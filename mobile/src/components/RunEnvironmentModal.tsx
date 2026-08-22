@@ -30,35 +30,36 @@ import Animated, {
 import { useRunEnvironmentStore } from '../stores/runEnvironmentStore';
 import { navigate } from '../navigation/navigationRef';
 import { fonts } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 
 // Figma tokens (1315-1609). Card width is computed from modal width minus
 // horizontal padding × 2 so cards never overshoot the container even when
 // the modal is shrunken by safe-area or small screens.
 const F = {
-  modalBg: '#1C1C2E',
+  modalBg: semanticColors.surface2,
   modalRadius: 20,
   modalWidth: 340,
   modalPadTop: 22,
   modalPadBottom: 18,
   modalPadH: 18,
-  titleColor: '#EBEBF5',
+  titleColor: semanticColors.textPrimary,
   titleSize: 22,
-  cardBg: 'rgba(21, 21, 42, 0.85)',
+  cardBg: semanticColors.surface1,
   cardRadius: 14,
   cardHeight: 72,
   cardGap: 10,
-  iconBg: '#0E0E1F',
+  iconBg: semanticColors.surface3,
   iconRadius: 10,
   iconSize: 44,
   iconInner: 22,
-  iconColor: '#FFFFFF',
-  subtitleColor: 'rgba(235, 235, 245, 0.55)',
+  iconColor: semanticColors.textPrimary,
+  subtitleColor: semanticColors.textSecondary,
   optionTitleSize: 15,
   optionSubtitleSize: 12,
   cancelSize: 13,
-  cyan: '#00D4FF',
-  backdrop: 'rgba(0, 0, 0, 0.6)',
-  cardBorder: 'rgba(235, 235, 245, 0.06)',
+  cyan: semanticColors.accent,
+  backdrop: semanticColors.scrim,
+  cardBorder: semanticColors.borderSubtle,
 };
 
 export function RunEnvironmentModal() {
@@ -135,7 +136,7 @@ export function RunEnvironmentModal() {
                 />
                 <OptionCard
                   iconName="walk"
-                  iconColor="#FFFFFF"
+                  iconColor={F.iconColor}
                   title="Na esteira"
                   subtitle="Conecte sua esteira."
                   onPress={handleTreadmill}
@@ -237,7 +238,7 @@ const styles = StyleSheet.create({
     paddingTop: F.modalPadTop,
     paddingBottom: F.modalPadBottom,
     paddingHorizontal: F.modalPadH,
-    shadowColor: '#000',
+    shadowColor: semanticColors.canvas,
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.45,
     shadowRadius: 32,

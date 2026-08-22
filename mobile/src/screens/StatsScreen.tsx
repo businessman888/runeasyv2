@@ -9,6 +9,7 @@ import {
     Platform,
 } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { useStatsStore, useFeedbackStore, useGamificationStore } from '../stores';
 
 export function StatsScreen({ navigation }: any) {
@@ -357,7 +358,7 @@ const styles = StyleSheet.create({
         backgroundColor: `${colors.primary}1A`,
     },
     metricIconIndigo: {
-        backgroundColor: '#EEF2FF',
+        backgroundColor: semanticColors.surface3,
     },
     metricIconText: {
         fontSize: 20,
@@ -505,7 +506,7 @@ const styles = StyleSheet.create({
     },
     planSubtitle: {
         fontSize: typography.fontSizes.sm,
-        color: '#94A3B8',
+        color: semanticColors.textSecondary,
         marginTop: 4,
         marginBottom: spacing.lg,
     },
@@ -523,7 +524,7 @@ const styles = StyleSheet.create({
     planValueSub: {
         fontSize: typography.fontSizes.lg,
         fontWeight: typography.fontWeights.normal,
-        color: '#94A3B8',
+        color: semanticColors.textSecondary,
     },
     planLabel: {
         fontSize: typography.fontSizes.xs,
@@ -533,7 +534,7 @@ const styles = StyleSheet.create({
     },
     planProgressBg: {
         height: 8,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: semanticColors.borderSubtle,
         borderRadius: borderRadius.full,
         overflow: 'hidden',
     },
@@ -549,7 +550,7 @@ const styles = StyleSheet.create({
     },
     planRemaining: {
         fontSize: typography.fontSizes.xs,
-        color: '#94A3B8',
+        color: semanticColors.textSecondary,
         marginTop: spacing.md,
         textAlign: 'right',
     },
@@ -578,10 +579,10 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         gap: spacing.sm,
         padding: spacing.lg,
-        backgroundColor: '#F5F3FF',
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius['2xl'],
         borderWidth: 1,
-        borderColor: '#E9D5FF',
+        borderColor: semanticColors.borderSubtle,
         marginRight: spacing.md,
     },
     rewardCardStreak: {
@@ -590,10 +591,10 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         gap: spacing.sm,
         padding: spacing.lg,
-        backgroundColor: '#FFF7ED',
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius['2xl'],
         borderWidth: 1,
-        borderColor: '#FED7AA',
+        borderColor: semanticColors.borderSubtle,
         marginRight: spacing.lg,
     },
     rewardIcon: {
@@ -605,10 +606,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     rewardIconBadge: {
-        backgroundColor: '#EDE9FE',
+        backgroundColor: semanticColors.surface3,
     },
     rewardIconStreak: {
-        backgroundColor: '#FFEDD5',
+        backgroundColor: semanticColors.surface3,
     },
     rewardIconText: {
         fontSize: 24,
@@ -663,10 +664,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         ...Platform.select({
             ios: {
-                shadowColor: colors.primary,
+                shadowColor: semanticColors.canvas,
                 shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.3,
-                shadowRadius: 12,
+                shadowOpacity: 0.2,
+                shadowRadius: 6,
             },
             android: {
                 elevation: 6,

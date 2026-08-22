@@ -37,26 +37,27 @@ import { useTreadmillStore, BluetoothState } from '../../stores/treadmillStore';
 import type { TreadmillDevice } from '../../services/treadmillService';
 import { MANUAL_TREADMILL_SPEED } from '../../constants/bluetooth';
 import { fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 // ─── Visual tokens (Figma-aligned + brand neon) ───────────────────────────────
 const T = {
-  bg: '#0E0E1F',
-  bgGradient: '#15152A',
-  card: '#1C1C2E',
-  cardTranslucent: 'rgba(28, 28, 46, 0.7)',
-  cardElevated: 'rgba(0, 212, 255, 0.04)',
-  cardBorderSubtle: 'rgba(235, 235, 245, 0.08)',
-  cardBorderNeon: 'rgba(0, 212, 255, 0.25)',
-  cardBorderNeonStrong: 'rgba(0, 212, 255, 0.45)',
-  cyan: '#00D4FF',
-  cyanGlow: 'rgba(0, 212, 255, 0.18)',
-  textPrimary: '#EBEBF5',
-  textSecondary: 'rgba(235, 235, 245, 0.6)',
-  textMuted: 'rgba(235, 235, 245, 0.35)',
-  divider: 'rgba(235, 235, 245, 0.10)',
+  bg: semanticColors.canvas,
+  bgGradient: semanticColors.surface1,
+  card: semanticColors.surface2,
+  cardTranslucent: semanticColors.surface2,
+  cardElevated: semanticColors.surface1,
+  cardBorderSubtle: semanticColors.borderSubtle,
+  cardBorderNeon: semanticColors.borderSubtle,
+  cardBorderNeonStrong: semanticColors.borderStrong,
+  cyan: semanticColors.accent,
+  cyanGlow: semanticColors.accentSubtle,
+  textPrimary: semanticColors.textPrimary,
+  textSecondary: semanticColors.textSecondary,
+  textMuted: semanticColors.textTertiary,
+  divider: semanticColors.borderSubtle,
   success: '#10B981',
   warning: '#FFC400',
-  warningBg: 'rgba(255, 196, 0, 0.10)',
+  warningBg: semanticColors.warningSubtle,
   warningBorder: 'rgba(255, 196, 0, 0.4)',
   danger: '#FF453A',
 };
@@ -713,7 +714,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 196, 0, 0.18)',
+    backgroundColor: semanticColors.warningSubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -771,7 +772,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: 'rgba(0, 212, 255, 0.12)',
+    backgroundColor: semanticColors.accentSubtle,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
@@ -813,7 +814,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: 'rgba(235, 235, 245, 0.05)',
+    backgroundColor: semanticColors.glass,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
@@ -907,7 +908,7 @@ const styles = StyleSheet.create({
     borderRadius: 1,
   },
   signalBarInactive: {
-    backgroundColor: 'rgba(235, 235, 245, 0.14)',
+    backgroundColor: semanticColors.borderStrong,
   },
 
   // Connected card

@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, typography, spacing, borderRadius, fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import { getReliefPreview, applyRelief } from '../../services/planAdaptation';
 import { useTrainingStore } from '../../stores/trainingStore';
 import type {
@@ -344,9 +345,9 @@ const OptionRow = React.memo(function OptionRow({
 });
 
 const styles = StyleSheet.create({
-    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },
+    overlay: { flex: 1, backgroundColor: semanticColors.scrim },
     sheet: {
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface2,
         borderTopLeftRadius: borderRadius['2xl'],
         borderTopRightRadius: borderRadius['2xl'],
         paddingHorizontal: spacing.base,
@@ -358,18 +359,18 @@ const styles = StyleSheet.create({
         width: 40,
         height: 4,
         borderRadius: 2,
-        backgroundColor: colors.border,
+        backgroundColor: semanticColors.borderStrong,
         marginBottom: spacing.sm,
     },
     title: {
         fontFamily: fonts.bold,
         fontSize: typography.fontSizes.xl,
-        color: colors.text,
+        color: semanticColors.textPrimary,
     },
     subtitle: {
         fontFamily: fonts.medium,
         fontSize: typography.fontSizes.sm,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
     },
     centered: {
         alignItems: 'center',
@@ -380,7 +381,7 @@ const styles = StyleSheet.create({
     stateText: {
         fontFamily: fonts.regular,
         fontSize: typography.fontSizes.md,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         textAlign: 'center',
     },
     conflictBanner: {
@@ -391,14 +392,14 @@ const styles = StyleSheet.create({
         borderRadius: borderRadius.lg,
         borderWidth: 1,
         borderColor: 'rgba(245,158,11,0.32)',
-        backgroundColor: 'rgba(245,158,11,0.06)',
+        backgroundColor: semanticColors.warningSubtle,
     },
     conflictText: {
         flex: 1,
         fontFamily: fonts.medium,
         fontSize: typography.fontSizes.xs,
         lineHeight: 17,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
     },
     options: { gap: spacing.xs, marginTop: spacing.xs },
     option: {
@@ -409,18 +410,18 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.md,
         borderRadius: borderRadius.lg,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
     },
     optionSelected: {
-        borderColor: 'rgba(0,212,255,0.45)',
-        backgroundColor: 'rgba(0,212,255,0.06)',
+        borderColor: semanticColors.accent,
+        backgroundColor: semanticColors.accentSubtle,
     },
     radio: {
         width: 20,
         height: 20,
         borderRadius: 10,
         borderWidth: 2,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -428,41 +429,41 @@ const styles = StyleSheet.create({
         width: 10,
         height: 10,
         borderRadius: 5,
-        backgroundColor: colors.primary,
+        backgroundColor: semanticColors.accent,
     },
     optionLabel: {
         flex: 1,
         fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.md,
-        color: colors.text,
+        color: semanticColors.textPrimary,
     },
     optionValue: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
     optionFrom: {
         fontFamily: fonts.regular,
         fontSize: typography.fontSizes.sm,
-        color: colors.textMuted,
+        color: semanticColors.textTertiary,
         textDecorationLine: 'line-through',
     },
     optionTo: {
         fontFamily: fonts.bold,
         fontSize: typography.fontSizes.md,
-        color: colors.primary,
+        color: semanticColors.accent,
     },
     footnote: {
         fontFamily: fonts.medium,
         fontSize: typography.fontSizes.xs,
-        color: colors.textMuted,
+        color: semanticColors.textTertiary,
     },
     errorText: {
         fontFamily: fonts.medium,
         fontSize: typography.fontSizes.xs,
-        color: colors.accent,
+        color: semanticColors.accent,
     },
     button: {
         marginTop: spacing.xs,
         height: 52,
         borderRadius: borderRadius.full,
-        backgroundColor: colors.primary,
+        backgroundColor: semanticColors.accent,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -471,7 +472,7 @@ const styles = StyleSheet.create({
     buttonText: {
         fontFamily: fonts.bold,
         fontSize: typography.fontSizes.lg,
-        color: colors.cardDark,
+        color: semanticColors.textOnAccent,
     },
     retryBtn: {
         marginTop: spacing.sm,
@@ -479,14 +480,14 @@ const styles = StyleSheet.create({
         height: 44,
         borderRadius: borderRadius.full,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
         alignItems: 'center',
         justifyContent: 'center',
     },
     retryText: {
         fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.md,
-        color: colors.text,
+        color: semanticColors.textPrimary,
     },
 });
 

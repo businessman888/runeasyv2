@@ -10,32 +10,33 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { useNotificationStore, AppNotification, NotificationType } from '../stores/notificationStore';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 
 // Icon components using @expo/vector-icons
-function BackIcon({ size = 24, color = '#EBEBF5' }: { size?: number; color?: string }) {
+function BackIcon({ size = 24, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
     return <Ionicons name="chevron-back" size={size} color={color} />;
 }
 
-function BrainFlashIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
+function BrainFlashIcon({ size = 24, color = semanticColors.accent }: { size?: number; color?: string }) {
     return <MaterialCommunityIcons name="brain" size={size} color={color} />;
 }
 
-function SyncIcon({ size = 24, color = 'rgba(235, 235, 245, 0.6)' }: { size?: number; color?: string }) {
+function SyncIcon({ size = 24, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
     return <Ionicons name="sync-outline" size={size} color={color} />;
 }
 
-function TrophyIcon({ size = 24, color = 'rgba(235, 235, 245, 0.6)' }: { size?: number; color?: string }) {
+function TrophyIcon({ size = 24, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
     return <Ionicons name="trophy-outline" size={size} color={color} />;
 }
 
-function RunnerIcon({ size = 24, color = 'rgba(235, 235, 245, 0.6)' }: { size?: number; color?: string }) {
+function RunnerIcon({ size = 24, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
     return <MaterialCommunityIcons name="run" size={size} color={color} />;
 }
 
-function BellOffIcon({ size = 64, color = 'rgba(235, 235, 245, 0.3)' }: { size?: number; color?: string }) {
+function BellOffIcon({ size = 64, color = semanticColors.textTertiary }: { size?: number; color?: string }) {
     return <Ionicons name="notifications-off-outline" size={size} color={color} />;
 }
 
@@ -85,13 +86,13 @@ type DisplayNotification = AppNotification & { displayType: DisplayType };
 function getNotificationIcon(type: DisplayType) {
     switch (type) {
         case 'insight':
-            return <BrainFlashIcon size={24} color="#00D4FF" />;
+            return <BrainFlashIcon size={24} color={semanticColors.accent} />;
         case 'workout':
-            return <SyncIcon size={24} color="rgba(235, 235, 245, 0.6)" />;
+            return <SyncIcon size={24} color={semanticColors.textSecondary} />;
         case 'achievement':
-            return <TrophyIcon size={24} color="rgba(235, 235, 245, 0.6)" />;
+            return <TrophyIcon size={24} color={semanticColors.textSecondary} />;
         case 'reminder':
-            return <RunnerIcon size={24} color="rgba(235, 235, 245, 0.6)" />;
+            return <RunnerIcon size={24} color={semanticColors.textSecondary} />;
     }
 }
 
@@ -209,7 +210,7 @@ export function NotificationsScreen({ navigation }: any) {
                     style={styles.backButton}
                     onPress={() => navigation.goBack()}
                 >
-                    <BackIcon size={24} color="#EBEBF5" />
+                    <BackIcon size={24} color={semanticColors.textPrimary} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Notificações</Text>
                 <View style={styles.headerPlaceholder} />
@@ -252,7 +253,7 @@ export function NotificationsScreen({ navigation }: any) {
             {/* Empty State */}
             {!isLoading && filteredNotifications.length === 0 && (
                 <View style={styles.emptyContainer}>
-                    <BellOffIcon size={64} color="rgba(235, 235, 245, 0.3)" />
+                    <BellOffIcon size={64} color={semanticColors.textTertiary} />
                     <Text style={styles.emptyText}>Nenhuma notificação</Text>
                     <Text style={styles.emptySubtext}>
                         Suas notificações aparecerão aqui
@@ -300,7 +301,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: typography.fontSizes.lg,
         fontWeight: typography.fontWeights.semibold as any,
-        color: '#EBEBF5',
+        color: semanticColors.textPrimary,
     },
     headerPlaceholder: {
         width: 40,
@@ -320,20 +321,20 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         backgroundColor: 'transparent',
         borderWidth: 1,
-        borderColor: 'rgba(235, 235, 245, 0.2)',
+        borderColor: semanticColors.borderStrong,
         marginRight: spacing.sm,
     },
     filterButtonActive: {
-        backgroundColor: '#00D4FF',
-        borderColor: '#00D4FF',
+        backgroundColor: semanticColors.accent,
+        borderColor: semanticColors.accent,
     },
     filterText: {
         fontSize: typography.fontSizes.sm,
         fontWeight: typography.fontWeights.medium as any,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
     filterTextActive: {
-        color: '#0A0A18',
+        color: semanticColors.textOnAccent,
         fontWeight: typography.fontWeights.bold as any,
     },
 
@@ -356,28 +357,28 @@ const styles = StyleSheet.create({
     // Notification Card
     notificationCard: {
         flexDirection: 'row',
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         padding: spacing.lg,
         gap: spacing.md,
         borderWidth: 1,
-        borderColor: 'rgba(235, 235, 245, 0.1)',
+        borderColor: semanticColors.borderSubtle,
     },
     notificationCardInsight: {
         borderWidth: 1,
-        borderColor: '#00D4FF',
-        backgroundColor: 'rgba(0, 212, 255, 0.05)',
+        borderColor: semanticColors.accent,
+        backgroundColor: semanticColors.accentSubtle,
     },
     iconContainer: {
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: 'rgba(235, 235, 245, 0.1)',
+        backgroundColor: semanticColors.glass,
         justifyContent: 'center',
         alignItems: 'center',
     },
     iconContainerInsight: {
-        backgroundColor: 'rgba(0, 212, 255, 0.2)',
+        backgroundColor: semanticColors.accentSubtle,
     },
     notificationContent: {
         flex: 1,
@@ -391,26 +392,26 @@ const styles = StyleSheet.create({
     notificationTitle: {
         fontSize: typography.fontSizes.base,
         fontWeight: typography.fontWeights.bold as any,
-        color: '#EBEBF5',
+        color: semanticColors.textPrimary,
     },
     newIndicator: {
         width: 8,
         height: 8,
         borderRadius: 4,
-        backgroundColor: '#00D4FF',
+        backgroundColor: semanticColors.accent,
     },
     notificationDescription: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
         lineHeight: 20,
     },
     notificationTime: {
         fontSize: typography.fontSizes.xs,
-        color: 'rgba(235, 235, 245, 0.4)',
+        color: semanticColors.textTertiary,
         marginTop: spacing.xs,
     },
     notificationTimeInsight: {
-        color: '#00D4FF',
+        color: semanticColors.accent,
     },
 
     // Loading and empty states
@@ -428,13 +429,13 @@ const styles = StyleSheet.create({
     emptyText: {
         fontSize: typography.fontSizes.lg,
         fontWeight: typography.fontWeights.semibold as any,
-        color: '#EBEBF5',
+        color: semanticColors.textPrimary,
         marginTop: spacing.lg,
         marginBottom: spacing.sm,
     },
     emptySubtext: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
         textAlign: 'center',
     },
     bottomSpacer: {

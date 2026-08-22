@@ -15,15 +15,16 @@ import Animated, {
     Easing,
 } from 'react-native-reanimated';
 import { fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const DS = {
-    text: '#EBEBF5',
+    text: semanticColors.textPrimary,
     textSecondary: 'rgba(235, 235, 245, 0.6)',
-    cyan: '#00D4FF',
+    cyan: semanticColors.accent,
     cyanGlow: 'rgba(0, 127, 153, 0.3)',
-    card: '#1C1C2E',
+    card: semanticColors.surface2,
     glassBorder: 'rgba(235, 235, 245, 0.1)',
 };
 

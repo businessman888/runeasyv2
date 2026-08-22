@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 if (
   Platform.OS === 'android' &&
@@ -98,7 +99,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
     marginTop: 8,
     borderRadius: 14,
-    backgroundColor: 'rgba(28, 28, 46, 0.94)',
+    backgroundColor: semanticColors.surface2,
     borderWidth: 1,
     borderColor: 'rgba(255, 196, 0, 0.45)',
     overflow: 'hidden',
@@ -112,7 +113,7 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    color: colors.text,
+    color: semanticColors.textPrimary,
     fontSize: 13,
     fontFamily: fonts.semibold,
   },
@@ -131,7 +132,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   body: {
-    color: colors.textSecondary,
+    color: semanticColors.textSecondary,
     fontSize: 12,
     lineHeight: 18,
     fontFamily: fonts.regular,
@@ -146,7 +147,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(255, 196, 0, 0.45)',
-    backgroundColor: 'rgba(255, 196, 0, 0.08)',
+    backgroundColor: semanticColors.warningSubtle,
   },
   settingsBtnText: {
     color: colors.warning,

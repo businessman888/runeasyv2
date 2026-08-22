@@ -42,6 +42,7 @@ import {
   computeSpeedChartSpacing,
 } from '../../utils/treadmillChart';
 import type { RunMode } from './RunningScreen';
+import { semanticColors } from '../../theme/semanticColors';
 
 export interface TreadmillSummaryData {
   is_smart: boolean;
@@ -91,18 +92,18 @@ type RunSummaryRouteParams = {
 
 // ─── Design Tokens (Figma) ────────────────────────────────────────────────────
 const T = {
-  bgPrimary: '#0E0E1F',
-  cardSurface: '#1C1C2E',
-  cardDarker: '#15152A',
-  cyan: '#00D4FF',
-  textPrimary: '#EBEBF5',
-  textSecondary: 'rgba(235, 235, 245, 0.60)',
-  textMuted: 'rgba(235, 235, 245, 0.35)',
-  divider: 'rgba(235, 235, 245, 0.10)',
+  bgPrimary: semanticColors.canvas,
+  cardSurface: semanticColors.surface2,
+  cardDarker: semanticColors.surface1,
+  cyan: semanticColors.accent,
+  textPrimary: semanticColors.textPrimary,
+  textSecondary: semanticColors.textSecondary,
+  textMuted: semanticColors.textTertiary,
+  divider: semanticColors.borderSubtle,
   success: '#32CD32',
   warning: '#FFC400',
   danger: '#FF453A',
-  routeColor: '#00D4FF',
+  routeColor: semanticColors.accent,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1012,7 +1013,7 @@ export function RunSummaryScreen() {
                     yAxisColor="transparent"
                     xAxisColor={T.divider}
                     rulesType="solid"
-                    rulesColor="rgba(235,235,245,0.06)"
+                    rulesColor={semanticColors.borderSubtle}
                     yAxisTextStyle={styles.chartAxisText}
                     xAxisLabelTextStyle={styles.chartAxisLabelText}
                     showVerticalLines={false}
@@ -1117,7 +1118,7 @@ export function RunSummaryScreen() {
                     yAxisColor="transparent"
                     xAxisColor={T.divider}
                     rulesType="solid"
-                    rulesColor="rgba(235,235,245,0.06)"
+                    rulesColor={semanticColors.borderSubtle}
                     yAxisTextStyle={styles.chartAxisText}
                     xAxisLabelTextStyle={styles.chartAxisLabelText}
                     yAxisLabelTexts={chartCfg.yAxisLabelTexts}
@@ -1129,12 +1130,12 @@ export function RunSummaryScreen() {
                     showVerticalLines={false}
                     hideDataPoints={false}
                     dataPointsRadius={3.5}
-                    dataPointsColor={'#FFFFFF'}
+                    dataPointsColor={semanticColors.textPrimary}
                     dataPointsShape={'circular'}
                     showReferenceLine1={chartCfg.refValue > 0}
                     referenceLine1Position={chartCfg.refValue}
                     referenceLine1Config={{
-                      color: 'rgba(255,255,255,0.35)',
+                      color: semanticColors.textTertiary,
                       dashWidth: 4,
                       dashGap: 3,
                       thickness: 1,
@@ -1207,7 +1208,7 @@ export function RunSummaryScreen() {
                     yAxisColor="transparent"
                     xAxisColor={T.divider}
                     rulesType="solid"
-                    rulesColor="rgba(235,235,245,0.06)"
+                    rulesColor={semanticColors.borderSubtle}
                     yAxisTextStyle={styles.chartAxisText}
                     xAxisLabelTextStyle={styles.chartAxisLabelText}
                     yAxisLabelTexts={elevCfg.yAxisLabelTexts}
@@ -1547,14 +1548,14 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(28, 28, 46, 0.92)',
+    backgroundColor: semanticColors.surface2,
     borderWidth: 1,
-    borderColor: 'rgba(235, 235, 245, 0.12)',
+    borderColor: semanticColors.borderSubtle,
     zIndex: 20,
   },
   chip3dActive: {
     borderColor: T.cyan,
-    backgroundColor: 'rgba(0, 212, 255, 0.12)',
+    backgroundColor: semanticColors.accentSubtle,
   },
   chip3dText: {
     color: T.textSecondary,
@@ -1656,7 +1657,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(14, 14, 31, 0.85)',
+    backgroundColor: semanticColors.surface1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1664,7 +1665,7 @@ const styles = StyleSheet.create({
     color: T.textPrimary,
     fontSize: 16,
     fontWeight: '600',
-    backgroundColor: 'rgba(14, 14, 31, 0.85)',
+    backgroundColor: semanticColors.surface1,
     paddingHorizontal: 18,
     paddingVertical: 8,
     borderRadius: 18,
@@ -1678,7 +1679,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
   },
   sheetHandle: {
-    backgroundColor: 'rgba(235,235,245,0.10)',
+    backgroundColor: semanticColors.borderSubtle,
     width: 60,
     height: 6,
   },
@@ -1703,7 +1704,7 @@ const styles = StyleSheet.create({
     backgroundColor: T.cardDarker,
   },
   avatarFallback: {
-    backgroundColor: 'rgba(0, 212, 255, 0.18)',
+    backgroundColor: semanticColors.accentSubtle,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -1738,7 +1739,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 196, 0, 0.14)',
+    backgroundColor: semanticColors.warningSubtle,
     borderColor: 'rgba(255, 196, 0, 0.40)',
     borderWidth: 1,
     paddingHorizontal: 10,
@@ -1834,7 +1835,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(235,235,245,0.10)',
+    borderBottomColor: semanticColors.borderSubtle,
   },
   splitsHeaderText: {
     color: T.textSecondary,
@@ -1891,9 +1892,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
-    backgroundColor: 'rgba(0,212,255,0.10)',
+    backgroundColor: semanticColors.accentSubtle,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,212,255,0.30)',
+    borderColor: semanticColors.borderSubtle,
   },
   sourceBadgeText: {
     color: T.cyan,
@@ -1952,7 +1953,7 @@ const styles = StyleSheet.create({
   },
   paceStatRowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(235,235,245,0.08)',
+    borderBottomColor: semanticColors.borderSubtle,
   },
   paceStatLabel: {
     color: T.textSecondary,
@@ -1979,9 +1980,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 18,
-    backgroundColor: 'rgba(14, 14, 31, 0.85)',
+    backgroundColor: semanticColors.surface1,
     borderWidth: 1,
-    borderColor: 'rgba(235, 235, 245, 0.10)',
+    borderColor: semanticColors.borderSubtle,
   },
   mapOverlayText: {
     color: T.textSecondary,
@@ -2000,7 +2001,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(235, 235, 245, 0.06)',
+    backgroundColor: semanticColors.glass,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,

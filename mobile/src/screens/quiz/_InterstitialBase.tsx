@@ -1,11 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 const DS = {
-    text: '#EBEBF5',
-    textSecondary: 'rgba(235, 235, 245, 0.6)',
-    cyan: '#00D4FF',
+    text: semanticColors.textPrimary,
+    textSecondary: semanticColors.textSecondary,
+    cyan: semanticColors.accent,
 };
 
 interface InterstitialBaseProps {

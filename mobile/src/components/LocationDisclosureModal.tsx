@@ -23,13 +23,13 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import {
-  colors,
   fonts,
   typography,
   spacing,
   borderRadius,
   shadows,
 } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 
 interface LocationDisclosureModalProps {
   visible: boolean;
@@ -88,7 +88,7 @@ export function LocationDisclosureModal({
           ]}
         >
           <View style={styles.iconCircle}>
-            <Ionicons name="location-outline" size={44} color={colors.primary} />
+            <Ionicons name="location-outline" size={44} color={semanticColors.accent} />
           </View>
 
           <Text
@@ -147,7 +147,7 @@ const DIALOG_WIDTH = 340;
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: semanticColors.scrim,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.base,
@@ -155,10 +155,10 @@ const styles = StyleSheet.create({
   dialog: {
     width: DIALOG_WIDTH,
     maxWidth: '100%',
-    backgroundColor: colors.card,
+    backgroundColor: semanticColors.surface2,
     borderRadius: borderRadius['2xl'],
     borderWidth: 1,
-    borderColor: colors.proGlassBorder,
+    borderColor: semanticColors.borderSubtle,
     paddingTop: spacing['2xl'],
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
@@ -168,13 +168,13 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(0, 212, 255, 0.12)',
+    backgroundColor: semanticColors.accentSubtle,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.lg,
   },
   title: {
-    color: colors.text,
+    color: semanticColors.textPrimary,
     fontFamily: fonts.bold,
     fontSize: typography.fontSizes['2xl'],
     textAlign: 'center',
@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   body: {
-    color: colors.textSecondary,
+    color: semanticColors.textSecondary,
     fontFamily: fonts.regular,
     fontSize: typography.fontSizes.md,
     textAlign: 'center',
@@ -193,15 +193,14 @@ const styles = StyleSheet.create({
     width: DIALOG_WIDTH - spacing.lg * 2,
     maxWidth: '100%',
     minHeight: 52,
-    backgroundColor: colors.primary,
+    backgroundColor: semanticColors.accent,
     borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
-    ...shadows.neon,
   },
   primaryBtnText: {
-    color: colors.backgroundLight,
+    color: semanticColors.textOnAccent,
     fontFamily: fonts.semibold,
     fontSize: typography.fontSizes.lg,
   },
@@ -214,7 +213,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   secondaryText: {
-    color: colors.textSecondary,
+    color: semanticColors.textSecondary,
     fontFamily: fonts.medium,
     fontSize: typography.fontSizes.md,
   },

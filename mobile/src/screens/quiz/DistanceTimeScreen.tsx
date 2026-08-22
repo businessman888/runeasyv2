@@ -2,17 +2,18 @@ import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { CustomKeypad } from '../../components/CustomKeypad';
 import { borderRadius, colors, fonts, spacing } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 // Design System
 const DS = {
-    bg: '#0F0F1E',
-    card: '#1C1C2E',
-    cyan: '#00D4FF',
-    text: '#EBEBF5',
-    textSecondary: 'rgba(235, 235, 245, 0.6)',
-    glassBorder: 'rgba(235, 235, 245, 0.1)',
-    glassBg: 'rgba(28, 28, 46, 0.7)',
-    activeBorder: '#00D4FF',
+    bg: semanticColors.canvas,
+    card: semanticColors.surface2,
+    cyan: semanticColors.accent,
+    text: semanticColors.textPrimary,
+    textSecondary: semanticColors.textSecondary,
+    glassBorder: semanticColors.borderSubtle,
+    glassBg: semanticColors.surface2,
+    activeBorder: semanticColors.accent,
 };
 
 interface DistanceTimeValue {
@@ -335,10 +336,10 @@ const styles = StyleSheet.create({
     inputBlockActive: {
         borderColor: DS.activeBorder,
         borderWidth: 1,
-        backgroundColor: 'rgba(28, 28, 46, 0.9)',
+        backgroundColor: semanticColors.surface2,
     },
     inputBlockTargetActive: {
-        backgroundColor: 'rgba(0, 212, 255, 0.09)',
+        backgroundColor: semanticColors.accentSubtle,
     },
     inputValue: {
         fontFamily: fonts.bold,

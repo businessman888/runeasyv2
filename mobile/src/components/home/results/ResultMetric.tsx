@@ -2,6 +2,7 @@ import React, { memo, useId, useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Svg, { Defs, LinearGradient, Path, Stop } from "react-native-svg";
 import { colors, fonts } from "../../../theme";
+import { semanticColors } from "../../../theme/semanticColors";
 
 interface ResultMetricProps {
   label: string;
@@ -90,7 +91,7 @@ export const ResultMetric = memo(function ResultMetric({
 const styles = StyleSheet.create({
   container: { flex: 1, minWidth: 0 },
   label: {
-    color: "rgba(235,235,245,0.56)",
+    color: semanticColors.textTertiary,
     fontFamily: fonts.regular,
     fontSize: 10,
     lineHeight: 14,
@@ -113,6 +114,6 @@ const styles = StyleSheet.create({
   emptyLine: {
     width: "64%",
     height: StyleSheet.hairlineWidth,
-    backgroundColor: "rgba(235,235,245,0.10)",
+    backgroundColor: semanticColors.borderSubtle,
   },
 });

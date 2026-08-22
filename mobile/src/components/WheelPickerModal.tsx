@@ -8,6 +8,7 @@ import {
     Platform,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
+import { semanticColors } from '../theme/semanticColors';
 import { colors, typography, borderRadius } from '../theme';
 
 interface WheelPickerModalProps {
@@ -158,7 +159,7 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     container: {
-        backgroundColor: '#15152A',
+        backgroundColor: semanticColors.surface1,
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         paddingHorizontal: 19,
@@ -216,7 +217,7 @@ const styles = StyleSheet.create({
     },
     pickerContainer: {
         flex: 1,
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 15,
         marginHorizontal: 3,
         overflow: 'hidden',

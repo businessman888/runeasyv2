@@ -10,19 +10,20 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import type { GoalStep } from '../types/workoutGoals';
+import { semanticColors } from '../theme/semanticColors';
 
 // ─── Design Tokens (Figma node 666:560) ──────────────────────────────────────
 const T = {
-  modalBg: '#1C1C2E',
-  blockBg: '#15152A',
-  borderDefault: 'rgba(235,235,245,0.1)',
-  borderActive: '#00D4FF',
-  borderCompleted: 'rgba(0,127,153,0.3)',
-  cyan: '#00D4FF',
-  textPrimary: '#EBEBF5',
-  textSecondary: 'rgba(235,235,245,0.60)',
+  modalBg: semanticColors.surface2,
+  blockBg: semanticColors.surface1,
+  borderDefault: semanticColors.borderSubtle,
+  borderActive: semanticColors.accent,
+  borderCompleted: semanticColors.successSubtle,
+  cyan: semanticColors.accent,
+  textPrimary: semanticColors.textPrimary,
+  textSecondary: semanticColors.textSecondary,
   checkGreen: '#32CD32',
-  circleGray: 'rgba(235,235,245,0.30)',
+  circleGray: semanticColors.borderStrong,
 };
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -190,7 +191,7 @@ export function GoalsModal({ visible, onClose, goalSteps }: GoalsModalProps) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: semanticColors.scrim,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -337,7 +338,7 @@ const styles = StyleSheet.create({
   // ── Progress bar
   progressBarContainer: {
     height: 3,
-    backgroundColor: 'rgba(0,212,255,0.15)',
+    backgroundColor: semanticColors.accentSubtle,
   },
   progressBar: {
     height: 3,

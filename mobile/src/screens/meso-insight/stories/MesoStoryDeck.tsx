@@ -25,6 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, fonts } from '../../../theme';
+import { semanticColors } from '../../../theme/semanticColors';
 import { StoryProgressBar } from '../../retrospective/StoryProgressBar';
 import { AnimatedStoryBackground } from '../../retrospective/AnimatedStoryBackground';
 import { gradientForCard } from '../../retrospective/storyTheme';
@@ -373,7 +374,7 @@ const styles = StyleSheet.create({
         borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(10,10,24,0.24)',
+        backgroundColor: semanticColors.overlaySoft,
     },
 
     tapZone: { position: 'absolute', top: 104, bottom: 112, width: '30%' },

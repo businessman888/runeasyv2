@@ -1,19 +1,21 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Pressable, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { fonts } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
+import { AppPressable } from './ui/AppPressable';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ============================================
 // FORCED COLORS (Figma exact values)
 // ============================================
-const FORCED_BG_DARK = '#0F0F1E';     // Dark background for text on cyan
-const FORCED_BACK_BG = '#1C1C2E';     // Neutral button background (Back / Sim / Não)
-const FORCED_CYAN = '#00D4FF';        // Accent cyan
-const FORCED_CYAN_MUTED = 'rgba(0, 127, 153, 0.3)'; // Pressed translucent cyan fill
-const FORCED_TEXT = '#EBEBF5';
-const FORCED_TEXT_SECONDARY = 'rgba(235, 235, 245, 0.6)';
-const FORCED_GLASS_STROKE = 'rgba(235, 235, 245, 0.1)';
+const FORCED_BG_DARK = semanticColors.textOnAccent;
+const FORCED_BACK_BG = semanticColors.surface2;
+const FORCED_CYAN = semanticColors.accent;
+const FORCED_CYAN_MUTED = semanticColors.accentSubtle;
+const FORCED_TEXT = semanticColors.textPrimary;
+const FORCED_TEXT_SECONDARY = semanticColors.textSecondary;
+const FORCED_GLASS_STROKE = semanticColors.borderSubtle;
 
 type Variant = 'default' | 'yesNo';
 
@@ -51,7 +53,7 @@ export const FixedNavigationButtons: React.FC<FixedNavigationButtonsProps> = ({
         // while the button is pressed (previously "Não" was permanently cyan,
         // which read as already-selected and confused users).
         const renderChoice = (label: string, onPress?: () => void) => (
-            <Pressable
+            <AppPressable
                 style={({ pressed }) => [
                     styles.choiceButton,
                     { width: buttonWidth },
@@ -66,7 +68,7 @@ export const FixedNavigationButtons: React.FC<FixedNavigationButtonsProps> = ({
                         {label}
                     </Text>
                 )}
-            </Pressable>
+            </AppPressable>
         );
 
         return (
@@ -81,7 +83,7 @@ export const FixedNavigationButtons: React.FC<FixedNavigationButtonsProps> = ({
     // The footer holds a single full-width, centered primary action.
     return (
         <View style={styles.container}>
-            <TouchableOpacity
+            <AppPressable
                 style={[
                     styles.continueButton,
                     { width: SCREEN_WIDTH - 40 },
@@ -89,7 +91,6 @@ export const FixedNavigationButtons: React.FC<FixedNavigationButtonsProps> = ({
                 ]}
                 onPress={onContinue}
                 disabled={continueDisabled}
-                activeOpacity={0.7}
                 accessibilityRole="button"
                 accessibilityLabel={isLastStep ? 'Finalizar' : 'Continuar'}
                 accessibilityState={{ disabled: continueDisabled }}
@@ -100,7 +101,7 @@ export const FixedNavigationButtons: React.FC<FixedNavigationButtonsProps> = ({
                 ]}>
                     {isLastStep ? 'Finalizar' : 'Continuar'}
                 </Text>
-            </TouchableOpacity>
+            </AppPressable>
         </View>
     );
 };
@@ -132,16 +133,9 @@ const styles = StyleSheet.create({
         borderRadius: 40,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: FORCED_CYAN,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.6,
-        shadowRadius: 12,
-        elevation: 8,
     },
     continueButtonDisabled: {
-        backgroundColor: '#1C1C2E',
-        shadowOpacity: 0,
-        elevation: 0,
+        backgroundColor: semanticColors.surface3,
     },
     continueText: {
         fontFamily: fonts.medium,

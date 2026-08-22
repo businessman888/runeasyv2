@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { getSyncStatus, getProviderLabel, SyncStatus } from '../services/devices';
+import { semanticColors } from '../theme/semanticColors';
 
 // Design System Colors
 const DS = {
-    cyan: '#00D4FF',
-    card: '#1A1A2E',
-    text: '#EBEBF5',
-    textSecondary: 'rgba(235, 235, 245, 0.6)',
+    cyan: semanticColors.accent,
+    card: semanticColors.surface2,
+    text: semanticColors.textPrimary,
+    textSecondary: semanticColors.textSecondary,
     success: '#4ADE80',
 };
 

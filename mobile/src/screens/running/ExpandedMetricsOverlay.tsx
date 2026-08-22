@@ -12,6 +12,7 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import { SplitsBars } from '../../components/coach/SplitsBars';
 import type { LiveSplit } from '../../utils/livePace';
 
@@ -19,13 +20,13 @@ const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
 // Tokens espelhados do TreadmillRunningView (mesmo design Figma).
 const T = {
-  bg: '#0E0E1F',
-  cardSurface: '#1C1C2E',
-  cardBorder: 'rgba(235, 235, 245, 0.10)',
-  cyan: '#00D4FF',
-  textPrimary: '#EBEBF5',
-  textSecondary: 'rgba(235, 235, 245, 0.60)',
-  textMuted: 'rgba(235, 235, 245, 0.40)',
+  bg: semanticColors.canvas,
+  cardSurface: semanticColors.surface2,
+  cardBorder: semanticColors.borderSubtle,
+  cyan: semanticColors.accent,
+  textPrimary: semanticColors.textPrimary,
+  textSecondary: semanticColors.textSecondary,
+  textMuted: semanticColors.textTertiary,
 };
 
 interface Props {
@@ -128,12 +129,12 @@ export function ExpandedMetricsOverlay({
       {/* Gradientes reativos — bg sólido por padrão, cyan treinando, âmbar pausado. */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         <AnimatedLinearGradient
-          colors={['#0E0E1F', 'rgba(0, 212, 255, 0.32)', '#0E0E1F']}
+          colors={[semanticColors.canvas, semanticColors.accentSubtle, semanticColors.canvas]}
           locations={[0, 0.5, 1]}
           style={[StyleSheet.absoluteFill, cyanOverlayStyle]}
         />
         <AnimatedLinearGradient
-          colors={['#0E0E1F', 'rgba(255, 199, 0, 0.55)', '#0E0E1F']}
+          colors={[semanticColors.canvas, semanticColors.warningSubtle, semanticColors.canvas]}
           locations={[0, 0.5, 1]}
           style={[StyleSheet.absoluteFill, amberOverlayStyle]}
         />
@@ -314,7 +315,7 @@ const styles = StyleSheet.create({
     backgroundColor: T.cardSurface,
     borderRadius: 26,
     borderWidth: 1,
-    borderColor: 'rgba(235, 235, 245, 0.18)',
+    borderColor: semanticColors.borderSubtle,
     paddingHorizontal: 18,
     paddingVertical: 7,
     alignItems: 'center',
@@ -402,7 +403,7 @@ const styles = StyleSheet.create({
     backgroundColor: T.cardSurface,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
-    shadowColor: '#000',
+    shadowColor: semanticColors.canvas,
     shadowOffset: { width: 0, height: -8 },
     shadowOpacity: 0.35,
     shadowRadius: 18,
@@ -419,7 +420,7 @@ const styles = StyleSheet.create({
     height: 58,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: 'rgba(235, 235, 245, 0.55)',
+    borderColor: semanticColors.borderStrong,
     paddingHorizontal: 20,
     backgroundColor: 'transparent',
   },

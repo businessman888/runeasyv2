@@ -258,11 +258,11 @@ export function FeasibilityModal({
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.6)',
+        backgroundColor: QUIZ.color.scrim,
         justifyContent: 'flex-end',
     },
     sheet: {
-        backgroundColor: '#15152A',
+        backgroundColor: QUIZ.color.surface1,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         paddingHorizontal: 20,
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     handleBar: {
         width: 40,
         height: 4,
-        backgroundColor: 'rgba(255,255,255,0.16)',
+        backgroundColor: QUIZ.color.border,
         borderRadius: 2,
         alignSelf: 'center',
         marginBottom: 16,
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
     confirmText: {
         fontFamily: QUIZ.optionTitle.fontFamily,
         fontSize: 16,
-        color: '#0F0F1E',
+        color: QUIZ.color.textOnAccent,
     },
 });
 

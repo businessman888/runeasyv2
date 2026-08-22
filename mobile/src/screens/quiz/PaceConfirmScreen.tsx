@@ -9,19 +9,20 @@ import {
 import Svg, { Path } from 'react-native-svg';
 import { CustomKeypad } from '../../components/CustomKeypad';
 import { fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Design System — Figma exact tokens (node 565:481)
 const DS = {
-    bg: '#0F0F1E',
-    cardBg: '#1C1C2E',
-    inputBgActive: 'rgba(0, 127, 153, 0.3)',  // Figma: accent/surface-muted
-    inputBgInactive: 'transparent',
-    cyan: '#00D4FF',
-    text: '#EBEBF5',
-    textSecondary: 'rgba(235, 235, 245, 0.6)',
-    glassBorder: 'rgba(235, 235, 245, 0.1)',
+    bg: semanticColors.onboardingIconInkAlt,
+    cardBg: semanticColors.surface2,
+    inputBgActive: semanticColors.accentSubtle,
+    inputBgInactive: semanticColors.transparent,
+    cyan: semanticColors.accent,
+    text: semanticColors.textPrimary,
+    textSecondary: semanticColors.textSecondary,
+    glassBorder: semanticColors.borderSubtle,
 };
 
 interface PaceConfirmScreenProps {

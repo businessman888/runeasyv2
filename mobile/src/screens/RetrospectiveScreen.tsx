@@ -23,6 +23,7 @@ import { BASE_API_URL } from '../config/api.config';
 import { authedFetch } from '../services/apiClient';
 import * as Storage from '../utils/storage';
 import { colors, fonts } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { openSystemShareSheet } from './sharing/utils/shareHandlers';
 
 import { gradientForCard, CLIMAX_CARD_INDEX, storyType } from './retrospective/storyTheme';
@@ -443,7 +444,7 @@ const styles = StyleSheet.create({
         borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(10,10,24,0.24)',
+        backgroundColor: semanticColors.overlaySoft,
     },
     stage: {
         flex: 1,

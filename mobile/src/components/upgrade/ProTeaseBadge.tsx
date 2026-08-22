@@ -3,6 +3,7 @@ import { Image, StyleSheet, View } from 'react-native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 const SHIELD_ICON = require('../../assets/images/shieldPro.png');
 
@@ -52,9 +53,9 @@ const styles = StyleSheet.create({
   lockBadge: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0, 212, 255, 0.12)',
+    backgroundColor: semanticColors.accentSubtle,
     borderWidth: 1,
-    borderColor: colors.proGlassBorderCyan,
+    borderColor: semanticColors.borderSubtle,
     // No elevation/shadow on purpose: Android renders elevation as a dark blob
     // behind the circle. The cyan border + tint carry the premium look.
   },

@@ -2,6 +2,7 @@ import React, { memo, useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import Mapbox from "@rnmapbox/maps";
 import { colors } from "../../../theme";
+import { semanticColors } from "../../../theme/semanticColors";
 import type { ActivityResultRoutePoint } from "../../../stores/feedbackStore";
 import { NoRoutePreview } from "./NoRoutePreview";
 import { FinishFlagMarker } from "../../map/FinishFlagMarker";
@@ -108,10 +109,10 @@ export const ResultRoutePreview = memo(function ResultRoutePreview({
 });
 
 const styles = StyleSheet.create({
-  container: { ...StyleSheet.absoluteFillObject, backgroundColor: "#11151B" },
+  container: { ...StyleSheet.absoluteFillObject, backgroundColor: semanticColors.surface1 },
   inactiveSurface: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#11151B",
+    backgroundColor: semanticColors.surface1,
   },
   mapShade: {
     ...StyleSheet.absoluteFillObject,

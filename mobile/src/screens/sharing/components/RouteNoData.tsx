@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../../../theme';
+import { semanticColors } from '../../../theme/semanticColors';
 
 interface RouteNoDataProps {
   width: number;
@@ -19,7 +20,7 @@ export function RouteNoData({ width, height }: RouteNoDataProps) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(14, 14, 31, 0.6)',
+    backgroundColor: semanticColors.scrim,
     borderRadius: borderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',

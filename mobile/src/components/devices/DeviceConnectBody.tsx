@@ -27,6 +27,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ScreenContainer } from '../ScreenContainer';
 import { colors, fonts, spacing } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import { WEARABLES, type WearableProvider } from '../../config/wearables.config';
 import {
     useWearableConnection,
@@ -213,7 +214,7 @@ const styles = StyleSheet.create({
         fontFamily: fonts.bold,
         fontSize: 26,
         lineHeight: 32,
-        color: colors.text,
+        color: semanticColors.textPrimary,
         textAlign: 'center',
         marginBottom: spacing.xl,
     },
@@ -229,7 +230,7 @@ const styles = StyleSheet.create({
         width: 6,
         height: 6,
         borderRadius: 3,
-        backgroundColor: colors.textSecondary,
+        backgroundColor: semanticColors.textSecondary,
         marginTop: 8,
     },
     bulletText: {
@@ -237,7 +238,7 @@ const styles = StyleSheet.create({
         fontFamily: fonts.regular,
         fontSize: 15,
         lineHeight: 22,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
     },
     spacer: {
         flex: 1,
@@ -253,7 +254,7 @@ const styles = StyleSheet.create({
     connectedText: {
         fontFamily: fonts.medium,
         fontSize: 14,
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
     },
     // "Ler mais" outline pill (Figma node 1355-1529): dark fill + subtle muted
     // hairline + muted semibold label. Sits above the primary CTA.
@@ -262,16 +263,16 @@ const styles = StyleSheet.create({
         borderRadius: 28,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: colors.streakDayCard,
+        backgroundColor: semanticColors.surface2,
         borderWidth: 1,
-        borderColor: colors.proMutedText,
+        borderColor: semanticColors.borderSubtle,
         marginTop: spacing.sm,
         marginBottom: spacing.sm,
     },
     readMoreText: {
         fontFamily: fonts.semibold,
         fontSize: 14,
-        color: colors.proMutedText,
+        color: semanticColors.textSecondary,
     },
     button: {
         height: 56,
@@ -281,7 +282,7 @@ const styles = StyleSheet.create({
         marginTop: spacing.sm,
     },
     buttonConnect: {
-        backgroundColor: '#F2F2F7',
+        backgroundColor: semanticColors.textPrimary,
     },
     buttonDisconnect: {
         backgroundColor: 'rgba(255,107,107,0.12)',
@@ -296,7 +297,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
     },
     buttonTextConnect: {
-        color: '#0A0A18',
+        color: semanticColors.textOnAccent,
     },
     buttonTextDisconnect: {
         color: DANGER,

@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import { useReadinessStore } from '../../stores/readinessStore';
 
 export function ReadinessSuccessScreen({ navigation }: any) {
@@ -71,7 +72,7 @@ export function ReadinessSuccessScreen({ navigation }: any) {
 
     return (
         <View style={[styles.container, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
-            <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
+            <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
 
             {/* Animated Check Icon */}
             <View style={styles.iconSection}>
@@ -79,7 +80,7 @@ export function ReadinessSuccessScreen({ navigation }: any) {
                     <View style={styles.outerCircle}>
                         <View style={styles.innerCircle}>
                             <Animated.View style={{ transform: [{ scale: checkmarkScale }] }}>
-                                <Ionicons name="checkmark" size={60} color="#0A0A14" />
+                                <Ionicons name="checkmark" size={60} color={semanticColors.textOnAccent} />
                             </Animated.View>
                         </View>
                     </View>
@@ -119,7 +120,7 @@ export function ReadinessSuccessScreen({ navigation }: any) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0A0A14',
+        backgroundColor: semanticColors.canvas,
         paddingHorizontal: spacing.lg,
     },
     iconSection: {
@@ -135,7 +136,7 @@ const styles = StyleSheet.create({
         width: 160,
         height: 160,
         borderRadius: 80,
-        backgroundColor: 'rgba(0, 212, 255, 0.15)',
+        backgroundColor: semanticColors.accentSubtle,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -155,20 +156,20 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 28,
         fontWeight: '700',
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
         textAlign: 'center',
         marginBottom: spacing.md,
     },
     subtitle: {
         fontSize: typography.fontSizes.md,
-        color: 'rgba(255, 255, 255, 0.8)',
+        color: semanticColors.textSecondary,
         textAlign: 'center',
         lineHeight: 24,
         marginBottom: spacing.lg,
     },
     info: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(255, 255, 255, 0.5)',
+        color: semanticColors.textTertiary,
         textAlign: 'center',
         lineHeight: 20,
     },
@@ -185,6 +186,6 @@ const styles = StyleSheet.create({
     confirmButtonText: {
         fontSize: typography.fontSizes.md,
         fontWeight: '600',
-        color: '#0A0A14',
+        color: semanticColors.textOnAccent,
     },
 });

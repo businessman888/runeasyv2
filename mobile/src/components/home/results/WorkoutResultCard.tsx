@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts } from "../../../theme";
+import { semanticColors } from "../../../theme/semanticColors";
 import type { LatestActivityData } from "../../../stores/feedbackStore";
 import { ResultMetric } from "./ResultMetric";
 import { ResultRoutePreview } from "./ResultRoutePreview";
@@ -204,16 +205,16 @@ const styles = StyleSheet.create({
     height: RESULT_CARD_HEIGHT,
     borderRadius: 22,
     overflow: "hidden",
-    backgroundColor: "#11151B",
+    backgroundColor: semanticColors.surface1,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(235,235,245,0.10)",
-    shadowColor: "#000",
+    borderColor: semanticColors.borderSubtle,
+    shadowColor: semanticColors.canvas,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.22,
     shadowRadius: 18,
     elevation: 8,
   },
-  mapRegion: { height: 156, backgroundColor: "#11151B" },
+  mapRegion: { height: 156, backgroundColor: semanticColors.surface1 },
   content: {
     position: "absolute",
     left: 0,
@@ -222,11 +223,11 @@ const styles = StyleSheet.create({
     height: 248,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
-    backgroundColor: colors.streakDayCard,
+    backgroundColor: semanticColors.surface2,
     paddingHorizontal: 18,
     paddingTop: 16,
     paddingBottom: 14,
-    shadowColor: "#000",
+    shadowColor: semanticColors.canvas,
     shadowOffset: { width: 0, height: -5 },
     shadowOpacity: 0.18,
     shadowRadius: 12,
@@ -248,7 +249,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   subtitle: {
-    color: "rgba(235,235,245,0.58)",
+    color: semanticColors.textSecondary,
     fontFamily: fonts.regular,
     fontSize: 12,
     lineHeight: 17,
@@ -256,7 +257,7 @@ const styles = StyleSheet.create({
   },
   achievements: { alignItems: "flex-end", minWidth: 72 },
   achievementLabel: {
-    color: "rgba(235,235,245,0.56)",
+    color: semanticColors.textTertiary,
     fontFamily: fonts.regular,
     fontSize: 10,
     lineHeight: 14,
@@ -290,14 +291,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    shadowColor: colors.primary,
+    shadowColor: semanticColors.canvas,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.14,
-    shadowRadius: 9,
-    elevation: 4,
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
   ctaDisabled: {
-    backgroundColor: "#323247",
+    backgroundColor: semanticColors.surface3,
     shadowOpacity: 0,
     elevation: 0,
   },

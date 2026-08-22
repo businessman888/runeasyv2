@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
         width: THUMB_SIZE,
         height: THUMB_SIZE,
         borderRadius: THUMB_SIZE / 2,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: QUIZ.color.text,
         borderWidth: 1,
         borderColor: QUIZ.color.border,
         // Soft, premium shadow — not the old neon glow.

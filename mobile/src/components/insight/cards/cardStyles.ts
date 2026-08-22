@@ -1,5 +1,6 @@
 import { StyleSheet } from 'react-native';
 import { colors, typography, spacing, borderRadius, fonts } from '../../../theme';
+import { semanticColors } from '../../../theme/semanticColors';
 
 /**
  * Estilos COMPARTILHADOS entre os cards do carrossel.
@@ -83,6 +84,6 @@ export const cardStyles = StyleSheet.create({
     ctaText: {
         fontFamily: fonts.bold,
         fontSize: typography.fontSizes.lg,
-        color: '#0F0F1E',
+        color: semanticColors.textOnAccent,
     },
 });

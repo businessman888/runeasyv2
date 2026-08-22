@@ -32,6 +32,7 @@ import { COACH_MMKV } from '../../services/coach/coachConfig';
 import { resetCoachRun, stopCoach, enqueue as enqueueCoach } from '../../services/coach/coachOrchestrator';
 import { buildMotivFinish } from '../../services/coach/coachMessages';
 import { LinearGradient } from 'expo-linear-gradient';
+import { semanticColors } from '../../theme/semanticColors';
 
 // ─── Tipos de rota ────────────────────────────────────────────────────────────
 export type RunMode = 'planned' | 'manual' | 'free';
@@ -55,16 +56,16 @@ type RunningRouteParams = {
 // ─── Design Tokens (Figma) ────────────────────────────────────────────────────
 const T = {
   // Backgrounds
-  bgPrimary: '#0E0E1F',
-  cardSurface: '#1C1C2E',
+  bgPrimary: semanticColors.canvas,
+  cardSurface: semanticColors.surface2,
   // Accent
-  cyan: '#00D4FF',
+  cyan: semanticColors.accent,
   warning: '#FFC400',
   // Text
-  textPrimary: '#EBEBF5',
-  textSecondary: 'rgba(235, 235, 245, 0.60)',
+  textPrimary: semanticColors.textPrimary,
+  textSecondary: semanticColors.textSecondary,
   // Route
-  routeColor: '#00D4FF',
+  routeColor: semanticColors.accent,
 };
 
 
@@ -498,7 +499,7 @@ function OutdoorRunningView() {
             topo e desvanece suavemente para baixo, dando legibilidade aos controles
             sobre o mapa sem um container sólido. Fica atrás de tudo (absoluto). */}
         <LinearGradient
-          colors={['rgba(10,10,24,0.82)', 'rgba(10,10,24,0.52)', 'rgba(10,10,24,0)']}
+          colors={[semanticColors.scrim, semanticColors.glass, semanticColors.transparent]}
           locations={[0, 0.55, 1]}
           pointerEvents="none"
           style={styles.headerScrim}
@@ -788,16 +789,16 @@ const styles = StyleSheet.create({
   // ── Layout base
   container: {
     flex: 1,
-    backgroundColor: '#0E0E1F',
+    backgroundColor: semanticColors.canvas,
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#0E0E1F',
+    backgroundColor: semanticColors.canvas,
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingText: {
-    color: 'rgba(235,235,245,0.60)',
+    color: semanticColors.textSecondary,
     fontSize: 14,
   },
 
@@ -840,13 +841,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitleDay: {
-    color: 'rgba(235,235,245,0.60)',
+    color: semanticColors.textSecondary,
     fontSize: 12,
     fontWeight: '500',
     textAlign: 'center',
   },
   headerTitle: {
-    color: '#EBEBF5',
+    color: semanticColors.textPrimary,
     fontSize: 15,
     fontWeight: '600',
     textAlign: 'center',
@@ -877,20 +878,20 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#1C1C2E',
+    backgroundColor: semanticColors.surface2,
     borderWidth: 1,
-    borderColor: 'rgba(235, 235, 245, 0.12)',
+    borderColor: semanticColors.borderSubtle,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: semanticColors.canvas,
     shadowOffset: { width: 2, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 4,
   },
   mapCircleBtnActive: {
-    borderColor: '#00D4FF',
-    shadowColor: '#00D4FF',
+    borderColor: semanticColors.accent,
+    shadowColor: semanticColors.canvas,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
@@ -920,21 +921,21 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: '35%',
-    backgroundColor: '#0A0A18',
+    backgroundColor: semanticColors.surface1,
     borderLeftWidth: 1,
-    borderLeftColor: 'rgba(235, 235, 245, 0.08)',
+    borderLeftColor: semanticColors.borderSubtle,
     justifyContent: 'flex-end',
     zIndex: 20,
   },
 
   // ── Telemetry card
   telemetryCard: {
-    backgroundColor: '#0E0E1F',
+    backgroundColor: semanticColors.surface1,
     marginHorizontal: 11,
     marginBottom: 8,
     borderRadius: 15,
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: semanticColors.canvas,
     shadowOffset: { width: 2, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
@@ -971,7 +972,7 @@ const styles = StyleSheet.create({
   metricDivider: {
     width: 1,
     height: 32,
-    backgroundColor: 'rgba(235,235,245,0.12)',
+    backgroundColor: semanticColors.borderSubtle,
   },
   metricValue: {
     fontSize: 16,
@@ -979,7 +980,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   metricLabel: {
-    color: 'rgba(235,235,245,0.60)',
+    color: semanticColors.textSecondary,
     fontSize: 11,
     fontWeight: '400',
   },
@@ -997,25 +998,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(0,212,255,0.10)',
+    backgroundColor: semanticColors.accentSubtle,
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
   splitKm: {
-    color: 'rgba(235,235,245,0.60)',
+    color: semanticColors.textSecondary,
     fontSize: 10,
     fontWeight: '600',
   },
   splitPace: {
-    color: '#00D4FF',
+    color: semanticColors.accent,
     fontSize: 12,
     fontWeight: '700',
   },
 
   // ── Buttons area
   btnArea: {
-    backgroundColor: '#0E0E1F',
+    backgroundColor: semanticColors.surface1,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1023,7 +1024,7 @@ const styles = StyleSheet.create({
     paddingTop: 17,
     paddingBottom: 16, // overridden inline with insets.bottom + 16
     gap: 10,
-    shadowColor: '#000',
+    shadowColor: semanticColors.canvas,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
@@ -1038,19 +1039,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   ctaBtnOutline: {
-    backgroundColor: '#1C1C2E',
+    backgroundColor: semanticColors.surface2,
     borderWidth: 1,
-    borderColor: '#EBEBF5',
+    borderColor: semanticColors.borderStrong,
   },
   ctaBtnOutlineCyan: {
-    backgroundColor: '#1C1C2E',
+    backgroundColor: semanticColors.surface2,
     borderWidth: 1,
-    borderColor: '#00D4FF',
+    borderColor: semanticColors.accent,
   },
   ctaBtnFilled: {
-    backgroundColor: '#00D4FF',
+    backgroundColor: semanticColors.accent,
     borderWidth: 1,
-    borderColor: '#00D4FF',
+    borderColor: semanticColors.accent,
   },
   ctaBtnText: {
     fontSize: 16,
@@ -1060,7 +1061,7 @@ const styles = StyleSheet.create({
   // ── Finishing overlay
   finishingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(14, 14, 31, 0.92)',
+    backgroundColor: semanticColors.scrim,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,
@@ -1072,10 +1073,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 28,
     borderRadius: 24,
-    backgroundColor: '#1C1C2E',
+    backgroundColor: semanticColors.surface2,
     borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.20)',
-    shadowColor: '#00D4FF',
+    borderColor: semanticColors.borderSubtle,
+    shadowColor: semanticColors.canvas,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 18,
@@ -1092,14 +1093,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
   finishingTitle: {
-    color: '#EBEBF5',
+    color: semanticColors.textPrimary,
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 6,
     textAlign: 'center',
   },
   finishingSubtitle: {
-    color: 'rgba(235,235,245,0.60)',
+    color: semanticColors.textSecondary,
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 18,

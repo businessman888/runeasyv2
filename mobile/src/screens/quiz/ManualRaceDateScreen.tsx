@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, borderRadius, fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 
 const MONTHS = [
@@ -205,7 +206,7 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: 'transparent',
     },
-    pillSelected: { borderColor: colors.primary, backgroundColor: 'rgba(0, 212, 255, 0.08)' },
+    pillSelected: { borderColor: semanticColors.accent, backgroundColor: semanticColors.accentSubtle },
     pillText: {
         fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.lg,
@@ -239,7 +240,7 @@ const styles = StyleSheet.create({
     dayCell: { flex: 1, height: 40, alignItems: 'center', justifyContent: 'center' },
     dayCellSelected: { borderWidth: 1, borderColor: colors.primary, borderRadius: 14 },
     dayText: { fontFamily: fonts.medium, fontSize: 13, color: colors.text },
-    dayTextPast: { color: 'rgba(235, 235, 245, 0.15)' },
+    dayTextPast: { color: semanticColors.textTertiary },
     dayTextSelected: { fontFamily: fonts.semibold, color: colors.primary },
 });
 

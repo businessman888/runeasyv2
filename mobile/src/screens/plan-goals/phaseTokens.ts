@@ -1,3 +1,5 @@
+import { semanticColors } from '../../theme/semanticColors';
+
 /**
  * Visual tokens for training phases (base / build / peak / taper).
  *
@@ -18,27 +20,27 @@ export interface PhaseStyle {
 const PHASE_STYLES: Record<PhaseKey, PhaseStyle> = {
     base: {
         label: 'Base',
-        accent: '#00D4FF',
-        pillBg: 'rgba(0, 212, 255, 0.14)',
-        glow: 'rgba(0, 212, 255, 0.35)',
+        accent: semanticColors.accent,
+        pillBg: semanticColors.accentSubtle,
+        glow: semanticColors.canvas,
     },
     build: {
         label: 'Desenvolvimento',
         accent: '#A78BFA',
         pillBg: 'rgba(167, 139, 250, 0.16)',
-        glow: 'rgba(167, 139, 250, 0.35)',
+        glow: semanticColors.canvas,
     },
     peak: {
         label: 'Específico',
         accent: '#FFB547',
         pillBg: 'rgba(255, 181, 71, 0.16)',
-        glow: 'rgba(255, 181, 71, 0.35)',
+        glow: semanticColors.canvas,
     },
     taper: {
         label: 'Polimento',
         accent: '#32E08A',
         pillBg: 'rgba(50, 224, 138, 0.16)',
-        glow: 'rgba(50, 224, 138, 0.35)',
+        glow: semanticColors.canvas,
     },
 };
 

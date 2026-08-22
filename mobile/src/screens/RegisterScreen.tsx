@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { colors, typography, fonts } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { useAuthStore } from '../stores';
 import { supabase } from '../services/supabase';
 
@@ -288,7 +289,7 @@ export function RegisterScreen({
                         accessibilityState={{ disabled: isLoading, busy: isLoading }}
                     >
                         {isLoading ? (
-                            <ActivityIndicator size="small" color="#0A0A18" />
+                            <ActivityIndicator size="small" color={semanticColors.textOnAccent} />
                         ) : (
                             <Text style={styles.primaryButtonText}>Criar conta</Text>
                         )}
@@ -313,7 +314,7 @@ export function RegisterScreen({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0E0E1F',
+        backgroundColor: semanticColors.canvas,
     },
     scrollContent: {
         flexGrow: 1,
@@ -329,11 +330,11 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         fontSize: scaleFont(24),
         lineHeight: scaleFont(36),
-        color: '#EBEBF5',
+        color: semanticColors.textPrimary,
         textAlign: 'left',
     },
     titleCyan: {
-        color: '#00D4FF',
+        color: semanticColors.accent,
     },
     formSection: {
         width: '100%',
@@ -355,11 +356,11 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.sm,
     },
     infoContainer: {
-        backgroundColor: 'rgba(0, 212, 255, 0.12)',
+        backgroundColor: semanticColors.accentSubtle,
         padding: 12,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: 'rgba(0, 212, 255, 0.3)',
+        borderColor: semanticColors.borderSubtle,
         width: '100%',
     },
     infoText: {
@@ -413,7 +414,7 @@ const styles = StyleSheet.create({
         opacity: 0.5,
     },
     primaryButtonText: {
-        color: '#0A0A18',
+        color: semanticColors.textOnAccent,
         fontSize: scaleFont(16),
         fontFamily: fonts.bold,
         fontWeight: '700',

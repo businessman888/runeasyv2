@@ -13,11 +13,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, shadows } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import { useProFeature } from '../../hooks/useProFeature';
 
 // Figma node 1275:1495 (modalInitiateTrial) — premium bottom sheet.
-const GRADIENT = ['#0E0E1F', '#1C1C2E'] as const;
-const DARK_TEXT = '#0E0E1F';
+const GRADIENT = [semanticColors.surface1, semanticColors.surface2] as const;
+const DARK_TEXT = semanticColors.textOnAccent;
 const FALLBACK_HEIGHT = 420;
 
 interface TrialModalProps {
@@ -128,7 +129,7 @@ export function TrialModal({ visible, onClose }: TrialModalProps) {
                             accessibilityRole="button"
                             accessibilityLabel="Fechar"
                         >
-                            <Ionicons name="close" size={24} color="#FFFFFF" />
+                            <Ionicons name="close" size={24} color={semanticColors.textPrimary} />
                         </Pressable>
 
                         <Text style={styles.title}>Destrave todo o{'\n'}seu potencial</Text>
@@ -160,7 +161,7 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     backdrop: {
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        backgroundColor: semanticColors.scrim,
     },
     sheetWrap: {
         width: '100%',
@@ -175,7 +176,7 @@ const styles = StyleSheet.create({
         width: 60,
         height: 6,
         borderRadius: 3,
-        backgroundColor: 'rgba(235, 235, 245, 0.1)',
+        backgroundColor: semanticColors.borderSubtle,
         alignSelf: 'center',
         marginBottom: 22,
     },

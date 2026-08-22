@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 /**
  * Coleta a percepção de esforço REPORTADA pelo atleta (Borg CR10, 1–10).
@@ -222,7 +223,7 @@ const RpeDot = memo(function RpeDot({
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: colors.streakCard,
+        backgroundColor: semanticColors.surface1,
         borderRadius: 20,
         paddingHorizontal: 16,
         paddingTop: 16,
@@ -240,19 +241,19 @@ const styles = StyleSheet.create({
     },
     title: {
         fontFamily: fonts.bold,
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
         fontSize: 17,
         marginBottom: 4,
     },
     subtitle: {
         fontFamily: fonts.regular,
-        color: colors.proMutedText,
+        color: semanticColors.textSecondary,
         fontSize: 12,
         lineHeight: 17,
     },
     skip: {
         fontFamily: fonts.medium,
-        color: colors.proMutedText,
+        color: semanticColors.textSecondary,
         fontSize: 13,
         paddingTop: 2,
     },
@@ -266,8 +267,8 @@ const styles = StyleSheet.create({
         aspectRatio: 1,
         borderRadius: 10,
         borderWidth: 1,
-        borderColor: colors.proDivider,
-        backgroundColor: colors.glassLight,
+        borderColor: semanticColors.borderSubtle,
+        backgroundColor: semanticColors.glass,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -276,7 +277,7 @@ const styles = StyleSheet.create({
     },
     dotText: {
         fontFamily: fonts.semibold,
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
         fontSize: 13,
     },
     anchorRow: {
@@ -286,7 +287,7 @@ const styles = StyleSheet.create({
     },
     anchor: {
         fontFamily: fonts.regular,
-        color: colors.textMuted,
+        color: semanticColors.textTertiary,
         fontSize: 10,
     },
     error: {
@@ -318,12 +319,12 @@ const styles = StyleSheet.create({
     },
     savedTitle: {
         fontFamily: fonts.semibold,
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
         fontSize: 15,
     },
     savedHint: {
         fontFamily: fonts.regular,
-        color: colors.proMutedText,
+        color: semanticColors.textSecondary,
         fontSize: 12,
         marginTop: 2,
     },

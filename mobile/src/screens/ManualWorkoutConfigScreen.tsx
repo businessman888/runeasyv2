@@ -11,7 +11,8 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius, shadows } from '../theme';
+import { typography, spacing, borderRadius } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { CustomCalendar } from '../components/CustomCalendar';
 import { WorkoutCreatedPopup } from '../components/WorkoutCreatedPopup';
@@ -191,7 +192,7 @@ export function ManualWorkoutConfigScreen() {
         <ScreenContainer style={{ paddingTop: 0 }}>
             <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                    <Ionicons name="chevron-back" size={26} color={colors.text} />
+                    <Ionicons name="chevron-back" size={26} color={semanticColors.textPrimary} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Treino Manual</Text>
                 <View style={{ width: 40 }} />
@@ -216,7 +217,7 @@ export function ManualWorkoutConfigScreen() {
                                 <MaterialCommunityIcons
                                     name={t.icon}
                                     size={26}
-                                    color={active ? colors.background : colors.primary}
+                                    color={active ? semanticColors.textOnAccent : semanticColors.accent}
                                 />
                                 <Text style={[styles.typeLabel, active && styles.typeLabelActive]}>{t.label}</Text>
                             </TouchableOpacity>
@@ -239,7 +240,7 @@ export function ManualWorkoutConfigScreen() {
                             style={[styles.stepBtn, distance <= config.distanceMin && styles.stepBtnDisabled]}
                             onPress={() => adjustDistance(-0.5)}
                         >
-                            <Ionicons name="remove" size={22} color={colors.text} />
+                            <Ionicons name="remove" size={22} color={semanticColors.textPrimary} />
                         </TouchableOpacity>
                         <View style={styles.valueDisplay}>
                             <Text style={styles.valueText}>{distance.toFixed(1)}</Text>
@@ -249,7 +250,7 @@ export function ManualWorkoutConfigScreen() {
                             style={[styles.stepBtn, distance >= config.distanceMax && styles.stepBtnDisabled]}
                             onPress={() => adjustDistance(0.5)}
                         >
-                            <Ionicons name="add" size={22} color={colors.text} />
+                            <Ionicons name="add" size={22} color={semanticColors.textPrimary} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -267,7 +268,7 @@ export function ManualWorkoutConfigScreen() {
                             style={[styles.stepBtn, paceSec >= config.paceMaxSec && styles.stepBtnDisabled]}
                             onPress={() => adjustPace(15)}
                         >
-                            <Ionicons name="remove" size={22} color={colors.text} />
+                            <Ionicons name="remove" size={22} color={semanticColors.textPrimary} />
                         </TouchableOpacity>
                         <View style={styles.valueDisplay}>
                             <Text style={styles.valueText}>{paceToString(paceSec)}</Text>
@@ -277,7 +278,7 @@ export function ManualWorkoutConfigScreen() {
                             style={[styles.stepBtn, paceSec <= config.paceMinSec && styles.stepBtnDisabled]}
                             onPress={() => adjustPace(-15)}
                         >
-                            <Ionicons name="add" size={22} color={colors.text} />
+                            <Ionicons name="add" size={22} color={semanticColors.textPrimary} />
                         </TouchableOpacity>
                     </View>
                     <Text style={styles.paceHint}>
@@ -295,9 +296,9 @@ export function ManualWorkoutConfigScreen() {
                         onPress={() => setShowPicker(true)}
                         activeOpacity={0.85}
                     >
-                        <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+                        <Ionicons name="calendar-outline" size={20} color={semanticColors.accent} />
                         <Text style={styles.dateButtonText}>{formatDateLabel(scheduledDate)}</Text>
-                        <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
+                        <Ionicons name="chevron-down" size={18} color={semanticColors.textSecondary} />
                     </TouchableOpacity>
                     <CustomCalendar
                         visible={showPicker}
@@ -333,7 +334,7 @@ export function ManualWorkoutConfigScreen() {
                     activeOpacity={0.85}
                 >
                     {submitting ? (
-                        <ActivityIndicator color={colors.background} />
+                        <ActivityIndicator color={semanticColors.textOnAccent} />
                     ) : (
                         <Text style={styles.saveBtnText}>Salvar treino</Text>
                     )}
@@ -360,12 +361,12 @@ const styles = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface1,
         alignItems: 'center',
         justifyContent: 'center',
     },
     headerTitle: {
-        color: colors.text,
+        color: semanticColors.textPrimary,
         fontSize: typography.fontSizes.xl,
         fontWeight: typography.fontWeights.bold,
     },
@@ -374,7 +375,7 @@ const styles = StyleSheet.create({
         paddingTop: spacing.sm,
     },
     sectionLabel: {
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         fontSize: typography.fontSizes.sm,
         fontWeight: typography.fontWeights.semibold,
         textTransform: 'uppercase',
@@ -390,31 +391,30 @@ const styles = StyleSheet.create({
     typeCard: {
         flexBasis: '31%',
         flexGrow: 1,
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface1,
         borderRadius: borderRadius.lg,
         paddingVertical: spacing.md,
         paddingHorizontal: spacing.sm,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
     },
     typeCardActive: {
-        backgroundColor: colors.primary,
-        borderColor: colors.primary,
-        ...shadows.neon,
+        backgroundColor: semanticColors.accent,
+        borderColor: semanticColors.accent,
     },
     typeLabel: {
         marginTop: spacing.xs,
-        color: colors.text,
+        color: semanticColors.textPrimary,
         fontSize: typography.fontSizes.sm,
         fontWeight: typography.fontWeights.semibold,
         textAlign: 'center',
     },
     typeLabelActive: {
-        color: colors.background,
+        color: semanticColors.textOnAccent,
     },
     typeDescription: {
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         fontSize: typography.fontSizes.md,
         marginTop: spacing.md,
         marginBottom: spacing.lg,
@@ -422,12 +422,12 @@ const styles = StyleSheet.create({
         fontStyle: 'italic',
     },
     controlBlock: {
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface1,
         borderRadius: borderRadius.xl,
         padding: spacing.base,
         marginBottom: spacing.md,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
     },
     controlHeader: {
         flexDirection: 'row',
@@ -436,12 +436,12 @@ const styles = StyleSheet.create({
         marginBottom: spacing.md,
     },
     controlLabel: {
-        color: colors.text,
+        color: semanticColors.textPrimary,
         fontSize: typography.fontSizes.lg,
         fontWeight: typography.fontWeights.bold,
     },
     controlRange: {
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         fontSize: typography.fontSizes.sm,
     },
     stepperRow: {
@@ -453,11 +453,11 @@ const styles = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: colors.cardDark,
+        backgroundColor: semanticColors.surface2,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
     },
     stepBtnDisabled: {
         opacity: 0.35,
@@ -466,19 +466,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     valueText: {
-        color: colors.primary,
+        color: semanticColors.accent,
         fontSize: typography.fontSizes['3xl'],
         fontWeight: typography.fontWeights.bold,
         lineHeight: 36,
     },
     valueUnit: {
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         fontSize: typography.fontSizes.sm,
         marginTop: 2,
     },
     paceHint: {
         marginTop: spacing.sm,
-        color: colors.textMuted,
+        color: semanticColors.textTertiary,
         fontSize: typography.fontSizes.xs,
         textAlign: 'center',
     },
@@ -486,29 +486,29 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.sm,
-        backgroundColor: colors.cardDark,
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius.lg,
         paddingVertical: spacing.md,
         paddingHorizontal: spacing.base,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
     },
     dateButtonText: {
         flex: 1,
-        color: colors.text,
+        color: semanticColors.textPrimary,
         fontSize: typography.fontSizes.lg,
         fontWeight: typography.fontWeights.semibold,
         textTransform: 'capitalize',
     },
     summaryCard: {
-        backgroundColor: colors.cardDark,
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius.xl,
         padding: spacing.base,
         borderWidth: 1,
-        borderColor: colors.borderLight,
+        borderColor: semanticColors.borderSubtle,
     },
     summaryTitle: {
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         fontSize: typography.fontSizes.sm,
         fontWeight: typography.fontWeights.semibold,
         textTransform: 'uppercase',
@@ -522,11 +522,11 @@ const styles = StyleSheet.create({
         paddingVertical: spacing.xs,
     },
     summaryLabel: {
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
         fontSize: typography.fontSizes.md,
     },
     summaryValue: {
-        color: colors.text,
+        color: semanticColors.textPrimary,
         fontSize: typography.fontSizes.lg,
         fontWeight: typography.fontWeights.bold,
     },
@@ -537,19 +537,18 @@ const styles = StyleSheet.create({
         right: 0,
         paddingHorizontal: spacing.lg,
         paddingTop: spacing.md,
-        backgroundColor: colors.background,
+        backgroundColor: semanticColors.surface1,
         borderTopWidth: 1,
-        borderTopColor: colors.border,
+        borderTopColor: semanticColors.borderSubtle,
     },
     saveBtn: {
-        backgroundColor: colors.primary,
+        backgroundColor: semanticColors.accent,
         paddingVertical: spacing.base,
         borderRadius: borderRadius.full,
         alignItems: 'center',
-        ...shadows.neon,
     },
     saveBtnText: {
-        color: colors.background,
+        color: semanticColors.textOnAccent,
         fontSize: typography.fontSizes.lg,
         fontWeight: typography.fontWeights.bold,
     },

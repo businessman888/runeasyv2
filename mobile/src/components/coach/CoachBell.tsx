@@ -19,14 +19,15 @@ import React, { memo, useState, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, FadeIn } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { semanticColors } from '../../theme/semanticColors';
 
 const T = {
-  dark: '#0E0E1F',
-  surface: '#1C1C2E', // = card de telemetria (consistência)
-  cyan: '#00D4FF',
-  textPrimary: '#EBEBF5',
-  textMuted: 'rgba(235, 235, 245, 0.55)',
-  neutralBorder: 'rgba(235, 235, 245, 0.12)',
+  dark: semanticColors.textOnAccent,
+  surface: semanticColors.surface2,
+  cyan: semanticColors.accent,
+  textPrimary: semanticColors.textPrimary,
+  textMuted: semanticColors.textSecondary,
+  neutralBorder: semanticColors.borderSubtle,
 };
 
 const BELL = 46;
@@ -118,11 +119,11 @@ const styles = StyleSheet.create({
   bellOn: {
     backgroundColor: T.cyan,
     borderColor: T.cyan,
-    shadowColor: T.cyan,
+    shadowColor: semanticColors.canvas,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 2,
   },
   dot: {
     position: 'absolute',
@@ -146,10 +147,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderTopRightRadius: 6, // canto "de chat" do lado da cauda
     borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.18)',
+    borderColor: semanticColors.borderSubtle,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    shadowColor: '#000',
+    shadowColor: semanticColors.canvas,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
@@ -178,7 +179,7 @@ const styles = StyleSheet.create({
     backgroundColor: T.surface,
     borderRightWidth: 1,
     borderTopWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.18)',
+    borderColor: semanticColors.borderSubtle,
     transform: [{ rotate: '45deg' }],
   },
 });

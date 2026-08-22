@@ -17,6 +17,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { colors, fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import { WEARABLES, type WearableProvider } from '../../config/wearables.config';
 import {
     useWearableConnection,
@@ -104,16 +105,16 @@ const styles = StyleSheet.create({
         minHeight: 64,
         paddingVertical: 12,
         paddingHorizontal: 14,
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.06)',
+        borderColor: semanticColors.borderSubtle,
     },
     logoTile: {
         width: 40,
         height: 40,
         borderRadius: 10,
-        backgroundColor: 'rgba(255,255,255,0.05)',
+        backgroundColor: semanticColors.glass,
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
@@ -128,7 +129,7 @@ const styles = StyleSheet.create({
     title: {
         fontFamily: fonts.semibold,
         fontSize: 15,
-        color: colors.text,
+        color: semanticColors.textPrimary,
         marginBottom: 3,
     },
     statusRow: {
@@ -144,7 +145,7 @@ const styles = StyleSheet.create({
     statusText: {
         fontFamily: fonts.regular,
         fontSize: 12.5,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
     },
 });
 

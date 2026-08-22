@@ -9,14 +9,15 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { fonts } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 
 // Design System
 const DS = {
-    bg: '#0F0F1E',
-    card: '#1C1C2E',
-    cyan: '#00E5FF',
-    text: '#EBEBF5',
-    textSecondary: 'rgba(235, 235, 245, 0.6)',
+    bg: semanticColors.canvas,
+    card: semanticColors.surface2,
+    cyan: semanticColors.accent,
+    text: semanticColors.textPrimary,
+    textSecondary: semanticColors.textSecondary,
 };
 
 const ITEM_HEIGHT = 50;
@@ -130,7 +131,7 @@ function WheelColumn({ data, selectedValue, onValueChange, label }: WheelColumnP
                 <Text style={[
                     styles.itemText,
                     {
-                        color: isActive ? DS.cyan : '#666',
+                        color: isActive ? DS.cyan : semanticColors.textTertiary,
                         fontSize: isActive ? 22 : 18,
                         fontFamily: isActive ? fonts.bold : fonts.regular,
                         opacity,
@@ -290,7 +291,7 @@ const styles = StyleSheet.create({
         left: 4,
         right: 4,
         height: ITEM_HEIGHT,
-        backgroundColor: 'rgba(0, 229, 255, 0.12)',
+        backgroundColor: semanticColors.accentSubtle,
         borderRadius: 12,
         borderWidth: 2,
         borderColor: DS.cyan,

@@ -5,7 +5,6 @@ import {
     Text,
     StyleSheet,
     ScrollView,
-    TouchableOpacity,
     Image,
     Animated,
     Modal,
@@ -17,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, spacing, borderRadius, fonts } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { AppIcon } from '../components/ui/AppIcon';
+import { AppPressable } from '../components/ui/AppPressable';
 import { useResponsiveTheme } from '../theme/responsive';
 import { ZONE_COLORS, ZONE_LABELS, PHASE_LABELS, getZoneColor } from '../theme/zoneColors';
 import { useTrainingStore, useWorkoutScopeStore, useTrialModalStore, ScheduleDay } from '../stores';
@@ -550,26 +550,28 @@ export function CalendarScreen({ navigation }: any) {
                 <View style={r.isTablet ? styles.tabletInner : undefined}>
                 {/* Header */}
                 <View style={styles.header}>
-                    <TouchableOpacity
+                    <AppPressable
                         style={styles.backButton}
+                        interactionScale="icon"
                         onPress={() => navigation.goBack()}
                         accessibilityRole="button"
                         accessibilityLabel="Voltar"
                     >
                         <BackIcon size={24} color={semanticColors.accent} />
-                    </TouchableOpacity>
+                    </AppPressable>
                     <View style={styles.headerCenter}>
                         <Text style={styles.headerSubtitle}>Agenda</Text>
                         <Text style={styles.headerTitle}>Calendário</Text>
                     </View>
-                    <TouchableOpacity
+                    <AppPressable
                         style={styles.notificationButton}
+                        interactionScale="icon"
                         onPress={() => navigation.navigate('PlanGoals')}
                         accessibilityRole="button"
                         accessibilityLabel="Abrir metas do plano"
                     >
                         <GoalsIcon size={24} color={semanticColors.textPrimary} />
-                    </TouchableOpacity>
+                    </AppPressable>
                 </View>
 
                 {/* ── Treinos | Atividades — acima do card de stats ─────────────── */}
@@ -800,11 +802,11 @@ export function CalendarScreen({ navigation }: any) {
                                     </View>
                                 </View>
                             ) : tomorrowEntry.workout ? (
-                                <TouchableOpacity
+                                <AppPressable
                                     key={`next-card-${tomorrowEntry.workout.id}`}
                                     style={styles.nextWorkoutCard}
+                                    interactionScale="card"
                                     onPress={handleNextWorkoutPress}
-                                    activeOpacity={0.7}
                                 >
                                     <ProximoIcon size={47} />
                                     <View style={styles.nextWorkoutInfo}>
@@ -829,7 +831,7 @@ export function CalendarScreen({ navigation }: any) {
                                         </Text>
                                     </View>
                                     <ArrowRightIcon size={24} color={semanticColors.textTertiary} />
-                                </TouchableOpacity>
+                                </AppPressable>
                             ) : null}
                         </View>
                     )}

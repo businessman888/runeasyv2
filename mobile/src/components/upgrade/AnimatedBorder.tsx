@@ -20,8 +20,8 @@ import Animated, {
   withTiming,
   cancelAnimation,
 } from 'react-native-reanimated';
-import { colors } from '../../theme';
 
+import { semanticColors } from '../../theme/semanticColors';
 const AnimatedRect = Animated.createAnimatedComponent(Rect);
 
 export interface AnimatedBorderProps {
@@ -84,10 +84,10 @@ function AnimatedBorderImpl({
         <Svg width={size.width} height={size.height} pointerEvents="none">
           <Defs>
             <LinearGradient id="beamGrad" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor={colors.primary} stopOpacity="0" />
-              <Stop offset="0.5" stopColor={colors.primary} stopOpacity="1" />
-              <Stop offset="0.8" stopColor={colors.primaryLight} stopOpacity="1" />
-              <Stop offset="1" stopColor={colors.recovery} stopOpacity="0.9" />
+              <Stop offset="0" stopColor={semanticColors.textSecondary} stopOpacity="0" />
+              <Stop offset="0.5" stopColor={semanticColors.textPrimary} stopOpacity="1" />
+              <Stop offset="0.8" stopColor={semanticColors.textSecondary} stopOpacity="1" />
+              <Stop offset="1" stopColor={semanticColors.recovery} stopOpacity="0.9" />
             </LinearGradient>
           </Defs>
 
@@ -100,7 +100,7 @@ function AnimatedBorderImpl({
             rx={rx}
             ry={rx}
             fill="none"
-            stroke="rgba(0, 212, 255, 0.25)"
+            stroke={semanticColors.borderSubtle}
             strokeWidth={borderWidth}
           />
 

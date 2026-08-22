@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import {
     referralService,
     ReferralApiError,
@@ -18,21 +19,21 @@ import {
 
 // Design tokens — exact values from the onboarding Figma frame (node 1307:1485)
 const DS = {
-    bg: '#0F0F1E',
-    pill: '#1C1C2E',
-    pillBorder: 'rgba(235, 235, 245, 0.08)',
-    pillBorderActive: '#00D4FF',
+    bg: semanticColors.canvas,
+    pill: semanticColors.surface2,
+    pillBorder: semanticColors.borderSubtle,
+    pillBorderActive: semanticColors.accent,
     pillBorderSuccess: '#10B981',
     pillBorderError: '#EF4444',
-    cyan: '#00D4FF',
-    cyanMuted: 'rgba(0, 212, 255, 0.35)',
+    cyan: semanticColors.accent,
+    cyanMuted: semanticColors.accentSubtle,
     text: '#EBEBF5',
-    textSecondary: 'rgba(235, 235, 245, 0.6)',
-    textMuted: 'rgba(235, 235, 245, 0.4)',
+    textSecondary: semanticColors.textSecondary,
+    textMuted: semanticColors.textTertiary,
     success: '#10B981',
-    successBg: 'rgba(16, 185, 129, 0.12)',
+    successBg: semanticColors.successSubtle,
     error: '#EF4444',
-    errorBg: 'rgba(239, 68, 68, 0.12)',
+    errorBg: semanticColors.dangerSubtle,
 };
 
 type Status = 'idle' | 'validating' | 'success' | 'error';
@@ -255,9 +256,9 @@ const styles = StyleSheet.create({
         width: 72,
         height: 72,
         borderRadius: 36,
-        backgroundColor: 'rgba(0, 212, 255, 0.08)',
+        backgroundColor: semanticColors.accentSubtle,
         borderWidth: 1,
-        borderColor: 'rgba(0, 212, 255, 0.25)',
+        borderColor: semanticColors.accent,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -291,12 +292,12 @@ const styles = StyleSheet.create({
         minWidth: 96,
     },
     sendButtonDisabled: {
-        backgroundColor: 'rgba(28, 28, 46, 0.8)',
+        backgroundColor: semanticColors.surface2,
     },
     sendButtonText: {
         fontFamily: fonts.semibold,
         fontSize: 15,
-        color: '#0F0F1E',
+        color: semanticColors.textOnAccent,
     },
     sendButtonTextDisabled: {
         color: DS.textMuted,
@@ -312,12 +313,12 @@ const styles = StyleSheet.create({
     badgeSuccess: {
         backgroundColor: DS.successBg,
         borderWidth: 1,
-        borderColor: 'rgba(16, 185, 129, 0.35)',
+        borderColor: DS.success,
     },
     badgeError: {
         backgroundColor: DS.errorBg,
         borderWidth: 1,
-        borderColor: 'rgba(239, 68, 68, 0.35)',
+        borderColor: DS.error,
     },
     badgeText: {
         flex: 1,

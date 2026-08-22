@@ -2,14 +2,15 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { fonts } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 
 // Design System Colors matching Figma
 const DS = {
     text: '#EBEBF5',
     textSecondary: 'rgba(235, 235, 245, 0.6)',
-    card: '#1C1C2E',
-    glassBorder: 'rgba(235, 235, 245, 0.1)',
-    cyan: '#00D4FF',
+    card: semanticColors.surface2,
+    glassBorder: semanticColors.borderSubtle,
+    cyan: semanticColors.accent,
 };
 
 interface CustomKeypadProps {
@@ -103,8 +104,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         borderRadius: 12,
-        // Optional: Add subtle background if desired, or keep transparent as per user image
-        // backgroundColor: 'rgba(255,255,255,0.03)',
     },
     buttonPlaceholder: {
         width: '30%',
@@ -119,9 +118,9 @@ const styles = StyleSheet.create({
     keyText: {
         fontFamily: fonts.semibold,
         fontSize: 28,
-        color: DS.text,
+        color: semanticColors.textPrimary,
     },
     disabledText: {
-        color: DS.textSecondary,
+        color: semanticColors.textSecondary,
     },
 });

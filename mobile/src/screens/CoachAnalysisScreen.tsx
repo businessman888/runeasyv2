@@ -45,24 +45,25 @@ import { CoachAnalysisSkeleton } from '../components/skeletons/ScreenSkeletons';
 import { RpeSelector } from '../components/workout/RpeSelector';
 import { paceValueToSecondsPerKm } from '../utils/pace';
 import { SharingModal } from './sharing/SharingModal';
+import { semanticColors } from '../theme/semanticColors';
 
 // ─── Design Tokens (alinhados ao RunSummary/Figma) ────────────────────────────
 const T = {
-    bgPrimary: '#0E0E1F',
-    cardSurface: '#1C1C2E',
-    cardDarker: '#15152A',
-    cyan: '#00D4FF',
-    cyanSoft: 'rgba(0, 212, 255, 0.15)',
-    textPrimary: '#EBEBF5',
-    textSecondary: 'rgba(235, 235, 245, 0.60)',
-    textMuted: 'rgba(235, 235, 245, 0.35)',
-    divider: 'rgba(235, 235, 245, 0.10)',
+    bgPrimary: semanticColors.canvas,
+    cardSurface: semanticColors.surface2,
+    cardDarker: semanticColors.surface1,
+    cyan: semanticColors.accent,
+    cyanSoft: semanticColors.accentSubtle,
+    textPrimary: semanticColors.textPrimary,
+    textSecondary: semanticColors.textSecondary,
+    textMuted: semanticColors.textTertiary,
+    divider: semanticColors.textTertiary,
     success: '#32CD32',
     warning: '#FFC400',
     danger: '#FF453A',
     purple: '#9747FF',
     gold: '#FFD700',
-    routeColor: '#00D4FF',
+    routeColor: semanticColors.accent,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1052,7 +1053,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                                         showReferenceLine1={chartCfg.refValue > 0}
                                         referenceLine1Position={chartCfg.refValue}
                                         referenceLine1Config={{
-                                            color: 'rgba(255,255,255,0.35)',
+                                            color: semanticColors.textTertiary,
                                             dashWidth: 4,
                                             dashGap: 3,
                                             thickness: 1,
@@ -1689,14 +1690,14 @@ const styles = StyleSheet.create({
         borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(28, 28, 46, 0.92)',
+        backgroundColor: semanticColors.surface2,
         borderWidth: 1,
-        borderColor: 'rgba(235, 235, 245, 0.12)',
+        borderColor: semanticColors.borderSubtle,
         zIndex: 20,
     },
     chip3dActive: {
         borderColor: T.cyan,
-        backgroundColor: 'rgba(0, 212, 255, 0.12)',
+        backgroundColor: semanticColors.accentSubtle,
     },
     chip3dText: {
         color: T.textSecondary,
@@ -1796,11 +1797,11 @@ const styles = StyleSheet.create({
     },
     iconBtn: {
         width: 40, height: 40, borderRadius: 20,
-        backgroundColor: 'rgba(14, 14, 31, 0.85)',
+        backgroundColor: semanticColors.surface1,
         alignItems: 'center', justifyContent: 'center',
     },
     titlePill: {
-        backgroundColor: 'rgba(14, 14, 31, 0.85)',
+        backgroundColor: semanticColors.surface1,
         paddingHorizontal: 18, paddingVertical: 6,
         borderRadius: 18, alignItems: 'center',
     },
@@ -1812,7 +1813,7 @@ const styles = StyleSheet.create({
         backgroundColor: T.cardSurface,
         borderTopLeftRadius: 20, borderTopRightRadius: 20,
     },
-    sheetHandle: { backgroundColor: 'rgba(235,235,245,0.10)', width: 60, height: 6 },
+    sheetHandle: { backgroundColor: semanticColors.glass, width: 60, height: 6 },
     sheetContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32 },
 
     // User row
@@ -1822,7 +1823,7 @@ const styles = StyleSheet.create({
     },
     avatar: { width: 47, height: 47, borderRadius: 24, backgroundColor: T.cardDarker },
     avatarFallback: {
-        backgroundColor: 'rgba(0, 212, 255, 0.18)',
+        backgroundColor: semanticColors.accentSubtle,
         alignItems: 'center', justifyContent: 'center',
         borderWidth: 1, borderColor: T.cyan,
     },
@@ -1899,7 +1900,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row', alignItems: 'center', paddingVertical: 12,
     },
     detailedRowBorder: {
-        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(235,235,245,0.06)',
+        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: semanticColors.borderSubtle,
     },
     detailedCellMetric: { flex: 1.4, flexDirection: 'row', alignItems: 'center', gap: 8 },
     detailedIcon: {
@@ -1927,7 +1928,7 @@ const styles = StyleSheet.create({
     colElev: { width: 44, justifyContent: 'center', alignItems: 'flex-end', paddingRight: 4 },
     splitsHeader: {
         flexDirection: 'row', alignItems: 'center', paddingBottom: 8,
-        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(235,235,245,0.10)',
+        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: semanticColors.borderSubtle,
     },
     splitsHeaderText: { color: T.textSecondary, fontSize: 13, fontWeight: '500' },
     splitsBody: { paddingTop: 4 },
@@ -1968,7 +1969,7 @@ const styles = StyleSheet.create({
         paddingVertical: 12, paddingHorizontal: 8,
     },
     paceStatRowBorder: {
-        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(235,235,245,0.08)',
+        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: semanticColors.borderSubtle,
     },
     paceStatLabel: { color: T.textSecondary, fontSize: 15, fontWeight: '500' },
     paceStatValue: { color: T.textPrimary, fontSize: 16, fontWeight: '600' },
@@ -1981,8 +1982,8 @@ const styles = StyleSheet.create({
     mapOverlayPill: {
         flexDirection: 'row', alignItems: 'center', gap: 8,
         paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18,
-        backgroundColor: 'rgba(14, 14, 31, 0.85)',
-        borderWidth: 1, borderColor: 'rgba(235, 235, 245, 0.10)',
+        backgroundColor: semanticColors.surface1,
+        borderWidth: 1, borderColor: semanticColors.borderSubtle,
     },
     mapOverlayText: { color: T.textSecondary, fontSize: 12, fontWeight: '500' },
 
@@ -1990,7 +1991,7 @@ const styles = StyleSheet.create({
     emptyState: { paddingVertical: 18, paddingHorizontal: 8, alignItems: 'center', gap: 8 },
     emptyStateIconWrap: {
         width: 40, height: 40, borderRadius: 20,
-        backgroundColor: 'rgba(235, 235, 245, 0.06)',
+        backgroundColor: semanticColors.glass,
         alignItems: 'center', justifyContent: 'center', marginBottom: 4,
     },
     emptyStateTitle: { color: T.textPrimary, fontSize: 13, fontWeight: '600', textAlign: 'center' },
@@ -2011,7 +2012,7 @@ const styles = StyleSheet.create({
     },
     analysisCardIcon: {
         width: 40, height: 40, borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.06)',
+        backgroundColor: semanticColors.glass,
         alignItems: 'center', justifyContent: 'center',
         marginRight: 12,
     },
@@ -2021,7 +2022,7 @@ const styles = StyleSheet.create({
     analysisTipLabel: { color: '#FFA500', fontWeight: '700' },
 
     // VO2
-    vo2Card: { borderWidth: 1, borderColor: 'rgba(0,212,255,0.30)' },
+    vo2Card: { borderWidth: 1, borderColor: semanticColors.borderSubtle },
     vo2Header: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
     vo2Title: { color: T.cyan, fontSize: 14, fontWeight: '700' },
     vo2Body: {
@@ -2071,7 +2072,7 @@ const styles = StyleSheet.create({
         borderRadius: 20, padding: 16, gap: 12,
         marginBottom: 18, alignItems: 'flex-start',
     },
-    tipText: { flex: 1, color: 'rgba(235,235,245,0.80)', fontSize: 13, lineHeight: 18 },
+    tipText: { flex: 1, color: semanticColors.textSecondary, fontSize: 13, lineHeight: 18 },
     tipBold: { color: T.textPrimary, fontWeight: '700' },
 
     // Botão Concluir

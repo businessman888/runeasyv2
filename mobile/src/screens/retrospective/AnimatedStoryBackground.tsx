@@ -13,6 +13,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import type { StoryGradient } from './storyTheme';
+import { semanticColors } from '../../theme/semanticColors';
 
 interface AnimatedStoryBackgroundProps {
   gradient: StoryGradient;
@@ -191,7 +192,7 @@ export const AnimatedStoryBackground = memo(function AnimatedStoryBackground({
       )}
 
       <LinearGradient
-        colors={['rgba(10,10,24,0.14)', 'transparent', 'rgba(10,10,24,0.46)']}
+        colors={[semanticColors.overlayFaint, semanticColors.transparent, semanticColors.overlayMedium]}
         locations={[0, 0.46, 1]}
         style={StyleSheet.absoluteFill}
       />

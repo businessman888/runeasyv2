@@ -8,6 +8,7 @@ import {
     TouchableOpacity,
 } from 'react-native';
 import LottieView from 'lottie-react-native';
+import { semanticColors } from '../theme/semanticColors';
 
 const checkAnimation = require('../assets/animate/animationCheck.json');
 
@@ -74,7 +75,7 @@ export function WorkoutCreatedPopup({
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        backgroundColor: semanticColors.scrim,
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 16,
@@ -82,13 +83,13 @@ const styles = StyleSheet.create({
     card: {
         width: '100%',
         maxWidth: 360,
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 20,
         paddingTop: 17,
         paddingBottom: 17,
         paddingHorizontal: 15,
         alignItems: 'center',
-        shadowColor: '#000',
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 2, height: 2 },
         shadowOpacity: 0.25,
         shadowRadius: 4,
@@ -98,7 +99,7 @@ const styles = StyleSheet.create({
         fontFamily: 'Poppins',
         fontSize: 20,
         fontWeight: '700',
-        color: '#EBEBF5',
+        color: semanticColors.textPrimary,
         textAlign: 'center',
         marginBottom: 12,
     },
@@ -117,7 +118,7 @@ const styles = StyleSheet.create({
         fontFamily: 'Poppins',
         fontSize: 14,
         fontWeight: '500',
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
         textAlign: 'center',
         marginTop: 12,
         marginBottom: 20,
@@ -126,11 +127,11 @@ const styles = StyleSheet.create({
     okBtn: {
         width: 258,
         height: 41,
-        backgroundColor: '#00D4FF',
+        backgroundColor: semanticColors.accent,
         borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#000',
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 2, height: 2 },
         shadowOpacity: 0.25,
         shadowRadius: 4,
@@ -140,6 +141,6 @@ const styles = StyleSheet.create({
         fontFamily: 'Poppins',
         fontSize: 14,
         fontWeight: '500',
-        color: '#0E0E1F',
+        color: semanticColors.textOnAccent,
     },
 });

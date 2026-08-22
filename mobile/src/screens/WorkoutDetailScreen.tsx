@@ -22,6 +22,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { PHASE_LABELS, getZoneColor } from '../theme/zoneColors';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { PremiumBackground } from '../components/ui/PremiumBackground';
@@ -149,7 +150,7 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
                         accessibilityRole="button"
                         accessibilityLabel="Voltar"
                     >
-                        <Ionicons name="chevron-back" size={26} color="rgba(235,235,245,0.85)" />
+                        <Ionicons name="chevron-back" size={26} color={semanticColors.textPrimary} />
                     </TouchableOpacity>
                 </View>
                 <View style={styles.emptyState}>
@@ -170,7 +171,7 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
                         accessibilityRole="button"
                         accessibilityLabel="Voltar"
                     >
-                        <Ionicons name="chevron-back" size={26} color="rgba(235,235,245,0.85)" />
+                        <Ionicons name="chevron-back" size={26} color={semanticColors.textPrimary} />
                     </TouchableOpacity>
                 </View>
                 <View style={styles.emptyState}>
@@ -276,7 +277,7 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
 
                                 {/* Distance/time + pace + description */}
                                 <View style={styles.blockMetaRow}>
-                                    <Ionicons name="time-outline" size={18} color="rgba(235,235,245,0.6)" />
+                                    <Ionicons name="time-outline" size={18} color={semanticColors.textSecondary} />
                                     <Text style={styles.blockDuration}>{block.duration}</Text>
                                     {!!block.pace && (
                                         <>
@@ -290,7 +291,7 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
                                 {/* Recuperação real (intervalados) */}
                                 {!!block.recovery && (
                                     <View style={styles.blockRecoveryRow}>
-                                        <Ionicons name="refresh-outline" size={16} color="rgba(235,235,245,0.6)" />
+                                        <Ionicons name="refresh-outline" size={16} color={semanticColors.textSecondary} />
                                         <Text style={styles.blockRecoveryText}>{block.recovery}</Text>
                                     </View>
                                 )}
@@ -303,7 +304,7 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
                                             <MaterialCommunityIcons
                                                 name="note-text-outline"
                                                 size={16}
-                                                color="rgba(235,235,245,0.6)"
+                                                color={semanticColors.textSecondary}
                                             />
                                             <Text style={styles.coachNoteLabel}>Nota do coach</Text>
                                         </View>
@@ -372,7 +373,7 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
                         accessibilityRole="button"
                         accessibilityLabel="Iniciar treino"
                     >
-                        <MaterialCommunityIcons name="run-fast" size={24} color="#0E0E1F" />
+                        <MaterialCommunityIcons name="run-fast" size={24} color={semanticColors.textOnAccent} />
                         <Text style={styles.startText}>Iniciar treino</Text>
                     </TouchableOpacity>
                 </View>
@@ -404,11 +405,11 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: typography.fontSizes.lg,
         fontWeight: typography.fontWeights.bold as any,
-        color: '#EBEBF5',
+        color: semanticColors.textPrimary,
     },
     headerDate: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(235, 235, 245, 0.5)',
+        color: semanticColors.textTertiary,
         marginTop: 2,
     },
     scroll: {
@@ -425,7 +426,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     emptyText: {
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
         fontSize: typography.fontSizes.md,
     },
     // Stats — centered group with tight, responsive gaps so the 4 stats fit
@@ -443,23 +444,23 @@ const styles = StyleSheet.create({
     statLabel: {
         fontSize: 13,
         fontWeight: typography.fontWeights.bold as any,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
         marginBottom: 6,
     },
     statValue: {
         fontSize: 22,
         fontWeight: typography.fontWeights.bold as any,
-        color: '#EBEBF5',
+        color: semanticColors.textPrimary,
     },
     divider: {
         height: 1,
-        backgroundColor: 'rgba(235, 235, 245, 0.1)',
+        backgroundColor: semanticColors.borderSubtle,
         marginBottom: spacing.lg,
     },
     phaseText: {
         fontSize: 18,
         fontWeight: typography.fontWeights.bold as any,
-        color: '#EBEBF5',
+        color: semanticColors.textPrimary,
         textAlign: 'center',
         marginBottom: spacing.md,
     },
@@ -468,7 +469,7 @@ const styles = StyleSheet.create({
     },
     // Blocks — clean card, left zone accent, no full neon border
     block: {
-        backgroundColor: '#15152A',
+        backgroundColor: semanticColors.surface1,
         borderRadius: 20,
         marginBottom: spacing.md,
         overflow: 'hidden',
@@ -492,13 +493,13 @@ const styles = StyleSheet.create({
     blockSubtitle: {
         fontSize: 12,
         fontWeight: typography.fontWeights.medium as any,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
         marginBottom: 4,
     },
     blockTitle: {
         fontSize: 15,
         fontWeight: typography.fontWeights.bold as any,
-        color: '#EBEBF5',
+        color: semanticColors.textPrimary,
     },
     blockDivider: {
         marginVertical: spacing.md,
@@ -512,17 +513,17 @@ const styles = StyleSheet.create({
     blockDuration: {
         fontSize: 15,
         fontWeight: typography.fontWeights.bold as any,
-        color: '#EBEBF5',
+        color: semanticColors.textPrimary,
     },
     blockPace: {
         fontSize: 15,
         fontWeight: typography.fontWeights.bold as any,
-        color: colors.primary,
+        color: semanticColors.accent,
         marginLeft: 4,
     },
     blockDescription: {
         fontSize: 13,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
         lineHeight: 18,
     },
     blockRecoveryRow: {
@@ -534,7 +535,7 @@ const styles = StyleSheet.create({
     blockRecoveryText: {
         fontSize: 13,
         fontWeight: typography.fontWeights.medium as any,
-        color: 'rgba(235, 235, 245, 0.75)',
+        color: semanticColors.textSecondary,
     },
     // Per-block coach note — neutral (white label + gray icon), Figma-faithful
     coachNoteHeader: {
@@ -546,21 +547,21 @@ const styles = StyleSheet.create({
     coachNoteLabel: {
         fontSize: 15,
         fontWeight: typography.fontWeights.bold as any,
-        color: '#EBEBF5',
+        color: semanticColors.textPrimary,
     },
     coachNoteText: {
         fontSize: 13,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
         lineHeight: 18,
     },
     // Insight
     insightCard: {
-        backgroundColor: 'rgba(0, 127, 153, 0.3)',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         padding: spacing.lg,
         marginTop: spacing.md,
         borderWidth: 1,
-        borderColor: colors.primary,
+        borderColor: semanticColors.borderSubtle,
     },
     insightHeader: {
         flexDirection: 'row',
@@ -571,30 +572,30 @@ const styles = StyleSheet.create({
     insightTitle: {
         fontSize: typography.fontSizes.sm,
         fontWeight: typography.fontWeights.bold as any,
-        color: colors.primary,
+        color: semanticColors.textPrimary,
         letterSpacing: 0.5,
     },
     insightText: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(235, 235, 245, 0.8)',
+        color: semanticColors.textSecondary,
         lineHeight: 20,
     },
     // Start button
     startContainer: {
         paddingHorizontal: spacing.lg,
         paddingTop: spacing.lg,
-        backgroundColor: 'transparent',
+        backgroundColor: semanticColors.transparent,
     },
     startButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: spacing.sm,
-        backgroundColor: colors.primary,
+        backgroundColor: semanticColors.accent,
         paddingVertical: spacing.md,
         paddingHorizontal: spacing.xl,
         borderRadius: 28,
-        shadowColor: colors.primary,
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5,
         shadowRadius: 6,
@@ -603,7 +604,7 @@ const styles = StyleSheet.create({
     startText: {
         fontSize: typography.fontSizes.lg,
         fontWeight: typography.fontWeights.bold as any,
-        color: '#0E0E1F',
+        color: semanticColors.textOnAccent,
     },
     // Contorno, não preenchido: aliviar é uma ação SECUNDÁRIA. O ciano sólido é
     // do "Iniciar treino", e dar o mesmo peso visual às duas sugeriria que
@@ -617,12 +618,12 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.xl,
         borderRadius: 28,
         borderWidth: 1,
-        borderColor: 'rgba(0,212,255,0.35)',
-        backgroundColor: 'rgba(0,212,255,0.06)',
+        borderColor: semanticColors.borderSubtle,
+        backgroundColor: semanticColors.surface2,
     },
     relieveText: {
         fontSize: typography.fontSizes.md,
         fontWeight: typography.fontWeights.semibold as any,
-        color: colors.primary,
+        color: semanticColors.accent,
     },
 });

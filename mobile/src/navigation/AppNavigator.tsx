@@ -6,6 +6,7 @@ import { Text, View, StyleSheet, Linking } from 'react-native';
 import { CustomTabBar } from '../components/CustomTabBar';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { SplashScreen } from '../components/SplashScreen';
+import { useMotionPreferences } from '../hooks/useMotionPreferences';
 import { navigationRef, setNavigationReady } from './navigationRef';
 
 import {
@@ -62,9 +63,18 @@ import { colors, typography } from '../theme';
 import { useAuthStore, useTrialModalStore } from '../stores';
 import { TrialModal } from '../components/upgrade/TrialModal';
 import { RunEnvironmentModal } from '../components/RunEnvironmentModal';
+import { navigationMotion } from '../theme/motion';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
+
+const MODAL_ROUTE_NAMES = new Set([
+    'PrePaywall',
+    'DeviceConnect',
+    'DeviceReadMore',
+    'CustomizeGoal',
+    'DevMenu',
+]);
 
 // CRITICAL: Dark background color for entire Navigator
 const FORCED_DARK_BG = colors.background;
@@ -183,6 +193,7 @@ function MainTabs({ route, navigation }: any) {
 export function AppNavigator() {
     const { isAuthenticated, isLoading, checkAuth, user, login } = useAuthStore();
 
+    const { reduceMotion } = useMotionPreferences();
     React.useEffect(() => {
         checkAuth();
     }, []);
@@ -248,7 +259,7 @@ export function AppNavigator() {
         >
             <Stack.Navigator
                 id="RootStack"
-                screenOptions={{
+                screenOptions={({ route }) => ({
                     // CRITICAL: Force dark background on ALL screens
                     contentStyle: { backgroundColor: FORCED_DARK_BG },
                     headerStyle: {
@@ -258,7 +269,13 @@ export function AppNavigator() {
                     headerTitleStyle: {
                         fontWeight: '600',
                     },
-                }}
+                    animation: reduceMotion
+                        ? 'none'
+                        : MODAL_ROUTE_NAMES.has(route.name) ? 'slide_from_bottom' : 'slide_from_right',
+                    animationDuration: reduceMotion
+                        ? 0
+                        : MODAL_ROUTE_NAMES.has(route.name) ? navigationMotion.modal : navigationMotion.card,
+                })}
             >
                 {!isAuthenticated ? (
                     /* ================================================
@@ -436,7 +453,7 @@ export function AppNavigator() {
                             options={{
                                 headerShown: false,
                                 presentation: 'card',
-                                animation: 'fade',
+                                animation: reduceMotion ? 'none' : 'fade',
                                 gestureEnabled: false,
                             }}
                         />
@@ -569,7 +586,7 @@ export function AppNavigator() {
                             options={{
                                 headerShown: false,
                                 gestureEnabled: false,
-                                animation: 'fade',
+                                animation: reduceMotion ? 'none' : 'fade',
                             }}
                         />
                         <Stack.Screen
@@ -578,7 +595,7 @@ export function AppNavigator() {
                             options={{
                                 headerShown: false,
                                 gestureEnabled: false,
-                                animation: 'fade',
+                                animation: reduceMotion ? 'none' : 'fade',
                             }}
                         />
                         <Stack.Screen

@@ -12,14 +12,15 @@ import Svg, { Line } from 'react-native-svg';
 import { QuizHeader, Hl } from '../../components/onboarding/QuizHeader';
 import { ValueInputSheet } from '../../components/onboarding/ValueInputSheet';
 import { fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 // Design System Colors (Figma)
 const DS = {
-    bg: '#0F0F1E',
-    card: '#1C1C2E',
-    cyan: '#00D4FF',
-    cyanSelected: 'rgba(0, 212, 255, 0.1)',
-    text: '#EBEBF5',
+    bg: semanticColors.canvas,
+    card: semanticColors.surface2,
+    cyan: semanticColors.accent,
+    cyanSelected: semanticColors.accentSubtle,
+    text: semanticColors.textPrimary,
     textSecondary: 'rgba(235, 235, 245, 0.6)',
 };
 

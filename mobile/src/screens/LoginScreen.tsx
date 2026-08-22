@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, spacing, fonts } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { useAuthStore } from '../stores';
 import { supabase } from '../services/supabase';
 import { BASE_API_URL } from '../config/api.config';
@@ -391,7 +392,7 @@ export function LoginScreen({ navigation }: { navigation: { navigate: (screen: s
                         <View style={styles.appleButtonWrapper}>
                             {isAppleLoading ? (
                                 <View style={styles.appleLoadingContainer}>
-                                    <ActivityIndicator size="small" color="#FFFFFF" />
+                                    <ActivityIndicator size="small" color={semanticColors.textPrimary} />
                                     <Text style={styles.appleLoadingText}>Conectando...</Text>
                                 </View>
                             ) : (
@@ -417,7 +418,7 @@ export function LoginScreen({ navigation }: { navigation: { navigate: (screen: s
                     >
                         {isLoading ? (
                             <View style={styles.googleLoadingContainer}>
-                                <ActivityIndicator size="small" color="#00D4FF" />
+                                <ActivityIndicator size="small" color={semanticColors.accent} />
                                 <Text style={styles.googleLoadingText}>Conectando...</Text>
                             </View>
                         ) : (
@@ -500,7 +501,7 @@ export function LoginScreen({ navigation }: { navigation: { navigate: (screen: s
                             accessibilityState={{ disabled: anyLoading, busy: isEmailLoading }}
                         >
                             {isEmailLoading ? (
-                                <ActivityIndicator size="small" color="#0A0A18" />
+                                <ActivityIndicator size="small" color={semanticColors.textOnAccent} />
                             ) : (
                                 <Text style={styles.emailButtonText}>Entrar com e-mail</Text>
                             )}
@@ -527,7 +528,7 @@ export function LoginScreen({ navigation }: { navigation: { navigate: (screen: s
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0E0E1F',
+        backgroundColor: semanticColors.canvas,
     },
     scrollContent: {
         flexGrow: 1,
@@ -543,11 +544,11 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         fontSize: scaleFont(24),
         lineHeight: scaleFont(36),
-        color: '#EBEBF5',
+        color: semanticColors.textPrimary,
         textAlign: 'left',
     },
     titleCyan: {
-        color: '#00D4FF',
+        color: semanticColors.accent,
     },
     buttonsSection: {
         alignItems: 'center',
@@ -586,7 +587,7 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     appleLoadingText: {
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
         fontSize: 16,
         fontWeight: '600',
     },
@@ -610,20 +611,20 @@ const styles = StyleSheet.create({
     googleButtonText: {
         fontSize: scaleFont(16),
         fontWeight: '600',
-        color: '#1F1F1F',
+        color: semanticColors.textOnAccent,
     },
     googleLoadingContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(0, 212, 255, 0.1)',
+        backgroundColor: semanticColors.accentSubtle,
         paddingVertical: scaleY(14),
         paddingHorizontal: scaleX(24),
         borderRadius: 16,
         gap: 12,
     },
     googleLoadingText: {
-        color: '#00D4FF',
+        color: semanticColors.accent,
         fontSize: 16,
         fontWeight: '600',
     },
@@ -699,7 +700,7 @@ const styles = StyleSheet.create({
         opacity: 0.5,
     },
     emailButtonText: {
-        color: '#0A0A18',
+        color: semanticColors.textOnAccent,
         fontSize: scaleFont(16),
         fontFamily: fonts.bold,
         fontWeight: '700',

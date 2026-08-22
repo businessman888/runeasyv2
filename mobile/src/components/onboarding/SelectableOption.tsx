@@ -95,12 +95,12 @@ const styles = StyleSheet.create({
         width: QUIZ.iconBox.size,
         height: QUIZ.iconBox.size,
         borderRadius: QUIZ.iconBox.radius,
-        backgroundColor: 'rgba(235, 235, 245, 0.05)',
+        backgroundColor: QUIZ.color.glass,
         alignItems: 'center',
         justifyContent: 'center',
     },
     iconBoxSelected: {
-        backgroundColor: 'rgba(0, 212, 255, 0.15)',
+        backgroundColor: QUIZ.color.selectedFill,
     },
     textWrap: {
         flex: 1,

@@ -10,16 +10,17 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { DateWheelPicker } from '../../components/DateWheelPicker';
 import { fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 
 // Design System
 const DS = {
-    bg: '#0F0F1E',
-    card: '#1C1C2E',
+    bg: semanticColors.canvas,
+    card: semanticColors.surface2,
     cyan: '#00E5FF',
-    text: '#EBEBF5',
+    text: semanticColors.textPrimary,
     textSecondary: 'rgba(235, 235, 245, 0.6)',
-    glassBorder: 'rgba(235, 235, 245, 0.1)',
-    modalOverlay: 'rgba(0, 0, 0, 0.7)',
+    glassBorder: semanticColors.borderSubtle,
+    modalOverlay: semanticColors.scrim,
 };
 
 interface BirthDateValue {
@@ -230,7 +231,7 @@ const styles = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 12,
-        backgroundColor: 'rgba(0, 229, 255, 0.1)',
+        backgroundColor: semanticColors.accentSubtle,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
@@ -245,7 +246,7 @@ const styles = StyleSheet.create({
         color: DS.text,
     },
     tipCard: {
-        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        backgroundColor: semanticColors.glass,
         borderRadius: 12,
         padding: 16,
         borderWidth: 1,

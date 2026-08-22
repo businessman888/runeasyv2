@@ -12,6 +12,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { colors, typography, spacing, borderRadius } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import { useWellnessStore } from '../../stores/wellnessStore';
 import { Skeleton, SkeletonText } from '../Skeleton';
 
@@ -150,14 +151,14 @@ function DistanceCard({
     return (
         <Pressable style={styles.largeCard} onPress={onPress}>
             <LinearGradient
-                colors={['rgba(0,212,255,0.10)', 'transparent']}
+                colors={[semanticColors.accentSubtle, semanticColors.transparent]}
                 start={{ x: 1, y: 0 }}
                 end={{ x: 0, y: 1 }}
                 style={StyleSheet.absoluteFill}
                 pointerEvents="none"
             />
             <View style={styles.largeCardHeader}>
-                <View style={[styles.cardIcon, { backgroundColor: 'rgba(0,212,255,0.15)' }]}>
+                <View style={[styles.cardIcon, { backgroundColor: semanticColors.accentSubtle }]}>
                     <Ionicons name="map-outline" size={16} color={colors.primary} />
                 </View>
                 <Text style={styles.largeCardLabel}>Distância</Text>
@@ -197,14 +198,14 @@ function FrequencyCard({
     return (
         <Pressable style={styles.largeCard} onPress={onPress}>
             <LinearGradient
-                colors={['rgba(16,185,129,0.10)', 'transparent']}
+                colors={[semanticColors.successSubtle, semanticColors.transparent]}
                 start={{ x: 1, y: 0 }}
                 end={{ x: 0, y: 1 }}
                 style={StyleSheet.absoluteFill}
                 pointerEvents="none"
             />
             <View style={styles.largeCardHeader}>
-                <View style={[styles.cardIcon, { backgroundColor: 'rgba(16,185,129,0.15)' }]}>
+                <View style={[styles.cardIcon, { backgroundColor: semanticColors.successSubtle }]}>
                     <Ionicons name="bar-chart-outline" size={16} color={colors.success} />
                 </View>
                 <Text style={styles.largeCardLabel}>Treinos</Text>
@@ -290,7 +291,7 @@ const styles = StyleSheet.create({
     heading: {
         fontSize: typography.fontSizes.xl,
         fontWeight: typography.fontWeights.bold,
-        color: colors.text,
+        color: semanticColors.textPrimary,
     },
     linkRow: {
         flexDirection: 'row',
@@ -308,11 +309,11 @@ const styles = StyleSheet.create({
     },
     largeCard: {
         flex: 1,
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface1,
         borderRadius: borderRadius.xl,
         padding: spacing.md,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
         overflow: 'hidden',
         gap: 6,
     },
@@ -323,7 +324,7 @@ const styles = StyleSheet.create({
     },
     largeCardLabel: {
         fontSize: typography.fontSizes.xs,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         fontWeight: typography.fontWeights.medium,
         textTransform: 'uppercase',
         letterSpacing: 0.4,
@@ -331,11 +332,11 @@ const styles = StyleSheet.create({
     largeValue: {
         fontSize: typography.fontSizes['2xl'],
         fontWeight: typography.fontWeights.bold,
-        color: colors.text,
+        color: semanticColors.textPrimary,
     },
     largeUnit: {
         fontSize: typography.fontSizes.sm,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         fontWeight: typography.fontWeights.medium,
     },
     deltaRow: {
@@ -349,13 +350,13 @@ const styles = StyleSheet.create({
     },
     deltaSub: {
         fontSize: 10,
-        color: colors.textMuted,
+        color: semanticColors.textTertiary,
         marginLeft: 2,
     },
     progressTrack: {
         height: 4,
         borderRadius: 2,
-        backgroundColor: 'rgba(255,255,255,0.06)',
+        backgroundColor: semanticColors.glass,
         overflow: 'hidden',
         marginTop: 2,
     },
@@ -369,11 +370,11 @@ const styles = StyleSheet.create({
     },
     smallCard: {
         flex: 1,
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface1,
         borderRadius: borderRadius.xl,
         padding: spacing.md,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
         gap: 4,
     },
     cardIcon: {
@@ -385,32 +386,32 @@ const styles = StyleSheet.create({
     },
     smallLabel: {
         fontSize: typography.fontSizes.xs,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         fontWeight: typography.fontWeights.medium,
     },
     smallValue: {
         fontSize: typography.fontSizes.lg,
         fontWeight: typography.fontWeights.bold,
-        color: colors.text,
+        color: semanticColors.textPrimary,
     },
     smallUnit: {
         fontSize: typography.fontSizes.xs,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         fontWeight: typography.fontWeights.medium,
     },
     smallHint: {
         fontSize: 10,
-        color: colors.textMuted,
+        color: semanticColors.textTertiary,
     },
     emptyCard: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.md,
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface1,
         borderRadius: borderRadius.xl,
         padding: spacing.lg,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
     },
     emptyIcon: {
         width: 36,
@@ -418,16 +419,16 @@ const styles = StyleSheet.create({
         borderRadius: 18,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(0,212,255,0.10)',
+        backgroundColor: semanticColors.accentSubtle,
     },
     emptyTitle: {
         fontSize: typography.fontSizes.sm,
-        color: colors.text,
+        color: semanticColors.textPrimary,
         fontWeight: typography.fontWeights.semibold,
     },
     emptySubtitle: {
         fontSize: typography.fontSizes.xs,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         marginTop: 2,
     },
 });

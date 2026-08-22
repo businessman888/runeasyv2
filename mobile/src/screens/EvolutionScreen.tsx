@@ -15,6 +15,7 @@ import Svg, { Path, Circle, Defs, LinearGradient, Stop, Rect } from 'react-nativ
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors, typography, spacing } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { useReadinessStore, ReadinessAnswers } from '../stores/readinessStore';
 
 import { BASE_API_URL, API_URL, API_ENDPOINTS } from '../config/api.config';
@@ -74,7 +75,7 @@ const HeartRateIcon = () => (
             </LinearGradient>
         </Defs>
         <Rect width="50" height="50" rx="10" fill="url(#paint0_linear)" />
-        <Path fillRule="evenodd" clipRule="evenodd" d="M24.9981 11.875C25.2963 11.8747 25.5868 11.9691 25.8278 12.1447C26.0688 12.3203 26.2477 12.568 26.3387 12.8519L32.5 32.1063L34.9113 24.5725C35.0019 24.2885 35.1804 24.0407 35.421 23.8648C35.6616 23.6889 35.9519 23.594 36.25 23.5938H38.5938C38.9667 23.5938 39.3244 23.7419 39.5881 24.0056C39.8518 24.2694 40 24.627 40 25C40 25.373 39.8518 25.7306 39.5881 25.9944C39.3244 26.2581 38.9667 26.4063 38.5938 26.4063H37.2756L33.8387 37.1481C33.7476 37.4315 33.5689 37.6787 33.3283 37.8541C33.0877 38.0294 32.7977 38.1239 32.5 38.1239C32.2023 38.1239 31.9123 38.0294 31.6717 37.8541C31.4311 37.6787 31.2524 37.4315 31.1613 37.1481L25.0094 17.9238L20.7156 31.5175C20.627 31.7976 20.453 32.043 20.2178 32.2191C19.9827 32.3952 19.6982 32.4932 19.4045 32.4994C19.1108 32.5056 18.8225 32.4197 18.5801 32.2537C18.3378 32.0876 18.1535 31.8499 18.0531 31.5738L15.6831 25.0563L15.5519 25.4463C15.4586 25.7262 15.2797 25.9697 15.0405 26.1423C14.8013 26.3149 14.5138 26.4079 14.2188 26.4081H11.4062C11.0333 26.4081 10.6756 26.26 10.4119 25.9962C10.1482 25.7325 10 25.3748 10 25.0019C10 24.6289 10.1482 24.2712 10.4119 24.0075C10.6756 23.7438 11.0333 23.5956 11.4062 23.5956H13.2063L14.29 20.3388C14.3819 20.0613 14.5579 19.8195 14.7936 19.6467C15.0293 19.4739 15.3129 19.3789 15.6051 19.3748C15.8973 19.3706 16.1835 19.4576 16.424 19.6237C16.6644 19.7897 16.8472 20.0266 16.9469 20.3013L19.2812 26.7231L23.6594 12.8594C23.749 12.5744 23.9271 12.3253 24.1678 12.1483C24.4085 11.9713 24.6993 11.8756 24.9981 11.875Z" fill="#0E0E1F" />
+        <Path fillRule="evenodd" clipRule="evenodd" d="M24.9981 11.875C25.2963 11.8747 25.5868 11.9691 25.8278 12.1447C26.0688 12.3203 26.2477 12.568 26.3387 12.8519L32.5 32.1063L34.9113 24.5725C35.0019 24.2885 35.1804 24.0407 35.421 23.8648C35.6616 23.6889 35.9519 23.594 36.25 23.5938H38.5938C38.9667 23.5938 39.3244 23.7419 39.5881 24.0056C39.8518 24.2694 40 24.627 40 25C40 25.373 39.8518 25.7306 39.5881 25.9944C39.3244 26.2581 38.9667 26.4063 38.5938 26.4063H37.2756L33.8387 37.1481C33.7476 37.4315 33.5689 37.6787 33.3283 37.8541C33.0877 38.0294 32.7977 38.1239 32.5 38.1239C32.2023 38.1239 31.9123 38.0294 31.6717 37.8541C31.4311 37.6787 31.2524 37.4315 31.1613 37.1481L25.0094 17.9238L20.7156 31.5175C20.627 31.7976 20.453 32.043 20.2178 32.2191C19.9827 32.3952 19.6982 32.4932 19.4045 32.4994C19.1108 32.5056 18.8225 32.4197 18.5801 32.2537C18.3378 32.0876 18.1535 31.8499 18.0531 31.5738L15.6831 25.0563L15.5519 25.4463C15.4586 25.7262 15.2797 25.9697 15.0405 26.1423C14.8013 26.3149 14.5138 26.4079 14.2188 26.4081H11.4062C11.0333 26.4081 10.6756 26.26 10.4119 25.9962C10.1482 25.7325 10 25.3748 10 25.0019C10 24.6289 10.1482 24.2712 10.4119 24.0075C10.6756 23.7438 11.0333 23.5956 11.4062 23.5956H13.2063L14.29 20.3388C14.3819 20.0613 14.5579 19.8195 14.7936 19.6467C15.0293 19.4739 15.3129 19.3789 15.6051 19.3748C15.8973 19.3706 16.1835 19.4576 16.424 19.6237C16.6644 19.7897 16.8472 20.0266 16.9469 20.3013L19.2812 26.7231L23.6594 12.8594C23.749 12.5744 23.9271 12.3253 24.1678 12.1483C24.4085 11.9713 24.6993 11.8756 24.9981 11.875Z" fill={semanticColors.textOnAccent} />
     </Svg>
 );
 
@@ -161,7 +162,7 @@ const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> 
     if (isLoading) {
         return (
             <View style={[resultStyles.loadingContainer, { paddingTop: insets.top }]}>
-                <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
+                <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
                 <ActivityIndicator size="large" color={colors.primary} />
                 <Text style={resultStyles.loadingText}>Analisando sua prontidão...</Text>
             </View>
@@ -171,7 +172,7 @@ const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> 
     if (error || !verdict) {
         return (
             <View style={[resultStyles.errorContainer, { paddingTop: insets.top }]}>
-                <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
+                <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
                 <Text style={{ fontSize: 48 }}>⚠️</Text>
                 <Text style={resultStyles.errorText}>{error || 'Erro ao carregar resultado'}</Text>
                 <TouchableOpacity style={resultStyles.retryButton} onPress={fetchVerdict}>
@@ -185,14 +186,14 @@ const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> 
 
     return (
         <View style={[resultStyles.container, { paddingTop: insets.top }]}>
-            <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
+            <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
             <View style={resultStyles.header}>
                 <TouchableOpacity onPress={onReset} style={resultStyles.backButton}>
-                    <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+                    <Ionicons name="chevron-back" size={24} color={semanticColors.textPrimary} />
                 </TouchableOpacity>
                 <Text style={resultStyles.headerTitle}>Veredito de Prontidão</Text>
                 <TouchableOpacity style={resultStyles.calendarButton}>
-                    <Ionicons name="calendar-outline" size={24} color="#FFFFFF" />
+                    <Ionicons name="calendar-outline" size={24} color={semanticColors.textPrimary} />
                 </TouchableOpacity>
             </View>
 
@@ -242,8 +243,8 @@ const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> 
 
 // Styles for Result Screen
 const resultStyles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#0A0A14' },
-    safeArea: { backgroundColor: '#0A0A14' },
+    container: { flex: 1, backgroundColor: semanticColors.textOnAccent },
+    safeArea: { backgroundColor: semanticColors.textOnAccent },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm },
     backButton: { padding: spacing.xs },
     backIcon: { fontSize: 24, color: colors.white },
@@ -252,37 +253,37 @@ const resultStyles = StyleSheet.create({
     content: { flex: 1, paddingHorizontal: spacing.lg },
     timeBadge: { alignItems: 'center', marginTop: spacing.lg, marginBottom: spacing.xl },
     timeText: { fontSize: typography.fontSizes.lg, fontWeight: '600', color: colors.primary },
-    timeSubtext: { fontSize: typography.fontSizes.sm, color: 'rgba(255, 255, 255, 0.5)', marginTop: spacing.xs },
+    timeSubtext: { fontSize: typography.fontSizes.sm, color: semanticColors.textTertiary, marginTop: spacing.xs },
     gaugeContainer: { alignItems: 'center', justifyContent: 'center', marginBottom: spacing['2xl'], position: 'relative' },
     gaugeCenter: { position: 'absolute', alignItems: 'center' },
     gaugeScore: { fontSize: 48, fontWeight: '700' },
     gaugeLabel: { fontSize: typography.fontSizes.md, fontWeight: '500', marginTop: spacing.xs },
-    analysisCard: { backgroundColor: '#12121F', borderRadius: 20, padding: spacing.lg, marginBottom: spacing.xl, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' },
+    analysisCard: { backgroundColor: semanticColors.surface2, borderRadius: 20, padding: spacing.lg, marginBottom: spacing.xl, borderWidth: 1, borderColor: semanticColors.borderSubtle },
     analysisHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md, gap: spacing.md },
     analysisHeaderText: { flex: 1 },
     analysisHeadline: { fontSize: typography.fontSizes.md, fontWeight: '700', color: colors.white, lineHeight: 24 },
-    analysisReasoning: { fontSize: typography.fontSizes.sm, color: 'rgba(255, 255, 255, 0.7)', lineHeight: 20, marginBottom: spacing.lg },
-    adjustmentSubcard: { backgroundColor: 'rgba(0, 212, 255, 0.15)', borderRadius: 16, padding: spacing.md, borderWidth: 1, borderColor: colors.primary, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-    adjustmentIconContainer: { width: 50, height: 50, borderRadius: 12, backgroundColor: 'rgba(0, 212, 255, 0.1)', alignItems: 'center', justifyContent: 'center' },
+    analysisReasoning: { fontSize: typography.fontSizes.sm, color: semanticColors.textSecondary, lineHeight: 20, marginBottom: spacing.lg },
+    adjustmentSubcard: { backgroundColor: semanticColors.borderSubtle, borderRadius: 16, padding: spacing.md, borderWidth: 1, borderColor: colors.primary, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    adjustmentIconContainer: { width: 50, height: 50, borderRadius: 12, backgroundColor: semanticColors.accentSubtle, alignItems: 'center', justifyContent: 'center' },
     adjustmentTextContainer: { flex: 1 },
     adjustmentTitle: { fontSize: typography.fontSizes.xs, fontWeight: '700', color: colors.primary, letterSpacing: 1, marginBottom: spacing.xs },
-    adjustmentText: { fontSize: typography.fontSizes.sm, color: 'rgba(255, 255, 255, 0.8)', lineHeight: 18 },
+    adjustmentText: { fontSize: typography.fontSizes.sm, color: semanticColors.textSecondary, lineHeight: 18 },
     metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginBottom: spacing.xl },
-    metricCard: { width: '47%', backgroundColor: '#12121F', borderRadius: 16, padding: spacing.md, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)', alignItems: 'center' },
+    metricCard: { width: '47%', backgroundColor: semanticColors.surface2, borderRadius: 16, padding: spacing.md, borderWidth: 1, borderColor: semanticColors.borderSubtle, alignItems: 'center' },
     metricIconContainer: { marginBottom: spacing.sm },
-    metricLabel: { fontSize: typography.fontSizes.xs, color: 'rgba(255, 255, 255, 0.5)', textAlign: 'center', marginBottom: spacing.xs },
+    metricLabel: { fontSize: typography.fontSizes.xs, color: semanticColors.textTertiary, textAlign: 'center', marginBottom: spacing.xs },
     metricValue: { fontSize: typography.fontSizes.lg, fontWeight: '700', color: colors.white, textAlign: 'center' },
     metricSublabel: { fontSize: typography.fontSizes.xs, color: colors.primary, marginTop: spacing.xs, textAlign: 'center' },
 
     footer: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 100 },
     confirmButton: { backgroundColor: colors.primary, paddingVertical: 18, borderRadius: 32, alignItems: 'center' },
-    confirmButtonText: { fontSize: typography.fontSizes.md, fontWeight: '700', color: '#0A0A14' },
-    loadingContainer: { flex: 1, backgroundColor: '#0A0A14', alignItems: 'center', justifyContent: 'center' },
+    confirmButtonText: { fontSize: typography.fontSizes.md, fontWeight: '700', color: semanticColors.textOnAccent },
+    loadingContainer: { flex: 1, backgroundColor: semanticColors.textOnAccent, alignItems: 'center', justifyContent: 'center' },
     loadingText: { fontSize: typography.fontSizes.lg, fontWeight: '600', color: colors.white, marginTop: spacing.lg },
-    errorContainer: { flex: 1, backgroundColor: '#0A0A14', alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
-    errorText: { fontSize: typography.fontSizes.md, color: 'rgba(255, 255, 255, 0.7)', textAlign: 'center', marginTop: spacing.lg, marginBottom: spacing.xl },
+    errorContainer: { flex: 1, backgroundColor: semanticColors.textOnAccent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
+    errorText: { fontSize: typography.fontSizes.md, color: semanticColors.textSecondary, textAlign: 'center', marginTop: spacing.lg, marginBottom: spacing.xl },
     retryButton: { backgroundColor: colors.primary, paddingVertical: 14, paddingHorizontal: 32, borderRadius: 24 },
-    retryButtonText: { fontSize: typography.fontSizes.md, fontWeight: '600', color: '#0A0A14' },
+    retryButtonText: { fontSize: typography.fontSizes.md, fontWeight: '600', color: semanticColors.textOnAccent },
 });
 
 export function EvolutionScreen({ navigation }: any) {
@@ -465,7 +466,7 @@ export function EvolutionScreen({ navigation }: any) {
     if (statusLoading || readinessStatus === null || (questionsLoading && questions.length === 0)) {
         return (
             <View style={styles.container}>
-                <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
+                <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <ActivityIndicator size="large" color={colors.primary} />
                     <Text style={{ color: colors.white, marginTop: spacing.lg }}>
@@ -486,7 +487,7 @@ export function EvolutionScreen({ navigation }: any) {
     if (!quizCompleted && !hasCompletedToday && questions.length === 0) {
         return (
             <View style={[styles.container, { paddingTop: insets.top }]}>
-                <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
+                <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
                     <Text style={{ color: colors.white, marginTop: spacing.lg }}>Erro ao carregar perguntas</Text>
@@ -516,23 +517,23 @@ export function EvolutionScreen({ navigation }: any) {
         // If no verdict available but still completed, show success message
         return (
             <View style={[styles.container, { paddingTop: insets.top }]}>
-                <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
+                <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.lg }}>
                     <Ionicons name="checkmark-circle" size={80} color={colors.primary} />
                     <Text style={{ color: colors.white, fontSize: 24, fontWeight: '700', marginTop: spacing.lg, textAlign: 'center' }}>
                         Prontidão Concluída!
                     </Text>
-                    <Text style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: 16, marginTop: spacing.md, textAlign: 'center' }}>
+                    <Text style={{ color: semanticColors.textSecondary, fontSize: 16, marginTop: spacing.md, textAlign: 'center' }}>
                         Você já realizou seu check-in de prontidão hoje.
                     </Text>
-                    <Text style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: 14, marginTop: spacing.sm, textAlign: 'center' }}>
+                    <Text style={{ color: semanticColors.textTertiary, fontSize: 14, marginTop: spacing.sm, textAlign: 'center' }}>
                         Próximo check-in disponível amanhã após as 03:00 AM
                     </Text>
                     <TouchableOpacity
                         style={{ backgroundColor: colors.primary, paddingVertical: 16, paddingHorizontal: 40, borderRadius: 30, marginTop: spacing.xl }}
                         onPress={() => navigation.navigate('Home')}
                     >
-                        <Text style={{ color: '#0A0A14', fontSize: 16, fontWeight: '600' }}>Voltar para Home</Text>
+                        <Text style={{ color: semanticColors.textOnAccent, fontSize: 16, fontWeight: '600' }}>Voltar para Home</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -550,8 +551,8 @@ export function EvolutionScreen({ navigation }: any) {
     }
 
     return (
-        <View style={{ paddingTop: insets.top + (Platform.OS === 'android' ? 10 : 0), paddingBottom: insets.bottom, backgroundColor: '#0A0A14', flex: 1 }}>
-            <StatusBar barStyle="light-content" backgroundColor="#0A0A14" />
+        <View style={{ paddingTop: insets.top + (Platform.OS === 'android' ? 10 : 0), paddingBottom: insets.bottom, backgroundColor: semanticColors.textOnAccent, flex: 1 }}>
+            <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
 
             {/* Header */}
             {/* Header */}
@@ -643,7 +644,7 @@ export function EvolutionScreen({ navigation }: any) {
                             disabled={!selectedValue}
                         >
                             <Text style={styles.continueButtonText}>Continuar</Text>
-                            <Ionicons name="arrow-forward-outline" size={18} color="#0A0A14" style={{ marginLeft: 8 }} />
+                            <Ionicons name="arrow-forward-outline" size={18} color={semanticColors.textOnAccent} style={{ marginLeft: 8 }} />
                         </TouchableOpacity>
                     </View>
 
@@ -683,10 +684,10 @@ export function EvolutionScreen({ navigation }: any) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0A0A14',
+        backgroundColor: semanticColors.textOnAccent,
     },
     safeArea: {
-        backgroundColor: '#0A0A14',
+        backgroundColor: semanticColors.textOnAccent,
     },
     header: {
         flexDirection: 'row',
@@ -698,7 +699,7 @@ const styles = StyleSheet.create({
     },
     headerTitle: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(255, 255, 255, 0.6)',
+        color: semanticColors.textSecondary,
         fontWeight: '500',
     },
     stepIndicator: {
@@ -713,7 +714,7 @@ const styles = StyleSheet.create({
     },
     progressBar: {
         height: 4,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: semanticColors.glass,
         borderRadius: 2,
         overflow: 'hidden',
     },
@@ -737,7 +738,7 @@ const styles = StyleSheet.create({
         paddingBottom: spacing.lg,
     },
     questionCard: {
-        backgroundColor: '#12121F',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 24,
         padding: spacing.xl,
         paddingTop: spacing['2xl'],
@@ -762,7 +763,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#15152A',
+        backgroundColor: semanticColors.surface1,
         paddingVertical: 20,
         paddingHorizontal: spacing.lg,
         borderRadius: 16,
@@ -771,12 +772,12 @@ const styles = StyleSheet.create({
     },
     optionCardSelected: {
         borderColor: colors.primary,
-        backgroundColor: 'rgba(0, 212, 255, 0.08)',
+        backgroundColor: semanticColors.accentSubtle,
     },
     optionLabel: {
         fontSize: 16,
         fontWeight: '500',
-        color: 'rgba(255, 255, 255, 0.8)',
+        color: semanticColors.textSecondary,
     },
     optionLabelSelected: {
         color: colors.primary,
@@ -786,7 +787,7 @@ const styles = StyleSheet.create({
     },
     optionDescription: {
         fontSize: 12,
-        color: 'rgba(255, 255, 255, 0.5)',
+        color: semanticColors.textTertiary,
         marginTop: 2,
     },
     optionDescriptionSelected: {
@@ -797,7 +798,7 @@ const styles = StyleSheet.create({
         height: 24,
         borderRadius: 12,
         borderWidth: 2,
-        borderColor: 'rgba(255, 255, 255, 0.3)',
+        borderColor: semanticColors.borderStrong,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -809,21 +810,21 @@ const styles = StyleSheet.create({
         backgroundColor: colors.primary,
         paddingVertical: 16,
         borderRadius: 32,
-        elevation: 4,
-        shadowColor: colors.primary,
+        elevation: 2,
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
     },
     continueButtonDisabled: {
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: semanticColors.glass,
         shadowOpacity: 0,
         elevation: 0,
     },
     continueButtonText: {
         fontSize: 16,
         fontWeight: '700',
-        color: '#0A0A14',
+        color: semanticColors.textOnAccent,
     },
     radioOuterSelected: {
         borderColor: colors.primary,
@@ -833,7 +834,7 @@ const styles = StyleSheet.create({
         width: 8,
         height: 8,
         borderRadius: 4,
-        backgroundColor: '#0A0A14',
+        backgroundColor: semanticColors.textOnAccent,
     },
     footer: {
         paddingHorizontal: spacing.lg,
@@ -841,14 +842,14 @@ const styles = StyleSheet.create({
         paddingBottom: 140, // Space for tab bar + equal spacing
     },
     continueButtonTextDisabled: {
-        color: 'rgba(255, 255, 255, 0.4)',
+        color: semanticColors.textTertiary,
     },
     arrowContainer: {
         marginLeft: spacing.xs,
     },
     arrowText: {
         fontSize: 18,
-        color: '#0A0A14',
+        color: semanticColors.textOnAccent,
         fontWeight: '600',
     },
     lockedOverlay: {
@@ -857,7 +858,7 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(10, 10, 20, 0.95)',
+        backgroundColor: semanticColors.scrim,
         justifyContent: 'center',
         alignItems: 'center',
         zIndex: 1000,
@@ -880,7 +881,7 @@ const styles = StyleSheet.create({
     },
     lockedMessage: {
         fontSize: typography.fontSizes.md,
-        color: 'rgba(255, 255, 255, 0.7)',
+        color: semanticColors.textSecondary,
         textAlign: 'center',
         lineHeight: 24,
     },

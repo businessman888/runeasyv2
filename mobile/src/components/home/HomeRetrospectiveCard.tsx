@@ -14,6 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { borderRadius, colors, fonts, spacing } from '../../theme';
 import { GlassSurface } from '../ui/GlassSurface';
+import { semanticColors } from '../../theme/semanticColors';
 
 const ICON_STAGE_SIZE = 72;
 const ICON_ORB_SIZE = 56;
@@ -77,15 +78,11 @@ export const HomeRetrospectiveCard = memo(function HomeRetrospectiveCard({
             <GlassSurface
                 radius={borderRadius['2xl']}
                 intensity={30}
-                veilColor="rgba(8, 24, 36, 0.30)"
+                veilColor={semanticColors.surface1}
                 style={styles.surface}
             >
                 <LinearGradient
-                    colors={[
-                        'rgba(0, 212, 255, 0.12)',
-                        'rgba(0, 212, 255, 0.025)',
-                        'rgba(59, 130, 246, 0.06)',
-                    ]}
+                    colors={[semanticColors.glass, semanticColors.transparent]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     pointerEvents="none"
@@ -110,7 +107,7 @@ export const HomeRetrospectiveCard = memo(function HomeRetrospectiveCard({
                         <Animated.View style={[styles.pulseHalo, pulseStyle]} />
                         <View style={styles.iconOrb}>
                             <LinearGradient
-                                colors={['rgba(0, 212, 255, 0.24)', 'rgba(0, 153, 204, 0.09)']}
+                                colors={[semanticColors.accentSubtle, semanticColors.transparent]}
                                 style={StyleSheet.absoluteFill}
                                 pointerEvents="none"
                             />
@@ -154,7 +151,7 @@ const styles = StyleSheet.create({
     },
     shadow: Platform.select({
         ios: {
-            shadowColor: colors.primary,
+            shadowColor: semanticColors.canvas,
             shadowOffset: { width: 0, height: 8 },
             shadowOpacity: 0.14,
             shadowRadius: 22,
@@ -166,7 +163,7 @@ const styles = StyleSheet.create({
     }) as ViewStyle,
     surface: {
         minHeight: 160,
-        borderColor: 'rgba(150, 235, 255, 0.25)',
+        borderColor: semanticColors.borderSubtle,
     },
     pressable: {
         minHeight: 160,
@@ -189,8 +186,8 @@ const styles = StyleSheet.create({
         height: ICON_ORB_SIZE,
         borderRadius: ICON_ORB_SIZE / 2,
         borderWidth: 1.5,
-        borderColor: 'rgba(0, 212, 255, 0.78)',
-        backgroundColor: 'rgba(0, 212, 255, 0.08)',
+        borderColor: semanticColors.borderStrong,
+        backgroundColor: semanticColors.glass,
     },
     iconOrb: {
         width: ICON_ORB_SIZE,
@@ -200,8 +197,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(177, 240, 255, 0.34)',
-        backgroundColor: 'rgba(0, 212, 255, 0.10)',
+        borderColor: semanticColors.borderSubtle,
+        backgroundColor: semanticColors.accentSubtle,
     },
     copy: {
         flex: 1,
@@ -220,27 +217,27 @@ const styles = StyleSheet.create({
         height: 6,
         borderRadius: 3,
         backgroundColor: colors.primary,
-        shadowColor: colors.primary,
+        shadowColor: semanticColors.transparent,
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.7,
-        shadowRadius: 5,
+        shadowOpacity: 0,
+        shadowRadius: 0,
     },
     eyebrow: {
-        color: 'rgba(177, 240, 255, 0.82)',
+        color: semanticColors.textSecondary,
         fontFamily: fonts.semibold,
         fontSize: 10,
         lineHeight: 14,
         letterSpacing: 1.05,
     },
     title: {
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
         fontFamily: fonts.bold,
         fontSize: 18,
         lineHeight: 24,
         letterSpacing: -0.3,
     },
     subtitle: {
-        color: 'rgba(235, 235, 245, 0.68)',
+        color: semanticColors.textSecondary,
         fontFamily: fonts.regular,
         fontSize: 12,
         lineHeight: 18,

@@ -22,6 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
 import { DeviceRow } from '../../components/devices/DeviceRow';
 import {
     ONBOARDING_WEARABLE_ORDER,
@@ -98,11 +99,11 @@ export function WearableSelectionModal({
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.6)',
+        backgroundColor: semanticColors.scrim,
         justifyContent: 'flex-end',
     },
     sheet: {
-        backgroundColor: '#15152A',
+        backgroundColor: semanticColors.surface1,
         borderTopLeftRadius: borderRadius['2xl'],
         borderTopRightRadius: borderRadius['2xl'],
         paddingHorizontal: spacing.lg,
@@ -111,7 +112,7 @@ const styles = StyleSheet.create({
     handleBar: {
         width: 40,
         height: 4,
-        backgroundColor: 'rgba(255,255,255,0.16)',
+        backgroundColor: semanticColors.borderStrong,
         borderRadius: 2,
         alignSelf: 'center',
         marginBottom: spacing.lg,
@@ -129,20 +130,20 @@ const styles = StyleSheet.create({
     title: {
         fontFamily: fonts.bold,
         fontSize: 20,
-        color: colors.text,
+        color: semanticColors.textPrimary,
         marginBottom: 4,
     },
     subtitle: {
         fontFamily: fonts.regular,
         fontSize: 13.5,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         lineHeight: 19,
     },
     closeButton: {
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: 'rgba(255,255,255,0.06)',
+        backgroundColor: semanticColors.glass,
         alignItems: 'center',
         justifyContent: 'center',
     },
