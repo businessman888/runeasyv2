@@ -106,7 +106,7 @@ describe('RecentActivityResultsService', () => {
     const result = await service.getRecent('user-1', 'plan', 5);
 
     expect(result).toHaveLength(1);
-    expect(result[0].activity.route_preview).toHaveLength(80);
+    expect(result[0].activity.route_preview).toHaveLength(120);
     expect(result[0].activity.metric_series.pace.length).toBeGreaterThan(0);
     expect(result[0].achievements).toEqual({
       count: 1,

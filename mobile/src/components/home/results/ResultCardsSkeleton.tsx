@@ -10,16 +10,16 @@ export function ResultCardsSkeleton() {
       style={styles.card}
       accessibilityLabel="Carregando resultados recentes"
     >
-      <Skeleton width="100%" height={204} />
+      <Skeleton width="100%" height={156} />
       <View style={styles.content}>
-        <Skeleton width="50%" height={20} style={{ marginBottom: 8 }} />
-        <Skeleton width="34%" height={13} style={{ marginBottom: 26 }} />
+        <Skeleton width="50%" height={18} style={{ marginBottom: 7 }} />
+        <Skeleton width="34%" height={12} style={{ marginBottom: 22 }} />
         <View style={styles.metrics}>
-          <Skeleton width="27%" height={72} />
-          <Skeleton width="27%" height={72} />
-          <Skeleton width="27%" height={72} />
+          <Skeleton width="27%" height={58} />
+          <Skeleton width="27%" height={58} />
+          <Skeleton width="27%" height={58} />
         </View>
-        <Skeleton width="64%" height={46} style={styles.button} />
+        <Skeleton width="64%" height={44} style={styles.button} />
       </View>
     </View>
   );
@@ -28,11 +28,11 @@ export function ResultCardsSkeleton() {
 const styles = StyleSheet.create({
   card: {
     height: RESULT_CARD_HEIGHT,
-    borderRadius: 24,
+    borderRadius: 22,
     overflow: "hidden",
     backgroundColor: colors.streakDayCard,
   },
-  content: { padding: 20 },
+  content: { padding: 18 },
   metrics: { flexDirection: "row", justifyContent: "space-between" },
-  button: { alignSelf: "center", marginTop: 22, borderRadius: 999 },
+  button: { alignSelf: "center", marginTop: 20, borderRadius: 999 },
 });

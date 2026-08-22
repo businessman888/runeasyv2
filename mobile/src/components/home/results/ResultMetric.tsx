@@ -18,7 +18,7 @@ function buildPaths(data: number[], width: number, height: number) {
   const max = Math.max(...drawable);
   const range = max - min || 1;
   const horizontalPadding = 2;
-  const verticalPadding = 4;
+  const verticalPadding = 5;
   const usableWidth = width - horizontalPadding * 2;
   const usableHeight = height - verticalPadding * 2;
   const points = drawable.map((entry, index) => ({
@@ -45,7 +45,7 @@ export const ResultMetric = memo(function ResultMetric({
 }: ResultMetricProps) {
   const rawId = useId();
   const gradientId = `resultMetric${rawId.replace(/[^a-zA-Z0-9]/g, "")}`;
-  const paths = useMemo(() => buildPaths(series, 92, 43), [series]);
+  const paths = useMemo(() => buildPaths(series, 92, 26), [series]);
 
   return (
     <View
@@ -61,10 +61,10 @@ export const ResultMetric = memo(function ResultMetric({
       </Text>
       <View style={styles.chart}>
         {paths ? (
-          <Svg width="100%" height={43} viewBox="0 0 92 43">
+          <Svg width="100%" height={26} viewBox="0 0 92 26">
             <Defs>
               <LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0" stopColor={color} stopOpacity={0.22} />
+                <Stop offset="0" stopColor={color} stopOpacity={0.08} />
                 <Stop offset="1" stopColor={color} stopOpacity={0} />
               </LinearGradient>
             </Defs>
@@ -73,7 +73,8 @@ export const ResultMetric = memo(function ResultMetric({
               d={paths.stroke}
               fill="none"
               stroke={color}
-              strokeWidth={1.7}
+              strokeOpacity={0.82}
+              strokeWidth={1.15}
               strokeLinecap="round"
               strokeLinejoin="round"
             />
@@ -89,23 +90,23 @@ export const ResultMetric = memo(function ResultMetric({
 const styles = StyleSheet.create({
   container: { flex: 1, minWidth: 0 },
   label: {
-    color: "rgba(235,235,245,0.60)",
+    color: "rgba(235,235,245,0.56)",
     fontFamily: fonts.regular,
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 10,
+    lineHeight: 14,
   },
   value: {
     color: colors.textLight,
     fontFamily: fonts.bold,
-    fontSize: 22,
-    lineHeight: 29,
-    letterSpacing: -0.5,
-    marginTop: 3,
+    fontSize: 19,
+    lineHeight: 25,
+    letterSpacing: -0.4,
+    marginTop: 2,
   },
-  chart: { height: 43, marginTop: 7, justifyContent: "center" },
+  chart: { height: 26, marginTop: 4, justifyContent: "center" },
   emptyLine: {
-    width: "72%",
-    height: 1,
-    backgroundColor: "rgba(235,235,245,0.12)",
+    width: "64%",
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "rgba(235,235,245,0.10)",
   },
 });

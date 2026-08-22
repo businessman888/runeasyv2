@@ -12,7 +12,7 @@ import type { LatestActivityData } from "../../../stores/feedbackStore";
 import { ResultMetric } from "./ResultMetric";
 import { ResultRoutePreview } from "./ResultRoutePreview";
 
-export const RESULT_CARD_HEIGHT = 443;
+export const RESULT_CARD_HEIGHT = 388;
 
 interface WorkoutResultCardProps {
   data: LatestActivityData;
@@ -157,7 +157,7 @@ export const WorkoutResultCard = memo(function WorkoutResultCard({
             <View style={styles.achievementValue}>
               <MaterialCommunityIcons
                 name="shield-outline"
-                size={29}
+                size={25}
                 color={colors.primary}
               />
               <Text style={styles.achievementCount}>{achievements}</Text>
@@ -202,88 +202,88 @@ export const WorkoutResultCard = memo(function WorkoutResultCard({
 const styles = StyleSheet.create({
   card: {
     height: RESULT_CARD_HEIGHT,
-    borderRadius: 24,
+    borderRadius: 22,
     overflow: "hidden",
     backgroundColor: "#11151B",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(235,235,245,0.10)",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.28,
-    shadowRadius: 24,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    elevation: 8,
   },
-  mapRegion: { height: 204, backgroundColor: "#11151B" },
+  mapRegion: { height: 156, backgroundColor: "#11151B" },
   content: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
-    height: 259,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    height: 248,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
     backgroundColor: colors.streakDayCard,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 16,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 14,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.24,
-    shadowRadius: 16,
-    elevation: 14,
+    shadowOffset: { width: 0, height: -5 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 12,
   },
   header: {
-    minHeight: 55,
+    minHeight: 48,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: 12,
   },
-  headingCopy: { flex: 1, minWidth: 0, paddingTop: 1 },
+  headingCopy: { flex: 1, minWidth: 0 },
   title: {
     color: colors.textLight,
     fontFamily: fonts.bold,
-    fontSize: 18,
-    lineHeight: 24,
-    letterSpacing: -0.25,
+    fontSize: 17,
+    lineHeight: 22,
+    letterSpacing: -0.2,
   },
   subtitle: {
-    color: "rgba(235,235,245,0.60)",
+    color: "rgba(235,235,245,0.58)",
     fontFamily: fonts.regular,
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
   },
-  achievements: { alignItems: "flex-end", minWidth: 78 },
+  achievements: { alignItems: "flex-end", minWidth: 72 },
   achievementLabel: {
-    color: "rgba(235,235,245,0.60)",
+    color: "rgba(235,235,245,0.56)",
     fontFamily: fonts.regular,
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 10,
+    lineHeight: 14,
   },
   achievementValue: {
-    minHeight: 34,
+    minHeight: 30,
     flexDirection: "row",
     alignItems: "center",
-    gap: 7,
+    gap: 6,
   },
   achievementCount: {
     color: colors.primary,
     fontFamily: fonts.bold,
-    fontSize: 23,
-    lineHeight: 30,
+    fontSize: 20,
+    lineHeight: 26,
   },
   metrics: {
     flexDirection: "row",
-    gap: 16,
-    marginTop: 14,
+    gap: 12,
+    marginTop: 12,
   },
   cta: {
     position: "absolute",
     left: "18%",
     right: "18%",
-    bottom: 16,
-    minHeight: 46,
+    bottom: 14,
+    minHeight: 44,
     borderRadius: 999,
     backgroundColor: colors.primary,
     flexDirection: "row",
@@ -291,21 +291,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 9,
+    elevation: 4,
   },
   ctaDisabled: {
     backgroundColor: "#323247",
     shadowOpacity: 0,
     elevation: 0,
   },
-  ctaPressed: { transform: [{ scale: 0.985 }], opacity: 0.92 },
+  ctaPressed: { opacity: 0.88 },
   ctaText: {
     color: colors.backgroundLight,
     fontFamily: fonts.semibold,
-    fontSize: 14,
-    lineHeight: 19,
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

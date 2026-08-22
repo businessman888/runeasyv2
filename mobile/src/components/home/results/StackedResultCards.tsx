@@ -1,62 +1,14 @@
-import React, { memo, useCallback, useEffect, useState } from "react";
+import React, { memo, useCallback, useState } from "react";
 import {
-  AccessibilityInfo,
+  LayoutChangeEvent,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  ScrollView,
   StyleSheet,
   View,
 } from "react-native";
-import Animated, {
-  Extrapolation,
-  interpolate,
-  useAnimatedScrollHandler,
-  useAnimatedStyle,
-  useSharedValue,
-} from "react-native-reanimated";
-import type { SharedValue } from "react-native-reanimated";
 import type { LatestActivityData } from "../../../stores/feedbackStore";
 import { RESULT_CARD_HEIGHT } from "./WorkoutResultCard";
-
-const CARD_PEEK = 30;
-const CARD_STEP = RESULT_CARD_HEIGHT - CARD_PEEK;
-
-interface CardItemProps {
-  index: number;
-  scrollY: SharedValue<number>;
-  reduceMotion: boolean;
-  children: React.ReactNode;
-}
-
-function CardItem({ index, scrollY, reduceMotion, children }: CardItemProps) {
-  const animatedStyle = useAnimatedStyle(() => {
-    if (reduceMotion) return { transform: [{ scale: 1 }], opacity: 1 };
-    const distance = Math.abs(scrollY.value / CARD_STEP - index);
-    return {
-      transform: [
-        {
-          scale: interpolate(
-            distance,
-            [0, 1, 2],
-            [1, 0.965, 0.94],
-            Extrapolation.CLAMP,
-          ),
-        },
-      ],
-      opacity: interpolate(
-        distance,
-        [0, 1.4, 2.5],
-        [1, 0.84, 0.55],
-        Extrapolation.CLAMP,
-      ),
-    };
-  }, [index, reduceMotion]);
-
-  return (
-    <Animated.View style={[styles.item, animatedStyle]}>
-      {children}
-    </Animated.View>
-  );
-}
 
 interface StackedResultCardsProps {
   results: LatestActivityData[];
@@ -67,77 +19,74 @@ interface StackedResultCardsProps {
   ) => React.ReactElement | null;
 }
 
+/**
+ * A five-item native horizontal pager with subtle stacked depth.
+ *
+ * Home already owns the vertical ScrollView, so this intentionally avoids
+ * FlatList/VirtualizedList and vertical gestures. Five cards are small enough
+ * to render eagerly, and only the active card mounts Mapbox.
+ */
 export const StackedResultCards = memo(function StackedResultCards({
   results,
   renderCard,
 }: StackedResultCardsProps) {
-  const scrollY = useSharedValue(0);
+  const [viewportWidth, setViewportWidth] = useState(0);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [reduceMotion, setReduceMotion] = useState(false);
 
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
-    const subscription = AccessibilityInfo.addEventListener(
-      "reduceMotionChanged",
-      setReduceMotion,
-    );
-    return () => subscription.remove();
+  const onLayout = useCallback((event: LayoutChangeEvent) => {
+    setViewportWidth(Math.round(event.nativeEvent.layout.width));
   }, []);
 
-  useEffect(() => {
-    if (activeIndex >= results.length) setActiveIndex(0);
-  }, [activeIndex, results.length]);
-
-  const onScroll = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      scrollY.value = event.contentOffset.y;
-    },
-  });
-
-  const updateActiveIndex = useCallback(
+  const onMomentumScrollEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (viewportWidth <= 0) return;
       const next = Math.max(
         0,
         Math.min(
           results.length - 1,
-          Math.round(event.nativeEvent.contentOffset.y / CARD_STEP),
+          Math.round(event.nativeEvent.contentOffset.x / viewportWidth),
         ),
       );
       setActiveIndex(next);
     },
-    [results.length],
+    [results.length, viewportWidth],
   );
 
   return (
-    <View
-      style={styles.viewport}
-      accessibilityLabel={`${results.length} resultados recentes. Deslize verticalmente para navegar.`}
-    >
-      <Animated.FlatList
-        data={results}
-        keyExtractor={(item) =>
-          item.activity?.id ?? item.workout_id ?? "result"
-        }
-        renderItem={({ item, index }) => (
-          <CardItem index={index} scrollY={scrollY} reduceMotion={reduceMotion}>
-            {renderCard(item, index, index === activeIndex)}
-          </CardItem>
-        )}
-        onScroll={onScroll}
-        onMomentumScrollEnd={updateActiveIndex}
-        onScrollEndDrag={updateActiveIndex}
-        scrollEventThrottle={16}
-        snapToInterval={CARD_STEP}
-        snapToAlignment="start"
-        decelerationRate="fast"
-        nestedScrollEnabled
-        showsVerticalScrollIndicator={false}
-        scrollEnabled={results.length > 1}
-        contentContainerStyle={styles.content}
-        removeClippedSubviews={false}
-        initialNumToRender={Math.min(results.length, 3)}
-        windowSize={3}
-      />
+    <View style={styles.deck}>
+      {results.length > 1 ? (
+        <>
+          <View style={[styles.depthLayer, styles.depthLayerBack]} />
+          <View style={[styles.depthLayer, styles.depthLayerMiddle]} />
+        </>
+      ) : null}
+
+      <View style={styles.viewport} onLayout={onLayout}>
+        {viewportWidth > 0 ? (
+          <ScrollView
+            horizontal
+            pagingEnabled
+            nestedScrollEnabled
+            directionalLockEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEnabled={results.length > 1}
+            onMomentumScrollEnd={onMomentumScrollEnd}
+            scrollEventThrottle={16}
+            overScrollMode="never"
+            bounces={false}
+          >
+            {results.map((item, index) => (
+              <View
+                key={item.activity?.id ?? item.workout_id ?? String(index)}
+                style={{ width: viewportWidth }}
+              >
+                {renderCard(item, index, index === activeIndex)}
+              </View>
+            ))}
+          </ScrollView>
+        ) : null}
+      </View>
+
       {results.length > 1 ? (
         <View
           style={styles.counter}
@@ -158,17 +107,41 @@ export const StackedResultCards = memo(function StackedResultCards({
 });
 
 const styles = StyleSheet.create({
-  viewport: { height: RESULT_CARD_HEIGHT + CARD_PEEK + 16 },
-  content: { paddingBottom: CARD_PEEK + 16 },
-  item: { height: RESULT_CARD_HEIGHT, marginBottom: -CARD_PEEK },
+  deck: {
+    height: RESULT_CARD_HEIGHT + 10,
+    paddingRight: 8,
+  },
+  viewport: {
+    height: RESULT_CARD_HEIGHT,
+    overflow: "hidden",
+    borderRadius: 22,
+  },
+  depthLayer: {
+    position: "absolute",
+    left: 8,
+    right: 0,
+    height: RESULT_CARD_HEIGHT - 4,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(235,235,245,0.08)",
+  },
+  depthLayerBack: {
+    top: 9,
+    backgroundColor: "rgba(28,28,46,0.42)",
+  },
+  depthLayerMiddle: {
+    top: 5,
+    right: 4,
+    backgroundColor: "rgba(28,28,46,0.76)",
+  },
   counter: {
     position: "absolute",
-    right: 12,
-    top: 12,
-    paddingHorizontal: 8,
+    right: 18,
+    top: 10,
     minHeight: 24,
+    paddingHorizontal: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(14,14,31,0.72)",
+    backgroundColor: "rgba(14,14,31,0.78)",
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
@@ -179,5 +152,5 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: "rgba(235,235,245,0.32)",
   },
-  dotActive: { width: 12, backgroundColor: "#00D4FF" },
+  dotActive: { width: 10, backgroundColor: "#00D4FF" },
 });

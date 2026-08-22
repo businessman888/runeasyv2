@@ -1,35 +1,16 @@
 import React, { memo, useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import Mapbox from "@rnmapbox/maps";
-import Svg, { Path } from "react-native-svg";
 import { colors } from "../../../theme";
 import type { ActivityResultRoutePoint } from "../../../stores/feedbackStore";
 import { NoRoutePreview } from "./NoRoutePreview";
+import { FinishFlagMarker } from "../../map/FinishFlagMarker";
 
 interface ResultRoutePreviewProps {
   activityId: string;
   route: ActivityResultRoutePoint[];
   isTreadmill: boolean;
   isActive: boolean;
-}
-
-function routePath(route: ActivityResultRoutePoint[]) {
-  if (route.length < 2) return "";
-  const latitudes = route.map((point) => point.latitude);
-  const longitudes = route.map((point) => point.longitude);
-  const minLat = Math.min(...latitudes);
-  const maxLat = Math.max(...latitudes);
-  const minLng = Math.min(...longitudes);
-  const maxLng = Math.max(...longitudes);
-  const latRange = maxLat - minLat || 1;
-  const lngRange = maxLng - minLng || 1;
-  return route
-    .map((point, index) => {
-      const x = 14 + ((point.longitude - minLng) / lngRange) * 327;
-      const y = 12 + (1 - (point.latitude - minLat) / latRange) * 172;
-      return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
 }
 
 export const ResultRoutePreview = memo(function ResultRoutePreview({
@@ -64,84 +45,38 @@ export const ResultRoutePreview = memo(function ResultRoutePreview({
     return <NoRoutePreview isTreadmill={isTreadmill} />;
   }
 
+  // Inactive pages sit off-screen. Keeping them as a neutral surface avoids
+  // five simultaneous native maps; once selected, the exact Mapbox map below
+  // mounts. No streets or geography are ever synthesized.
   if (!isActive || !bounds) {
-    const path = routePath(route);
-    return (
-      <View style={styles.staticMap}>
-        <Svg width="100%" height="100%" viewBox="0 0 355 196">
-          <Path
-            d="M-20 52 C58 30 83 92 152 67 S255 18 380 43"
-            fill="none"
-            stroke="rgba(235,235,245,0.065)"
-            strokeWidth={5}
-            strokeLinecap="round"
-          />
-          <Path
-            d="M20 188 C76 121 129 139 194 105 S291 70 375 119"
-            fill="none"
-            stroke="rgba(235,235,245,0.065)"
-            strokeWidth={5}
-            strokeLinecap="round"
-          />
-          <Path
-            d="M72 -20 C84 45 57 92 103 220"
-            fill="none"
-            stroke="rgba(235,235,245,0.065)"
-            strokeWidth={5}
-            strokeLinecap="round"
-          />
-          <Path
-            d="M269 -20 C245 48 294 102 252 220"
-            fill="none"
-            stroke="rgba(235,235,245,0.065)"
-            strokeWidth={5}
-            strokeLinecap="round"
-          />
-          <Path
-            d={path}
-            fill="none"
-            stroke="rgba(0,212,255,0.2)"
-            strokeWidth={8}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <Path
-            d={path}
-            fill="none"
-            stroke={colors.primary}
-            strokeWidth={3}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </Svg>
-      </View>
-    );
+    return <View style={styles.inactiveSurface} />;
   }
 
   return (
     <View style={styles.container} pointerEvents="none">
       <Mapbox.MapView
-        style={StyleSheet.absoluteFill}
+        style={StyleSheet.absoluteFillObject}
         styleURL={
           process.env.EXPO_PUBLIC_MAPBOX_STYLE_URL ||
           "mapbox://styles/mapbox/dark-v11"
         }
         logoEnabled={false}
-        attributionEnabled={false}
         compassEnabled={false}
+        attributionEnabled={false}
         scaleBarEnabled={false}
-        rotateEnabled={false}
-        pitchEnabled={false}
         scrollEnabled={false}
+        pitchEnabled={false}
+        rotateEnabled={false}
         zoomEnabled={false}
       >
         <Mapbox.Camera
           bounds={{
-            ...bounds,
-            paddingTop: 28,
-            paddingBottom: 42,
-            paddingLeft: 28,
-            paddingRight: 28,
+            ne: bounds.ne,
+            sw: bounds.sw,
+            paddingTop: 20,
+            paddingBottom: 28,
+            paddingLeft: 24,
+            paddingRight: 24,
           }}
           animationDuration={0}
         />
@@ -150,18 +85,18 @@ export const ResultRoutePreview = memo(function ResultRoutePreview({
             id={`homeResultGlow${id}`}
             style={{
               lineColor: colors.primary,
-              lineWidth: 8,
-              lineOpacity: 0.18,
-              lineBlur: 4,
+              lineWidth: 12,
+              lineOpacity: 0.25,
               lineJoin: "round",
               lineCap: "round",
+              lineEmissiveStrength: 1,
             }}
           />
           <Mapbox.LineLayer
             id={`homeResultLine${id}`}
             style={{
               lineColor: colors.primary,
-              lineWidth: 4,
+              lineWidth: 5,
               lineOpacity: 1,
               lineJoin: "round",
               lineCap: "round",
@@ -169,6 +104,13 @@ export const ResultRoutePreview = memo(function ResultRoutePreview({
             }}
           />
         </Mapbox.ShapeSource>
+        <FinishFlagMarker
+          coordinate={[
+            route[route.length - 1].longitude,
+            route[route.length - 1].latitude,
+          ]}
+          size={24}
+        />
       </Mapbox.MapView>
       <View style={styles.mapShade} />
     </View>
@@ -177,9 +119,12 @@ export const ResultRoutePreview = memo(function ResultRoutePreview({
 
 const styles = StyleSheet.create({
   container: { ...StyleSheet.absoluteFillObject, backgroundColor: "#11151B" },
-  staticMap: { ...StyleSheet.absoluteFillObject, backgroundColor: "#11151B" },
+  inactiveSurface: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#11151B",
+  },
   mapShade: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(4,6,11,0.12)",
+    backgroundColor: "rgba(4,6,11,0.08)",
   },
 });

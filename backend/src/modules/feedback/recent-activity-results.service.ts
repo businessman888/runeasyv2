@@ -23,7 +23,7 @@ interface SpeedSample {
   kmh: number;
 }
 
-const MAX_ROUTE_POINTS = 80;
+const MAX_ROUTE_POINTS = 180;
 const MAX_SERIES_POINTS = 24;
 const SAO_PAULO_TIME_ZONE = 'America/Sao_Paulo';
 
