@@ -7,7 +7,6 @@ import {
     ScrollView,
     TouchableOpacity,
     Platform,
-    Animated,
 } from 'react-native';
 import * as Storage from '../utils/storage';
 import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
@@ -15,13 +14,13 @@ import { colors, typography, spacing, borderRadius, shadows, fonts } from '../th
 import { useResponsiveTheme } from '../theme/responsive';
 import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore, useStatsStore, useNotificationStore, useWorkoutScopeStore, getDisplayName, getAvatarUrl } from '../stores';
 import type { LatestActivityData } from '../stores/feedbackStore';
+import { ResultCardsSkeleton, StackedResultCards, WorkoutResultCard } from '../components/home/results';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useStartWorkoutFlow } from '../hooks/useStartWorkoutFlow';
 import { usePlanGenerationGate } from '../hooks/usePlanGenerationGate';
 import { SegmentedTabs } from '../components/ui/SegmentedTabs';
 import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
 import { CircularProgress } from '../components/CircularProgress';
-import { Skeleton } from '../components/Skeleton';
 import { WorkoutCardSkeleton } from '../components/skeletons/ScreenSkeletons';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { HomeFixedHeader } from '../components/HomeFixedHeader';
@@ -88,18 +87,6 @@ function ShoeIcon({ size = 24, color = '#0E0E1F' }: { size?: number; color?: str
     return <MaterialCommunityIcons name="shoe-sneaker" size={size} color={color} />;
 }
 
-function BinocularsIcon({ size = 35, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="binoculars" size={size} color={color} />;
-}
-
-function TrendUpIcon({ size = 20, color = '#32CD32' }: { size?: number; color?: string }) {
-    return <Ionicons name="trending-up" size={size} color={color} />;
-}
-
-function ArrowRightIcon({ size = 16, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <Ionicons name="arrow-forward" size={size} color={color} />;
-}
-
 function LockIcon({ size = 24, color = '#6B7280' }: { size?: number; color?: string }) {
     return <Ionicons name="lock-closed" size={size} color={color} />;
 }
@@ -122,10 +109,10 @@ export function HomeScreen({ navigation }: any) {
     const { stats, badges, fetchStats, fetchBadges, isLoading: gamificationLoading } = useGamificationStore();
     const { upcomingWorkouts, fetchUpcomingWorkouts, isLoading: trainingLoading, today, nextWorkout: storeNextWorkout, fetchSchedule, clearScheduleData, schedule, retryPendingWorkouts, workouts: rawWorkouts, fetchWorkouts } = useTrainingStore();
     const {
-        latestSummary, fetchLatestSummary, fetchLatestActivity,
-        latestPlanActivity, latestPlanActivityLoading,
-        latestActivityResult, latestActivityResultLoading,
-        retryFeedback,
+        latestSummary, fetchLatestSummary,
+        recentPlanActivities, recentPlanActivitiesLoading,
+        recentActivityResults, recentActivityResultsLoading,
+        fetchRecentActivities, retryFeedback,
     } = useFeedbackStore();
     // Activity id currently being re-requested via the coach card retry button.
     const [retryingActivityId, setRetryingActivityId] = useState<string | null>(null);
@@ -293,8 +280,8 @@ export function HomeScreen({ navigation }: any) {
                     fetchBadges(),
                     fetchUpcomingWorkouts(),
                     fetchLatestSummary(),
-                    fetchLatestActivity('plan'),
-                    fetchLatestActivity('activity'),
+                    fetchRecentActivities('plan'),
+                    fetchRecentActivities('activity'),
                     fetchWorkouts(startStr, endStr),
                     fetchSummary(),
                     fetchUnreadCount(),
@@ -399,8 +386,8 @@ export function HomeScreen({ navigation }: any) {
         if (todayData?.status === 'completed') {
             // Delay to allow AI feedback to be generated
             const refreshResults = () => {
-                fetchLatestActivity('plan');
-                fetchLatestActivity('activity');
+                fetchRecentActivities('plan');
+                fetchRecentActivities('activity');
             };
             const timer = setTimeout(refreshResults, 2000);
 
@@ -424,7 +411,6 @@ export function HomeScreen({ navigation }: any) {
     // porque o body sempre mostra o upsell, nunca o feedback real.
     // Pro users without a completed plan workout get the "complete first workout" hint
     // (estilo neutro, sem highlight premium).
-    const isAiLocked = !latestPlanActivityLoading && !latestPlanActivity?.activity;
     const isFreeAiLock = !isProUser;
 
     // Check if workout is for today (used for button enable/disable)
@@ -527,34 +513,20 @@ export function HomeScreen({ navigation }: any) {
         }
     };
 
-    // Renders the inner body of the result/feedback card for a given activity.
-    // Plan workouts route to CoachAnalysis (full feedback); manual/free route to
-    // RunSummary. Shared by the Treinos and Atividades tabs.
-    const renderResultCardBody = (data: LatestActivityData) => {
+    // Preserves the existing copy, retry lifecycle and navigation targets while
+    // delegating presentation to the Figma-aligned result card.
+    const renderResultCard = (data: LatestActivityData, _index: number, isActive: boolean) => {
         const source = data.workout_source;
         const isPlanWorkout = source === 'plan';
-
-        // feedback_status (backend novo) é a fonte de verdade do ciclo de vida da
-        // análise. Fallback para `!!feedback` quando ausente (backend antigo).
         const status = data.feedback_status;
         const isCoachReady = isPlanWorkout && !!data.feedback && status !== 'failed' && status !== 'skipped';
-        // 'failed'/'skipped' = a geração não vai se resolver sozinha → oferecer
-        // retry em vez de "em preparo" para sempre.
         const isCoachFailed = isPlanWorkout && (status === 'failed' || status === 'skipped');
         const activityId = data.activity?.id ?? null;
         const canRetryCoach = isCoachFailed && !!data.workout_id && !!activityId;
         const isRetrying = !!activityId && retryingActivityId === activityId;
-
-        // Sem workout_id (caso degradado: linkedWorkout query retornou null por
-        // múltiplas linhas, ou activity sem workout linkado) o RunSummary abre
-        // em estado vazio — sem dados, sem cold-start loading (pois `!!workoutId`
-        // é false). Para o usuário parece "clique sem ação". Desabilitamos o
-        // botão e refletimos no rótulo. Mesma lógica para CoachAnalysis quando
-        // feedbackId/activityId ausentes.
         const hasSummaryTarget = !!data.workout_id;
         const hasCoachTarget = !!data.feedback?.id;
         const canOpen = isPlanWorkout ? (isCoachReady && hasCoachTarget) : hasSummaryTarget;
-        // O botão fica ativo quando abre a análise OU quando permite retry.
         const isButtonEnabled = (canOpen || canRetryCoach) && !isRetrying;
 
         const cardTitle = isPlanWorkout ? 'Análise do Treinador' : 'Resumo do treino';
@@ -576,9 +548,8 @@ export function HomeScreen({ navigation }: any) {
                     workoutId: data.workout_id as string,
                     activityId: activityId as string,
                 });
-                // Dá tempo ao worker (delay 1s + geração) e reflete o novo status.
-                setTimeout(() => fetchLatestActivity('plan'), 3000);
-                setTimeout(() => fetchLatestActivity('plan'), 9000);
+                setTimeout(() => fetchRecentActivities('plan'), 3000);
+                setTimeout(() => fetchRecentActivities('plan'), 9000);
             } finally {
                 setTimeout(() => setRetryingActivityId(null), 9000);
             }
@@ -586,7 +557,7 @@ export function HomeScreen({ navigation }: any) {
 
         const handleOpen = () => {
             if (isPlanWorkout && isCoachFailed) {
-                handleRetryCoach();
+                void handleRetryCoach();
                 return;
             }
             if (!canOpen) return;
@@ -596,8 +567,6 @@ export function HomeScreen({ navigation }: any) {
                     activityId: data.activity?.id,
                 });
             } else {
-                // Dumb redirect — RunSummaryScreen fetches everything via
-                // workoutId and handles outdoor/treadmill internally.
                 navigation.navigate('RunSummary', {
                     workoutId: data.workout_id as string,
                     mode: source === 'manual' ? 'manual' : 'free',
@@ -606,57 +575,17 @@ export function HomeScreen({ navigation }: any) {
         };
 
         return (
-            <>
-                <View style={styles.aiHeader}>
-                    <View>
-                        <Text style={styles.aiTitle}>{cardTitle}</Text>
-                        <Text style={styles.aiSubtitle}>
-                            {data.activity?.name || 'Corrida'} - {data.activity?.date_label}
-                        </Text>
-                    </View>
-                    <BinocularsIcon size={35} color="#00D4FF" />
-                </View>
-
-                <View style={styles.aiStats}>
-                    <View style={styles.aiPaceSection}>
-                        <Text style={styles.aiPace}>
-                            {data.activity?.formatted_pace} <Text style={styles.aiPaceUnit}>km</Text>
-                        </Text>
-                        <View style={styles.efficiencyBadge}>
-                            <TrendUpIcon size={18} color={data.efficiency_percent >= 0 ? "#32CD32" : "#FF6B6B"} />
-                            <Text style={[
-                                styles.efficiencyText,
-                                { color: data.efficiency_percent >= 0 ? "#32CD32" : "#FF6B6B" }
-                            ]}>
-                                {data.efficiency_percent >= 0 ? '+' : ''}{data.efficiency_percent}% EFICIENTE
-                            </Text>
-                        </View>
-                    </View>
-                    <View style={styles.miniChart}>
-                        <View style={[styles.bar, { height: 20 }]} />
-                        <View style={[styles.bar, { height: 28 }]} />
-                        <View style={[styles.bar, { height: 24 }]} />
-                        <View style={[styles.barActive, { height: 40 }]} />
-                        <View style={[styles.bar, { height: 32 }]} />
-                        <View style={[styles.barActive, { height: 48 }]} />
-                    </View>
-                </View>
-
-                <TouchableOpacity
-                    style={[
-                        styles.feedbackButton,
-                        !isButtonEnabled && { opacity: 0.5 },
-                    ]}
-                    onPress={handleOpen}
-                    disabled={!isButtonEnabled}
-                >
-                    <Text style={styles.feedbackButtonText}>{cardCta}</Text>
-                    <ArrowRightIcon size={18} color="#00D4FF" />
-                </TouchableOpacity>
-            </>
+            <WorkoutResultCard
+                data={data}
+                title={cardTitle}
+                ctaLabel={cardCta}
+                isButtonEnabled={isButtonEnabled}
+                isRetrying={isRetrying}
+                isActive={isActive}
+                onPress={handleOpen}
+            />
         );
     };
-
     const getWorkoutPace = (workout: any): string => {
         if (workout.instructions_json && workout.instructions_json.length > 0) {
             const segs = workout.instructions_json;
@@ -915,7 +844,7 @@ export function HomeScreen({ navigation }: any) {
                     card de "Análise do Treinador" aparecia com pace/eficiência
                     no override Free.
                     Pro: feedback real ou estado bloqueado. */}
-                <View style={[styles.aiCard, isFreeAiLock && styles.aiCardPremium]}>
+                <View style={!isProUser ? [styles.aiCard, isFreeAiLock && styles.aiCardPremium] : styles.resultStackContainer}>
                     {!isProUser ? (
                         /* Free: upsell premium do Coach (independente de plan-activity órfão). */
                         <View style={styles.lockedContainer}>
@@ -937,15 +866,10 @@ export function HomeScreen({ navigation }: any) {
                                 </Text>
                             </View>
                         </View>
-                    ) : latestPlanActivityLoading ? (
-                        <View style={styles.aiLoadingContainer}>
-                            <Skeleton width="50%" height={20} style={{ marginBottom: 8 }} />
-                            <Skeleton width="30%" height={14} style={{ marginBottom: 16 }} />
-                            <Skeleton width="40%" height={36} style={{ marginBottom: 8 }} />
-                            <Skeleton width="60%" height={24} />
-                        </View>
-                    ) : latestPlanActivity?.activity ? (
-                        renderResultCardBody(latestPlanActivity)
+                    ) : recentPlanActivitiesLoading ? (
+                        <ResultCardsSkeleton />
+                    ) : recentPlanActivities.length > 0 ? (
+                        <StackedResultCards results={recentPlanActivities} renderCard={renderResultCard} />
                     ) : (
                         /* Pro without a completed workout yet. */
                         <View style={styles.lockedContainer}>
@@ -993,19 +917,10 @@ export function HomeScreen({ navigation }: any) {
                 </View>
 
                 {/* Resultados das atividades (resumo da corrida, sem feedback do Coach) */}
-                {latestActivityResultLoading ? (
-                    <View style={styles.aiCard}>
-                        <View style={styles.aiLoadingContainer}>
-                            <Skeleton width="50%" height={20} style={{ marginBottom: 8 }} />
-                            <Skeleton width="30%" height={14} style={{ marginBottom: 16 }} />
-                            <Skeleton width="40%" height={36} style={{ marginBottom: 8 }} />
-                            <Skeleton width="60%" height={24} />
-                        </View>
-                    </View>
-                ) : latestActivityResult?.activity ? (
-                    <View style={styles.aiCard}>
-                        {renderResultCardBody(latestActivityResult)}
-                    </View>
+                {recentActivityResultsLoading ? (
+                    <ResultCardsSkeleton />
+                ) : recentActivityResults.length > 0 ? (
+                    <StackedResultCards results={recentActivityResults} renderCard={renderResultCard} />
                 ) : (
                     <FriendlyEmptyCard
                         icon="stats-chart-outline"
@@ -1391,6 +1306,10 @@ const styles = StyleSheet.create({
     },
     startButtonTextDisabled: {
         color: '#6B7280',
+    },
+
+    resultStackContainer: {
+        width: '100%',
     },
 
     // AI Card

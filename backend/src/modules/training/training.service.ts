@@ -943,9 +943,7 @@ export class TrainingService {
 
     // Mantém o histórico de ciclos anteriores. O único dado obsoleto é
     // uma sessão ainda não concluída cuja data pertence ao presente/futuro.
-    return (
-      workout.status === 'completed' || workout.scheduled_date < todayStr
-    );
+    return workout.status === 'completed' || workout.scheduled_date < todayStr;
   }
 
   /**
@@ -1447,6 +1445,8 @@ export class TrainingService {
           : 0;
 
       await this.gamificationService.checkBadges(userId, {
+        activity_id: activityId,
+        workout_id: workoutId,
         distance: finalDistanceKm * 1000,
         average_speed: averageSpeedMs,
         elapsed_time: payload.duration_seconds,

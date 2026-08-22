@@ -32,6 +32,7 @@ export interface UserBadge {
   id: string;
   user_id: string;
   badge_id: string;
+  activity_id?: string | null;
   earned_at: string;
   badge?: Badge;
 }
@@ -44,6 +45,8 @@ export interface WorkoutXPData {
 }
 
 export interface ActivityData {
+  activity_id?: string;
+  workout_id?: string;
   distance?: number; // meters
   average_speed?: number; // m/s
   elapsed_time?: number; // seconds
@@ -481,6 +484,7 @@ export class GamificationService {
       await this.supabaseService.from('user_badges').insert({
         user_id: userId,
         badge_id: badge.id,
+        activity_id: activityData?.activity_id ?? null,
       });
 
       const xp = badge.xp_reward ?? 100;

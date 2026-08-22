@@ -12,12 +12,17 @@ import {
 } from '@nestjs/common';
 import { User } from '../../common/decorators';
 import { FeedbackAIService } from './feedback-ai.service';
+import { RecentActivityResultsQueryDto } from './dto/recent-activity-results.dto';
+import { RecentActivityResultsService } from './recent-activity-results.service';
 
 @Controller('feedback')
 export class FeedbackController {
   private readonly logger = new Logger(FeedbackController.name);
 
-  constructor(private readonly feedbackAIService: FeedbackAIService) {}
+  constructor(
+    private readonly feedbackAIService: FeedbackAIService,
+    private readonly recentActivityResultsService: RecentActivityResultsService,
+  ) {}
 
   /**
    * (Re)generate feedback for a completed workout. Marks the feedback row as
@@ -210,6 +215,24 @@ export class FeedbackController {
       scope,
     );
     return result;
+  }
+
+  /** Last workout results for the Home stacked cards. */
+  @Get('activities/recent')
+  async getRecentActivityResults(
+    @User('id') userId: string,
+    @Query() query: RecentActivityResultsQueryDto,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+
+    const results = await this.recentActivityResultsService.getRecent(
+      userId,
+      query.source,
+      query.limit ?? 5,
+    );
+    return { results };
   }
 
   /**

@@ -105,6 +105,19 @@ export interface WorkoutHistorySummary {
     total_elevation: number;
 }
 
+export interface ActivityResultRoutePoint {
+    latitude: number;
+    longitude: number;
+}
+
+export interface ActivityMetricSeries {
+    distance: number[];
+    pace: number[];
+    elevation: number[];
+    speed: number[];
+    time: number[];
+}
+
 export interface LatestActivityData {
     activity: {
         id: string;
@@ -119,6 +132,11 @@ export interface LatestActivityData {
         average_heartrate: number | null;
         start_date: string;
         date_label: string;
+        environment?: 'outdoor' | 'treadmill';
+        treadmill_data?: Record<string, unknown> | null;
+        average_speed_kmh?: number;
+        route_preview?: ActivityResultRoutePoint[];
+        metric_series?: ActivityMetricSeries;
     } | null;
     feedback: {
         id: string;
@@ -141,6 +159,10 @@ export interface LatestActivityData {
     target_pace_seconds: number | null;
     target_duration_seconds: number | null;
     efficiency_percent: number;
+    achievements?: {
+        count: number;
+        badges: Array<{ id: string; name: string; slug: string; icon: string | null }>;
+    };
     conquest: {
         goal_met: boolean;
         planned_distance_km: number;
@@ -182,6 +204,11 @@ interface FeedbackState {
     latestActivityResult: LatestActivityData | null;
     latestActivityResultLoading: boolean;
 
+    recentPlanActivities: LatestActivityData[];
+    recentPlanActivitiesLoading: boolean;
+    recentActivityResults: LatestActivityData[];
+    recentActivityResultsLoading: boolean;
+
     // Workout History
     workoutHistory: WorkoutMonth[];
     workoutSummary: WorkoutHistorySummary | null;
@@ -197,6 +224,7 @@ interface FeedbackState {
     fetchFeedback: (feedbackId: string) => Promise<void>;
     fetchLatestSummary: () => Promise<void>;
     fetchLatestActivity: (scope?: 'plan' | 'activity') => Promise<void>;
+    fetchRecentActivities: (scope: 'plan' | 'activity') => Promise<void>;
     /** Poll the AI coach analysis lifecycle for a workout/activity. */
     fetchFeedbackStatus: (params: { workoutId?: string; activityId?: string }) => Promise<FeedbackStatusResult>;
     /** Re-enqueue feedback generation (card "Tentar novamente"). */
@@ -223,6 +251,10 @@ export const useFeedbackStore = create<FeedbackState>((set, get) => ({
     latestPlanActivityLoading: false,
     latestActivityResult: null,
     latestActivityResultLoading: false,
+    recentPlanActivities: [],
+    recentPlanActivitiesLoading: false,
+    recentActivityResults: [],
+    recentActivityResultsLoading: false,
     workoutHistory: [],
     workoutSummary: null,
     workoutHistoryLoading: false,
@@ -338,6 +370,28 @@ export const useFeedbackStore = create<FeedbackState>((set, get) => ({
         }
     },
 
+    fetchRecentActivities: async (scope) => {
+        if (scope === 'plan') set({ recentPlanActivitiesLoading: true });
+        else set({ recentActivityResultsLoading: true });
+        try {
+            const userId = await getUserId();
+            if (!userId) return;
+            const response = await authedFetch(
+                `${API_URL}/feedback/activities/recent?source=${scope}&limit=5`,
+                { headers: { 'x-user-id': userId } },
+            );
+            if (!response.ok) return;
+            const payload = (await response.json()) as { results?: LatestActivityData[] };
+            const results = Array.isArray(payload.results) ? payload.results : [];
+            if (scope === 'plan') set({ recentPlanActivities: results });
+            else set({ recentActivityResults: results });
+        } catch (error) {
+            console.error('Fetch recent activities error:', error);
+        } finally {
+            if (scope === 'plan') set({ recentPlanActivitiesLoading: false });
+            else set({ recentActivityResultsLoading: false });
+        }
+    },
     fetchFeedbackStatus: async ({ workoutId, activityId }) => {
         const fallback: FeedbackStatusResult = {
             status: 'none',

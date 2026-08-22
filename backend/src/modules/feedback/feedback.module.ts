@@ -5,6 +5,7 @@ import { FeedbackController } from './feedback.controller';
 import { FeedbackProcessor } from './feedback.processor';
 import { NotificationModule } from '../notifications';
 import { GamificationModule } from '../gamification/gamification.module';
+import { RecentActivityResultsService } from './recent-activity-results.service';
 
 @Module({
   imports: [
@@ -15,7 +16,11 @@ import { GamificationModule } from '../gamification/gamification.module';
     }),
   ],
   controllers: [FeedbackController],
-  providers: [FeedbackAIService, FeedbackProcessor],
+  providers: [
+    FeedbackAIService,
+    FeedbackProcessor,
+    RecentActivityResultsService,
+  ],
   exports: [FeedbackAIService, BullModule],
 })
 export class FeedbackModule {}
