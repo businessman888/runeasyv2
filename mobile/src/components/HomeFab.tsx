@@ -9,8 +9,9 @@ import {
     Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { colors, spacing, shadows } from '../theme';
+import { fonts, spacing } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
+import { AppIcon } from './ui/AppIcon';
 
 interface HomeFabProps {
     onPressFreeRun: () => void;
@@ -93,12 +94,12 @@ export function HomeFab({ onPressFreeRun, onPressManual }: HomeFabProps) {
                 <FabOption
                     label="Treino Livre"
                     onPress={handleOption(onPressFreeRun)}
-                    icon={<MaterialCommunityIcons name="run-fast" size={26} color={colors.text} />}
+                    icon={<AppIcon name="running" size={28} tone="primary" variant="outline" />}
                 />
                 <FabOption
                     label="Treino manual"
                     onPress={handleOption(onPressManual)}
-                    icon={<Ionicons name="create-outline" size={24} color={colors.text} />}
+                    icon={<AppIcon name="edit" size={24} tone="primary" variant="outline" />}
                 />
             </Animated.View>
 
@@ -116,7 +117,7 @@ export function HomeFab({ onPressFreeRun, onPressManual }: HomeFabProps) {
                     accessibilityState={{ expanded: open }}
                 >
                     <Animated.View style={{ transform: [{ rotate }] }}>
-                        <Ionicons name="add" size={32} color={colors.background} />
+                        <AppIcon name="add" size={32} tone="onAccent" variant="outline" />
                     </Animated.View>
                 </TouchableOpacity>
             </View>
@@ -151,12 +152,12 @@ function FabOption({ label, onPress, icon }: FabOptionProps) {
     );
 }
 
-const PANEL_BG = '#15152A';
-const SUB_BTN_BG = '#15152A';
+const PANEL_BG = semanticColors.surface2;
+const SUB_BTN_BG = semanticColors.surface3;
 
 const styles = StyleSheet.create({
     backdrop: {
-        backgroundColor: '#000',
+        backgroundColor: semanticColors.canvas,
     },
     panel: {
         position: 'absolute',
@@ -167,7 +168,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 3,
         gap: ROW_GAP,
         alignItems: 'stretch',
-        shadowColor: '#000',
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 2, height: 2 },
         shadowOpacity: 0.25,
         shadowRadius: 8,
@@ -187,17 +188,17 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#000',
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 2, height: 2 },
         shadowOpacity: 0.25,
         shadowRadius: 4,
         elevation: 3,
     },
     labelText: {
-        fontFamily: 'Inter',
+        fontFamily: fonts.medium,
         fontSize: 9,
         fontWeight: '500',
-        color: '#EBEBF5',
+        color: semanticColors.textPrimary,
     },
     subButton: {
         width: SUB_BTN_SIZE,
@@ -206,7 +207,7 @@ const styles = StyleSheet.create({
         backgroundColor: SUB_BTN_BG,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#000',
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 2, height: 2 },
         shadowOpacity: 0.25,
         shadowRadius: 4,
@@ -220,9 +221,13 @@ const styles = StyleSheet.create({
         width: FAB_SIZE,
         height: FAB_SIZE,
         borderRadius: FAB_SIZE / 2,
-        backgroundColor: colors.primary,
+        backgroundColor: semanticColors.accent,
         alignItems: 'center',
         justifyContent: 'center',
-        ...shadows.neonStrong,
+        shadowColor: semanticColors.canvas,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.35,
+        shadowRadius: 12,
+        elevation: 8,
     },
 });

@@ -10,13 +10,14 @@ import {
     Linking,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fonts, borderRadius } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { useAuthStore, useTrialModalStore, getDisplayName, getAvatarUrl } from '../stores';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
 import { useCoachStore } from '../stores/coachStore';
 import { useProFeature } from '../hooks/useProFeature';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { AppIcon } from '../components/ui/AppIcon';
 import { Skeleton } from '../components/Skeleton';
 import { DeviceRow } from '../components/devices/DeviceRow';
 import { WEARABLE_ORDER } from '../config/wearables.config';
@@ -31,32 +32,6 @@ function getInitials(name: string): string {
     if (parts.length === 0) return '';
     if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '';
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-// Icon components using @expo/vector-icons. Nav icons are neutral (não-CTA):
-// o cyan fica reservado para ações primárias (botão de editar avatar, badge Pro).
-function PersonIcon({ size = 22, color = colors.textLight }: { size?: number; color?: string }) {
-    return <Ionicons name="person" size={size} color={color} />;
-}
-
-function HistoryIcon({ size = 22, color = colors.textLight }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="history" size={size} color={color} />;
-}
-
-function NotificationIcon({ size = 22, color = colors.textLight }: { size?: number; color?: string }) {
-    return <Ionicons name="notifications" size={size} color={color} />;
-}
-
-function HelpIcon({ size = 22, color = colors.textLight }: { size?: number; color?: string }) {
-    return <Ionicons name="help-circle" size={size} color={color} />;
-}
-
-function ChevronIcon({ size = 20, color = colors.textSecondary }: { size?: number; color?: string }) {
-    return <Ionicons name="chevron-forward" size={size} color={color} />;
-}
-
-function EditIcon({ size = 14, color = '#0A0A18' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="pencil" size={size} color={color} />;
 }
 
 export function SettingsScreen({ navigation }: any) {
@@ -103,7 +78,7 @@ export function SettingsScreen({ navigation }: any) {
     const initials = getInitials(userName);
 
     return (
-        <ScreenContainer centered>
+        <ScreenContainer centered style={styles.screen}>
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 {/* Header */}
                 <Pressable onPress={handleHeaderTap} style={styles.header} hitSlop={4}>
@@ -131,7 +106,7 @@ export function SettingsScreen({ navigation }: any) {
                             accessibilityRole="button"
                             accessibilityLabel="Editar perfil"
                         >
-                            <EditIcon size={14} color="#0A0A18" />
+                            <AppIcon name="edit" size={16} tone="primary" variant="filled" />
                         </TouchableOpacity>
                     </View>
                     <Text style={styles.userName}>{userName}</Text>
@@ -142,7 +117,7 @@ export function SettingsScreen({ navigation }: any) {
                         <Skeleton width={120} height={26} borderRadius={13} style={{ marginTop: spacing.sm }} />
                     ) : isProUser ? (
                         <View style={styles.badgePro}>
-                            <Ionicons name="shield-checkmark" size={13} color={colors.primary} />
+                            <AppIcon name="shieldCheck" size={16} tone="accent" variant="filled" />
                             <Text style={styles.badgeProText}>MEMBRO PRO</Text>
                         </View>
                     ) : (
@@ -154,7 +129,7 @@ export function SettingsScreen({ navigation }: any) {
                             accessibilityLabel="Plano grátis, tocar para fazer upgrade"
                         >
                             <Text style={styles.badgeFreeText}>PLANO GRÁTIS</Text>
-                            <Ionicons name="chevron-forward" size={13} color={colors.textSecondary} />
+                            <AppIcon name="chevronForward" size={16} tone="secondary" />
                         </TouchableOpacity>
                     )}
                 </View>
@@ -169,11 +144,11 @@ export function SettingsScreen({ navigation }: any) {
                         >
                             <View style={styles.menuItemLeft}>
                                 <View style={styles.menuIconContainer}>
-                                    <PersonIcon size={20} />
+                                    <AppIcon name="profile" size={20} tone="primary" />
                                 </View>
                                 <Text style={styles.menuItemText}>Informações Pessoais</Text>
                             </View>
-                            <ChevronIcon size={20} />
+                            <AppIcon name="chevronForward" size={20} tone="secondary" />
                         </TouchableOpacity>
 
                         <View style={styles.menuDivider} />
@@ -184,11 +159,11 @@ export function SettingsScreen({ navigation }: any) {
                         >
                             <View style={styles.menuItemLeft}>
                                 <View style={styles.menuIconContainer}>
-                                    <HistoryIcon size={20} />
+                                    <AppIcon name="history" size={20} tone="primary" />
                                 </View>
                                 <Text style={styles.menuItemText}>Histórico de Treinos</Text>
                             </View>
-                            <ChevronIcon size={20} />
+                            <AppIcon name="chevronForward" size={20} tone="secondary" />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -220,7 +195,7 @@ export function SettingsScreen({ navigation }: any) {
                         >
                             <View style={styles.menuItemLeft}>
                                 <View style={styles.menuIconContainer}>
-                                    <Ionicons name="headset" size={20} color={colors.textLight} />
+                                    <AppIcon name="headset" size={20} tone="primary" />
                                 </View>
                                 <Text style={styles.menuItemText}>Coach de Áudio</Text>
                             </View>
@@ -228,7 +203,7 @@ export function SettingsScreen({ navigation }: any) {
                                 <Text style={[styles.stateLabel, coachEnabled && styles.stateLabelOn]}>
                                     {coachEnabled ? 'Ligado' : 'Desligado'}
                                 </Text>
-                                <ChevronIcon size={20} />
+                                <AppIcon name="chevronForward" size={20} tone="secondary" />
                             </View>
                         </TouchableOpacity>
 
@@ -240,11 +215,11 @@ export function SettingsScreen({ navigation }: any) {
                         >
                             <View style={styles.menuItemLeft}>
                                 <View style={styles.menuIconContainer}>
-                                    <NotificationIcon size={20} />
+                                    <AppIcon name="notification" size={20} tone="primary" />
                                 </View>
                                 <Text style={styles.menuItemText}>Notificações</Text>
                             </View>
-                            <ChevronIcon size={20} />
+                            <AppIcon name="chevronForward" size={20} tone="secondary" />
                         </TouchableOpacity>
 
                         <View style={styles.menuDivider} />
@@ -255,11 +230,11 @@ export function SettingsScreen({ navigation }: any) {
                         >
                             <View style={styles.menuItemLeft}>
                                 <View style={styles.menuIconContainer}>
-                                    <HelpIcon size={20} />
+                                    <AppIcon name="help" size={20} tone="primary" />
                                 </View>
                                 <Text style={styles.menuItemText}>Ajuda / FAQ</Text>
                             </View>
-                            <ChevronIcon size={20} />
+                            <AppIcon name="chevronForward" size={20} tone="secondary" />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -275,18 +250,18 @@ export function SettingsScreen({ navigation }: any) {
                         >
                             <View style={styles.menuItemLeft}>
                                 <View style={styles.menuIconContainer}>
-                                    <Ionicons name="trash-outline" size={20} color={colors.error} />
+                                    <AppIcon name="delete" size={20} tone="danger" />
                                 </View>
                                 <Text style={[styles.menuItemText, { color: colors.error }]}>Excluir Conta</Text>
                             </View>
-                            <ChevronIcon size={20} />
+                            <AppIcon name="chevronForward" size={20} tone="secondary" />
                         </TouchableOpacity>
                     </View>
                 </View>
 
                 {/* Logout Button */}
                 <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                    <Ionicons name="log-out-outline" size={20} color={colors.error} />
+                    <AppIcon name="logout" size={20} tone="danger" />
                     <Text style={styles.logoutText}>Sair da Conta</Text>
                 </TouchableOpacity>
 
@@ -300,6 +275,9 @@ export function SettingsScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
+    screen: {
+        backgroundColor: semanticColors.canvas,
+    },
     scrollView: {
         flex: 1,
     },
@@ -311,7 +289,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontFamily: fonts.semibold,
         fontSize: 18,
-        color: colors.text,
+        color: semanticColors.textPrimary,
     },
     profileSection: {
         alignItems: 'center',
@@ -328,7 +306,7 @@ const styles = StyleSheet.create({
         height: 100,
         borderRadius: 50,
         borderWidth: 2,
-        borderColor: 'rgba(255,255,255,0.12)',
+        borderColor: semanticColors.borderStrong,
         overflow: 'hidden',
         marginBottom: spacing.md,
     },
@@ -339,14 +317,14 @@ const styles = StyleSheet.create({
     avatarInitials: {
         width: '100%',
         height: '100%',
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface3,
         justifyContent: 'center',
         alignItems: 'center',
     },
     initialsText: {
         fontFamily: fonts.semibold,
         fontSize: 36,
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
         textTransform: 'uppercase',
     },
     editAvatarButton: {
@@ -356,16 +334,16 @@ const styles = StyleSheet.create({
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: colors.primary,
+        backgroundColor: semanticColors.surface3,
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 3,
-        borderColor: '#0A0A18',
+        borderColor: semanticColors.canvas,
     },
     userName: {
         fontFamily: fonts.bold,
         fontSize: 22,
-        color: colors.text,
+        color: semanticColors.textPrimary,
         marginBottom: spacing.sm,
     },
     badgePro: {
@@ -389,9 +367,9 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 3,
-        backgroundColor: 'rgba(255,255,255,0.06)',
+        backgroundColor: semanticColors.glass,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.10)',
+        borderColor: semanticColors.borderSubtle,
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: borderRadius.full,
@@ -399,7 +377,7 @@ const styles = StyleSheet.create({
     badgeFreeText: {
         fontFamily: fonts.semibold,
         fontSize: 11,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         letterSpacing: 0.5,
     },
     section: {
@@ -409,16 +387,16 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontFamily: fonts.medium,
         fontSize: 13,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         letterSpacing: 0.6,
         marginBottom: spacing.sm,
         marginLeft: spacing.sm,
     },
     menuCard: {
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.06)',
+        borderColor: semanticColors.borderSubtle,
         overflow: 'hidden',
     },
     menuItem: {
@@ -437,7 +415,7 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 10,
-        backgroundColor: 'rgba(255,255,255,0.06)',
+        backgroundColor: semanticColors.surface3,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: spacing.md,
@@ -445,7 +423,7 @@ const styles = StyleSheet.create({
     menuItemText: {
         fontFamily: fonts.medium,
         fontSize: 15,
-        color: colors.text,
+        color: semanticColors.textPrimary,
     },
     menuItemRight: {
         flexDirection: 'row',
@@ -455,21 +433,21 @@ const styles = StyleSheet.create({
     stateLabel: {
         fontFamily: fonts.medium,
         fontSize: 13,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
     },
     stateLabelOn: {
         color: colors.primary,
     },
     menuDivider: {
         height: 1,
-        backgroundColor: 'rgba(255,255,255,0.06)',
+        backgroundColor: semanticColors.borderSubtle,
         marginLeft: 60,
     },
     logoutButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(239,68,68,0.10)',
+        backgroundColor: semanticColors.dangerSubtle,
         marginHorizontal: spacing.lg,
         paddingVertical: 14,
         borderRadius: 12,
@@ -484,7 +462,7 @@ const styles = StyleSheet.create({
     versionText: {
         fontFamily: fonts.regular,
         fontSize: 12,
-        color: 'rgba(235,235,245,0.4)',
+        color: semanticColors.textTertiary,
         textAlign: 'center',
         marginTop: spacing.lg,
     },

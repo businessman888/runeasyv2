@@ -12,6 +12,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet, View, Text, AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppNavigator } from './src/navigation';
+import { semanticColors } from './src/theme/semanticColors';
 import { useNotifications } from './src/hooks/useNotifications';
 import Mapbox from '@rnmapbox/maps';
 import { SuperwallProvider, CustomPurchaseControllerProvider } from 'expo-superwall';
@@ -400,7 +401,7 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A18',
+    backgroundColor: semanticColors.canvas,
   },
   errorContainer: {
     flex: 1,

@@ -8,11 +8,13 @@ import {
     Image,
     RefreshControl,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius } from '../theme';
+import { colors, typography, spacing, borderRadius, fonts } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { useGamificationStore, RankingUser } from '../stores/gamificationStore';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { RankingSkeleton } from '../components/skeletons/ScreenSkeletons';
+import { AppIcon } from '../components/ui/AppIcon';
+import { IconButton } from '../components/ui/IconButton';
 import { useResponsiveTheme } from '../theme/responsive';
 import { Patent } from '../components/patents/Patent';
 import { getCurrentPatent } from '../utils/patents';
@@ -60,7 +62,7 @@ function Avatar({ profile, size = 48, borderColor }: {
                 width: size,
                 height: size,
                 borderRadius: size / 2,
-                borderColor: borderColor || colors.border,
+                borderColor: borderColor || semanticColors.borderSubtle,
                 borderWidth: borderColor ? 2 : 1,
             },
         ]}>
@@ -93,8 +95,8 @@ function PodiumSection({ rankings }: { rankings: RankingUser[] }) {
             {second ? (
                 <View style={styles.podiumSide}>
                     <View style={styles.podiumAvatarWrapper}>
-                        <Avatar profile={second.profile} size={64} borderColor={colors.textSecondary} />
-                        <View style={[styles.podiumBadge, { backgroundColor: colors.textSecondary }]}>
+                        <Avatar profile={second.profile} size={64} borderColor={semanticColors.textSecondary} />
+                        <View style={[styles.podiumBadge, { backgroundColor: semanticColors.textSecondary }]}>
                             <Text style={styles.podiumBadgeText}>#2</Text>
                         </View>
                     </View>
@@ -111,7 +113,7 @@ function PodiumSection({ rankings }: { rankings: RankingUser[] }) {
                         <Text style={styles.podiumBadgeText}>#1</Text>
                     </View>
                 </View>
-                <Text style={[styles.podiumName, { fontWeight: typography.fontWeights.bold }]} numberOfLines={1}>
+                <Text style={[styles.podiumName, { fontFamily: fonts.bold }]} numberOfLines={1}>
                     {getUserDisplayName(first.profile)}
                 </Text>
                 <Text style={[styles.podiumXP, { color: colors.primary }]}>{formatXP(first.total_xp)} PTS</Text>
@@ -147,7 +149,7 @@ function RankingRow({ user }: { user: RankingUser }) {
                     <Patent patent={getCurrentPatent(user.current_level || 1)} size={22} glow={false} />
                 </View>
                 <View style={styles.streakRow}>
-                    <MaterialCommunityIcons name="fire" size={14} color={colors.primary} />
+                    <AppIcon name="flame" size={16} tone="accent" variant="filled" />
                     <Text style={styles.streakText}>
                         {user.current_streak > 0 ? `${String(user.current_streak).padStart(2, '0')} dias de sequência` : '0 dias de sequência'}
                     </Text>
@@ -176,11 +178,11 @@ function UserPositionCard({ rank, totalXP, streak, profile, currentLevel }: {
             <Avatar profile={profile} size={44} borderColor={colors.primary} />
             <View style={styles.rankInfo}>
                 <View style={styles.rankNameRow}>
-                    <Text style={[styles.rankName, { color: colors.text }]}>Você</Text>
+                    <Text style={[styles.rankName, { color: semanticColors.textPrimary }]}>Você</Text>
                     <Patent patent={getCurrentPatent(currentLevel)} size={22} glow={false} />
                 </View>
                 <View style={styles.streakRow}>
-                    <MaterialCommunityIcons name="fire" size={14} color={colors.primary} />
+                    <AppIcon name="flame" size={16} tone="accent" variant="filled" />
                     <Text style={styles.streakText}>
                         {streak > 0 ? `${String(streak).padStart(2, '0')} dias de sequência` : '0 dias de sequência'}
                     </Text>
@@ -216,11 +218,11 @@ function AchievementsSection({ earned, total, navigation }: {
                     <View style={styles.badgeIconsRow}>
                         {[...Array(Math.min(4, earned))].map((_, i) => (
                             <View key={i} style={[styles.miniBadge, { marginLeft: i > 0 ? -8 : 0 }]}>
-                                <Ionicons name="trophy" size={16} color={colors.primary} />
+                                <AppIcon name="trophy" size={16} tone="accent" variant="filled" />
                             </View>
                         ))}
                         {earned > 4 && (
-                            <View style={[styles.miniBadge, { marginLeft: -8, backgroundColor: colors.card }]}>
+                            <View style={[styles.miniBadge, { marginLeft: -8, backgroundColor: semanticColors.surface3 }]}>
                                 <Text style={styles.miniBadgeText}>+{earned - 4}</Text>
                             </View>
                         )}
@@ -297,7 +299,7 @@ export function RankingScreen({ navigation }: any) {
     const r = useResponsiveTheme();
 
     return (
-        <ScreenContainer>
+        <ScreenContainer style={styles.screen}>
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={[styles.scrollContent, r.isTablet && styles.tabletScrollContent]}
@@ -312,13 +314,13 @@ export function RankingScreen({ navigation }: any) {
                 <View style={r.isTablet ? styles.tabletInner : undefined}>
                 {/* Header */}
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
-                        <Ionicons name="chevron-back" size={24} color={colors.text} />
-                    </TouchableOpacity>
+                    <IconButton
+                        icon="chevronBack"
+                        accessibilityLabel="Voltar"
+                        onPress={() => navigation.goBack()}
+                    />
                     <Text style={styles.headerTitle}>Ranking</Text>
-                    <TouchableOpacity style={styles.headerButton}>
-                        <Ionicons name="share-social-outline" size={22} color={colors.text} />
-                    </TouchableOpacity>
+                    <View style={styles.headerButton} />
                 </View>
 
                 {/* Tab Selector */}
@@ -348,7 +350,7 @@ export function RankingScreen({ navigation }: any) {
                     <RankingSkeleton />
                 ) : rankings.length === 0 ? (
                     <View style={styles.emptyContainer}>
-                        <Ionicons name="trophy-outline" size={64} color={colors.textMuted} />
+                        <AppIcon name="trophy" size={48} tone="tertiary" />
                         <Text style={styles.emptyText}>Nenhum competidor ainda</Text>
                         <Text style={styles.emptySubtext}>Complete treinos para aparecer no ranking!</Text>
                     </View>
@@ -379,7 +381,7 @@ export function RankingScreen({ navigation }: any) {
                                 onPress={() => setShowAll(true)}
                             >
                                 <Text style={styles.seeMoreText}>Ver mais</Text>
-                                <Ionicons name="chevron-down" size={18} color={colors.primary} />
+                                <AppIcon name="chevronDown" size={16} tone="accent" />
                             </TouchableOpacity>
                         )}
 
@@ -418,6 +420,9 @@ export function RankingScreen({ navigation }: any) {
 // ─── Styles ────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+    screen: {
+        backgroundColor: semanticColors.canvas,
+    },
     scrollContent: {
         paddingHorizontal: spacing.base,
     },
@@ -454,8 +459,8 @@ const styles = StyleSheet.create({
     },
     headerTitle: {
         fontSize: typography.fontSizes.xl,
-        fontWeight: typography.fontWeights.bold,
-        color: colors.text,
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
     },
 
     // Tabs
@@ -463,7 +468,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         marginTop: spacing.sm,
         borderBottomWidth: 1,
-        borderBottomColor: colors.border,
+        borderBottomColor: semanticColors.borderSubtle,
     },
     tab: {
         flex: 1,
@@ -477,19 +482,20 @@ const styles = StyleSheet.create({
     },
     tabText: {
         fontSize: typography.fontSizes.md,
-        fontWeight: typography.fontWeights.medium,
-        color: colors.textMuted,
+        fontFamily: fonts.medium,
+        color: semanticColors.textTertiary,
     },
     tabTextActive: {
         color: colors.primary,
-        fontWeight: typography.fontWeights.semibold,
+        fontFamily: fonts.semibold,
     },
 
     // Period
     periodText: {
+        fontFamily: fonts.regular,
         textAlign: 'center',
         fontSize: typography.fontSizes.sm,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         marginTop: spacing.md,
         marginBottom: spacing.lg,
     },
@@ -521,7 +527,7 @@ const styles = StyleSheet.create({
         borderRadius: 50,
         padding: 3,
         borderWidth: 2,
-        borderColor: colors.primary,
+        borderColor: semanticColors.borderStrong,
     },
     podiumBadge: {
         position: 'absolute',
@@ -533,21 +539,21 @@ const styles = StyleSheet.create({
     },
     podiumBadgeText: {
         fontSize: 10,
-        fontWeight: typography.fontWeights.bold,
-        color: colors.text,
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
     },
     podiumName: {
         fontSize: typography.fontSizes.sm,
-        fontWeight: typography.fontWeights.medium,
-        color: colors.text,
+        fontFamily: fonts.medium,
+        color: semanticColors.textPrimary,
         marginTop: spacing.xs,
         maxWidth: 100,
         textAlign: 'center',
     },
     podiumXP: {
         fontSize: typography.fontSizes.sm,
-        fontWeight: typography.fontWeights.semibold,
-        color: colors.textSecondary,
+        fontFamily: fonts.semibold,
+        color: semanticColors.textSecondary,
         marginTop: 2,
     },
 
@@ -555,17 +561,17 @@ const styles = StyleSheet.create({
     rankRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius.lg,
         padding: spacing.md,
         marginBottom: spacing.sm,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
     },
     rankNumber: {
         fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.semibold,
-        color: colors.textSecondary,
+        fontFamily: fonts.semibold,
+        color: semanticColors.textSecondary,
         width: 32,
         textAlign: 'center',
     },
@@ -580,8 +586,8 @@ const styles = StyleSheet.create({
     },
     rankName: {
         fontSize: typography.fontSizes.md,
-        fontWeight: typography.fontWeights.semibold,
-        color: colors.text,
+        fontFamily: fonts.semibold,
+        color: semanticColors.textPrimary,
         flexShrink: 1,
     },
     streakRow: {
@@ -590,6 +596,7 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     streakText: {
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.xs,
         color: colors.primary,
         marginLeft: 4,
@@ -599,24 +606,25 @@ const styles = StyleSheet.create({
     },
     rankXPValue: {
         fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.bold,
+        fontFamily: fonts.bold,
         color: colors.primary,
     },
     rankXPLabel: {
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.xs,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
     },
 
     // User Position Card
     userPositionCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius.lg,
         padding: spacing.md,
         marginTop: spacing.sm,
         borderWidth: 1.5,
-        borderColor: colors.primary,
+        borderColor: semanticColors.borderStrong,
     },
 
     // Achievements
@@ -631,21 +639,21 @@ const styles = StyleSheet.create({
     },
     sectionTitle: {
         fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.bold,
-        color: colors.text,
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
         textAlign: 'center',
     },
     seeAllText: {
         fontSize: typography.fontSizes.md,
         color: colors.primary,
-        fontWeight: typography.fontWeights.medium,
+        fontFamily: fonts.medium,
     },
     achievementsCard: {
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius.lg,
         padding: spacing.base,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
     },
     achievementsBadgeRow: {
         flexDirection: 'row',
@@ -661,32 +669,33 @@ const styles = StyleSheet.create({
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: colors.highlight,
+        backgroundColor: semanticColors.surface3,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
     },
     miniBadgeText: {
         fontSize: 10,
-        fontWeight: typography.fontWeights.semibold,
-        color: colors.textSecondary,
+        fontFamily: fonts.semibold,
+        color: semanticColors.textSecondary,
     },
     achievementsCountContainer: {
         alignItems: 'flex-end',
     },
     achievementsLabel: {
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.xs,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
     },
     achievementsCount: {
         fontSize: typography.fontSizes.xl,
-        fontWeight: typography.fontWeights.bold,
-        color: colors.text,
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
     },
     progressBarBg: {
         height: 6,
-        backgroundColor: colors.highlight,
+        backgroundColor: semanticColors.surface3,
         borderRadius: 3,
         overflow: 'hidden',
     },
@@ -706,14 +715,14 @@ const styles = StyleSheet.create({
     seeMoreText: {
         fontSize: typography.fontSizes.md,
         color: colors.primary,
-        fontWeight: typography.fontWeights.medium,
+        fontFamily: fonts.medium,
         marginRight: 4,
     },
 
     // Divider
     divider: {
         height: 1,
-        backgroundColor: colors.border,
+        backgroundColor: semanticColors.borderSubtle,
         marginVertical: spacing.lg,
     },
 
@@ -728,25 +737,26 @@ const styles = StyleSheet.create({
     },
     emptyText: {
         fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.semibold,
-        color: colors.textSecondary,
+        fontFamily: fonts.semibold,
+        color: semanticColors.textSecondary,
         marginTop: spacing.base,
     },
     emptySubtext: {
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.md,
-        color: colors.textMuted,
+        color: semanticColors.textTertiary,
         marginTop: spacing.xs,
     },
 
     // Avatar
     avatarContainer: {
-        backgroundColor: colors.highlight,
+        backgroundColor: semanticColors.surface3,
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
     },
     avatarText: {
-        fontWeight: typography.fontWeights.bold,
+        fontFamily: fonts.bold,
         color: colors.primary,
     },
 });

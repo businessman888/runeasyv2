@@ -31,7 +31,7 @@ export default {
   splash: {
     image: "./assets/splash-icon.png",
     resizeMode: "contain",
-    backgroundColor: "#0E0E1F"
+    backgroundColor: "#050506"
   },
   ios: {
     buildNumber: iosBuildNumber,
@@ -74,7 +74,7 @@ export default {
     newArchEnabled: true,
     adaptiveIcon: {
       foregroundImage: "./assets/adaptive-icon.png",
-      backgroundColor: "#0E0E1F"
+      backgroundColor: "#050506"
     },
     package: "com.runeasy.app",
     googleServicesFile: "./google-services.json",

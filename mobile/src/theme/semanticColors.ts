@@ -16,6 +16,12 @@ export const semanticColors = {
   textSecondary: '#A7A7AE',
   textTertiary: '#7F7F88',
   accent: '#00D4FF',
+  textOnAccent: '#050506',
+  accentSubtle: 'rgba(0,212,255,0.10)',
+  successSubtle: 'rgba(16,185,129,0.12)',
+  warningSubtle: 'rgba(255,196,0,0.12)',
+  dangerSubtle: 'rgba(239,68,68,0.12)',
+  scrim: 'rgba(0,0,0,0.62)',
   transparent: 'transparent',
 } as const;
 

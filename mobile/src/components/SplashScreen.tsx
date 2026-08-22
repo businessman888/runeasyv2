@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { StatusBar } from 'expo-status-bar';
+import { semanticColors } from '../theme/semanticColors';
 
 const { width, height } = Dimensions.get('window');
 
@@ -22,7 +23,7 @@ export function SplashScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0E0E1F',
+        backgroundColor: semanticColors.canvas,
         justifyContent: 'center',
         alignItems: 'center',
     },

@@ -1,7 +1,8 @@
 import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BadgeShield } from './BadgeShield';
+import { semanticColors } from '../theme/semanticColors';
+import { AppIcon } from './ui/AppIcon';
 import {
   getEarnableBadgeSlugs,
   resolveWorkoutPaceSeconds,
@@ -61,17 +62,17 @@ interface WorkoutCardProps {
 
 // ─── Figma design tokens ──────────────────────────────────────────────────────
 
-const CARD_BG = '#15152A';
-const CARD_BORDER_ACTIVE = '#00D4FF';
-const TEXT_PRIMARY = '#EBEBF5';
-const TEXT_SECONDARY = 'rgba(235, 235, 245, 0.6)';
-const SEPARATOR = 'rgba(235, 235, 245, 0.1)';
-const BTN_ACTIVE_BG = '#00D4FF';
-const BTN_ACTIVE_TEXT = '#0E0E1F';
-const BTN_DISABLED_BG = 'rgba(235, 235, 245, 0.1)';
-const BTN_DISABLED_TEXT = 'rgba(235, 235, 245, 0.6)';
-const CHECKBOX_BORDER = 'rgba(235, 235, 245, 0.6)';
-const CHECKBOX_CHECKED_BG = '#00D4FF';
+const CARD_BG = semanticColors.surface2;
+const CARD_BORDER_ACTIVE = semanticColors.borderSubtle;
+const TEXT_PRIMARY = semanticColors.textPrimary;
+const TEXT_SECONDARY = semanticColors.textSecondary;
+const SEPARATOR = semanticColors.borderSubtle;
+const BTN_ACTIVE_BG = semanticColors.accent;
+const BTN_ACTIVE_TEXT = semanticColors.textOnAccent;
+const BTN_DISABLED_BG = semanticColors.glass;
+const BTN_DISABLED_TEXT = semanticColors.textTertiary;
+const CHECKBOX_BORDER = semanticColors.borderStrong;
+const CHECKBOX_CHECKED_BG = semanticColors.accent;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -217,7 +218,7 @@ export const WorkoutCard = memo(
           <View style={styles.checkboxArea}>
             <View style={[styles.checkbox, isCompleted && styles.checkboxChecked]}>
               {isCompleted && (
-                <MaterialCommunityIcons name="check" size={12} color="#FFFFFF" />
+                <AppIcon name="check" size={16} tone="onAccent" variant="filled" />
               )}
             </View>
           </View>
@@ -281,11 +282,7 @@ export const WorkoutCard = memo(
             accessibilityLabel="Começar treino"
             accessibilityState={{ disabled: !isButtonEnabled }}
           >
-            <MaterialCommunityIcons
-              name="run"
-              size={20}
-              color={isButtonEnabled ? '#FFFFFF' : BTN_DISABLED_TEXT}
-            />
+            <AppIcon name="running" size={20} tone={isButtonEnabled ? 'onAccent' : 'tertiary'} />
             <Text
               style={[
                 styles.startBtnText,
@@ -312,7 +309,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     ...Platform.select({
       ios: {
-        shadowColor: '#000000',
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 2, height: 2 },
         shadowOpacity: 0.25,
         shadowRadius: 4,
@@ -321,11 +318,12 @@ const styles = StyleSheet.create({
     }),
   },
   cardActive: {
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: CARD_BORDER_ACTIVE,
   },
   cardCompleted: {
-    borderWidth: 0,
+    borderWidth: 1,
+    borderColor: semanticColors.borderSubtle,
   },
 
   // Section 1
@@ -441,7 +439,7 @@ const styles = StyleSheet.create({
     gap: 8,
     ...Platform.select({
       ios: {
-        shadowColor: '#000000',
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 2, height: 2 },
         shadowOpacity: 0.25,
         shadowRadius: 4,

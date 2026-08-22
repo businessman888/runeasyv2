@@ -1,7 +1,9 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet, type DimensionValue } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
+import type { IconTone } from '../../theme/iconography';
+import { AppIcon } from '../ui/AppIcon';
 import { Sparkline } from './Sparkline';
 
 export interface PerformanceCardProps {
@@ -36,15 +38,17 @@ export const PerformanceCard = memo(function PerformanceCard({
     accentColor = colors.primary,
     widthPercent,
 }: PerformanceCardProps) {
-    let deltaColor = colors.textMuted;
+    let deltaColor: string = colors.textMuted;
     let deltaArrow: 'arrow-up' | 'arrow-down' | null = null;
     let deltaText = '';
+    let deltaTone: IconTone = 'tertiary';
     if (deltaPct !== null && deltaPct !== 0) {
         const isPositive = deltaPct > 0;
         const isGood = invertDelta ? !isPositive : isPositive;
         deltaColor = isGood ? colors.success : colors.error;
         deltaArrow = isPositive ? 'arrow-up' : 'arrow-down';
         deltaText = `${Math.abs(deltaPct).toFixed(0)}%`;
+        deltaTone = isGood ? 'success' : 'danger';
     }
 
     return (
@@ -55,7 +59,7 @@ export const PerformanceCard = memo(function PerformanceCard({
                 </Text>
                 {deltaArrow && (
                     <View style={styles.deltaBox}>
-                        <Ionicons name={deltaArrow} size={10} color={deltaColor} />
+                        <AppIcon name={deltaArrow === 'arrow-up' ? 'trendUp' : 'trendDown'} size={16} tone={deltaTone} />
                         <Text style={[styles.deltaText, { color: deltaColor }]}>
                             {deltaText}
                         </Text>
@@ -78,12 +82,12 @@ export const PerformanceCard = memo(function PerformanceCard({
 const styles = StyleSheet.create({
     card: {
         width: '48%',
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius.xl,
         paddingVertical: spacing.md,
         paddingHorizontal: spacing.base,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.04)',
+        borderColor: semanticColors.borderSubtle,
         minHeight: 108,
         justifyContent: 'space-between',
     },

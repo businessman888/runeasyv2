@@ -14,8 +14,9 @@ import {
     Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius, shadows, fonts } from '../theme';
+import { colors, typography, spacing, borderRadius, fonts } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
+import { AppIcon } from '../components/ui/AppIcon';
 import { useResponsiveTheme } from '../theme/responsive';
 import { ZONE_COLORS, ZONE_LABELS, PHASE_LABELS, getZoneColor } from '../theme/zoneColors';
 import { useTrainingStore, useWorkoutScopeStore, useTrialModalStore, ScheduleDay } from '../stores';
@@ -57,81 +58,81 @@ const MOCK_DAY_WORKOUT: DayWorkout = {
 };
 
 
-// Icon components using @expo/vector-icons
-function BackIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <Ionicons name="chevron-back" size={size} color={color} />;
+// Semantic icon adapters backed by the modular Ionicons package.
+function BackIcon({ size = 24, color = semanticColors.accent }: { size?: number; color?: string }) {
+    return <AppIcon name="chevronBack" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="accent" variant="filled" />;
 }
 
-function BellIcon({ size = 24, color = '#EBEBF5' }: { size?: number; color?: string }) {
-    return <Ionicons name="notifications" size={size} color={color} />;
+function BellIcon({ size = 24, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
+    return <AppIcon name="notification" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="primary" variant="filled" />;
 }
 
-function GoalsIcon({ size = 24, color = '#EBEBF5' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="clipboard-list-outline" size={size} color={color} />;
+function GoalsIcon({ size = 24, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
+    return <AppIcon name="flag" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="primary" />;
 }
 
-function BoltIcon({ size = 14, color = '#A78BFA' }: { size?: number; color?: string }) {
-    return <Ionicons name="flash" size={size} color={color} />;
+function BoltIcon({ size = 16, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    return <AppIcon name="energy" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" variant="filled" />;
 }
 
-function MoonIcon({ size = 48, color = '#A78BFA' }: { size?: number; color?: string }) {
-    return <Ionicons name="moon" size={size} color={color} />;
+function MoonIcon({ size = 48, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    return <AppIcon name="sleep" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" variant="filled" />;
 }
 
-function TimerIcon({ size = 18, color = '#EBEBF5' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="timer-outline" size={size} color={color} />;
+function TimerIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    return <AppIcon name="time" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" />;
 }
 
-function PaceClockIcon({ size = 18, color = '#EBEBF5' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="speedometer" size={size} color={color} />;
+function PaceClockIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    return <AppIcon name="trainingLoad" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" />;
 }
 
-function ArrowRightIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <Ionicons name="arrow-forward" size={size} color={color} />;
+function ArrowRightIcon({ size = 24, color = semanticColors.accent }: { size?: number; color?: string }) {
+    return <AppIcon name="chevronForward" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone={color === semanticColors.accent ? 'accent' : 'tertiary'} />;
 }
 
 function ProximoIcon({ size = 47 }: { size?: number }) {
     return (
-        <View style={{ width: size, height: size, borderRadius: 10, backgroundColor: 'rgba(0,127,153,0.5)', borderWidth: 1, borderColor: '#00D4FF', justifyContent: 'center', alignItems: 'center' }}>
-            <MaterialCommunityIcons name="run" size={size * 0.55} color="#00D4FF" />
+        <View style={[styles.proximoIcon, { width: size, height: size }]}>
+            <AppIcon name="running" size={24} tone="accent" variant="filled" />
         </View>
     );
 }
 
-function DistanceIcon({ size = 20, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="map-marker-distance" size={size} color={color} />;
+function DistanceIcon({ size = 20, color = semanticColors.accent }: { size?: number; color?: string }) {
+    return <AppIcon name="location" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="accent" />;
 }
 
-function RPEIcon({ size = 20, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="heart-pulse" size={size} color={color} />;
+function RPEIcon({ size = 20, color = semanticColors.accent }: { size?: number; color?: string }) {
+    return <AppIcon name="heartRate" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="accent" />;
 }
 
-function ClockOutlineIcon({ size = 20, color = 'rgba(235,235,245,0.6)' }: { size?: number; color?: string }) {
-    return <Ionicons name="time-outline" size={size} color={color} />;
+function ClockOutlineIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    return <AppIcon name="time" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" />;
 }
 
-function RunnerWarmupIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="walk" size={size} color={color} />;
+function RunnerWarmupIcon({ size = 24, color = semanticColors.accent }: { size?: number; color?: string }) {
+    return <AppIcon name="walking" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="accent" />;
 }
 
-function RunnerSprintIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="run-fast" size={size} color={color} />;
+function RunnerSprintIcon({ size = 24, color = semanticColors.accent }: { size?: number; color?: string }) {
+    return <AppIcon name="running" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="accent" variant="filled" />;
 }
 
-function CooldownIcon({ size = 24, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="yoga" size={size} color={color} />;
+function CooldownIcon({ size = 24, color = semanticColors.accent }: { size?: number; color?: string }) {
+    return <AppIcon name="wellness" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="accent" />;
 }
 
-function IdeaIcon({ size = 24, color = '#FFD700' }: { size?: number; color?: string }) {
-    return <Ionicons name="bulb" size={size} color={color} />;
+function IdeaIcon({ size = 24, color = colors.warning }: { size?: number; color?: string }) {
+    return <AppIcon name="sparkles" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="warning" variant="filled" />;
 }
 
-function RunFastIcon({ size = 30, color = '#0E0E1F' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="run-fast" size={size} color={color} />;
+function RunFastIcon({ size = 32, color = semanticColors.textOnAccent }: { size?: number; color?: string }) {
+    return <AppIcon name="running" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="tertiary" variant="filled" />;
 }
 
-function CloseIcon({ size = 24, color = '#EBEBF5' }: { size?: number; color?: string }) {
-    return <Ionicons name="close" size={size} color={color} />;
+function CloseIcon({ size = 24, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
+    return <AppIcon name="close" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="primary" />;
 }
 
 /**
@@ -552,8 +553,10 @@ export function CalendarScreen({ navigation }: any) {
                     <TouchableOpacity
                         style={styles.backButton}
                         onPress={() => navigation.goBack()}
+                        accessibilityRole="button"
+                        accessibilityLabel="Voltar"
                     >
-                        <BackIcon size={24} color="#00D4FF" />
+                        <BackIcon size={24} color={semanticColors.accent} />
                     </TouchableOpacity>
                     <View style={styles.headerCenter}>
                         <Text style={styles.headerSubtitle}>Agenda</Text>
@@ -565,7 +568,7 @@ export function CalendarScreen({ navigation }: any) {
                         accessibilityRole="button"
                         accessibilityLabel="Abrir metas do plano"
                     >
-                        <GoalsIcon size={24} color="#EBEBF5" />
+                        <GoalsIcon size={24} color={semanticColors.textPrimary} />
                     </TouchableOpacity>
                 </View>
 
@@ -692,7 +695,7 @@ export function CalendarScreen({ navigation }: any) {
                         ) : isSelectedPlanRecovery ? (
                             <View key={`recovery-${getSelectedDateStr()}`} style={styles.recoveryCard}>
                                 <View style={styles.recoveryCardHeader}>
-                                    <MoonIcon size={48} color="#A78BFA" />
+                                    <MoonIcon size={48} color={semanticColors.textSecondary} />
                                     <View style={styles.recoveryCardInfo}>
                                         <Text style={styles.recoveryTitle}>Dia de Recuperação</Text>
                                         <Text style={styles.recoverySubtitle}>
@@ -702,15 +705,15 @@ export function CalendarScreen({ navigation }: any) {
                                 </View>
                                 <View style={styles.recoveryTips}>
                                     <View style={styles.recoveryTipItem}>
-                                        <BoltIcon size={16} color="#A78BFA" />
+                                        <BoltIcon size={16} color={semanticColors.textSecondary} />
                                         <Text style={styles.recoveryTipText}>Hidrate-se bem</Text>
                                     </View>
                                     <View style={styles.recoveryTipItem}>
-                                        <BoltIcon size={16} color="#A78BFA" />
+                                        <BoltIcon size={16} color={semanticColors.textSecondary} />
                                         <Text style={styles.recoveryTipText}>Durma 7-8 horas</Text>
                                     </View>
                                     <View style={styles.recoveryTipItem}>
-                                        <BoltIcon size={16} color="#A78BFA" />
+                                        <BoltIcon size={16} color={semanticColors.textSecondary} />
                                         <Text style={styles.recoveryTipText}>Alongamento leve</Text>
                                     </View>
                                 </View>
@@ -728,7 +731,7 @@ export function CalendarScreen({ navigation }: any) {
                             <View key={`no-plan-${getSelectedDateStr()}`} style={styles.workoutDetailCard}>
                                 <View style={styles.cardTopSection}>
                                     <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-                                        <Ionicons name="calendar-outline" size={40} color="rgba(235, 235, 245, 0.4)" />
+                                        <AppIcon name="calendar" size={48} tone="tertiary" />
                                         <Text style={[styles.workoutTitle, { textAlign: 'center', marginTop: 12 }]}>
                                             Nenhum plano ativo para esta data
                                         </Text>
@@ -742,7 +745,7 @@ export function CalendarScreen({ navigation }: any) {
                             <View key={`rest-day-${getSelectedDateStr()}`} style={styles.workoutDetailCard}>
                                 <View style={styles.cardTopSection}>
                                     <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-                                        <Ionicons name="bed-outline" size={40} color="#A78BFA" />
+                                        <AppIcon name="sleep" size={48} tone="secondary" />
                                         <Text style={[styles.workoutTitle, { textAlign: 'center', marginTop: 12 }]}>
                                             Hoje é dia de recuperar as energias
                                         </Text>
@@ -786,8 +789,8 @@ export function CalendarScreen({ navigation }: any) {
                             {/* Render based on type: Workout vs Recovery */}
                             {tomorrowEntry.type === 'recovery' ? (
                                 <View style={styles.nextWorkoutCard}>
-                                    <View style={[styles.nextWorkoutIconContainer, { backgroundColor: 'rgba(167, 139, 250, 0.15)' }]}>
-                                        <Ionicons name="bed-outline" size={24} color="#A78BFA" />
+                                    <View style={[styles.nextWorkoutIconContainer, styles.recoveryIconContainer]}>
+                                        <AppIcon name="sleep" size={24} tone="secondary" />
                                     </View>
                                     <View style={styles.nextWorkoutInfo}>
                                         <Text style={styles.nextWorkoutTitle}>Dia de Recuperação</Text>
@@ -825,7 +828,7 @@ export function CalendarScreen({ navigation }: any) {
                                                 : 'Corrida de rua - média intensidade'}
                                         </Text>
                                     </View>
-                                    <ArrowRightIcon size={24} color="rgba(235,235,245,0.3)" />
+                                    <ArrowRightIcon size={24} color={semanticColors.textTertiary} />
                                 </TouchableOpacity>
                             ) : null}
                         </View>
@@ -844,7 +847,7 @@ export function CalendarScreen({ navigation }: any) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0A0A18',
+        backgroundColor: semanticColors.canvas,
     },
     scrollView: {
         flex: 1,
@@ -878,8 +881,8 @@ const styles = StyleSheet.create({
         paddingBottom: spacing.md,
     },
     backButton: {
-        width: 40,
-        height: 40,
+        width: 44,
+        height: 44,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -889,17 +892,17 @@ const styles = StyleSheet.create({
     },
     headerSubtitle: {
         fontSize: typography.fontSizes.xs,
-        color: '#00D4FF',
+        color: semanticColors.textSecondary,
         letterSpacing: 1,
     },
     headerTitle: {
         fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#FFFFFF',
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
     },
     notificationButton: {
-        width: 40,
-        height: 40,
+        width: 44,
+        height: 44,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -912,7 +915,7 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontFamily: fonts.semibold,
         fontSize: 15,
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
         marginLeft: spacing.lg,
         marginTop: spacing.md,
         marginBottom: spacing.sm,
@@ -936,13 +939,13 @@ const styles = StyleSheet.create({
         gap: spacing.md,
     },
     lockedDayTitle: {
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
         fontFamily: fonts.bold,
         fontSize: 18,
         textAlign: 'center',
     },
     lockedDaySubtitle: {
-        color: colors.proMutedText,
+        color: semanticColors.textSecondary,
         fontFamily: fonts.regular,
         fontSize: 14,
         lineHeight: 20,
@@ -961,29 +964,29 @@ const styles = StyleSheet.create({
     },
     todayDate: {
         fontSize: typography.fontSizes.xs,
-        color: '#00D4FF',
+        color: semanticColors.accent,
         marginBottom: 4,
     },
     todayTitle: {
         fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#FFFFFF',
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
     },
     totalKm: {
         alignItems: 'flex-end',
     },
     totalKmValue: {
         fontSize: typography.fontSizes['2xl'],
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#00D4FF',
+        fontFamily: fonts.bold,
+        color: semanticColors.accent,
     },
     totalKmUnit: {
         fontSize: typography.fontSizes.sm,
-        fontWeight: typography.fontWeights.normal as any,
+        fontFamily: fonts.regular,
     },
     totalKmLabel: {
         fontSize: typography.fontSizes.xs,
-        color: 'rgba(235, 235, 245, 0.4)',
+        color: semanticColors.textTertiary,
     },
     workoutDetailCard: {
         marginBottom: spacing.lg,
@@ -991,7 +994,7 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
     cardTopSection: {
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface1,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         padding: spacing.lg,
@@ -1003,24 +1006,24 @@ const styles = StyleSheet.create({
         marginBottom: spacing.md,
     },
     intensityBadge: {
-        backgroundColor: 'transparent',
+        backgroundColor: semanticColors.transparent,
         borderWidth: 1,
-        borderColor: '#00D4FF',
+        borderColor: semanticColors.borderStrong,
         paddingHorizontal: spacing.md,
         paddingVertical: spacing.xs,
         borderRadius: borderRadius.md,
     },
     intensityText: {
         fontSize: 11,
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#00D4FF',
+        fontFamily: fonts.bold,
+        color: semanticColors.accent,
         letterSpacing: 0.5,
     },
     sourceBadge: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        backgroundColor: 'transparent',
+        backgroundColor: semanticColors.transparent,
         borderWidth: 1,
         paddingHorizontal: spacing.sm,
         paddingVertical: spacing.xs,
@@ -1028,7 +1031,7 @@ const styles = StyleSheet.create({
     },
     sourceBadgeText: {
         fontSize: 10,
-        fontWeight: typography.fontWeights.bold as any,
+        fontFamily: fonts.bold,
         letterSpacing: 0.5,
     },
     pendingBadge: {
@@ -1040,11 +1043,11 @@ const styles = StyleSheet.create({
         width: 10,
         height: 10,
         borderRadius: 5,
-        backgroundColor: '#FFC107',
+        backgroundColor: colors.warning,
     },
     pendingText: {
         fontSize: typography.fontSizes.xs,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
     workoutDetailBody: {
         flexDirection: 'row',
@@ -1060,13 +1063,13 @@ const styles = StyleSheet.create({
     },
     workoutTitle: {
         fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#FFFFFF',
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
         marginBottom: 4,
     },
     workoutDescription: {
         fontSize: typography.fontSizes.xs,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
         marginBottom: spacing.sm,
     },
     workoutMetrics: {
@@ -1080,7 +1083,7 @@ const styles = StyleSheet.create({
     },
     metricText: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
     viewDetailsButton: {
         flexDirection: 'row',
@@ -1088,7 +1091,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingVertical: spacing.lg,
         paddingHorizontal: spacing.lg,
-        backgroundColor: '#0E0E1F',
+        backgroundColor: semanticColors.surface2,
         borderTopLeftRadius: 0,
         borderTopRightRadius: 0,
         borderBottomLeftRadius: 30,
@@ -1096,35 +1099,46 @@ const styles = StyleSheet.create({
     },
     viewDetailsText: {
         fontSize: typography.fontSizes.base,
-        fontWeight: typography.fontWeights.semibold as any,
-        color: '#FFFFFF',
+        fontFamily: fonts.semibold,
+        color: semanticColors.textPrimary,
     },
     nextWorkoutSection: {
         marginTop: spacing.lg,
     },
     nextWorkoutDivider: {
         height: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: semanticColors.borderSubtle,
         marginBottom: spacing.lg,
     },
     nextWorkoutLabel: {
         fontSize: typography.fontSizes.xs,
-        color: 'rgba(235, 235, 245, 0.4)',
+        color: semanticColors.textTertiary,
         marginBottom: spacing.md,
     },
     nextWorkoutCard: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.md,
-        backgroundColor: '#1A1A2E',
+        backgroundColor: semanticColors.surface1,
         padding: spacing.md,
         borderRadius: borderRadius['2xl'],
+    },
+    proximoIcon: {
+        borderRadius: 12,
+        backgroundColor: semanticColors.accentSubtle,
+        borderWidth: 1,
+        borderColor: semanticColors.borderSubtle,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    recoveryIconContainer: {
+        backgroundColor: semanticColors.surface2,
     },
     nextWorkoutIconContainer: {
         width: 48,
         height: 48,
         borderRadius: borderRadius.xl,
-        backgroundColor: 'rgba(0, 212, 255, 0.1)',
+        backgroundColor: semanticColors.accentSubtle,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -1133,28 +1147,28 @@ const styles = StyleSheet.create({
     },
     nextWorkoutTitle: {
         fontSize: typography.fontSizes.base,
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#FFFFFF',
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
     },
     nextWorkoutSubtitle: {
         fontSize: typography.fontSizes.xs,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
         marginTop: 2,
     },
 
     // Modal Styles
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        backgroundColor: semanticColors.scrim,
         justifyContent: 'flex-end',
     },
     modalContainer: {
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         overflow: 'hidden',
         height: Dimensions.get('window').height * 0.85,
-        shadowColor: '#000',
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 0, height: -4 },
         shadowOpacity: 0.3,
         shadowRadius: 10,
@@ -1166,7 +1180,7 @@ const styles = StyleSheet.create({
     dragHandleArea: {
         paddingVertical: 8,
         alignItems: 'center',
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
     },
     modalScrollView: {
         flex: 1,
@@ -1179,7 +1193,7 @@ const styles = StyleSheet.create({
     modalHandle: {
         width: 40,
         height: 5,
-        backgroundColor: 'rgba(235, 235, 245, 0.3)',
+        backgroundColor: semanticColors.borderStrong,
         borderRadius: 3,
         alignSelf: 'center',
         marginTop: spacing.md,
@@ -1187,8 +1201,8 @@ const styles = StyleSheet.create({
     },
     modalTitle: {
         fontSize: 24,
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#EBEBF5',
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
         textAlign: 'center',
         marginBottom: spacing.lg,
     },
@@ -1207,7 +1221,7 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         borderRadius: 20,
         borderWidth: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        backgroundColor: semanticColors.glass,
     },
     zoneChipDot: {
         width: 8,
@@ -1216,22 +1230,22 @@ const styles = StyleSheet.create({
     },
     zoneChipText: {
         fontSize: typography.fontSizes.xs,
-        color: colors.textLight,
-        fontWeight: typography.fontWeights.semibold,
+        color: semanticColors.textPrimary,
+        fontFamily: fonts.semibold,
         letterSpacing: 0.3,
     },
     phaseChip: {
         paddingHorizontal: spacing.md,
         paddingVertical: 6,
         borderRadius: 20,
-        backgroundColor: 'rgba(151, 71, 255, 0.12)',
+        backgroundColor: semanticColors.surface3,
         borderWidth: 1,
-        borderColor: 'rgba(151, 71, 255, 0.3)',
+        borderColor: semanticColors.borderSubtle,
     },
     phaseChipText: {
         fontSize: typography.fontSizes.xs,
-        color: colors.textLight,
-        fontWeight: typography.fontWeights.medium,
+        color: semanticColors.textSecondary,
+        fontFamily: fonts.medium,
     },
     blockZoneStrip: {
         position: 'absolute',
@@ -1250,29 +1264,29 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: 'rgba(0, 212, 255, 0.15)',
+        backgroundColor: semanticColors.surface3,
         paddingHorizontal: spacing.md,
         paddingVertical: spacing.sm,
         borderRadius: 20,
         borderWidth: 1,
-        borderColor: 'rgba(0, 212, 255, 0.3)',
+        borderColor: semanticColors.borderSubtle,
     },
     modalBadgeText: {
         fontSize: typography.fontSizes.sm,
-        fontWeight: typography.fontWeights.semibold as any,
-        color: '#EBEBF5',
+        fontFamily: fonts.semibold,
+        color: semanticColors.textPrimary,
     },
 
     // Workout Block Styles
     workoutBlock: {
-        backgroundColor: '#15152A',
+        backgroundColor: semanticColors.surface1,
         borderRadius: 16,
         marginBottom: spacing.md,
         overflow: 'hidden',
     },
     workoutBlockMain: {
         borderWidth: 1,
-        borderColor: 'rgba(0, 212, 255, 0.3)',
+        borderColor: semanticColors.borderSubtle,
     },
     blockHeader: {
         flexDirection: 'row',
@@ -1280,21 +1294,21 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: spacing.md,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+        borderBottomColor: semanticColors.borderSubtle,
     },
     blockSubtitle: {
         fontSize: typography.fontSizes.xs,
-        color: 'rgba(235, 235, 245, 0.5)',
+        color: semanticColors.textTertiary,
         marginBottom: 4,
     },
     blockSubtitleMain: {
-        color: '#00D4FF',
-        fontWeight: typography.fontWeights.bold as any,
+        color: semanticColors.accent,
+        fontFamily: fonts.bold,
     },
     blockTitle: {
         fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#EBEBF5',
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
     },
     blockContent: {
         padding: spacing.md,
@@ -1318,17 +1332,17 @@ const styles = StyleSheet.create({
     },
     blockDuration: {
         fontSize: typography.fontSizes.base,
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#EBEBF5',
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
     },
     blockDescription: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
         marginLeft: 26,
     },
     blockDescriptionMain: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
     blockPaceRow: {
         flexDirection: 'row',
@@ -1337,44 +1351,44 @@ const styles = StyleSheet.create({
         marginTop: spacing.md,
         paddingTop: spacing.md,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(255, 255, 255, 0.05)',
+        borderTopColor: semanticColors.borderSubtle,
     },
     blockPaceLabel: {
         fontSize: typography.fontSizes.base,
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#EBEBF5',
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
     },
     blockPace: {
         fontSize: typography.fontSizes.base,
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#00D4FF',
+        fontFamily: fonts.bold,
+        color: semanticColors.accent,
     },
     blockRecovery: {
         marginTop: spacing.md,
         paddingTop: spacing.md,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(255, 255, 255, 0.05)',
+        borderTopColor: semanticColors.borderSubtle,
     },
     blockRecoveryTitle: {
         fontSize: typography.fontSizes.base,
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#EBEBF5',
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
         marginBottom: 4,
     },
     blockRecoveryText: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
 
     // Insight Card Styles
     insightCard: {
-        backgroundColor: 'rgba(0, 127, 153, 0.3)',
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         padding: spacing.lg,
         marginTop: spacing.md,
         marginBottom: spacing.lg,
         borderWidth: 1,
-        borderColor: '#00D4FF',
+        borderColor: semanticColors.borderSubtle,
     },
     insightHeader: {
         flexDirection: 'row',
@@ -1384,13 +1398,13 @@ const styles = StyleSheet.create({
     },
     insightTitle: {
         fontSize: typography.fontSizes.sm,
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#00D4FF',
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
         letterSpacing: 0.5,
     },
     insightText: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(235, 235, 245, 0.8)',
+        color: semanticColors.textSecondary,
         lineHeight: 20,
     },
 
@@ -1398,18 +1412,18 @@ const styles = StyleSheet.create({
     startWorkoutContainer: {
         paddingHorizontal: spacing.lg,
         paddingVertical: spacing.lg,
-        backgroundColor: '#1C1C2E',
+        backgroundColor: semanticColors.surface2,
     },
     startWorkoutButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: spacing.sm,
-        backgroundColor: '#00D4FF',
+        backgroundColor: semanticColors.accent,
         paddingVertical: spacing.md,
         paddingHorizontal: spacing.xl,
         borderRadius: 20,
-        shadowColor: '#00D4FF',
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5,
         shadowRadius: 6,
@@ -1417,17 +1431,17 @@ const styles = StyleSheet.create({
     },
     startWorkoutText: {
         fontSize: typography.fontSizes.base,
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#0E0E1F',
+        fontFamily: fonts.bold,
+        color: semanticColors.textOnAccent,
     },
 
     // Recovery Card Styles
     recoveryCard: {
-        backgroundColor: 'rgba(167, 139, 250, 0.1)',
+        backgroundColor: semanticColors.surface1,
         borderRadius: 16,
         padding: spacing.lg,
         borderWidth: 1,
-        borderColor: 'rgba(167, 139, 250, 0.3)',
+        borderColor: semanticColors.borderSubtle,
     },
     recoveryCardHeader: {
         flexDirection: 'row',
@@ -1440,13 +1454,13 @@ const styles = StyleSheet.create({
     },
     recoveryTitle: {
         fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#A78BFA',
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
         marginBottom: 4,
     },
     recoverySubtitle: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
     recoveryTips: {
         flexDirection: 'row',
@@ -1457,13 +1471,13 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.xs,
-        backgroundColor: 'rgba(167, 139, 250, 0.15)',
+        backgroundColor: semanticColors.surface2,
         paddingVertical: spacing.xs,
         paddingHorizontal: spacing.sm,
         borderRadius: 12,
     },
     recoveryTipText: {
         fontSize: typography.fontSizes.sm,
-        color: 'rgba(235, 235, 245, 0.8)',
+        color: semanticColors.textSecondary,
     },
 });

@@ -3,6 +3,7 @@ import { View, StyleSheet, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { contentMaxWidth } from '../theme/responsive';
+import { semanticColors } from '../theme/semanticColors';
 
 interface ScreenContainerProps {
     children: React.ReactNode;
@@ -53,7 +54,7 @@ export function ScreenContainer({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0A0A18',
+        backgroundColor: semanticColors.canvas,
     },
     centeredOuter: {
         alignItems: 'center',

@@ -1,7 +1,8 @@
 import React, { memo, useCallback } from 'react';
 import { Pressable, Text, View, StyleSheet } from 'react-native';
-import { colors, fonts } from '../../theme';
-import { DayIndicator, STATUS_COLORS, type CalendarDayStatus } from './DayIndicator';
+import { fonts } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
+import { DayIndicator, type CalendarDayStatus } from './DayIndicator';
 
 /**
  * A single calendar cell. Vertical flex stack (no absolutely-positioned dots):
@@ -9,10 +10,8 @@ import { DayIndicator, STATUS_COLORS, type CalendarDayStatus } from './DayIndica
  *   [circle with the day number]
  *   [status indicator icon]
  *
- * Selected day: a "stadium" capsule tinted by the day's status (green = done,
- * red = missed, purple = rest, cyan = upcoming) sits behind the stack, with the
- * number in a dark inner circle. The indicator is kept (color + icon, never
- * color alone) but tinted dark for contrast on the colored capsule.
+ * Selection uses a neutral elevated capsule; status remains communicated by
+ * its semantic icon, keeping accent color focused on actions and today.
  *
  * `weekday` is passed only in week mode (month mode has a shared header row).
  */
@@ -49,9 +48,6 @@ function CalendarDayInner({
     if (!inMonth) return <View style={styles.cell} />;
 
     const hasLabel = weekday != null;
-    // Selected capsule takes the status color; default cyan when the day has no
-    // status (e.g. an upcoming plan day the user just tapped).
-    const capsuleColor = STATUS_COLORS[status ?? 'planned'];
 
     return (
         <Pressable
@@ -61,9 +57,9 @@ function CalendarDayInner({
             accessibilityLabel={accessibilityLabel ?? String(date.getDate())}
             accessibilityState={{ selected: isSelected }}
         >
-            {/* Status-colored stadium capsule behind the content. */}
+            {/* Neutral elevated capsule behind the selected day. */}
             {isSelected && (
-                <View style={[styles.capsule, { backgroundColor: capsuleColor }]} pointerEvents="none" />
+                <View style={styles.capsule} pointerEvents="none" />
             )}
 
             {hasLabel && (
@@ -85,10 +81,7 @@ function CalendarDayInner({
 
             <View style={styles.indicatorSlot}>
                 {status && (
-                    <DayIndicator
-                        status={status}
-                        color={isSelected ? colors.backgroundLight : undefined}
-                    />
+                    <DayIndicator status={status} />
                 )}
             </View>
         </Pressable>
@@ -117,15 +110,18 @@ const styles = StyleSheet.create({
         left: 2,
         right: 2,
         borderRadius: 20,
+        backgroundColor: semanticColors.surface3,
+        borderWidth: 1,
+        borderColor: semanticColors.borderStrong,
     },
     weekday: {
         fontFamily: fonts.medium,
         fontSize: 12,
-        color: colors.textLight,
+        color: semanticColors.textSecondary,
         marginBottom: 3,
     },
     weekdaySelected: {
-        color: colors.backgroundLight, // navy on the colored capsule
+        color: semanticColors.textPrimary,
     },
     circle: {
         width: CIRCLE,
@@ -137,15 +133,15 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     circleSelected: {
-        backgroundColor: colors.backgroundLight, // #0E0E1F
+        backgroundColor: semanticColors.surface1,
     },
     number: {
         fontFamily: fonts.medium,
         fontSize: 16,
-        color: colors.white,
+        color: semanticColors.textPrimary,
     },
     numberToday: {
-        color: colors.primary,
+        color: semanticColors.accent,
         fontFamily: fonts.bold,
     },
     indicatorSlot: {

@@ -1,12 +1,14 @@
+import { semanticColors } from './semanticColors';
+
 // Design System Colors - Dark Theme (Figma design)
 export const colors = {
     // Backgrounds - Dark Navy
-    background: '#0A0A18',  // dark navy background
-    backgroundLight: '#0E0E1F',  // slightly lighter
+    background: semanticColors.canvas,
+    backgroundLight: semanticColors.surface1,
     white: '#FFFFFF',
-    card: '#1A1A2E',  // dark card
-    cardDark: '#0E0E1F',  // darker card variant
-    highlight: '#1E1E32',  // dark highlight
+    card: semanticColors.surface2,
+    cardDark: semanticColors.surface1,
+    highlight: semanticColors.surface3,
 
     // Primary & Accent
     primary: '#00D4FF',  // neon-cyan - electric blue
@@ -21,42 +23,42 @@ export const colors = {
     info: '#3B82F6',
 
     // Text - Light for dark theme
-    text: '#FFFFFF',  // white text
-    textLight: '#EBEBF5',  // light text
-    textSecondary: '#A0A0B2',  // muted light
-    textMuted: '#6B6B7B',  // darker muted
+    text: semanticColors.textPrimary,
+    textLight: semanticColors.textPrimary,
+    textSecondary: semanticColors.textSecondary,
+    textMuted: semanticColors.textTertiary,
 
     // UI Elements  
-    border: '#2A2A3E',  // dark border
-    borderLight: '#1E1E32',  // lighter dark border
+    border: semanticColors.borderSubtle,
+    borderLight: semanticColors.borderSubtle,
 
     // Streak Card (Figma)
-    streakCard: '#15152A',
-    streakDayCard: '#1C1C2E',
+    streakCard: semanticColors.surface1,
+    streakDayCard: semanticColors.surface2,
     recovery: '#9747FF',
     missed: '#FF453A',
     completed: '#32CD32',
 
     // Glassmorphism overlay
-    glassWhite: 'rgba(255, 255, 255, 0.1)',
-    glassLight: 'rgba(255, 255, 255, 0.05)',
-    glassDark: 'rgba(0, 0, 0, 0.3)',
+    glassWhite: semanticColors.borderStrong,
+    glassLight: semanticColors.glass,
+    glassDark: 'rgba(0, 0, 0, 0.42)',
 
     // Upgrade Pro card (Figma node 1235:1300) — glass over bg image
-    proGlassOverlay: 'rgba(28, 28, 46, 0.6)',       // dark veil over the bg image
-    proGlassOverlayStrong: 'rgba(14, 14, 30, 0.82)', // denser veil for teasers — keeps overlay text readable over the mock (Android blur is weak)
-    proGlassBorder: 'rgba(235, 235, 245, 0.18)',     // light, clean glass hairline border
-    proGlassBorderCyan: 'rgba(0, 212, 255, 0.22)',   // premium static cyan hairline — clean alternative to the animated beam (matches AnimatedBorder's faint outline)
-    proCardGlassFill: 'rgba(28, 28, 46, 0.5)',       // pre-paywall benefit cards — translucent glass fill (border reuses proDivider)
-    proCtaFill: 'rgba(8, 34, 42, 0.92)',            // CTA pill — near-opaque dark teal so the card blur doesn't bleed through
-    proDivider: 'rgba(235, 235, 245, 0.1)',         // hairline under header
-    proMutedText: 'rgba(235, 235, 245, 0.6)',       // tagline + bullets
+    proGlassOverlay: 'rgba(13, 13, 15, 0.72)',
+    proGlassOverlayStrong: 'rgba(5, 5, 6, 0.88)',
+    proGlassBorder: semanticColors.borderStrong,
+    proGlassBorderCyan: semanticColors.borderSubtle,
+    proCardGlassFill: 'rgba(20, 20, 22, 0.72)',
+    proCtaFill: semanticColors.surface3,
+    proDivider: semanticColors.borderSubtle,
+    proMutedText: semanticColors.textSecondary,
 
     // Floating tab bar — translucent navy veil over the frosted BlurView, so the
     // scroll content behind the pill blurs through while labels/icons stay legible
     // (matches the streakCard #15152A identity at ~55% opacity).
-    tabBarGlassFill: 'rgba(21, 21, 42, 0.55)',
-    tabBarIdleBorder: 'rgba(235, 235, 245, 0.18)', // subtle hairline on the idle profile avatar ring
+    tabBarGlassFill: 'rgba(13, 13, 15, 0.78)',
+    tabBarIdleBorder: semanticColors.borderStrong,
 };
 
 // Plus Jakarta Sans — loaded at runtime in App.tsx via @expo-google-fonts.
@@ -145,18 +147,18 @@ export const shadows = {
         elevation: 8,
     },
     neon: {
-        shadowColor: '#00D4FF',
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 15,
-        elevation: 6,
+        shadowOpacity: 0.18,
+        shadowRadius: 10,
+        elevation: 5,
     },
     neonStrong: {
-        shadowColor: '#00D4FF',
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.4,
-        shadowRadius: 20,
-        elevation: 8,
+        shadowOpacity: 0.24,
+        shadowRadius: 16,
+        elevation: 7,
     },
 };
 

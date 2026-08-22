@@ -6,11 +6,11 @@ import {
     StyleSheet,
     ScrollView,
     TouchableOpacity,
-    Platform,
 } from 'react-native';
 import * as Storage from '../utils/storage';
-import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius, shadows, fonts } from '../theme';
+import { colors, typography, spacing, borderRadius, fonts } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
+import { AppIcon } from '../components/ui/AppIcon';
 import { useResponsiveTheme } from '../theme/responsive';
 import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore, useStatsStore, useNotificationStore, useWorkoutScopeStore, getDisplayName, getAvatarUrl } from '../stores';
 import type { LatestActivityData } from '../stores/feedbackStore';
@@ -66,37 +66,37 @@ const MOCK_TEASE_WORKOUT: WorkoutData = {
     status: 'pending',
 };
 
-// Icon components using @expo/vector-icons
-function RunningIcon({ size = 30, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="run" size={size} color={color} />;
+// Semantic icon adapters backed by the modular Ionicons package.
+function RunningIcon({ size = 32, color = semanticColors.accent }: { size?: number; color?: string }) {
+    return <AppIcon name="running" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone={color === semanticColors.accent ? 'accent' : 'tertiary'} />;
 }
 
-function DistanceIcon({ size = 18, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="map-marker-distance" size={size} color={color} />;
+function DistanceIcon({ size = 20, color = semanticColors.accent }: { size?: number; color?: string }) {
+    return <AppIcon name="location" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone={color === semanticColors.accent ? 'accent' : 'secondary'} />;
 }
 
-function PaceIcon({ size = 18, color = '#00D4FF' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="timer-outline" size={size} color={color} />;
+function PaceIcon({ size = 20, color = semanticColors.accent }: { size?: number; color?: string }) {
+    return <AppIcon name="trainingLoad" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone={color === semanticColors.accent ? 'accent' : 'secondary'} />;
 }
 
-function CalendarSmallIcon({ size = 18, color = 'rgba(235, 235, 245, 0.6)' }: { size?: number; color?: string }) {
-    return <Ionicons name="calendar-outline" size={size} color={color} />;
+function CalendarSmallIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    return <AppIcon name="calendar" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" />;
 }
 
-function ShoeIcon({ size = 24, color = '#0E0E1F' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="shoe-sneaker" size={size} color={color} />;
+function ShoeIcon({ size = 24, color = semanticColors.textOnAccent }: { size?: number; color?: string }) {
+    return <AppIcon name="walking" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone={color === semanticColors.textOnAccent ? 'tertiary' : 'primary'} variant="filled" />;
 }
 
-function LockIcon({ size = 24, color = '#6B7280' }: { size?: number; color?: string }) {
-    return <Ionicons name="lock-closed" size={size} color={color} />;
+function LockIcon({ size = 24, color = semanticColors.textTertiary }: { size?: number; color?: string }) {
+    return <AppIcon name="lock" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone={color === semanticColors.textTertiary ? 'tertiary' : 'primary'} variant="filled" />;
 }
 
-function MoonIcon({ size = 30, color = '#A78BFA' }: { size?: number; color?: string }) {
-    return <Ionicons name="moon" size={size} color={color} />;
+function MoonIcon({ size = 32, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    return <AppIcon name="sleep" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" variant="filled" />;
 }
 
-function BedIcon({ size = 24, color = '#A78BFA' }: { size?: number; color?: string }) {
-    return <MaterialCommunityIcons name="bed" size={size} color={color} />;
+function BedIcon({ size = 24, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    return <AppIcon name="sleep" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" />;
 }
 
 export function HomeScreen({ navigation }: any) {
@@ -630,7 +630,7 @@ export function HomeScreen({ navigation }: any) {
                 {/* Apple Health sync banner — shown for 4s after a successful sync */}
                 {healthKitLastSyncedCount > 0 && (
                     <View style={styles.healthKitBanner}>
-                        <Ionicons name="checkmark-circle" size={18} color="#4ADE80" />
+                        <AppIcon name="check" size={20} tone="success" variant="filled" />
                         <Text style={styles.healthKitBannerText}>
                             {healthKitLastSyncedCount === 1
                                 ? '1 nova corrida sincronizada do Apple Health'
@@ -653,12 +653,12 @@ export function HomeScreen({ navigation }: any) {
                             navigation.navigate('DeviceConnect', { provider: 'apple' })
                         }
                     >
-                        <Ionicons name="watch-outline" size={18} color={colors.primary} />
+                        <AppIcon name="workout" size={20} tone="accent" />
                         <Text style={styles.healthKitConnectBannerText}>
                             Treina pelo app da Apple no relógio? Conecte a Saúde para
                             importar essas corridas.
                         </Text>
-                        <Ionicons name="chevron-forward" size={16} color="rgba(235,235,245,0.6)" />
+                        <AppIcon name="chevronForward" size={16} tone="secondary" />
                     </TouchableOpacity>
                 )}
 
@@ -723,10 +723,10 @@ export function HomeScreen({ navigation }: any) {
                     <View style={styles.recoveryCard}>
                         <View style={styles.recoveryHeader}>
                             <View style={styles.recoveryBadge}>
-                                <BedIcon size={16} color="#A78BFA" />
+                                <BedIcon size={16} color={semanticColors.textSecondary} />
                                 <Text style={styles.recoveryBadgeText}>Dia de Descanso</Text>
                             </View>
-                            <MoonIcon size={30} color="#A78BFA" />
+                            <MoonIcon size={32} color={semanticColors.textSecondary} />
                         </View>
 
                         <Text style={styles.recoveryTitle}>Recuperação Ativa</Text>
@@ -768,7 +768,7 @@ export function HomeScreen({ navigation }: any) {
                         {/* Next Workout Preview (secondary) */}
                         {nextWorkout && (
                             <View style={styles.nextWorkoutPreview}>
-                                <CalendarSmallIcon size={16} color="rgba(235, 235, 245, 0.6)" />
+                                <CalendarSmallIcon size={16} color={semanticColors.textSecondary} />
                                 <Text style={styles.nextWorkoutPreviewText}>
                                     Próximo: <Text style={styles.nextWorkoutPreviewBold}>
                                         {getWorkoutTypeName(nextWorkout.type)}
@@ -827,7 +827,7 @@ export function HomeScreen({ navigation }: any) {
                         {!mainWorkout && !isRecoveryDay && !isInitialLoading && !trainingLoading && (
                             <View style={styles.workoutCard}>
                                 <View style={styles.lockedContent}>
-                                    <RunningIcon size={48} color="#6B7280" />
+                                    <RunningIcon size={48} color={semanticColors.textTertiary} />
                                     <Text style={styles.lockedText}>Nenhum treino agendado</Text>
                                 </View>
                             </View>
@@ -856,12 +856,12 @@ export function HomeScreen({ navigation }: any) {
                                     <Text style={styles.aiSubtitlePremium}>Exclusivo do Coach AI</Text>
                                 </View>
                                 <View style={styles.aiLockBadge}>
-                                    <Feather name="lock" size={18} color={colors.primary} />
+                                    <AppIcon name="lock" size={20} tone="accent" variant="filled" />
                                 </View>
                             </View>
                             <View style={styles.lockedContentPremium}>
                                 <View style={styles.aiLockBadgeLarge}>
-                                    <Feather name="lock" size={30} color={colors.primary} />
+                                    <AppIcon name="lock" size={32} tone="accent" variant="filled" />
                                 </View>
                                 <Text style={styles.lockedTextPremium}>
                                     Torne-se Pro para alavancar seu nível com acompanhamento real do seu Coach
@@ -880,10 +880,10 @@ export function HomeScreen({ navigation }: any) {
                                     <Text style={styles.aiTitle}>Análise do Treinador</Text>
                                     <Text style={styles.aiSubtitle}>Funcionalidade bloqueada</Text>
                                 </View>
-                                <LockIcon size={35} color="#6B7280" />
+                                <LockIcon size={32} color={semanticColors.textTertiary} />
                             </View>
                             <View style={styles.lockedContent}>
-                                <LockIcon size={48} color="#6B7280" />
+                                <LockIcon size={48} color={semanticColors.textTertiary} />
                                 <Text style={styles.lockedText}>
                                     Complete o primeiro treino para desbloquear
                                 </Text>
@@ -1011,7 +1011,7 @@ export function HomeScreen({ navigation }: any) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.background,
+        backgroundColor: semanticColors.canvas,
     },
     scrollView: {
         flex: 1,
@@ -1051,12 +1051,12 @@ const styles = StyleSheet.create({
 
     // Recovery Card
     recoveryCard: {
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface1,
         borderRadius: borderRadius['2xl'],
         padding: spacing.lg,
         gap: spacing.md,
         borderWidth: 1,
-        borderColor: 'rgba(167, 139, 250, 0.3)',
+        borderColor: semanticColors.borderSubtle,
     },
     recoveryHeader: {
         flexDirection: 'row',
@@ -1067,24 +1067,24 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.sm,
-        backgroundColor: 'rgba(167, 139, 250, 0.2)',
+        backgroundColor: semanticColors.surface2,
         paddingHorizontal: spacing.md,
         paddingVertical: spacing.xs,
         borderRadius: borderRadius.full,
     },
     recoveryBadgeText: {
         fontSize: typography.fontSizes.xs,
-        fontWeight: typography.fontWeights.semibold as any,
-        color: '#A78BFA',
+        fontFamily: fonts.semibold,
+        color: semanticColors.textSecondary,
     },
     recoveryTitle: {
         fontSize: typography.fontSizes['2xl'],
-        fontWeight: typography.fontWeights.bold as any,
-        color: colors.text,
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
     },
     recoverySubtitle: {
         fontSize: typography.fontSizes.sm,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         lineHeight: 20,
     },
     recoveryTimerContainer: {
@@ -1093,7 +1093,7 @@ const styles = StyleSheet.create({
     },
     recoveryTimerLabel: {
         fontSize: typography.fontSizes.xs,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         marginBottom: spacing.sm,
     },
     recoveryTimer: {
@@ -1106,18 +1106,18 @@ const styles = StyleSheet.create({
     },
     timerValue: {
         fontSize: 32,
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#A78BFA',
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
         fontVariant: ['tabular-nums'],
     },
     timerLabel: {
         fontSize: typography.fontSizes.xs,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
     },
     timerSeparator: {
         fontSize: 28,
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#A78BFA',
+        fontFamily: fonts.bold,
+        color: semanticColors.textTertiary,
         marginBottom: 16,
     },
     recoveryProgressContainer: {
@@ -1125,43 +1125,43 @@ const styles = StyleSheet.create({
     },
     recoveryProgressBar: {
         height: 8,
-        backgroundColor: 'rgba(167, 139, 250, 0.2)',
+        backgroundColor: semanticColors.surface3,
         borderRadius: 4,
         overflow: 'hidden',
     },
     recoveryProgressFill: {
         height: '100%',
-        backgroundColor: '#A78BFA',
+        backgroundColor: semanticColors.textSecondary,
         borderRadius: 4,
     },
     recoveryProgressText: {
         fontSize: typography.fontSizes.xs,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         textAlign: 'center',
     },
     nextWorkoutPreview: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.sm,
-        backgroundColor: '#0E0E1F',
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius.lg,
         padding: spacing.md,
         marginTop: spacing.sm,
     },
     nextWorkoutPreviewText: {
         fontSize: typography.fontSizes.sm,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
     },
     nextWorkoutPreviewBold: {
-        fontWeight: typography.fontWeights.semibold as any,
-        color: colors.text,
+        fontFamily: fonts.semibold,
+        color: semanticColors.textPrimary,
     },
 
     // Section title — "Seus treinos" (Figma: Inter 600 15px #EBEBF5, x:17 y:8.5)
     sectionTitle: {
         fontSize: 15,
-        fontWeight: '600' as const,
-        color: '#EBEBF5',
+        fontFamily: fonts.semibold,
+        color: semanticColors.textPrimary,
         marginLeft: 17,
         marginBottom: 11,
     },
@@ -1181,7 +1181,7 @@ const styles = StyleSheet.create({
         gap: spacing.lg,
     },
     homeTeaseTitle: {
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
         fontFamily: fonts.extrabold,
         fontSize: 22,
         lineHeight: 28,
@@ -1196,7 +1196,7 @@ const styles = StyleSheet.create({
 
     // Workout Card (legacy — kept for the "no workout" empty state)
     workoutCard: {
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface1,
         borderRadius: borderRadius['2xl'],
         padding: spacing.lg,
         gap: spacing.md,
@@ -1210,7 +1210,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.sm,
-        backgroundColor: `${colors.primary}20`,
+        backgroundColor: semanticColors.accentSubtle,
         paddingHorizontal: spacing.md,
         paddingVertical: spacing.xs,
         borderRadius: borderRadius.full,
@@ -1219,18 +1219,18 @@ const styles = StyleSheet.create({
         width: 8,
         height: 8,
         borderRadius: 4,
-        backgroundColor: colors.primary,
+        backgroundColor: semanticColors.accent,
     },
     proximoText: {
         fontSize: typography.fontSizes.xs,
-        fontWeight: typography.fontWeights.semibold as any,
-        color: colors.primary,
+        fontFamily: fonts.semibold,
+        color: semanticColors.accent,
     },
     runnerIcon: {
         width: 40,
         height: 40,
         borderRadius: borderRadius.lg,
-        backgroundColor: colors.highlight,
+        backgroundColor: semanticColors.surface2,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -1239,12 +1239,12 @@ const styles = StyleSheet.create({
     },
     workoutTitle: {
         fontSize: typography.fontSizes['2xl'],
-        fontWeight: typography.fontWeights.bold as any,
-        color: colors.text,
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
     },
     workoutTime: {
         fontSize: typography.fontSizes.sm,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
     },
     workoutTimeRow: {
         flexDirection: 'row',
@@ -1258,7 +1258,7 @@ const styles = StyleSheet.create({
     },
     statBox: {
         flex: 1,
-        backgroundColor: '#0E0E1F',
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius.xl,
         padding: spacing.md,
         gap: spacing.sm,
@@ -1273,31 +1273,30 @@ const styles = StyleSheet.create({
     },
     statLabel: {
         fontSize: typography.fontSizes.xs,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
     },
     statValue: {
         fontSize: typography.fontSizes.xl,
-        fontWeight: typography.fontWeights.bold as any,
-        color: colors.text,
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
     },
     statUnit: {
         fontSize: typography.fontSizes.sm,
-        fontWeight: typography.fontWeights.normal as any,
-        color: colors.textMuted,
+        fontFamily: fonts.regular,
+        color: semanticColors.textTertiary,
     },
     startButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: spacing.sm,
-        backgroundColor: colors.primary,
+        backgroundColor: semanticColors.accent,
         borderRadius: borderRadius.xl,
         paddingVertical: spacing.md,
         marginTop: spacing.sm,
-        ...shadows.neon,
     },
     startButtonDisabled: {
-        backgroundColor: '#2A2A3E',
+        backgroundColor: semanticColors.surface3,
         opacity: 0.7,
         shadowOpacity: 0,
         elevation: 0,
@@ -1307,11 +1306,11 @@ const styles = StyleSheet.create({
     },
     startButtonText: {
         fontSize: typography.fontSizes.base,
-        fontWeight: typography.fontWeights.bold as any,
-        color: '#0A0A18',
+        fontFamily: fonts.bold,
+        color: semanticColors.textOnAccent,
     },
     startButtonTextDisabled: {
-        color: '#6B7280',
+        color: semanticColors.textTertiary,
     },
 
     resultStackContainer: {
@@ -1320,7 +1319,7 @@ const styles = StyleSheet.create({
 
     // AI Card
     aiCard: {
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface1,
         borderRadius: borderRadius['2xl'],
         padding: spacing.lg,
         gap: spacing.lg,
@@ -1328,8 +1327,7 @@ const styles = StyleSheet.create({
     // Premium accent for the Free Coach-analysis upsell card
     aiCardPremium: {
         borderWidth: 1,
-        borderColor: 'rgba(0, 212, 255, 0.35)',
-        ...shadows.neon,
+        borderColor: semanticColors.borderSubtle,
     },
     aiLoadingContainer: {
         padding: spacing.md,
@@ -1341,12 +1339,12 @@ const styles = StyleSheet.create({
     },
     aiTitle: {
         fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.bold as any,
-        color: colors.text,
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
     },
     aiSubtitle: {
         fontSize: typography.fontSizes.xs,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         marginTop: 2,
     },
     aiIcon: {
@@ -1368,19 +1366,19 @@ const styles = StyleSheet.create({
     },
     aiPace: {
         fontSize: typography.fontSizes['3xl'],
-        fontWeight: typography.fontWeights.bold as any,
-        color: colors.text,
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
     },
     aiPaceUnit: {
         fontSize: typography.fontSizes.sm,
-        fontWeight: typography.fontWeights.normal as any,
-        color: colors.textMuted,
+        fontFamily: fonts.regular,
+        color: semanticColors.textTertiary,
     },
     efficiencyBadge: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.xs,
-        backgroundColor: `${colors.success}20`,
+        backgroundColor: semanticColors.successSubtle,
         paddingHorizontal: spacing.sm,
         paddingVertical: spacing.xs,
         borderRadius: borderRadius.md,
@@ -1391,7 +1389,7 @@ const styles = StyleSheet.create({
     },
     efficiencyText: {
         fontSize: typography.fontSizes.xs,
-        fontWeight: typography.fontWeights.bold as any,
+        fontFamily: fonts.bold,
         color: colors.success,
     },
     miniChart: {
@@ -1402,33 +1400,30 @@ const styles = StyleSheet.create({
     },
     bar: {
         width: 8,
-        backgroundColor: colors.border,
+        backgroundColor: semanticColors.surface3,
         borderRadius: 4,
     },
     barActive: {
         width: 8,
-        backgroundColor: colors.primary,
+        backgroundColor: semanticColors.accent,
         borderRadius: 4,
-        ...(Platform.OS === 'web' ? {
-            boxShadow: '0 0 8px rgba(0, 212, 255, 0.4)'
-        } : {}),
     },
     feedbackButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: colors.cardDark,
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius.lg,
         padding: spacing.md,
     },
     feedbackButtonText: {
         fontSize: typography.fontSizes.base,
-        fontWeight: typography.fontWeights.medium as any,
-        color: colors.textLight,
+        fontFamily: fonts.medium,
+        color: semanticColors.textPrimary,
     },
     feedbackArrow: {
         fontSize: typography.fontSizes.lg,
-        color: colors.accent,
+        color: semanticColors.accent,
     },
     // Locked state styles
     lockedContainer: {
@@ -1442,13 +1437,13 @@ const styles = StyleSheet.create({
     },
     lockedText: {
         fontSize: typography.fontSizes.sm,
-        color: '#6B7280',
+        color: semanticColors.textTertiary,
         textAlign: 'center' as const,
     },
     // Premium locked state (Free Coach-analysis upsell)
     aiSubtitlePremium: {
         fontSize: typography.fontSizes.xs,
-        color: colors.primary,
+        color: semanticColors.textSecondary,
         fontFamily: fonts.semibold,
         marginTop: 3,
     },
@@ -1458,9 +1453,9 @@ const styles = StyleSheet.create({
         borderRadius: borderRadius.full,
         alignItems: 'center' as const,
         justifyContent: 'center' as const,
-        backgroundColor: 'rgba(0, 212, 255, 0.12)',
+        backgroundColor: semanticColors.accentSubtle,
         borderWidth: 1,
-        borderColor: 'rgba(0, 212, 255, 0.3)',
+        borderColor: semanticColors.borderSubtle,
     },
     lockedContentPremium: {
         alignItems: 'center' as const,
@@ -1475,14 +1470,14 @@ const styles = StyleSheet.create({
         borderRadius: borderRadius.full,
         alignItems: 'center' as const,
         justifyContent: 'center' as const,
-        backgroundColor: 'rgba(0, 212, 255, 0.1)',
+        backgroundColor: semanticColors.accentSubtle,
         borderWidth: 1,
-        borderColor: 'rgba(0, 212, 255, 0.25)',
+        borderColor: semanticColors.borderSubtle,
     },
     lockedTextPremium: {
         fontSize: typography.fontSizes.base,
         lineHeight: 22,
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
         fontFamily: fonts.medium,
         textAlign: 'center' as const,
         paddingHorizontal: spacing.sm,
@@ -1492,10 +1487,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row' as const,
         alignItems: 'center' as const,
         gap: 8,
-        backgroundColor: 'rgba(74, 222, 128, 0.1)',
+        backgroundColor: semanticColors.successSubtle,
         borderRadius: borderRadius.lg,
         borderWidth: 1,
-        borderColor: 'rgba(74, 222, 128, 0.3)',
+        borderColor: semanticColors.borderSubtle,
         paddingVertical: 10,
         paddingHorizontal: spacing.md,
         marginBottom: spacing.md,
@@ -1504,10 +1499,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row' as const,
         alignItems: 'center' as const,
         gap: 8,
-        backgroundColor: 'rgba(0, 212, 255, 0.08)',
+        backgroundColor: semanticColors.accentSubtle,
         borderRadius: borderRadius.lg,
         borderWidth: 1,
-        borderColor: 'rgba(0, 212, 255, 0.25)',
+        borderColor: semanticColors.borderSubtle,
         paddingVertical: 10,
         paddingHorizontal: spacing.md,
         marginBottom: spacing.md,
@@ -1515,15 +1510,15 @@ const styles = StyleSheet.create({
     healthKitConnectBannerText: {
         flex: 1,
         fontSize: 12,
-        fontWeight: '500' as const,
-        color: '#EBEBF5',
+        fontFamily: fonts.medium,
+        color: semanticColors.textPrimary,
         lineHeight: 17,
     },
     healthKitBannerText: {
         flex: 1,
         fontSize: 13,
-        fontWeight: '500' as const,
-        color: '#EBEBF5',
+        fontFamily: fonts.medium,
+        color: semanticColors.textPrimary,
     },
     floatingFooter: {
         position: 'absolute',
@@ -1540,11 +1535,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: spacing.sm,
-        backgroundColor: '#00D4FF',
+        backgroundColor: semanticColors.accent,
         paddingVertical: 16,
         paddingHorizontal: spacing.xl,
         borderRadius: 32,
-        shadowColor: '#00D4FF',
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.4,
         shadowRadius: 8,

@@ -7,9 +7,10 @@ import {
     Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
 import { colors, typography } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { Skeleton, SkeletonCircle } from './Skeleton';
+import { AppIcon } from './ui/AppIcon';
 import { ScheduleDay } from '../stores/trainingStore';
 
 // Free users have no streak/plan counters — the header center shows the brand
@@ -169,17 +170,17 @@ export function HomeFixedHeader({
                 ) : isProUser ? (
                     <View style={styles.statsRow}>
                         <View style={styles.statItem}>
-                            <MaterialCommunityIcons name="fire" size={18} color="#FFFFFF" />
+                            <AppIcon name="flame" size={16} tone="warning" variant="filled" />
                             <Text style={styles.statTextWhite}>{currentStreak}</Text>
                         </View>
                         <View style={styles.statItem}>
-                            <Ionicons name="flash" size={18} color={colors.recovery} />
+                            <AppIcon name="energy" size={16} tone="secondary" variant="filled" />
                             <Text style={styles.statTextLight}>
                                 {counters.restDone}/{counters.restTotal}
                             </Text>
                         </View>
                         <View style={styles.statItem}>
-                            <MaterialCommunityIcons name="shoe-sneaker" size={18} color={colors.primary} />
+                            <AppIcon name="running" size={16} tone="accent" variant="filled" />
                             <Text style={styles.statTextWhite}>
                                 {counters.workoutDone}/{counters.workoutTotal}
                             </Text>
@@ -196,7 +197,7 @@ export function HomeFixedHeader({
                     activeOpacity={0.7}
                     style={styles.bellContainer}
                 >
-                    <Ionicons name="notifications" size={24} color="#FFFFFF" />
+                    <AppIcon name="notification" size={24} tone="primary" variant="outline" />
                     {unreadCount > 0 && (
                         <View style={styles.badge}>
                             <Text style={styles.badgeText}>
@@ -237,7 +238,7 @@ export function HomeFixedHeader({
                                 ) : isProUser ? (
                                     renderDayIcon(day)
                                 ) : (
-                                    <Feather name="lock" size={12} color="rgba(235, 235, 245, 0.35)" />
+                                    <AppIcon name="lock" size={16} tone="tertiary" variant="outline" />
                                 )}
                             </View>
                             <Text
@@ -261,27 +262,27 @@ function renderDayIcon(day: WeekDay): React.ReactNode {
 
     switch (day.status) {
         case 'completed':
-            return <Ionicons name="checkmark-circle" size={size} color={colors.completed} />;
+            return <AppIcon name="check" size={size} tone="success" variant="filled" />;
         case 'missed':
-            return <Ionicons name="close-circle" size={size} color={colors.missed} />;
+            return <AppIcon name="close" size={size} tone="danger" variant="filled" />;
         case 'recovery':
         case 'pending_recovery':
-            return <Ionicons name="flash" size={size} color={colors.recovery} />;
+            return <AppIcon name="energy" size={size} tone="secondary" variant="outline" />;
         case 'pending_workout':
-            return <MaterialCommunityIcons name="shoe-sneaker" size={size} color="#FFFFFF" />;
+            return <AppIcon name="running" size={size} tone="primary" variant="outline" />;
         default:
-            return <Ionicons name="flash" size={size} color={colors.recovery} />;
+            return <AppIcon name="energy" size={size} tone="tertiary" variant="outline" />;
     }
 }
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: '#15152A',
+        backgroundColor: semanticColors.surface1,
         borderBottomLeftRadius: 20,
         borderBottomRightRadius: 20,
         paddingHorizontal: 10,
         gap: 13,
-        shadowColor: '#000',
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 0, height: 3 },
         shadowOpacity: 0.25,
         shadowRadius: 4,
@@ -303,22 +304,22 @@ const styles = StyleSheet.create({
         height: 40,
         borderRadius: 20,
         borderWidth: 2,
-        borderColor: colors.primary,
+        borderColor: semanticColors.borderStrong,
     },
     profileInitials: {
         width: 40,
         height: 40,
         borderRadius: 20,
         borderWidth: 2,
-        borderColor: colors.primary,
-        backgroundColor: '#1C1C2E',
+        borderColor: semanticColors.borderStrong,
+        backgroundColor: semanticColors.surface3,
         justifyContent: 'center',
         alignItems: 'center',
     },
     profileInitialsText: {
         fontSize: 14,
         fontWeight: '600',
-        color: colors.primary,
+        color: semanticColors.textPrimary,
     },
     statsRow: {
         flexDirection: 'row',
@@ -346,12 +347,12 @@ const styles = StyleSheet.create({
     statTextWhite: {
         fontSize: 12,
         fontWeight: typography.fontWeights.semibold,
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
     },
     statTextLight: {
         fontSize: 12,
         fontWeight: typography.fontWeights.semibold,
-        color: '#EBEBF5',
+        color: semanticColors.textPrimary,
     },
     bellContainer: {
         width: 24,
@@ -363,7 +364,7 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: -6,
         right: -8,
-        backgroundColor: '#FF3B30',
+        backgroundColor: colors.error,
         borderRadius: 10,
         minWidth: 16,
         height: 16,
@@ -372,7 +373,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 3,
     },
     badgeText: {
-        color: '#FFFFFF',
+        color: semanticColors.textPrimary,
         fontSize: 9,
         fontWeight: 'bold',
     },
@@ -393,7 +394,7 @@ const styles = StyleSheet.create({
     dayLabel: {
         fontSize: 10,
         fontWeight: typography.fontWeights.semibold,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
     dayIconContainer: {
         width: 16,
@@ -404,6 +405,6 @@ const styles = StyleSheet.create({
     dayNumber: {
         fontSize: 13,
         fontWeight: typography.fontWeights.semibold,
-        color: '#EBEBF5',
+        color: semanticColors.textPrimary,
     },
 });

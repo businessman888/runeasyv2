@@ -1,6 +1,5 @@
 import React, { memo, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import Animated, {
     Easing,
     useAnimatedStyle,
@@ -10,6 +9,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { colors, fonts } from '../../theme';
 import { GlassSurface } from '../ui/GlassSurface';
+import { semanticColors } from '../../theme/semanticColors';
+import { AppIcon } from '../ui/AppIcon';
 import { CalendarDay, CELL_HEIGHT } from './CalendarDay';
 import { DayIndicator, type CalendarDayStatus } from './DayIndicator';
 import { useCalendarGrid, toLocalDateStr, isSameDay, startOfDay } from './useCalendarGrid';
@@ -125,23 +126,23 @@ function AgendaCalendarInner({
                         <Pressable
                             onPress={() => onNavigate(-1)}
                             hitSlop={10}
-                            style={({ pressed }) => pressed && styles.pressed}
+                            style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
                             accessibilityRole="button"
                             accessibilityLabel={viewMode === 'month' ? 'Mês anterior' : 'Semana anterior'}
                         >
-                            <Ionicons name="chevron-back" size={18} color={colors.textLight} />
+                            <AppIcon name="chevronBack" size={20} tone="primary" />
                         </Pressable>
                         <Pressable
                             onPress={() => onNavigate(1)}
                             hitSlop={10}
-                            style={({ pressed }) => pressed && styles.pressed}
+                            style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
                             accessibilityRole="button"
                             accessibilityLabel={viewMode === 'month' ? 'Próximo mês' : 'Próxima semana'}
                         >
-                            <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
+                            <AppIcon name="chevronForward" size={20} tone="primary" />
                         </Pressable>
                     </View>
-                    <Ionicons name="calendar-outline" size={16} color={colors.textLight} style={styles.calIcon} />
+                    <AppIcon name="calendar" size={16} tone="secondary" style={styles.calIcon} />
                     <Text style={styles.periodLabel}>{periodLabel}</Text>
                 </View>
                 <Pressable
@@ -248,27 +249,33 @@ const styles = StyleSheet.create({
         gap: 8,
         marginRight: 12,
     },
+    iconButton: {
+        width: 44,
+        height: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     calIcon: {
         marginRight: 6,
     },
     periodLabel: {
         fontFamily: fonts.regular,
         fontSize: 13,
-        color: colors.textLight,
+        color: semanticColors.textSecondary,
         flexShrink: 1,
     },
     todayPill: {
         paddingHorizontal: 14,
         paddingVertical: 7,
         borderRadius: 10,
-        backgroundColor: 'rgba(235, 235, 245, 0.10)',
+        backgroundColor: semanticColors.glass,
         borderWidth: 1,
-        borderColor: 'rgba(235, 235, 245, 0.15)',
+        borderColor: semanticColors.borderStrong,
     },
     todayPillText: {
         fontFamily: fonts.semibold,
         fontSize: 12,
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
     },
     toggle: {
         flexDirection: 'row',
@@ -284,20 +291,20 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     togglePillActive: {
-        backgroundColor: colors.primary,
+        backgroundColor: semanticColors.accent,
     },
     togglePillInactive: {
-        backgroundColor: 'rgba(235, 235, 245, 0.10)',
+        backgroundColor: semanticColors.glass,
     },
     toggleText: {
         fontFamily: fonts.medium,
         fontSize: 15,
     },
     toggleTextActive: {
-        color: colors.backgroundLight,
+        color: semanticColors.textOnAccent,
     },
     toggleTextInactive: {
-        color: colors.textLight,
+        color: semanticColors.textSecondary,
     },
     grid: {
         overflow: 'hidden',
@@ -312,7 +319,7 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         fontFamily: fonts.medium,
         fontSize: 12,
-        color: 'rgba(235, 235, 245, 0.4)',
+        color: semanticColors.textTertiary,
     },
     row: {
         flexDirection: 'row',
@@ -334,7 +341,7 @@ const styles = StyleSheet.create({
     legendText: {
         fontFamily: fonts.regular,
         fontSize: 13,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
     pressed: {
         opacity: 0.6,

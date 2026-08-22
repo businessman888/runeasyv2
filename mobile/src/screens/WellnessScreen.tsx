@@ -11,7 +11,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import { colors, typography, spacing } from '../theme';
+import { colors, typography, spacing, fonts } from '../theme';
+import { semanticColors } from '../theme/semanticColors';
 import { useWellnessStore } from '../stores/wellnessStore';
 import { useHealthKitStore } from '../stores/healthKitStore';
 import { useReadinessStore } from '../stores/readinessStore';
@@ -22,6 +23,7 @@ import { ZonesChart } from '../components/wellness/ZonesChart';
 import { EvolutionChart } from '../components/wellness/EvolutionChart';
 import { WellnessSkeleton } from '../components/wellness/WellnessSkeleton';
 import { UpgradeProCard } from '../components/upgrade/UpgradeProCard';
+import { AppIcon } from '../components/ui/AppIcon';
 import { useProFeature } from '../hooks/useProFeature';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 
@@ -69,7 +71,7 @@ export function WellnessScreen() {
 
     return (
         <SafeAreaView style={styles.safeArea} edges={['top']}>
-            <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+            <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
 
             <View style={styles.header}>
                 <Text style={styles.title}>Wellness</Text>
@@ -144,9 +146,10 @@ export function WellnessScreen() {
                         {summary.streak.current > 0 && (
                             <View style={styles.streakStrip}>
                                 <Text style={styles.streakLabel}>Streak atual</Text>
-                                <Text style={styles.streakValue}>
-                                    🔥 {summary.streak.current} dias
-                                </Text>
+                                <View style={styles.streakValueRow}>
+                                    <AppIcon name="flame" size={16} tone="accent" variant="filled" />
+                                    <Text style={styles.streakValue}>{summary.streak.current} dias</Text>
+                                </View>
                                 <Text style={styles.streakSub}>
                                     Recorde: {summary.streak.longest} dias
                                 </Text>
@@ -162,7 +165,7 @@ export function WellnessScreen() {
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: colors.background,
+        backgroundColor: semanticColors.canvas,
     },
     header: {
         paddingHorizontal: spacing.base,
@@ -171,12 +174,13 @@ const styles = StyleSheet.create({
     },
     title: {
         fontSize: typography.fontSizes['3xl'],
-        fontWeight: typography.fontWeights.bold,
-        color: colors.text,
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
     },
     subtitle: {
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.sm,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         marginTop: 2,
     },
     scroll: {
@@ -198,21 +202,22 @@ const styles = StyleSheet.create({
     errorBox: {
         marginTop: spacing.xl,
         padding: spacing.lg,
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
         alignItems: 'center',
         gap: spacing.xs,
     },
     errorTitle: {
         fontSize: typography.fontSizes.base,
-        fontWeight: typography.fontWeights.semibold,
-        color: colors.text,
+        fontFamily: fonts.semibold,
+        color: semanticColors.textPrimary,
     },
     errorText: {
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.sm,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
         textAlign: 'center',
     },
     streakStrip: {
@@ -221,26 +226,32 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: spacing.lg,
         paddingVertical: spacing.md,
-        backgroundColor: colors.streakCard,
+        backgroundColor: semanticColors.surface2,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
     },
     streakLabel: {
         fontSize: typography.fontSizes.xs,
-        color: colors.textSecondary,
-        fontWeight: typography.fontWeights.medium,
+        color: semanticColors.textSecondary,
+        fontFamily: fonts.medium,
         textTransform: 'uppercase',
         letterSpacing: 0.3,
     },
+    streakValueRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+    },
     streakValue: {
         fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.bold,
-        color: colors.text,
+        fontFamily: fonts.bold,
+        color: semanticColors.textPrimary,
     },
     streakSub: {
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.xs,
-        color: colors.textSecondary,
+        color: semanticColors.textSecondary,
     },
 });
 

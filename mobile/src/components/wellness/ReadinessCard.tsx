@@ -9,9 +9,11 @@ import {
     Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import type { ReadinessBlock } from '../../types/wellness.types';
+import { semanticColors } from '../../theme/semanticColors';
+import type { AppIconName, IconTone } from '../../theme/iconography';
+import { AppIcon } from '../ui/AppIcon';
 
 interface ReadinessCardProps {
     readiness: ReadinessBlock;
@@ -32,18 +34,18 @@ const DIMENSION_LABELS = {
     motivation: 'Motivação',
 } as const;
 
-const DIMENSION_ICONS: Record<keyof typeof DIMENSION_LABELS, string> = {
-    sleep: 'moon-outline',
-    legs: 'walk-outline',
-    mood: 'happy-outline',
-    stress: 'cloud-outline',
-    motivation: 'flash-outline',
+const DIMENSION_ICONS: Record<keyof typeof DIMENSION_LABELS, AppIconName> = {
+    sleep: 'sleep',
+    legs: 'running',
+    mood: 'mood',
+    stress: 'stress',
+    motivation: 'energy',
 };
 
 const STATUS_GRADIENT: Record<'red' | 'yellow' | 'green', [string, string, string]> = {
-    green: ['#1A2E1F', '#1E4035', '#0F1A35'],
-    yellow: ['#2E2A1A', '#403A1E', '#1A1A2E'],
-    red: ['#2E1A1A', '#401E1E', '#1A1A2E'],
+    green: [semanticColors.surface1, semanticColors.surface2, semanticColors.successSubtle],
+    yellow: [semanticColors.surface1, semanticColors.surface2, semanticColors.warningSubtle],
+    red: [semanticColors.surface1, semanticColors.surface2, semanticColors.dangerSubtle],
 };
 
 const STATUS_COLOR: Record<'red' | 'yellow' | 'green', string> = {
@@ -166,10 +168,10 @@ function ReadinessCardPending({ onPress }: { onPress: () => void }) {
                     >
                         <LinearGradient
                             colors={[
-                                'rgba(0,212,255,0.55)',
-                                'rgba(151,71,255,0.35)',
-                                'rgba(0,212,255,0)',
-                                'rgba(0,212,255,0.55)',
+                                semanticColors.borderStrong,
+                                semanticColors.accentSubtle,
+                                semanticColors.transparent,
+                                semanticColors.borderStrong,
                             ]}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 1 }}
@@ -179,13 +181,13 @@ function ReadinessCardPending({ onPress }: { onPress: () => void }) {
 
                     {/* Inner card */}
                     <LinearGradient
-                        colors={['#0E0E1F', '#1A1A2E', '#0F1A35']}
+                        colors={[semanticColors.surface1, semanticColors.surface2, semanticColors.surface1]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={styles.pendingInner}
                     >
                         <LinearGradient
-                            colors={['rgba(0,212,255,0.18)', 'transparent']}
+                            colors={[semanticColors.accentSubtle, semanticColors.transparent]}
                             start={{ x: 1, y: 0 }}
                             end={{ x: 0.2, y: 1 }}
                             style={StyleSheet.absoluteFill}
@@ -194,12 +196,12 @@ function ReadinessCardPending({ onPress }: { onPress: () => void }) {
 
                         <View style={styles.pendingHeader}>
                             <View style={styles.pendingChip}>
-                                <Ionicons name="sparkles" size={12} color={colors.primary} />
+                                <AppIcon name="sparkles" size={16} tone="accent" />
                                 <Text style={styles.pendingChipText}>Check-in diário</Text>
                             </View>
                             <Animated.View style={{ opacity: iconPulse }}>
                                 <View style={styles.pendingIconBubble}>
-                                    <Ionicons name="heart" size={20} color={colors.primary} />
+                                    <AppIcon name="heartRate" size={20} tone="accent" variant="filled" />
                                 </View>
                             </Animated.View>
                         </View>
@@ -219,13 +221,13 @@ function ReadinessCardPending({ onPress }: { onPress: () => void }) {
                             }}
                         >
                             <LinearGradient
-                                colors={[colors.primary, '#7B6BFF']}
+                                colors={[semanticColors.accent, semanticColors.accent]}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 0 }}
                                 style={styles.pendingCta}
                             >
                                 <Text style={styles.pendingCtaText}>Responder agora</Text>
-                                <Ionicons name="arrow-forward" size={18} color="#0A0A18" />
+                                <AppIcon name="chevronForward" size={20} tone="onAccent" />
                             </LinearGradient>
                         </Animated.View>
                     </LinearGradient>
@@ -242,18 +244,18 @@ function ReadinessCardPending({ onPress }: { onPress: () => void }) {
 function ReadinessCardLocked() {
     return (
         <LinearGradient
-            colors={['#15152A', '#1A1A2E', '#0F1A35']}
+            colors={[semanticColors.surface1, semanticColors.surface2, semanticColors.surface1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.lockedCard}
         >
             <View style={styles.lockedHeader}>
                 <View style={styles.lockedChip}>
-                    <Ionicons name="lock-closed" size={11} color={colors.textSecondary} />
+                    <AppIcon name="lock" size={16} tone="secondary" variant="filled" />
                     <Text style={styles.lockedChipText}>Check-in bloqueado</Text>
                 </View>
                 <View style={styles.lockedIconBubble}>
-                    <Ionicons name="footsteps-outline" size={20} color={colors.textSecondary} />
+                    <AppIcon name="running" size={20} tone="secondary" />
                 </View>
             </View>
 
@@ -266,7 +268,7 @@ function ReadinessCardLocked() {
             </Text>
 
             <View style={styles.lockedFootnote}>
-                <Ionicons name="information-circle-outline" size={12} color={colors.textMuted} />
+                <AppIcon name="info" size={16} tone="tertiary" />
                 <Text style={styles.lockedFootnoteText}>
                     Precisamos de pelo menos 1 treino para calibrar suas análises.
                 </Text>
@@ -285,6 +287,7 @@ function ReadinessCardDone({ readiness }: { readiness: ReadinessBlock }) {
     const accent = STATUS_COLOR[color];
     const score = readiness.score ?? 0;
     const dims = readiness.dimensions;
+    const statusTone: IconTone = color === 'green' ? 'success' : color === 'yellow' ? 'warning' : 'danger';
 
     return (
         <LinearGradient
@@ -303,7 +306,7 @@ function ReadinessCardDone({ readiness }: { readiness: ReadinessBlock }) {
 
             <View style={styles.doneHeader}>
                 <View style={[styles.doneChip, { backgroundColor: `${accent}22`, borderColor: `${accent}55` }]}>
-                    <Ionicons name="checkmark-circle" size={12} color={accent} />
+                    <AppIcon name="check" size={16} tone={statusTone} variant="filled" />
                     <Text style={[styles.doneChipText, { color: accent }]}>
                         Respondido hoje
                     </Text>
@@ -337,10 +340,10 @@ function ReadinessCardDone({ readiness }: { readiness: ReadinessBlock }) {
                                                 ]}
                                             />
                                         </View>
-                                        <Ionicons
-                                            name={DIMENSION_ICONS[key] as any}
-                                            size={12}
-                                            color={colors.textSecondary}
+                                        <AppIcon
+                                            name={DIMENSION_ICONS[key]}
+                                            size={16}
+                                            tone="secondary"
                                             style={{ marginTop: 4 }}
                                         />
                                     </View>
@@ -384,12 +387,12 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: 'rgba(0,212,255,0.14)',
+        backgroundColor: semanticColors.accentSubtle,
         paddingHorizontal: spacing.md,
         paddingVertical: 6,
         borderRadius: borderRadius.full,
         borderWidth: 1,
-        borderColor: 'rgba(0,212,255,0.28)',
+        borderColor: semanticColors.borderSubtle,
     },
     pendingChipText: {
         fontSize: typography.fontSizes.xs,
@@ -403,9 +406,9 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(0,212,255,0.10)',
+        backgroundColor: semanticColors.accentSubtle,
         borderWidth: 1,
-        borderColor: 'rgba(0,212,255,0.30)',
+        borderColor: semanticColors.borderSubtle,
     },
     pendingTitle: {
         fontSize: typography.fontSizes['2xl'],
@@ -429,7 +432,7 @@ const styles = StyleSheet.create({
     pendingCtaText: {
         fontSize: typography.fontSizes.base,
         fontWeight: typography.fontWeights.bold,
-        color: '#0A0A18',
+        color: semanticColors.textOnAccent,
         letterSpacing: 0.3,
     },
 
@@ -438,7 +441,7 @@ const styles = StyleSheet.create({
         borderRadius: borderRadius['2xl'],
         padding: spacing.lg,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.05)',
+        borderColor: semanticColors.borderSubtle,
         overflow: 'hidden',
         gap: spacing.sm,
         ...shadows.md,
@@ -453,12 +456,12 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: 'rgba(255,255,255,0.04)',
+        backgroundColor: semanticColors.glass,
         paddingHorizontal: spacing.md,
         paddingVertical: 6,
         borderRadius: borderRadius.full,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.08)',
+        borderColor: semanticColors.borderSubtle,
     },
     lockedChipText: {
         fontSize: typography.fontSizes.xs,
@@ -472,9 +475,9 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(255,255,255,0.04)',
+        backgroundColor: semanticColors.glass,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.06)',
+        borderColor: semanticColors.borderSubtle,
     },
     lockedTitle: {
         fontSize: typography.fontSizes.xl,
@@ -494,7 +497,7 @@ const styles = StyleSheet.create({
         marginTop: spacing.sm,
         paddingTop: spacing.sm,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(255,255,255,0.04)',
+        borderTopColor: semanticColors.borderSubtle,
     },
     lockedFootnoteText: {
         flex: 1,
@@ -507,7 +510,7 @@ const styles = StyleSheet.create({
         borderRadius: borderRadius['2xl'],
         padding: spacing.lg,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.06)',
+        borderColor: semanticColors.borderSubtle,
         overflow: 'hidden',
         ...shadows.md,
     },
@@ -561,7 +564,7 @@ const styles = StyleSheet.create({
     dimensionBarTrack: {
         width: 8,
         height: 56,
-        backgroundColor: 'rgba(255,255,255,0.08)',
+        backgroundColor: semanticColors.borderSubtle,
         borderRadius: borderRadius.full,
         justifyContent: 'flex-end',
         overflow: 'hidden',

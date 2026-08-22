@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
+import type { AppIconName, IconTone } from '../../theme/iconography';
+import { AppIcon } from '../ui/AppIcon';
 import { useHealthKitStore } from '../../stores/healthKitStore';
 import type { HealthBlock } from '../../types/wellness.types';
 
@@ -9,11 +11,11 @@ interface HealthSectionProps {
     health: HealthBlock;
 }
 
-function classifyResting(hr: number | null): { label: string; color: string } | null {
+function classifyResting(hr: number | null): { label: string; color: string; tone: IconTone } | null {
     if (hr === null) return null;
-    if (hr < 60) return { label: 'Excelente', color: colors.success };
-    if (hr < 70) return { label: 'Bom', color: colors.primary };
-    return { label: 'Regular', color: colors.warning };
+    if (hr < 60) return { label: 'Excelente', color: colors.success, tone: 'success' };
+    if (hr < 70) return { label: 'Bom', color: semanticColors.accent, tone: 'accent' };
+    return { label: 'Regular', color: colors.warning, tone: 'warning' };
 }
 
 export function HealthSection({ health }: HealthSectionProps) {
@@ -29,7 +31,7 @@ export function HealthSection({ health }: HealthSectionProps) {
                 <Text style={styles.heading}>Saúde</Text>
                 {connected && (
                     <View style={styles.deviceTag}>
-                        <Ionicons name="watch-outline" size={12} color={colors.primary} />
+                        <AppIcon name="wearable" size={16} tone="accent" />
                         <Text style={styles.deviceTagText}>
                             {health.deviceName ?? 'via Apple Health'}
                         </Text>
@@ -54,7 +56,8 @@ function ConnectedGrid({ health }: { health: HealthBlock }) {
     return (
         <View style={styles.grid}>
             <HealthCard
-                icon="heart-outline"
+                icon="heartRate"
+                iconTone={restingClass?.tone ?? 'tertiary'}
                 label="FC repouso"
                 value={health.restingHr !== null ? String(health.restingHr) : '--'}
                 unit={health.restingHr !== null ? 'bpm' : undefined}
@@ -62,21 +65,24 @@ function ConnectedGrid({ health }: { health: HealthBlock }) {
                 badge={restingClass?.label}
             />
             <HealthCard
-                icon="pulse-outline"
+                icon="heartRate"
+                iconTone="accent"
                 label="FC média 7d"
                 value={health.avgHr7d !== null ? String(health.avgHr7d) : '--'}
                 unit={health.avgHr7d !== null ? 'bpm' : undefined}
                 accent={colors.primary}
             />
             <HealthCard
-                icon="speedometer-outline"
+                icon="trainingLoad"
+                iconTone="warning"
                 label="FC máxima 7d"
                 value={health.maxHr7d !== null ? String(health.maxHr7d) : '--'}
                 unit={health.maxHr7d !== null ? 'bpm' : undefined}
                 accent={colors.warning}
             />
             <HealthCard
-                icon="flame-outline"
+                icon="flame"
+                iconTone="secondary"
                 label="Calorias 7d"
                 value={
                     health.calories7d !== null
@@ -93,13 +99,15 @@ function ConnectedGrid({ health }: { health: HealthBlock }) {
 function HealthCard({
     icon,
     label,
+    iconTone,
     value,
     unit,
     accent,
     badge,
 }: {
-    icon: keyof typeof Ionicons.glyphMap;
+    icon: AppIconName;
     label: string;
+    iconTone: IconTone;
     value: string;
     unit?: string;
     accent: string;
@@ -109,7 +117,7 @@ function HealthCard({
         <View style={styles.card}>
             <View style={styles.cardHeader}>
                 <View style={[styles.cardIcon, { backgroundColor: `${accent}1A` }]}>
-                    <Ionicons name={icon} size={14} color={accent} />
+                    <AppIcon name={icon} size={16} tone={iconTone} />
                 </View>
                 <Text style={styles.cardLabel}>{label}</Text>
             </View>
@@ -142,7 +150,7 @@ function ConnectCard({
             accessibilityLabel="Conectar HealthKit"
         >
             <View style={styles.ctaIcon}>
-                <Ionicons name="heart-outline" size={28} color={colors.primary} />
+                <AppIcon name="heartRate" size={28} tone="accent" />
             </View>
             <View style={styles.ctaContent}>
                 <Text style={styles.ctaTitle}>
@@ -156,7 +164,7 @@ function ConnectCard({
                 <Text style={styles.ctaButtonText}>
                     {loading ? 'Conectando...' : 'Conectar'}
                 </Text>
-                <Ionicons name="arrow-forward" size={14} color="#0A0A18" />
+                <AppIcon name="chevronForward" size={16} tone="onAccent" />
             </View>
         </Pressable>
     );
@@ -167,7 +175,7 @@ function AndroidSoonCard() {
         <View style={styles.soonCard}>
             <View style={styles.soonHeader}>
                 <View style={styles.soonIcon}>
-                    <Ionicons name="watch-outline" size={22} color={colors.primary} />
+                    <AppIcon name="wearable" size={24} tone="secondary" />
                 </View>
                 <View style={styles.soonBadge}>
                     <Text style={styles.soonBadgeText}>Em breve no Android</Text>
@@ -181,9 +189,9 @@ function AndroidSoonCard() {
                 trazer FC, calorias e mais.
             </Text>
             <View style={styles.soonDeviceRow}>
-                {['watch-outline', 'fitness-outline', 'heart-outline'].map((n, i) => (
-                    <View key={i} style={styles.soonDeviceIcon}>
-                        <Ionicons name={n as any} size={14} color={colors.textSecondary} />
+                {(['wearable', 'workout', 'heartRate'] as const).map((name) => (
+                    <View key={name} style={styles.soonDeviceIcon}>
+                        <AppIcon name={name} size={16} tone="secondary" />
                     </View>
                 ))}
             </View>
@@ -212,9 +220,9 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.sm,
         paddingVertical: 4,
         borderRadius: borderRadius.full,
-        backgroundColor: 'rgba(0,212,255,0.10)',
+        backgroundColor: semanticColors.accentSubtle,
         borderWidth: 1,
-        borderColor: 'rgba(0,212,255,0.25)',
+        borderColor: semanticColors.borderSubtle,
     },
     deviceTagText: {
         fontSize: typography.fontSizes.xs,
@@ -228,11 +236,11 @@ const styles = StyleSheet.create({
     },
     card: {
         width: '48%',
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius.xl,
         padding: spacing.md,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
         gap: spacing.xs,
     },
     cardHeader: {
@@ -276,11 +284,11 @@ const styles = StyleSheet.create({
         fontWeight: typography.fontWeights.semibold,
     },
     ctaCard: {
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius['2xl'],
         padding: spacing.lg,
         borderWidth: 1,
-        borderColor: 'rgba(0,212,255,0.20)',
+        borderColor: semanticColors.borderSubtle,
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.md,
@@ -291,7 +299,7 @@ const styles = StyleSheet.create({
         borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(0,212,255,0.12)',
+        backgroundColor: semanticColors.accentSubtle,
     },
     ctaContent: {
         flex: 1,
@@ -313,19 +321,19 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.md,
         paddingVertical: spacing.sm,
         borderRadius: borderRadius.full,
-        backgroundColor: colors.primary,
+        backgroundColor: semanticColors.accent,
     },
     ctaButtonText: {
         fontSize: typography.fontSizes.xs,
         fontWeight: typography.fontWeights.bold,
-        color: '#0A0A18',
+        color: semanticColors.textOnAccent,
     },
     soonCard: {
-        backgroundColor: colors.card,
+        backgroundColor: semanticColors.surface2,
         borderRadius: borderRadius['2xl'],
         padding: spacing.lg,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
         gap: spacing.sm,
     },
     soonHeader: {
@@ -339,15 +347,15 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(0,212,255,0.10)',
+        backgroundColor: semanticColors.glass,
     },
     soonBadge: {
         paddingHorizontal: spacing.md,
         paddingVertical: 4,
         borderRadius: borderRadius.full,
-        backgroundColor: 'rgba(0,212,255,0.10)',
+        backgroundColor: semanticColors.glass,
         borderWidth: 1,
-        borderColor: 'rgba(0,212,255,0.25)',
+        borderColor: semanticColors.borderSubtle,
     },
     soonBadgeText: {
         fontSize: typography.fontSizes.xs,
@@ -376,8 +384,8 @@ const styles = StyleSheet.create({
         borderRadius: 14,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(255,255,255,0.04)',
+        backgroundColor: semanticColors.glass,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: semanticColors.borderSubtle,
     },
 });

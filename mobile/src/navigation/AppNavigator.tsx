@@ -67,7 +67,7 @@ const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 // CRITICAL: Dark background color for entire Navigator
-const FORCED_DARK_BG = '#0F0F1E';
+const FORCED_DARK_BG = colors.background;
 
 // Deep Linking Configuration
 // Maps runeasy://--/callback/onboarding?user_id=xxx to Onboarding screen

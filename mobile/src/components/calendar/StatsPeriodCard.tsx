@@ -1,7 +1,8 @@
 import React, { memo, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { colors, fonts, spacing } from '../../theme';
+import { fonts, spacing } from '../../theme';
+import { semanticColors } from '../../theme/semanticColors';
+import { AppIcon } from '../ui/AppIcon';
 import { useWorkoutScopeStore } from '../../stores';
 import {
     useStatsStore,
@@ -14,7 +15,7 @@ import { StatsBarChart } from './StatsBarChart';
  * Calendar stats card — Distância / Tempo / Freq + animated bar chart, scoped
  * by the active Treinos/Atividades tab (via useWorkoutScopeStore) and by its
  * OWN local Semana/Mês dropdown (independent from the calendar's toggle).
- * Solid #15152A card, no border, no glass (clean/minimal per design).
+ * Calm elevated surface with a subtle neutral boundary.
  */
 
 const WEEK_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
@@ -93,10 +94,10 @@ function StatsPeriodCardInner() {
                     accessibilityHint="Alterna entre visão semanal e mensal"
                 >
                     <Text style={styles.dropdownText}>{period === 'week' ? 'Semana' : 'Mês'}</Text>
-                    <Ionicons
-                        name="chevron-down"
-                        size={18}
-                        color="rgba(235, 235, 245, 0.6)"
+                    <AppIcon
+                        name="chevronDown"
+                        size={20}
+                        tone="secondary"
                         style={{ transform: [{ rotate: menuOpen ? '180deg' : '0deg' }] }}
                     />
                 </Pressable>
@@ -143,12 +144,14 @@ export const StatsPeriodCard = memo(StatsPeriodCardInner);
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: colors.streakCard, // #15152A — solid, no border/glass
+        backgroundColor: semanticColors.surface2,
         marginHorizontal: spacing.md,
         marginVertical: spacing.md,
         borderRadius: 20,
         padding: spacing.base,
         position: 'relative',
+        borderWidth: 1,
+        borderColor: semanticColors.borderSubtle,
     },
     header: {
         flexDirection: 'row',
@@ -166,12 +169,12 @@ const styles = StyleSheet.create({
     tileLabel: {
         fontFamily: fonts.semibold,
         fontSize: 10,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
     tileValue: {
         fontFamily: fonts.semibold,
         fontSize: 15,
-        color: colors.textLight,
+        color: semanticColors.textPrimary,
     },
     dropdownTrigger: {
         flexDirection: 'row',
@@ -183,24 +186,26 @@ const styles = StyleSheet.create({
     dropdownText: {
         fontFamily: fonts.semibold,
         fontSize: 14,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
     menu: {
         position: 'absolute',
         top: 48,
         right: spacing.base,
-        backgroundColor: '#1F1F38',
+        backgroundColor: semanticColors.surface3,
         borderRadius: 12,
         paddingVertical: 4,
         minWidth: 120,
         // Subtle elevation so the menu reads above the card.
-        shadowColor: '#000',
+        shadowColor: semanticColors.canvas,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 10,
         elevation: 8,
     },
     menuItem: {
+        borderWidth: 1,
+        borderColor: semanticColors.borderSubtle,
         paddingVertical: 10,
         paddingHorizontal: 14,
         minHeight: 44,
@@ -209,10 +214,10 @@ const styles = StyleSheet.create({
     menuItemText: {
         fontFamily: fonts.medium,
         fontSize: 14,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
     menuItemTextActive: {
-        color: colors.primary,
+        color: semanticColors.accent,
         fontFamily: fonts.semibold,
     },
 });
