@@ -12,7 +12,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet, View, Text, AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppNavigator } from './src/navigation';
-import { semanticColors } from './src/theme/semanticColors';
+import { semanticColors, ThemeProvider, useAppTheme } from './src/theme';
 import { useNotifications } from './src/hooks/useNotifications';
 import Mapbox from '@rnmapbox/maps';
 import { SuperwallProvider, CustomPurchaseControllerProvider } from 'expo-superwall';
@@ -158,6 +158,23 @@ function GarminSyncManager() {
 function NetworkRetryManager() {
   useNetworkRetry();
   return null;
+}
+
+function ThemedAppSurface({ children }: { children: React.ReactNode }) {
+  const { theme } = useAppTheme();
+
+  return (
+    <GestureHandlerRootView
+      style={[styles.container, { backgroundColor: theme.colors.canvas }]}
+    >
+      <StatusBar
+        style={theme.isDark ? 'light' : 'dark'}
+        translucent
+        backgroundColor="transparent"
+      />
+      {children}
+    </GestureHandlerRootView>
+  );
 }
 
 /**
@@ -362,8 +379,9 @@ export default function App() {
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
-        <CustomPurchaseControllerProvider controller={superwallPurchaseController}>
-        <SuperwallProvider
+        <ThemeProvider>
+          <CustomPurchaseControllerProvider controller={superwallPurchaseController}>
+          <SuperwallProvider
           apiKeys={{
             ios: superwallApiKey,
             android: superwallApiKey,
@@ -373,8 +391,7 @@ export default function App() {
             console.warn('[Superwall] Configuration error:', error?.message ?? String(error))
           }
         >
-          <GestureHandlerRootView style={styles.container}>
-            <StatusBar style="light" translucent backgroundColor="transparent" />
+          <ThemedAppSurface>
             {/* Bridge que conecta Superwall hooks ao authStore */}
             <SuperwallBridge />
             {/* SubscriptionReconciler: destrava Pro app-wide durante a geração do plano */}
@@ -390,9 +407,10 @@ export default function App() {
             <AppNavigator />
             {/* EnvBadge: discreet env indicator — visible only on non-prod builds */}
             <EnvBadge />
-          </GestureHandlerRootView>
-        </SuperwallProvider>
-        </CustomPurchaseControllerProvider>
+          </ThemedAppSurface>
+          </SuperwallProvider>
+          </CustomPurchaseControllerProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </ErrorBoundary>
   );

@@ -13,4 +13,5 @@ export * from './trialModalStore';
 export * from './treadmillStore';
 export * from './devMenuStore';
 export * from './runEnvironmentStore';
+export * from './themeStore';
 

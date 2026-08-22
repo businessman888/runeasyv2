@@ -1,0 +1,581 @@
+{
+  "components/AnimatedXP.tsx": {
+    "#00d4ff": 1
+  },
+  "components/auth/AuthBackground.tsx": {
+    "rgba(0,212,255,0.06)": 1
+  },
+  "components/auth/AuthIcons.tsx": {
+    "#1976d2": 1,
+    "#4caf50": 1,
+    "#ff3d00": 1,
+    "#ffc107": 1
+  },
+  "components/BadgeShield.tsx": {
+    "#89898f": 1,
+    "#ebebf5": 1,
+    "rgba(255,255,255,0.08)": 1,
+    "rgba(255,255,255,0.20)": 1
+  },
+  "components/calendar/StatsBarChart.tsx": {
+    "#00d4ff": 1,
+    "rgba(0,212,255,${opacity.tofixed(2)": 1,
+    "rgba(235,235,245,0.6)": 1
+  },
+  "components/coach/SplitsBars.tsx": {
+    "#00d4ff": 1,
+    "#ebebf5": 1,
+    "rgba(235,235,245,0.40)": 1,
+    "rgba(235,235,245,0.60)": 1
+  },
+  "components/CustomKeypad.tsx": {
+    "#ebebf5": 1,
+    "rgba(235,235,245,0.6)": 1
+  },
+  "components/dev/EnvBadge.tsx": {
+    "rgba(245,158,11,0.18)": 1,
+    "rgba(245,158,11,0.55)": 1
+  },
+  "components/devices/DeviceConnectBody.tsx": {
+    "#4ade80": 1,
+    "#ff6b6b": 1,
+    "rgba(255,107,107,0.12)": 1,
+    "rgba(255,107,107,0.35)": 1
+  },
+  "components/devices/DeviceRow.tsx": {
+    "#4ade80": 1,
+    "#fbbf24": 1
+  },
+  "components/GoalsModal.tsx": {
+    "#32cd32": 1
+  },
+  "components/home/results/ResultRoutePreview.tsx": {
+    "rgba(4,6,11,0.08)": 1
+  },
+  "components/icons/RunningIcon.tsx": {
+    "#00d4ff": 1
+  },
+  "components/insight/cards/MesoInsightCardBody.tsx": {
+    "rgba(0,212,255,0.10)": 1
+  },
+  "components/insight/InsightCarousel.tsx": {
+    "rgba(0,0,0,0.6)": 1,
+    "rgba(255,255,255,0.06)": 1,
+    "rgba(255,255,255,0.18)": 1,
+    "rgba(255,255,255,0.25)": 1
+  },
+  "components/insight/MesoInsightCard.tsx": {
+    "rgba(0,212,255,0.10)": 1
+  },
+  "components/insight/WeeklyInsightCard.tsx": {
+    "rgba(0,212,255,0.10)": 1
+  },
+  "components/landing/StoryProgressBars.tsx": {
+    "rgba(255,255,255,0.25)": 1
+  },
+  "components/level/LevelProgressBar.tsx": {
+    "#3b82f6": 1,
+    "#9747ff": 1,
+    "rgba(255,255,255,0.06)": 1,
+    "rgba(255,255,255,0.45)": 1
+  },
+  "components/loading/PlanGeneratingOverlay.tsx": {
+    "rgba(0,0,0,0.10)": 1,
+    "rgba(255,255,255,0.05)": 1,
+    "rgba(255,255,255,0)": 1
+  },
+  "components/loading/RippleLoader.tsx": {
+    "rgba(0,212,255,${(0.7-index*0.075)": 1,
+    "rgba(0,212,255,0.04)": 1
+  },
+  "components/map/LowPowerBanner.tsx": {
+    "rgba(255,196,0,0.45)": 2
+  },
+  "components/onboarding/RaceCountdownBadge.tsx": {
+    "#ffb800": 1,
+    "rgba(255,184,0,0.1)": 1
+  },
+  "components/onboarding/StepSlider.tsx": {
+    "#000": 1
+  },
+  "components/patents/Patent.tsx": {
+    "#ffffff": 4,
+    "rgba(255,255,255,0.25)": 1
+  },
+  "components/patents/PatentCarousel.tsx": {
+    "rgba(235,235,245,0.45)": 1
+  },
+  "components/SyncStatusBadge.tsx": {
+    "#4ade80": 1,
+    "rgba(0,212,255,0.1)": 1,
+    "rgba(0,212,255,0.3)": 1,
+    "rgba(74,222,128,0.1)": 1,
+    "rgba(74,222,128,0.3)": 1
+  },
+  "components/training/ReliefSheet.tsx": {
+    "rgba(245,158,11,0.32)": 1
+  },
+  "components/training/WeekReliefSheet.tsx": {
+    "rgba(245,158,11,0.32)": 1
+  },
+  "components/training/WorkoutDayCard.tsx": {
+    "#32cd32": 4,
+    "#a78bfa": 3,
+    "#ff4444": 1,
+    "#ffc107": 2
+  },
+  "components/ui/DashedDivider.tsx": {
+    "#ebebf5": 1,
+    "rgba(235,235,245,0.1)": 1
+  },
+  "components/ui/GlassSurface.tsx": {
+    "rgba(0,0,0,0.12)": 1,
+    "rgba(255,255,255,0.06)": 1,
+    "rgba(255,255,255,0)": 1
+  },
+  "components/upgrade/GlassTeaseOverlay.tsx": {
+    "rgba(0,0,0,0.10)": 1,
+    "rgba(255,255,255,0.05)": 1,
+    "rgba(255,255,255,0)": 1
+  },
+  "components/WeeklyStreakCard.tsx": {
+    "rgba(255,69,58,0.2)": 1,
+    "rgba(50,205,50,0.2)": 1
+  },
+  "components/wellness/EvolutionChart.tsx": {
+    "rgba(0,212,255,0.14)": 1,
+    "rgba(255,255,255,0.06)": 1,
+    "rgba(255,255,255,0.08)": 1
+  },
+  "components/wellness/ZonesChart.tsx": {
+    "rgba(255,255,255,0.06)": 1
+  },
+  "components/WheelPickerModal.tsx": {
+    "#000": 1,
+    "rgba(0,0,0,0.5)": 1,
+    "rgba(235,235,245,0.1)": 1,
+    "rgba(235,235,245,0.6)": 1
+  },
+  "constants/badgeColors.ts": {
+    "#008270": 1,
+    "#039381": 1,
+    "#046b32": 1,
+    "#0a3485": 1,
+    "#11a492": 1,
+    "#167c44": 1,
+    "#1a4799": 1,
+    "#1fb5a3": 1,
+    "#288d56": 1,
+    "#2a5aa8": 1,
+    "#2dc6b4": 2,
+    "#371cb6": 1,
+    "#3a6db5": 1,
+    "#3a9e68": 1,
+    "#482fc4": 1,
+    "#4a7fc1": 2,
+    "#4caf7a": 2,
+    "#5942d2": 1,
+    "#6a55e0": 1,
+    "#7b68ee": 2,
+    "#b01b00": 1,
+    "#bc3310": 1,
+    "#c15600": 1,
+    "#c84b22": 1,
+    "#ce6a08": 1,
+    "#d4633a": 1,
+    "#db7e11": 1,
+    "#e07b54": 2,
+    "#e8921a": 1,
+    "#f5a623": 2
+  },
+  "constants/patents.ts": {
+    "#00ff88": 2,
+    "#00ffd1": 1,
+    "#0a4d38": 1,
+    "#0a8c66": 1,
+    "#10e0a0": 1,
+    "#2052cb": 1,
+    "#33cfff": 2,
+    "#357baa": 1,
+    "#3c3c85": 1,
+    "#4289c1": 1,
+    "#58585c": 1,
+    "#5c0040": 1,
+    "#5c0817": 1,
+    "#5c2308": 1,
+    "#5c4226": 1,
+    "#6b6b85": 1,
+    "#7939cc": 1,
+    "#797989": 1,
+    "#7a5c00": 1,
+    "#826af9": 1,
+    "#89898f": 1,
+    "#8b6f4e": 1,
+    "#9747ff": 3,
+    "#a0a0a8": 1,
+    "#a88554": 1,
+    "#b1b1b7": 1,
+    "#c0c0d0": 1,
+    "#c71f3f": 1,
+    "#c84a0f": 1,
+    "#c9a57a": 2,
+    "#d4a017": 1,
+    "#e8e8f2": 1,
+    "#ff1493": 2,
+    "#ff1744": 2,
+    "#ff5070": 1,
+    "#ff6b35": 2,
+    "#ff7a33": 1,
+    "#ffd700": 2,
+    "#ffe066": 1,
+    "#ffffff": 2
+  },
+  "hooks/useTracking.ts": {
+    "#00d1ff": 1
+  },
+  "screens/auth/AuthScreen.tsx": {
+    "#000000": 1,
+    "#ffffff": 3,
+    "rgba(0,212,255,0.12)": 1,
+    "rgba(0,212,255,0.3)": 1,
+    "rgba(239,68,68,0.2)": 1,
+    "rgba(239,68,68,0.3)": 1,
+    "rgba(255,255,255,0.06)": 1
+  },
+  "screens/BadgesScreen.tsx": {
+    "#ffd700": 1
+  },
+  "screens/coach/CoachAudioSettingsScreen.tsx": {
+    "#ffc400": 1,
+    "rgba(255,196,0,0.12)": 1,
+    "rgba(255,196,0,0.40)": 1
+  },
+  "screens/CoachAnalysisScreen.tsx": {
+    "#32cd32": 1,
+    "#9747ff": 1,
+    "#ff453a": 1,
+    "#ffa500": 1,
+    "#ffc400": 1,
+    "#ffd700": 1,
+    "#ffffff": 1,
+    "rgba(0,212,255,0.15)": 1,
+    "rgba(151,71,255,0.18)": 1,
+    "rgba(156,163,175,0.15)": 1,
+    "rgba(235,235,245,0.06)": 3,
+    "rgba(255,107,107,0.15)": 1,
+    "rgba(255,196,0,0.10)": 1,
+    "rgba(255,196,0,0.18)": 1,
+    "rgba(255,196,0,0.30)": 1,
+    "rgba(255,69,58,0.30)": 1,
+    "rgba(50,205,50,0.15)": 1
+  },
+  "screens/dev/DevMenuScreen.tsx": {
+    "rgba(255,196,0,0.10)": 1
+  },
+  "screens/EvolutionScreen.tsx": {
+    "#007f99": 1,
+    "#00d4ff": 9,
+    "#00ffff": 1,
+    "#ebebf5": 1,
+    "#ff4444": 1,
+    "#ffd700": 1,
+    "rgba(0,212,255,0.7)": 1,
+    "rgba(255,255,255,0.1)": 1
+  },
+  "screens/HomeScreen.tsx": {
+    "#ebebf5": 1
+  },
+  "screens/LoginScreen.tsx": {
+    "#000000": 1,
+    "#1976d2": 1,
+    "#4caf50": 1,
+    "#ef4444": 1,
+    "#ff3d00": 1,
+    "#ffc107": 1,
+    "#ffffff": 1,
+    "rgba(239,68,68,0.2)": 1,
+    "rgba(239,68,68,0.3)": 1
+  },
+  "screens/meso-insight/dashboard/MesoDashboard.tsx": {
+    "rgba(0,212,255,0.10)": 1,
+    "rgba(0,212,255,0.22)": 1
+  },
+  "screens/meso-insight/stories/MesoStoryCards.tsx": {
+    "rgba(235,235,245,0.55)": 2,
+    "rgba(235,235,245,0.9)": 1
+  },
+  "screens/meso-insight/stories/MesoStoryDeck.tsx": {
+    "rgba(21,21,42,0.28)": 1,
+    "rgba(235,235,245,0.58)": 1
+  },
+  "screens/NotificationSettingsScreen.tsx": {
+    "#ffffff": 1
+  },
+  "screens/OnboardingScreen.tsx": {
+    "#ebebf5": 1
+  },
+  "screens/plan-goals/components/WeekRow.tsx": {
+    "#32e08a": 3
+  },
+  "screens/plan-goals/phaseTokens.ts": {
+    "#32e08a": 1,
+    "#a78bfa": 1,
+    "#ffb547": 1,
+    "rgba(167,139,250,0.16)": 1,
+    "rgba(255,181,71,0.16)": 1,
+    "rgba(50,224,138,0.16)": 1
+  },
+  "screens/PrePaywallScreen.tsx": {
+    "#000": 1
+  },
+  "screens/quiz/AssessoriaCompareScreen.tsx": {
+    "rgba(0,127,153,0.3)": 1,
+    "rgba(235,235,245,0.1)": 1,
+    "rgba(235,235,245,0.6)": 1
+  },
+  "screens/quiz/AvailableDaysScreen.tsx": {
+    "#ffc400": 1
+  },
+  "screens/quiz/BirthDateScreen.tsx": {
+    "#00e5ff": 1,
+    "rgba(235,235,245,0.6)": 1
+  },
+  "screens/quiz/BriefingScreen.tsx": {
+    "#000": 3,
+    "#ffc400": 1,
+    "rgba(235,235,245,0.6)": 1
+  },
+  "screens/quiz/DistanceTimeScreen.tsx": {
+    "#000": 1
+  },
+  "screens/quiz/GoalTimeframeScreen.tsx": {
+    "#ffffff": 1
+  },
+  "screens/quiz/HeightScreen.tsx": {
+    "rgba(235,235,245,0.6)": 1
+  },
+  "screens/quiz/PaceConfirmScreen.tsx": {
+    "#000": 1
+  },
+  "screens/quiz/PlanPreviewScreen.tsx": {
+    "#00d4ff": 7,
+    "#0e0e1f": 1,
+    "#ebebf5": 4,
+    "rgba(235,235,245,0.6)": 4
+  },
+  "screens/quiz/ReferralCodeScreen.tsx": {
+    "#10b981": 2,
+    "#ebebf5": 1,
+    "#ef4444": 2
+  },
+  "screens/quiz/SmartPlanScreen.tsx": {
+    "#000": 3,
+    "#ffc400": 1,
+    "rgba(235,235,245,0.6)": 1
+  },
+  "screens/quiz/StartDateScreen.tsx": {
+    "#000": 1
+  },
+  "screens/quiz/TimeCompareScreen.tsx": {
+    "rgba(235,235,245,0.45)": 1
+  },
+  "screens/quiz/TimeframeScreen.tsx": {
+    "#0e0e1f": 1,
+    "rgba(235,235,245,0.6)": 1
+  },
+  "screens/RankingScreen.tsx": {
+    "#cd7f32": 2
+  },
+  "screens/readiness/ReadinessQuizScreen.tsx": {
+    "rgba(0,212,255,0.7)": 1
+  },
+  "screens/readiness/ReadinessResultScreen.tsx": {
+    "#007f99": 1,
+    "#00d4ff": 6,
+    "#ebebf5": 1,
+    "#ff4444": 1,
+    "#ffd700": 2,
+    "rgba(255,255,255,0.1)": 1
+  },
+  "screens/RegisterScreen.tsx": {
+    "#ef4444": 1,
+    "rgba(239,68,68,0.2)": 1,
+    "rgba(239,68,68,0.3)": 1
+  },
+  "screens/retrospective/AnimatedStoryBackground.tsx": {
+    "rgba(${red},${green},${blue},${opacity})": 1
+  },
+  "screens/retrospective/ShareSummaryCard.tsx": {
+    "rgba(235,235,245,0.4)": 1,
+    "rgba(235,235,245,0.6)": 1,
+    "rgba(235,235,245,0.62)": 1,
+    "rgba(235,235,245,0.7)": 1
+  },
+  "screens/retrospective/StoryCards.tsx": {
+    "rgba(235,235,245,0.14)": 1,
+    "rgba(235,235,245,0.18)": 1,
+    "rgba(235,235,245,0.55)": 4,
+    "rgba(235,235,245,0.68)": 1,
+    "rgba(235,235,245,0.75)": 1,
+    "rgba(255,255,255,0.06)": 1,
+    "rgba(255,255,255,0.08)": 1
+  },
+  "screens/retrospective/StoryProgressBar.tsx": {
+    "rgba(235,235,245,0.22)": 1
+  },
+  "screens/retrospective/storyTheme.ts": {
+    "#06202e": 1,
+    "#071e28": 2,
+    "#0a3446": 1,
+    "#0b1836": 1,
+    "#0b3a4a": 2,
+    "#12103a": 1,
+    "#132a55": 1,
+    "#1a0e36": 1,
+    "#221f5c": 1,
+    "#2e1a55": 1,
+    "#2e1d02": 1,
+    "#5c3a05": 1,
+    "#6366f1": 1,
+    "rgba(235,235,245,0.55)": 1,
+    "rgba(235,235,245,0.65)": 1,
+    "rgba(235,235,245,0.72)": 1,
+    "rgba(235,235,245,0.75)": 1
+  },
+  "screens/RetrospectiveScreen.tsx": {
+    "rgba(235,235,245,0.58)": 1
+  },
+  "screens/running/RunningScreen.tsx": {
+    "#32cd32": 1,
+    "#ffc400": 1
+  },
+  "screens/running/RunSummaryScreen.tsx": {
+    "#32cd32": 1,
+    "#ff453a": 1,
+    "#ffc400": 1,
+    "rgba(255,196,0,0.40)": 1
+  },
+  "screens/running/TreadmillRunningView.tsx": {
+    "#32cd32": 2,
+    "#ffc400": 1,
+    "rgba(255,196,0,0.4)": 1
+  },
+  "screens/SettingsScreen.tsx": {
+    "rgba(0,212,255,0.12)": 1,
+    "rgba(0,212,255,0.30)": 1
+  },
+  "screens/sharing/components/cards/Card02_Pace.tsx": {
+    "rgba(255,255,255,0.25)": 1
+  },
+  "screens/sharing/components/cards/Card03_Achievement.tsx": {
+    "rgba(255,255,255,0.06)": 1,
+    "rgba(255,255,255,0.1)": 1,
+    "rgba(255,255,255,0.25)": 1
+  },
+  "screens/sharing/components/cards/Card04_MetricsFull.tsx": {
+    "rgba(255,255,255,0.07)": 1,
+    "rgba(255,255,255,0.08)": 1
+  },
+  "screens/sharing/components/cards/cardTypography.ts": {
+    "#ffffff": 6,
+    "rgba(0,0,0,0.45)": 1,
+    "rgba(0,0,0,0.55)": 1,
+    "rgba(235,235,245,0.6)": 1,
+    "rgba(235,235,245,0.7)": 1,
+    "rgba(235,235,245,0.75)": 1,
+    "rgba(235,235,245,0.85)": 1
+  },
+  "screens/sharing/components/RouteSvg.tsx": {
+    "#ffffff": 1
+  },
+  "screens/sharing/SharingModal.tsx": {
+    "#000": 1,
+    "rgba(0,0,0,0.35)": 1,
+    "rgba(0,0,0,0.5)": 1,
+    "rgba(235,235,245,0.2)": 1,
+    "rgba(235,235,245,0.65)": 1,
+    "rgba(255,255,255,0.06)": 1,
+    "rgba(255,255,255,0.13)": 1
+  },
+  "screens/sharing/utils/shareHandlers.ts": {
+    "#003d5c": 1,
+    "#070b14": 1
+  },
+  "screens/StatsScreen.tsx": {
+    "#00d4ff": 2,
+    "#00ffff": 2,
+    "#6366f1": 1,
+    "#9333ea": 1,
+    "#ea580c": 1,
+    "rgba(0,212,255,0.3)": 1,
+    "rgba(0,212,255,0.6)": 1
+  },
+  "screens/TrainingHistoryScreen.tsx": {
+    "#ff4444": 1,
+    "#ffc400": 1
+  },
+  "screens/treadmill/TreadmillSetupScreen.tsx": {
+    "#10b981": 1,
+    "#ff453a": 1,
+    "#ffc400": 1,
+    "rgba(16,185,129,0.30)": 1,
+    "rgba(255,196,0,0.4)": 1
+  },
+  "screens/weekly-insight/components/AdjustmentTray.tsx": {
+    "rgba(0,212,255,0.05)": 1,
+    "rgba(0,212,255,0.14)": 1,
+    "rgba(0,212,255,0.35)": 1,
+    "rgba(245,158,11,0.05)": 1,
+    "rgba(245,158,11,0.16)": 1,
+    "rgba(245,158,11,0.32)": 1
+  },
+  "screens/weekly-insight/components/CoachCallout.tsx": {
+    "rgba(0,212,255,0.03)": 1,
+    "rgba(0,212,255,0.13)": 1,
+    "rgba(0,212,255,0.14)": 1,
+    "rgba(0,212,255,0.22)": 1
+  },
+  "screens/weekly-insight/components/IntensityCard.tsx": {
+    "rgba(255,196,0,0.12)": 1
+  },
+  "screens/weekly-insight/components/VolumeComparison.tsx": {
+    "rgba(0,212,255,0.75)": 1,
+    "rgba(255,255,255,0.06)": 1
+  },
+  "screens/weekly-insight/components/WeeklyProgressChart.tsx": {
+    "rgba(255,255,255,0.05)": 1,
+    "rgba(255,255,255,0.24)": 1,
+    "rgba(255,255,255,0.34)": 1
+  },
+  "screens/weekly-insight/components/ZonesRadar.tsx": {
+    "rgba(0,212,255,0.22)": 2,
+    "rgba(255,255,255,0.06)": 1,
+    "rgba(255,255,255,0.07)": 1,
+    "rgba(255,255,255,0.30)": 1,
+    "rgba(255,255,255,0.35)": 1
+  },
+  "screens/WorkoutDetailScreen.tsx": {
+    "#ffd700": 1
+  },
+  "services/notifications.ts": {
+    "#4caf50": 1,
+    "#ff6b35": 2,
+    "#ffd700": 1
+  },
+  "utils/archetypes.ts": {
+    "#00b4d8": 1,
+    "#00d4ff": 1,
+    "#26de81": 1,
+    "#4d96ff": 1,
+    "#4ecdc4": 1,
+    "#7be495": 1,
+    "#7c5cfc": 1,
+    "#e84393": 1,
+    "#ff3860": 1,
+    "#ff6b6b": 1,
+    "#ff8a3d": 1,
+    "#ff9f1c": 1,
+    "#ffb800": 1,
+    "#ffd700": 1
+  }
+}

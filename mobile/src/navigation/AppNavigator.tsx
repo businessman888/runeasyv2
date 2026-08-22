@@ -2,7 +2,7 @@ import React from 'react';
 import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text, View, StyleSheet, Linking } from 'react-native';
+import { View, Linking } from 'react-native';
 import { CustomTabBar } from '../components/CustomTabBar';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { SplashScreen } from '../components/SplashScreen';
@@ -59,7 +59,7 @@ import { PlanPreviewScreen as OldPlanPreviewScreen } from '../screens/PlanPrevie
 // DevMenuScreen é dev-only; o require() em vez de import preserva tree-shaking
 // em produção (junto com o gate `__DEV__` na registration).
 const DevMenuScreen = __DEV__ ? require('../screens/dev/DevMenuScreen').DevMenuScreen : null;
-import { colors, typography } from '../theme';
+import { useAppTheme } from '../theme';
 import { useAuthStore, useTrialModalStore } from '../stores';
 import { TrialModal } from '../components/upgrade/TrialModal';
 import { RunEnvironmentModal } from '../components/RunEnvironmentModal';
@@ -76,8 +76,6 @@ const MODAL_ROUTE_NAMES = new Set([
     'DevMenu',
 ]);
 
-// CRITICAL: Dark background color for entire Navigator
-const FORCED_DARK_BG = colors.background;
 
 // Deep Linking Configuration
 // Maps runeasy://--/callback/onboarding?user_id=xxx to Onboarding screen
@@ -98,6 +96,7 @@ const linking: LinkingOptions<any> = {
 
 // Tab Navigator
 function MainTabs({ route, navigation }: any) {
+    const { theme } = useAppTheme();
     const { initialTab } = route.params || {};
 
     // Tablet landscape: a tab bar vira side rail à esquerda (tabBarPosition
@@ -131,9 +130,9 @@ function MainTabs({ route, navigation }: any) {
             screenOptions={{
                 tabBarPosition: useSideRail ? 'left' : 'bottom',
                 headerStyle: {
-                    backgroundColor: colors.background,
+                    backgroundColor: theme.colors.canvas,
                 },
-                headerTintColor: colors.text,
+                headerTintColor: theme.colors.textPrimary,
                 headerTitleStyle: {
                     fontWeight: '600',
                 },
@@ -191,6 +190,7 @@ function MainTabs({ route, navigation }: any) {
 
 // Root Navigator
 export function AppNavigator() {
+    const { theme, navigationTheme } = useAppTheme();
     const { isAuthenticated, isLoading, checkAuth, user, login } = useAuthStore();
 
     const { reduceMotion } = useMotionPreferences();
@@ -250,6 +250,7 @@ export function AppNavigator() {
 
     return (
         <NavigationContainer
+            theme={navigationTheme}
             ref={navigationRef}
             linking={linking}
             onReady={() => {
@@ -260,12 +261,12 @@ export function AppNavigator() {
             <Stack.Navigator
                 id="RootStack"
                 screenOptions={({ route }) => ({
-                    // CRITICAL: Force dark background on ALL screens
-                    contentStyle: { backgroundColor: FORCED_DARK_BG },
+                    // The resolved theme owns native-stack surfaces and headers.
+                    contentStyle: { backgroundColor: theme.colors.canvas },
                     headerStyle: {
-                        backgroundColor: FORCED_DARK_BG,
+                        backgroundColor: theme.colors.canvas,
                     },
-                    headerTintColor: colors.text,
+                    headerTintColor: theme.colors.textPrimary,
                     headerTitleStyle: {
                         fontWeight: '600',
                     },
@@ -624,35 +625,3 @@ export function AppNavigator() {
         </NavigationContainer >
     );
 }
-
-const styles = StyleSheet.create({
-    loadingContainer: {
-        flex: 1,
-        backgroundColor: colors.white,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    loadingEmoji: {
-        fontSize: 64,
-        marginBottom: 16,
-    },
-    loadingText: {
-        fontSize: typography.fontSizes['2xl'],
-        fontWeight: '700' as const,
-        color: colors.primary,
-    },
-    placeholder: {
-        flex: 1,
-        backgroundColor: colors.background,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    placeholderText: {
-        fontSize: 48,
-        marginBottom: 8,
-    },
-    placeholderSubtext: {
-        fontSize: typography.fontSizes.lg,
-        color: colors.textSecondary,
-    },
-});

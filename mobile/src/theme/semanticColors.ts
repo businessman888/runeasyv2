@@ -1,10 +1,12 @@
+import type { ThemeColors } from './contracts';
+
 /**
  * Semantic dark-theme colors.
  *
  * Components should consume these names instead of raw color values so the
  * visual hierarchy can evolve without coupling UI code to a specific palette.
  */
-export const semanticColors = {
+export const darkColors = {
   canvas: '#050506',
   surface1: '#0D0D0F',
   surface2: '#141416',
@@ -31,7 +33,13 @@ export const semanticColors = {
   overlayStrong: 'rgba(5,5,6,0.85)',
   scrim: 'rgba(0,0,0,0.62)',
   transparent: 'transparent',
-} as const;
+} as const satisfies ThemeColors;
+
+/**
+ * @deprecated Compatibility alias while screens migrate to useAppTheme().
+ * New theme-aware code must consume colors from the provider.
+ */
+export const semanticColors = darkColors;
 
 export type SemanticColor = keyof typeof semanticColors;
 export type SemanticColorValue = (typeof semanticColors)[SemanticColor];
