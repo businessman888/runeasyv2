@@ -1,9 +1,8 @@
 import React, { memo, useMemo } from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { BadgeShield } from './BadgeShield';
 import { semanticColors } from '../theme/semanticColors';
 import { AppIcon } from './ui/AppIcon';
-import { AppPressable } from './ui/AppPressable';
 import {
   getEarnableBadgeSlugs,
   resolveWorkoutPaceSeconds,
@@ -275,9 +274,8 @@ export const WorkoutCard = memo(
 
         {/* ── Section 3: Start button ───────────────────────────────────── */}
         <View style={styles.section3}>
-          <AppPressable
+          <Pressable
             style={[styles.startBtn, !isButtonEnabled && styles.startBtnDisabled]}
-            interactionScale="button"
             onPress={isButtonEnabled ? onStartWorkout : undefined}
             disabled={!isButtonEnabled}
             accessibilityRole="button"
@@ -293,7 +291,7 @@ export const WorkoutCard = memo(
             >
               Começar treino
             </Text>
-          </AppPressable>
+          </Pressable>
         </View>
       </View>
     );

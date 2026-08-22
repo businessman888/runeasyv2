@@ -3,6 +3,7 @@ import {
     View,
     Text,
     StyleSheet,
+    TouchableOpacity,
     Animated,
     Easing,
     Pressable,
@@ -11,7 +12,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fonts, spacing } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { AppIcon } from './ui/AppIcon';
-import { AppPressable } from './ui/AppPressable';
 
 interface HomeFabProps {
     onPressFreeRun: () => void;
@@ -108,9 +108,9 @@ export function HomeFab({ onPressFreeRun, onPressManual }: HomeFabProps) {
                 style={[styles.fabContainer, { bottom: fabBottom, right: FAB_RIGHT_OFFSET }]}
                 pointerEvents="box-none"
             >
-                <AppPressable
+                <TouchableOpacity
                     style={styles.fab}
-                    interactionScale="icon"
+                    activeOpacity={0.85}
                     onPress={() => setOpen((v) => !v)}
                     accessibilityRole="button"
                     accessibilityLabel={open ? 'Fechar opções de treino' : 'Abrir opções de treino'}
@@ -119,7 +119,7 @@ export function HomeFab({ onPressFreeRun, onPressManual }: HomeFabProps) {
                     <Animated.View style={{ transform: [{ rotate }] }}>
                         <AppIcon name="add" size={32} tone="onAccent" variant="outline" />
                     </Animated.View>
-                </AppPressable>
+                </TouchableOpacity>
             </View>
         </>
     );
@@ -139,15 +139,15 @@ function FabOption({ label, onPress, icon }: FabOptionProps) {
                     {label}
                 </Text>
             </View>
-            <AppPressable
+            <TouchableOpacity
                 style={styles.subButton}
-                interactionScale="icon"
                 onPress={onPress}
+                activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityLabel={label}
             >
                 {icon}
-            </AppPressable>
+            </TouchableOpacity>
         </View>
     );
 }

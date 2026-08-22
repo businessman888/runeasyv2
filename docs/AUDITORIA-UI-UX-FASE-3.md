@@ -40,17 +40,18 @@ O estado selecionado foi restaurado conforme o comportamento anterior:
 
 ## LevelCard
 
-O gradiente agora usa `surface1 → surface2 → surface3`, com borda neutra e
-sombra curta. Não há navy, roxo decorativo ou glow cyan.
+O gradiente usa `surface1 → surface2 → surface3`, com borda e sombra neutralizadas.
+A composição original do card, incluindo overlay, geometria e ícones, foi preservada.
 
 ## Motion
 
 - 38 rotas do Native Stack usam transição de 220 ms.
 - Rotas modais usam 320 ms e entrada inferior.
 - Reduce Motion troca as transições por `none`.
-- `AppPressable` usa scale + opacity em 160 ms.
-- 25 instâncias de `AppPressable` cobrem tabbar, navegação do onboarding,
-  botões das telas principais, FAB, cards e controles de ícone.
+- `AppPressable` mantém a animação de escala já existente.
+- Controles cuja composição depende de largura intrínseca continuam com seus
+  wrappers nativos originais; não se substitui `TouchableOpacity`/`Pressable`
+  durante uma migração exclusivamente cromática.
 - 42 arquivos usam motion Reanimated para transições, feedback ou visualização.
 - Backdrops invisíveis e gestos especiais permanecem sem escala.
 

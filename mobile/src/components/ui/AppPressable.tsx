@@ -14,15 +14,11 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
-  withTiming,
 } from 'react-native-reanimated';
 
 import { useMotionPreferences } from '../../hooks/useMotionPreferences';
 import {
   motionScale,
-  createTimingConfig,
-  motionDuration,
-  motionOpacity,
   motionSpring,
   type MotionScale,
 } from '../../theme/motion';
@@ -62,18 +58,18 @@ export const AppPressable = forwardRef<View, AppPressableProps>(
   ) {
     const scale = useSharedValue(1);
     const { reduceMotion } = useMotionPreferences();
-    const opacity = useSharedValue(disabled === true ? motionOpacity.disabled : 1);
     const isDisabled = disabled === true;
 
     useEffect(() => {
+      if (!isDisabled) {
+        return;
+      }
+
       cancelAnimation(scale);
-      cancelAnimation(opacity);
       scale.value = 1;
-      opacity.value = isDisabled ? motionOpacity.disabled : 1;
-    }, [isDisabled, opacity, scale]);
+    }, [isDisabled, scale]);
 
     const animatedStyle = useAnimatedStyle(() => ({
-      opacity: opacity.value,
       transform: [{ scale: scale.value }],
     }));
 
@@ -86,10 +82,9 @@ export const AppPressable = forwardRef<View, AppPressableProps>(
         scale.value = reduceMotion
           ? 1
           : withSpring(motionScale[interactionScale], motionSpring.press);
-        opacity.value = withTiming(motionOpacity.pressed, createTimingConfig(motionDuration.fast));
         onPressIn?.(event);
       },
-      [interactionScale, isDisabled, onPressIn, opacity, reduceMotion, scale],
+      [interactionScale, isDisabled, onPressIn, reduceMotion, scale],
     );
 
     const handlePressOut = useCallback(
@@ -98,11 +93,10 @@ export const AppPressable = forwardRef<View, AppPressableProps>(
           return;
         }
 
-        opacity.value = withTiming(1, createTimingConfig(motionDuration.fast));
         scale.value = reduceMotion ? 1 : withSpring(1, motionSpring.press);
         onPressOut?.(event);
       },
-      [isDisabled, onPressOut, opacity, reduceMotion, scale],
+      [isDisabled, onPressOut, reduceMotion, scale],
     );
 
     const handlePress = useCallback(

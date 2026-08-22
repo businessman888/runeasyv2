@@ -4,6 +4,7 @@ import {
     Text,
     StyleSheet,
     ScrollView,
+    TouchableOpacity,
     Image,
     Pressable,
     Linking,
@@ -17,7 +18,6 @@ import { useCoachStore } from '../stores/coachStore';
 import { useProFeature } from '../hooks/useProFeature';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { AppIcon } from '../components/ui/AppIcon';
-import { AppPressable } from '../components/ui/AppPressable';
 import { Skeleton } from '../components/Skeleton';
 import { DeviceRow } from '../components/devices/DeviceRow';
 import { WEARABLE_ORDER } from '../config/wearables.config';
@@ -100,15 +100,14 @@ export function SettingsScreen({ navigation }: any) {
                                 </View>
                             )}
                         </View>
-                        <AppPressable
+                        <TouchableOpacity
                             style={styles.editAvatarButton}
-                            interactionScale="icon"
                             onPress={() => navigation.navigate('PersonalInfo')}
                             accessibilityRole="button"
                             accessibilityLabel="Editar perfil"
                         >
                             <AppIcon name="edit" size={16} tone="primary" variant="filled" />
-                        </AppPressable>
+                        </TouchableOpacity>
                     </View>
                     <Text style={styles.userName}>{userName}</Text>
 
@@ -122,16 +121,16 @@ export function SettingsScreen({ navigation }: any) {
                             <Text style={styles.badgeProText}>MEMBRO PRO</Text>
                         </View>
                     ) : (
-                        <AppPressable
+                        <TouchableOpacity
                             style={styles.badgeFree}
-                            interactionScale="button"
                             onPress={openUpgrade}
+                            activeOpacity={0.7}
                             accessibilityRole="button"
                             accessibilityLabel="Plano grátis, tocar para fazer upgrade"
                         >
                             <Text style={styles.badgeFreeText}>PLANO GRÁTIS</Text>
                             <AppIcon name="chevronForward" size={16} tone="secondary" />
-                        </AppPressable>
+                        </TouchableOpacity>
                     )}
                 </View>
 
@@ -139,9 +138,8 @@ export function SettingsScreen({ navigation }: any) {
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>CONTA</Text>
                     <View style={styles.menuCard}>
-                        <AppPressable
+                        <TouchableOpacity
                             style={styles.menuItem}
-                            interactionScale="card"
                             onPress={() => navigation.navigate('PersonalInfo')}
                         >
                             <View style={styles.menuItemLeft}>
@@ -151,13 +149,12 @@ export function SettingsScreen({ navigation }: any) {
                                 <Text style={styles.menuItemText}>Informações Pessoais</Text>
                             </View>
                             <AppIcon name="chevronForward" size={20} tone="secondary" />
-                        </AppPressable>
+                        </TouchableOpacity>
 
                         <View style={styles.menuDivider} />
 
-                        <AppPressable
+                        <TouchableOpacity
                             style={styles.menuItem}
-                            interactionScale="card"
                             onPress={() => navigation.navigate('TrainingHistory')}
                         >
                             <View style={styles.menuItemLeft}>
@@ -167,7 +164,7 @@ export function SettingsScreen({ navigation }: any) {
                                 <Text style={styles.menuItemText}>Histórico de Treinos</Text>
                             </View>
                             <AppIcon name="chevronForward" size={20} tone="secondary" />
-                        </AppPressable>
+                        </TouchableOpacity>
                     </View>
                 </View>
 
@@ -190,9 +187,8 @@ export function SettingsScreen({ navigation }: any) {
                     <View style={styles.menuCard}>
                         {/* Coach de áudio — mesmo padrão de linha (replicado, não há
                             componente compartilhado). Mostra o estado atual à direita. */}
-                        <AppPressable
+                        <TouchableOpacity
                             style={styles.menuItem}
-                            interactionScale="card"
                             onPress={() => navigation.navigate('CoachAudioSettings')}
                             accessibilityRole="button"
                             accessibilityLabel={`Coach de áudio, ${coachEnabled ? 'ligado' : 'desligado'}`}
@@ -209,13 +205,12 @@ export function SettingsScreen({ navigation }: any) {
                                 </Text>
                                 <AppIcon name="chevronForward" size={20} tone="secondary" />
                             </View>
-                        </AppPressable>
+                        </TouchableOpacity>
 
                         <View style={styles.menuDivider} />
 
-                        <AppPressable
+                        <TouchableOpacity
                             style={styles.menuItem}
-                            interactionScale="card"
                             onPress={() => navigation.navigate('NotificationSettings')}
                         >
                             <View style={styles.menuItemLeft}>
@@ -225,13 +220,12 @@ export function SettingsScreen({ navigation }: any) {
                                 <Text style={styles.menuItemText}>Notificações</Text>
                             </View>
                             <AppIcon name="chevronForward" size={20} tone="secondary" />
-                        </AppPressable>
+                        </TouchableOpacity>
 
                         <View style={styles.menuDivider} />
 
-                        <AppPressable
+                        <TouchableOpacity
                             style={styles.menuItem}
-                            interactionScale="card"
                             onPress={() => navigation.navigate('Help')}
                         >
                             <View style={styles.menuItemLeft}>
@@ -241,16 +235,15 @@ export function SettingsScreen({ navigation }: any) {
                                 <Text style={styles.menuItemText}>Ajuda / FAQ</Text>
                             </View>
                             <AppIcon name="chevronForward" size={20} tone="secondary" />
-                        </AppPressable>
+                        </TouchableOpacity>
                     </View>
                 </View>
 
                 {/* Excluir Conta — card isolado (requisito de loja), antes do logout */}
                 <View style={styles.section}>
                     <View style={styles.menuCard}>
-                        <AppPressable
+                        <TouchableOpacity
                             style={styles.menuItem}
-                            interactionScale="card"
                             onPress={() => Linking.openURL('https://runeasy.com.br/excluir-conta')}
                             accessibilityRole="button"
                             accessibilityLabel="Excluir conta"
@@ -262,15 +255,15 @@ export function SettingsScreen({ navigation }: any) {
                                 <Text style={[styles.menuItemText, { color: colors.error }]}>Excluir Conta</Text>
                             </View>
                             <AppIcon name="chevronForward" size={20} tone="secondary" />
-                        </AppPressable>
+                        </TouchableOpacity>
                     </View>
                 </View>
 
                 {/* Logout Button */}
-                <AppPressable style={styles.logoutButton} onPress={handleLogout}>
+                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
                     <AppIcon name="logout" size={20} tone="danger" />
                     <Text style={styles.logoutText}>Sair da Conta</Text>
-                </AppPressable>
+                </TouchableOpacity>
 
                 {/* Version */}
                 <Text style={styles.versionText}>Versão 2.4.0 (Build 192)</Text>

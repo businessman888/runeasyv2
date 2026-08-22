@@ -1,9 +1,9 @@
-import React, { type ReactNode } from 'react';
+import React, { ReactNode } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
-import { AppIcon } from '../ui/AppIcon';
 import { LevelProgressBar } from './LevelProgressBar';
 
 export interface LevelCardStats {
@@ -38,13 +38,22 @@ export function LevelCard({ stats, patentSlot, patentName, variant = 'home' }: L
             end={{ x: 1, y: 1 }}
             style={styles.card}
         >
+            {/* Keep the original overlay geometry, using the neutral palette. */}
+            <LinearGradient
+                colors={[semanticColors.glass, semanticColors.transparent]}
+                start={{ x: 1, y: 0 }}
+                end={{ x: 0.2, y: 1 }}
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
+            />
+
             <View style={styles.topRow}>
                 <View style={styles.eliteChip}>
-                    <AppIcon name="energy" size={16} tone="accent" variant="filled" />
+                    <Ionicons name="flash" size={12} color={semanticColors.accent} />
                     <Text style={styles.eliteChipText}>Elite status</Text>
                 </View>
                 <View style={styles.patentSlot}>
-                    {patentSlot ?? <AppIcon name="medal" size={28} tone="accent" variant="filled" />}
+                    {patentSlot ?? <Ionicons name="diamond" size={26} color={semanticColors.accent} />}
                 </View>
             </View>
 
@@ -76,7 +85,7 @@ export function LevelCard({ stats, patentSlot, patentName, variant = 'home' }: L
 
             {variant === 'badges' && streak > 0 ? (
                 <View style={styles.streakRow}>
-                    <AppIcon name="flame" size={16} tone="success" variant="filled" />
+                    <Ionicons name="flame" size={16} color={semanticColors.accent} />
                     <Text style={styles.streakText}>Combo: {streak} dias</Text>
                 </View>
             ) : null}
@@ -92,7 +101,8 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: semanticColors.borderSubtle,
         overflow: 'hidden',
-        ...shadows.md,
+        ...shadows.neon,
+        shadowColor: semanticColors.canvas,
     },
     topRow: {
         flexDirection: 'row',

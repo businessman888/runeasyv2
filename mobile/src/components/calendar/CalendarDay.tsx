@@ -116,6 +116,8 @@ const styles = StyleSheet.create({
         left: 2,
         right: 2,
         borderRadius: 20,
+        borderWidth: 1,
+        borderColor: semanticColors.borderStrong,
     },
     weekday: {
         fontFamily: fonts.medium,

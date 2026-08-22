@@ -4,6 +4,7 @@ import {
     Text,
     StyleSheet,
     ScrollView,
+    TouchableOpacity,
     Image,
     RefreshControl,
 } from 'react-native';
@@ -13,7 +14,6 @@ import { useGamificationStore, RankingUser } from '../stores/gamificationStore';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { RankingSkeleton } from '../components/skeletons/ScreenSkeletons';
 import { AppIcon } from '../components/ui/AppIcon';
-import { AppPressable } from '../components/ui/AppPressable';
 import { IconButton } from '../components/ui/IconButton';
 import { useResponsiveTheme } from '../theme/responsive';
 import { Patent } from '../components/patents/Patent';
@@ -209,9 +209,9 @@ function AchievementsSection({ earned, total, navigation }: {
         <View style={styles.achievementsSection}>
             <View style={styles.achievementsHeader}>
                 <Text style={styles.sectionTitle}>Suas conquistas</Text>
-                <AppPressable onPress={() => navigation.navigate('Badges')}>
+                <TouchableOpacity onPress={() => navigation.navigate('Badges')}>
                     <Text style={styles.seeAllText}>Ver tudo</Text>
-                </AppPressable>
+                </TouchableOpacity>
             </View>
             <View style={styles.achievementsCard}>
                 <View style={styles.achievementsBadgeRow}>
@@ -325,22 +325,22 @@ export function RankingScreen({ navigation }: any) {
 
                 {/* Tab Selector */}
                 <View style={styles.tabContainer}>
-                    <AppPressable
+                    <TouchableOpacity
                         style={[styles.tab, rankingTab === 'cohort' && styles.tabActive]}
                         onPress={() => handleTabChange('cohort')}
                     >
                         <Text style={[styles.tabText, rankingTab === 'cohort' && styles.tabTextActive]}>
                             Meu cohort
                         </Text>
-                    </AppPressable>
-                    <AppPressable
+                    </TouchableOpacity>
+                    <TouchableOpacity
                         style={[styles.tab, rankingTab === 'global' && styles.tabActive]}
                         onPress={() => handleTabChange('global')}
                     >
                         <Text style={[styles.tabText, rankingTab === 'global' && styles.tabTextActive]}>
                             Global
                         </Text>
-                    </AppPressable>
+                    </TouchableOpacity>
                 </View>
 
                 {/* Period Info */}
@@ -376,14 +376,13 @@ export function RankingScreen({ navigation }: any) {
 
                         {/* Ver mais button */}
                         {restRankings.length > 4 && !showAll && (
-                            <AppPressable
+                            <TouchableOpacity
                                 style={styles.seeMoreButton}
-                                interactionScale="button"
                                 onPress={() => setShowAll(true)}
                             >
                                 <Text style={styles.seeMoreText}>Ver mais</Text>
                                 <AppIcon name="chevronDown" size={16} tone="accent" />
-                            </AppPressable>
+                            </TouchableOpacity>
                         )}
 
                         {/* Divider */}

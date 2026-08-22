@@ -5,12 +5,12 @@ import {
     Text,
     StyleSheet,
     ScrollView,
+    TouchableOpacity,
 } from 'react-native';
 import * as Storage from '../utils/storage';
 import { colors, typography, spacing, borderRadius, fonts } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { AppIcon } from '../components/ui/AppIcon';
-import { AppPressable } from '../components/ui/AppPressable';
 import { useResponsiveTheme } from '../theme/responsive';
 import { useAuthStore, useGamificationStore, useTrainingStore, useFeedbackStore, useStatsStore, useNotificationStore, useWorkoutScopeStore, getDisplayName, getAvatarUrl } from '../stores';
 import type { LatestActivityData } from '../stores/feedbackStore';
@@ -644,9 +644,9 @@ export function HomeScreen({ navigation }: any) {
                     existe e funciona, mas fica desligada e sem nenhum sinal na
                     UI de que existe um botão a apertar. Ver AUDITORIA §P4. */}
                 {healthKitAvailable && !healthKitConnected && (
-                    <AppPressable
+                    <TouchableOpacity
                         style={styles.healthKitConnectBanner}
-                        interactionScale="card"
+                        activeOpacity={0.8}
                         onPress={() =>
                             // `apple` é o provider do HealthKit (o `appleWatch` é
                             // o companion app via WatchConnectivity, outro fluxo).
@@ -659,7 +659,7 @@ export function HomeScreen({ navigation }: any) {
                             importar essas corridas.
                         </Text>
                         <AppIcon name="chevronForward" size={16} tone="secondary" />
-                    </AppPressable>
+                    </TouchableOpacity>
                 )}
 
                 {/* A retrospectiva fecha um ciclo inteiro e, enquanto estiver
