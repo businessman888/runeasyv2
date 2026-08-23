@@ -1,6 +1,11 @@
-import { DarkTheme, type Theme as NavigationTheme } from '@react-navigation/native';
+import {
+  DarkTheme,
+  DefaultTheme,
+  type Theme as NavigationTheme,
+} from '@react-navigation/native';
 
 import { darkColors } from './semanticColors';
+import { lightColors } from './lightColors';
 import type { AppTheme, ResolvedThemeName } from './contracts';
 
 export const darkTheme = {
@@ -9,17 +14,25 @@ export const darkTheme = {
   colors: darkColors,
 } as const satisfies AppTheme;
 
-// Light is deliberately absent until its palette and contrast matrix are approved.
-export const themeRegistry: Partial<Record<ResolvedThemeName, AppTheme>> = {
+export const lightTheme = {
+  name: 'light',
+  isDark: false,
+  colors: lightColors,
+} as const satisfies AppTheme;
+
+export const themeRegistry: Record<ResolvedThemeName, AppTheme> = {
   dark: darkTheme,
+  light: lightTheme,
 };
 
 export function createNavigationTheme(theme: AppTheme): NavigationTheme {
+  const baseTheme = theme.isDark ? DarkTheme : DefaultTheme;
+
   return {
-    ...DarkTheme,
+    ...baseTheme,
     dark: theme.isDark,
     colors: {
-      ...DarkTheme.colors,
+      ...baseTheme.colors,
       primary: theme.colors.accent,
       background: theme.colors.canvas,
       card: theme.colors.surface1,

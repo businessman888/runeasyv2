@@ -1,8 +1,7 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius } from '../../theme';
-import { semanticColors } from '../../theme/semanticColors';
+import { typography, spacing, borderRadius, useAppTheme, type ThemeColors, useThemedStyles } from '../../theme';
 
 /**
  * Friendly empty-state card for the "Atividades" tab — shown when the user has
@@ -24,6 +23,9 @@ function FriendlyEmptyCardInner({
     icon = 'sparkles-outline',
     style,
 }: FriendlyEmptyCardProps) {
+    const { theme } = useAppTheme();
+    const styles = useThemedStyles(createStyles);
+
     return (
         <View
             style={[styles.card, style]}
@@ -31,7 +33,7 @@ function FriendlyEmptyCardInner({
             accessibilityLabel={subtitle ? `${title}. ${subtitle}` : title}
         >
             <View style={styles.iconWrap}>
-                <Ionicons name={icon} size={26} color={colors.primary} />
+                <Ionicons name={icon} size={26} color={theme.colors.accent} />
             </View>
             <Text style={styles.title}>{title}</Text>
             {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
@@ -39,38 +41,40 @@ function FriendlyEmptyCardInner({
     );
 }
 
-const styles = StyleSheet.create({
-    card: {
-        backgroundColor: semanticColors.surface1,
-        borderRadius: borderRadius.xl,
-        borderWidth: 1,
-        borderColor: semanticColors.borderSubtle,
-        paddingVertical: spacing.xl,
-        paddingHorizontal: spacing.lg,
-        alignItems: 'center',
-    },
-    iconWrap: {
-        width: 52,
-        height: 52,
-        borderRadius: 26,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: semanticColors.accentSubtle,
-        marginBottom: spacing.md,
-    },
-    title: {
-        fontSize: typography.fontSizes.lg,
-        fontWeight: typography.fontWeights.semibold,
-        color: semanticColors.textPrimary,
-        textAlign: 'center',
-    },
-    subtitle: {
-        fontSize: typography.fontSizes.sm,
-        color: semanticColors.textSecondary,
-        textAlign: 'center',
-        marginTop: spacing.xs,
-        lineHeight: typography.fontSizes.sm * typography.lineHeights.normal,
-    },
-});
+function createStyles(colors: ThemeColors) {
+    return StyleSheet.create({
+        card: {
+            backgroundColor: colors.surface1,
+            borderRadius: borderRadius.xl,
+            borderWidth: 1,
+            borderColor: colors.borderSubtle,
+            paddingVertical: spacing.xl,
+            paddingHorizontal: spacing.lg,
+            alignItems: 'center',
+        },
+        iconWrap: {
+            width: 52,
+            height: 52,
+            borderRadius: 26,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: colors.accentSubtle,
+            marginBottom: spacing.md,
+        },
+        title: {
+            fontSize: typography.fontSizes.lg,
+            fontWeight: typography.fontWeights.semibold,
+            color: colors.textPrimary,
+            textAlign: 'center',
+        },
+        subtitle: {
+            fontSize: typography.fontSizes.sm,
+            color: colors.textSecondary,
+            textAlign: 'center',
+            marginTop: spacing.xs,
+            lineHeight: typography.fontSizes.sm * typography.lineHeights.normal,
+        },
+    });
+}
 
 export const FriendlyEmptyCard = memo(FriendlyEmptyCardInner);

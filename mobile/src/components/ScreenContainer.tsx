@@ -3,7 +3,7 @@ import { View, StyleSheet, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { contentMaxWidth } from '../theme/responsive';
-import { semanticColors } from '../theme/semanticColors';
+import { type ThemeColors, useThemedStyles } from '../theme';
 
 interface ScreenContainerProps {
     children: React.ReactNode;
@@ -27,6 +27,7 @@ export function ScreenContainer({
     style,
     centered = false,
 }: ScreenContainerProps) {
+    const styles = useThemedStyles(createStyles);
     const insets = useSafeAreaInsets();
     const { width, isTablet, isLargeTablet } = useBreakpoint();
 
@@ -51,18 +52,20 @@ export function ScreenContainer({
     );
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: semanticColors.canvas,
-    },
-    centeredOuter: {
-        alignItems: 'center',
-    },
-    centeredInner: {
-        flex: 1,
-        width: '100%',
-    },
-});
+function createStyles(colors: ThemeColors) {
+    return StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: colors.canvas,
+        },
+        centeredOuter: {
+            alignItems: 'center',
+        },
+        centeredInner: {
+            flex: 1,
+            width: '100%',
+        },
+    });
+}
 
 export default ScreenContainer;

@@ -1,10 +1,11 @@
 import React, { memo, type ComponentProps } from 'react';
 import { Ionicons } from '@react-native-vector-icons/ionicons/static';
+import { useAppTheme } from '../../theme';
 
 import {
   iconography,
   iconSizes,
-  iconToneColors,
+  resolveIconToneColor,
   type AppIconName,
   type IconSize,
   type IconTone,
@@ -44,12 +45,14 @@ function AppIconComponent({
   accessibilityLabel,
   ...iconProps
 }: AppIconProps) {
+  const { theme } = useAppTheme();
+
   return (
     <Ionicons
       {...iconProps}
       name={iconography[name][variant]}
       size={size}
-      color={iconToneColors[tone]}
+      color={resolveIconToneColor(tone, theme.colors)}
       accessible={!decorative}
       accessibilityLabel={decorative ? undefined : accessibilityLabel}
       accessibilityRole={decorative ? undefined : 'image'}

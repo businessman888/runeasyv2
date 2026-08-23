@@ -5,7 +5,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { semanticColors } from '../../theme/semanticColors';
+import { useAppTheme } from '../../theme';
 import {
   iconSizes,
   type AppIconName,
@@ -40,13 +40,15 @@ function IconButtonComponent({
   style,
   ...pressableProps
 }: IconButtonProps) {
+  const { theme } = useAppTheme();
+
   return (
     <AppPressable
       {...pressableProps}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled }}
-      android_ripple={{ color: semanticColors.surface3, borderless: true }}
+      android_ripple={{ color: theme.colors.surface3, borderless: true }}
       interactionScale="icon"
       disabled={disabled}
       hitSlop={hitSlop}

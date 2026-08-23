@@ -269,9 +269,6 @@
     "rgba(255,69,58,0.30)": 1,
     "rgba(50,205,50,0.15)": 1
   },
-  "screens/dev/DevMenuScreen.tsx": {
-    "rgba(255,196,0,0.10)": 1
-  },
   "screens/EvolutionScreen.tsx": {
     "#007f99": 1,
     "#00d4ff": 9,

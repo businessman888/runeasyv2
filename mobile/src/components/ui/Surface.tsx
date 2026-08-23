@@ -6,8 +6,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { semanticColors } from '../../theme/semanticColors';
-import { borderRadius, spacing } from '../../theme';
+import { borderRadius, spacing, type ThemeColors, useThemedStyles } from '../../theme';
 
 export type SurfaceVariant =
   | 'canvas'
@@ -26,25 +25,28 @@ export interface SurfaceProps extends PropsWithChildren<ViewProps> {
   padding?: SurfaceSpacing;
 }
 
-const backgroundByVariant = StyleSheet.create<Record<SurfaceVariant, ViewStyle>>({
-  canvas: { backgroundColor: semanticColors.canvas },
-  surface1: { backgroundColor: semanticColors.surface1 },
-  surface2: { backgroundColor: semanticColors.surface2 },
-  surface3: { backgroundColor: semanticColors.surface3 },
-  glass: { backgroundColor: semanticColors.glass },
-});
-
-const borderByVariant = StyleSheet.create<Record<SurfaceBorder, ViewStyle>>({
-  none: { borderWidth: 0 },
-  subtle: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: semanticColors.borderSubtle,
-  },
-  strong: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: semanticColors.borderStrong,
-  },
-});
+function createColorStyles(colors: ThemeColors) {
+  return {
+    backgroundByVariant: StyleSheet.create<Record<SurfaceVariant, ViewStyle>>({
+      canvas: { backgroundColor: colors.canvas },
+      surface1: { backgroundColor: colors.surface1 },
+      surface2: { backgroundColor: colors.surface2 },
+      surface3: { backgroundColor: colors.surface3 },
+      glass: { backgroundColor: colors.glass },
+    }),
+    borderByVariant: StyleSheet.create<Record<SurfaceBorder, ViewStyle>>({
+      none: { borderWidth: 0 },
+      subtle: {
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: colors.borderSubtle,
+      },
+      strong: {
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: colors.borderStrong,
+      },
+    }),
+  };
+}
 
 const radiusByVariant = StyleSheet.create<Record<SurfaceRadius, ViewStyle>>({
   none: { borderRadius: 0 },
@@ -76,12 +78,14 @@ export const Surface = forwardRef<View, SurfaceProps>(function Surface(
   },
   ref,
 ) {
+  const colorStyles = useThemedStyles(createColorStyles);
+
   return (
     <View
       ref={ref}
       style={[
-        backgroundByVariant[variant],
-        borderByVariant[border],
+        colorStyles.backgroundByVariant[variant],
+        colorStyles.borderByVariant[border],
         radiusByVariant[radius],
         paddingByVariant[padding],
         style,

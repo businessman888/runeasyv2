@@ -1,9 +1,12 @@
 import { semanticColors } from './semanticColors';
 
 export * from './contracts';
+export * from './lightColors';
+export * from './mapTheme';
 export * from './semanticColors';
 export * from './themes';
 export * from './ThemeProvider';
+export * from './useThemedStyles';
 
 // Design System Colors - Dark Theme (Figma design)
 export const colors = {
@@ -16,16 +19,16 @@ export const colors = {
     highlight: semanticColors.surface3,
 
     // Primary & Accent
-    primary: '#00D4FF',  // neon-cyan - electric blue
+    primary: semanticColors.accent,  // neon-cyan - electric blue
     primaryLight: '#3B82F6',  // electric-blue
     primaryDark: '#0099CC',
     accent: '#F59E0B',  // orange/amber for streak
 
     // Status Colors
-    success: '#10B981',  // neon-success
-    error: '#EF4444',
-    warning: '#FFC400',  // neon-alert
-    info: '#3B82F6',
+    success: semanticColors.success,  // neon-success
+    error: semanticColors.danger,
+    warning: semanticColors.warning,  // neon-alert
+    info: semanticColors.info,
 
     // Text - Light for dark theme
     text: semanticColors.textPrimary,

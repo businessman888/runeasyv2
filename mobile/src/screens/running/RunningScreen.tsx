@@ -16,6 +16,10 @@ import { useWorkoutGoals } from '../../hooks/useWorkoutGoals';
 import { GoalsModal } from '../../components/GoalsModal';
 import { LocationDisclosureModal } from '../../components/LocationDisclosureModal';
 import { MapLocationPuck } from '../../components/map/MapLocationPuck';
+import {
+  mapboxStyleURL,
+  ThemedMapStyle,
+} from '../../components/map/ThemedMapStyle';
 import { getGpsQuality } from '../../components/map/GpsSignalBars';
 import { ExpandedMetricsOverlay } from './ExpandedMetricsOverlay';
 import { LowPowerBanner } from '../../components/map/LowPowerBanner';
@@ -33,6 +37,7 @@ import { resetCoachRun, stopCoach, enqueue as enqueueCoach } from '../../service
 import { buildMotivFinish } from '../../services/coach/coachMessages';
 import { LinearGradient } from 'expo-linear-gradient';
 import { semanticColors } from '../../theme/semanticColors';
+import { useMapThemePalette } from '../../theme';
 
 // ─── Tipos de rota ────────────────────────────────────────────────────────────
 export type RunMode = 'planned' | 'manual' | 'free';
@@ -65,7 +70,6 @@ const T = {
   textPrimary: semanticColors.textPrimary,
   textSecondary: semanticColors.textSecondary,
   // Route
-  routeColor: semanticColors.accent,
 };
 
 
@@ -108,6 +112,7 @@ export function RunningScreen() {
 }
 
 function OutdoorRunningView() {
+  const mapPalette = useMapThemePalette();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RunningRouteParams, 'Running'>>();
   const insets = useSafeAreaInsets();
@@ -422,12 +427,13 @@ function OutdoorRunningView() {
       {/* ── MAP (full screen no phone; ~65% à esquerda em tablet landscape) ── */}
       <Mapbox.MapView
         style={sideLayout ? styles.mapSide : StyleSheet.absoluteFillObject}
-        styleURL={process.env.EXPO_PUBLIC_MAPBOX_STYLE_URL || 'mapbox://styles/mapbox/dark-v11'}
+        styleURL={mapboxStyleURL}
         logoEnabled={false}
         compassEnabled={false}
         attributionEnabled={false}
         scaleBarEnabled={false}
       >
+        <ThemedMapStyle />
         <Mapbox.Camera
           ref={cameraRef}
           pitch={0}
@@ -465,7 +471,7 @@ function OutdoorRunningView() {
             <Mapbox.LineLayer
               id="routeGlow"
               style={{
-                lineColor: T.routeColor,
+                lineColor: mapPalette.routeGlow,
                 lineWidth: 14,
                 lineOpacity: 0.5,
                 lineJoin: 'round',
@@ -476,7 +482,7 @@ function OutdoorRunningView() {
             <Mapbox.LineLayer
               id="routeFill"
               style={{
-                lineColor: T.routeColor,
+                lineColor: mapPalette.route,
                 lineWidth: 6,
                 lineOpacity: 1,
                 lineBlur: 1, // brilho sutil na borda — visual premium

@@ -2,21 +2,22 @@
 
 ## Estado atual
 
-A fundação é dark-first e preserva visualmente o tema aprovado. O registry contém
-somente `darkTheme`; preferências `light` e `system` já fazem parte do contrato,
-mas resolvem com fallback seguro para dark enquanto a paleta light não existir.
+A fundação continua dark-first e preserva visualmente o tema aprovado. O registry
+contém `darkTheme` e `lightTheme`; a preferência persistida continua `dark` e o
+tema claro fica disponível inicialmente apenas no Dev Menu para validação.
 
-O light mode não deve ser exposto em Configurações antes de:
+O light mode não deve ser exposto em Configurações de produção antes de:
 
-1. existir um `lightTheme` completo que satisfaça `AppTheme`;
-2. a matriz de contraste dos dois temas ser validada;
-3. `userInterfaceStyle` mudar de `dark` para `automatic`;
-4. os componentes prioritários deixarem de importar o alias estático legado.
+1. a matriz de contraste dos dois temas ser validada em dispositivos reais;
+2. `userInterfaceStyle` mudar de `dark` para `automatic`;
+3. os componentes prioritários deixarem de importar o alias estático legado;
+4. mapas, gráficos, modais, glass e estados especiais passarem pela QA visual.
 
 ## Camadas
 
 - `contracts.ts`: contrato compartilhado de cores e preferências.
 - `semanticColors.ts`: valores do dark atual e alias temporário de compatibilidade.
+- `lightColors.ts`: paleta light candidata, validada incrementalmente no Dev Menu.
 - `themes.ts`: registry de temas e adaptador para React Navigation.
 - `ThemeProvider.tsx`: resolução da preferência do usuário e do sistema.
 - `themeStore.ts`: preferência persistida `system | dark | light`.
@@ -42,6 +43,18 @@ qualquer migração de tema. Ícones ilustrativos do onboarding também preserva
 sua composição e paleta interna; somente as superfícies ao redor deles podem
 responder ao tema.
 
+## Mapbox
+
+`ThemedMapStyle` centraliza o Style URL e aplica `lightPreset: day | night`
+ao import `basemap` do Mapbox Standard. O ID pode ser sobrescrito por
+`EXPO_PUBLIC_MAPBOX_BASEMAP_IMPORT_ID` sem alterar os componentes.
+
+`useMapThemePalette()` controla somente rotas, halo, trilhas e parques. Os
+valores do dark preservam a aparência anterior; o light usa o accent com
+contraste adequado ao basemap claro.
+
+O puck e o indicador de localização não consomem essa paleta.
+
 
 ## Proteção contra novos hardcodes
 
@@ -62,7 +75,7 @@ para impedir que a dívida aumente durante a migração.
 
 1. Consolidar os hardcodes residuais em tokens ou paletas de domínio.
 2. Migrar componentes compartilhados para `useAppTheme()`.
-3. Criar `lightTheme` com a mesma interface de `darkTheme`.
+3. Validar `lightTheme` em Dev Menu com a mesma interface de `darkTheme`.
 4. Validar contraste, glass, mapas, gráficos, modais e estados.
 5. Alterar a configuração nativa para `automatic`.
 6. Expor a preferência na tela de Configurações.

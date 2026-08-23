@@ -1,7 +1,6 @@
 import type { IoniconsIconName } from '@react-native-vector-icons/ionicons/static';
 
-import { colors } from './index';
-import { semanticColors } from './semanticColors';
+import type { ThemeColors } from './contracts';
 
 export const iconSizes = {
   xs: 16,
@@ -15,20 +14,35 @@ export const iconSizes = {
 export type IconSize = (typeof iconSizes)[keyof typeof iconSizes];
 export type IconVariant = 'outline' | 'filled';
 
-export const iconToneColors = {
-  primary: semanticColors.textPrimary,
-  secondary: semanticColors.textSecondary,
-  tertiary: semanticColors.textTertiary,
-  accent: semanticColors.accent,
-  recovery: semanticColors.recovery,
-  success: colors.success,
-  onAccent: semanticColors.textOnAccent,
-  warning: colors.warning,
-  danger: colors.error,
-  info: colors.info,
-} as const;
+export type IconTone =
+  | 'primary'
+  | 'secondary'
+  | 'tertiary'
+  | 'accent'
+  | 'recovery'
+  | 'success'
+  | 'onAccent'
+  | 'warning'
+  | 'danger'
+  | 'info';
 
-export type IconTone = keyof typeof iconToneColors;
+export function resolveIconToneColor(
+  tone: IconTone,
+  colors: ThemeColors,
+): string {
+  switch (tone) {
+    case 'primary': return colors.textPrimary;
+    case 'secondary': return colors.textSecondary;
+    case 'tertiary': return colors.textTertiary;
+    case 'accent': return colors.accent;
+    case 'recovery': return colors.recovery;
+    case 'success': return colors.success;
+    case 'onAccent': return colors.textOnAccent;
+    case 'warning': return colors.warning;
+    case 'danger': return colors.danger;
+    case 'info': return colors.info;
+  }
+}
 
 type IconVariants = Readonly<{
   outline: IoniconsIconName;

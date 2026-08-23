@@ -35,6 +35,10 @@ import { Terrain3DLayers } from '../../components/map/Terrain3DLayers';
 import { StatMapRoute } from '../../components/map/StatMapRoute';
 import { StatMapSelector, type StatMapMode } from '../../components/map/StatMapSelector';
 import { FinishFlagMarker } from '../../components/map/FinishFlagMarker';
+import {
+  mapboxStyleURL,
+  ThemedMapStyle,
+} from '../../components/map/ThemedMapStyle';
 import { RpeSelector } from '../../components/workout/RpeSelector';
 import { loadTreadmillCache } from '../../utils/treadmillCache';
 import {
@@ -43,6 +47,7 @@ import {
 } from '../../utils/treadmillChart';
 import type { RunMode } from './RunningScreen';
 import { semanticColors } from '../../theme/semanticColors';
+import { useMapThemePalette } from '../../theme';
 
 export interface TreadmillSummaryData {
   is_smart: boolean;
@@ -103,7 +108,6 @@ const T = {
   success: '#32CD32',
   warning: '#FFC400',
   danger: '#FF453A',
-  routeColor: semanticColors.accent,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -155,6 +159,7 @@ function statusLabel(actual: number, target: number, fmt: (n: number) => string)
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export function RunSummaryScreen() {
+  const mapPalette = useMapThemePalette();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RunSummaryRouteParams, 'RunSummary'>>();
   const insets = useSafeAreaInsets();
@@ -708,7 +713,7 @@ export function RunSummaryScreen() {
       <View style={sideLayout ? styles.mediaHalf : StyleSheet.absoluteFillObject}>
         <Mapbox.MapView
           style={StyleSheet.absoluteFillObject}
-          styleURL={process.env.EXPO_PUBLIC_MAPBOX_STYLE_URL || 'mapbox://styles/mapbox/dark-v11'}
+          styleURL={mapboxStyleURL}
           logoEnabled={false}
           compassEnabled={false}
           attributionEnabled={false}
@@ -718,6 +723,7 @@ export function RunSummaryScreen() {
           rotateEnabled={false}
           zoomEnabled={false}
         >
+          <ThemedMapStyle />
           <Mapbox.Camera
             centerCoordinate={centerCoord}
             zoomLevel={is3D ? fit3DZoom : hasRoute ? undefined : 15}
@@ -746,7 +752,7 @@ export function RunSummaryScreen() {
               <Mapbox.LineLayer
                 id="summaryRouteGlow"
                 style={{
-                  lineColor: T.routeColor,
+                  lineColor: mapPalette.routeGlow,
                   lineWidth: 12,
                   lineOpacity: 0.25,
                   lineJoin: 'round',
@@ -757,7 +763,7 @@ export function RunSummaryScreen() {
               <Mapbox.LineLayer
                 id="summaryRouteFill"
                 style={{
-                  lineColor: T.routeColor,
+                  lineColor: mapPalette.route,
                   lineWidth: 5,
                   lineJoin: 'round',
                   lineCap: 'round',

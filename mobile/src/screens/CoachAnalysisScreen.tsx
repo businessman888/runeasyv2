@@ -41,11 +41,16 @@ import { Terrain3DLayers } from '../components/map/Terrain3DLayers';
 import { StatMapRoute } from '../components/map/StatMapRoute';
 import { StatMapSelector, type StatMapMode } from '../components/map/StatMapSelector';
 import { FinishFlagMarker } from '../components/map/FinishFlagMarker';
+import {
+    mapboxStyleURL,
+    ThemedMapStyle,
+} from '../components/map/ThemedMapStyle';
 import { CoachAnalysisSkeleton } from '../components/skeletons/ScreenSkeletons';
 import { RpeSelector } from '../components/workout/RpeSelector';
 import { paceValueToSecondsPerKm } from '../utils/pace';
 import { SharingModal } from './sharing/SharingModal';
 import { semanticColors } from '../theme/semanticColors';
+import { useMapThemePalette } from '../theme';
 
 // ─── Design Tokens (alinhados ao RunSummary/Figma) ────────────────────────────
 const T = {
@@ -63,7 +68,6 @@ const T = {
     danger: '#FF453A',
     purple: '#9747FF',
     gold: '#FFD700',
-    routeColor: semanticColors.accent,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -122,6 +126,7 @@ function statusLabel(actual: number, target: number, fmt: (n: number) => string)
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export function CoachAnalysisScreen({ navigation, route }: any) {
+    const mapPalette = useMapThemePalette();
     const { feedbackId } = route?.params || {};
     const insets = useSafeAreaInsets();
     const sheetRef = useRef<BottomSheet>(null);
@@ -656,7 +661,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
             <View style={StyleSheet.absoluteFillObject}>
                 <Mapbox.MapView
                     style={StyleSheet.absoluteFillObject}
-                    styleURL={process.env.EXPO_PUBLIC_MAPBOX_STYLE_URL || 'mapbox://styles/mapbox/dark-v11'}
+                    styleURL={mapboxStyleURL}
                     logoEnabled={false}
                     compassEnabled={false}
                     attributionEnabled={false}
@@ -666,6 +671,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                     rotateEnabled={false}
                     zoomEnabled={false}
                 >
+                    <ThemedMapStyle />
                     <Mapbox.Camera
                         centerCoordinate={centerCoord}
                         zoomLevel={is3D ? fit3DZoom : hasRoute ? undefined : 15}
@@ -690,7 +696,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                             <Mapbox.LineLayer
                                 id="coachRouteGlow"
                                 style={{
-                                    lineColor: T.routeColor,
+                                    lineColor: mapPalette.routeGlow,
                                     lineWidth: 12,
                                     lineOpacity: 0.25,
                                     lineJoin: 'round',
@@ -701,7 +707,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                             <Mapbox.LineLayer
                                 id="coachRouteFill"
                                 style={{
-                                    lineColor: T.routeColor,
+                                    lineColor: mapPalette.route,
                                     lineWidth: 5,
                                     lineJoin: 'round',
                                     lineCap: 'round',

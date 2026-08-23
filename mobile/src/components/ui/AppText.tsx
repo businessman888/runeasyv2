@@ -7,10 +7,7 @@ import {
   type TextProps,
 } from 'react-native';
 
-import {
-  semanticColors,
-  type SemanticColor,
-} from '../../theme/semanticColors';
+import { type ThemeColors, useAppTheme } from '../../theme';
 import { typeScale, type TypeScaleVariant } from '../../theme/typeScale';
 
 export interface AppTextProps extends TextProps {
@@ -18,7 +15,7 @@ export interface AppTextProps extends TextProps {
   variant?: TypeScaleVariant;
   /** Semantic text color. Raw color values remain available through `style`. */
   color?: Extract<
-    SemanticColor,
+    keyof ThemeColors,
     'textPrimary' | 'textSecondary' | 'textTertiary' | 'accent'
   >;
   /** Convenience alias for the native text alignment style. */
@@ -44,6 +41,8 @@ export const AppText = forwardRef<Text, AppTextProps>(function AppText(
   },
   ref,
 ) {
+  const { theme } = useAppTheme();
+
   return (
     <Text
       ref={ref}
@@ -52,7 +51,7 @@ export const AppText = forwardRef<Text, AppTextProps>(function AppText(
       style={[
         styles.base,
         typeScale[variant],
-        { color: semanticColors[color] },
+        { color: theme.colors[color] },
         align !== undefined && { textAlign: align },
         style,
       ]}

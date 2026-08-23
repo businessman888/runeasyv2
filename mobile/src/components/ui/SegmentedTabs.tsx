@@ -1,7 +1,6 @@
 import React, { memo, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, StyleProp, ViewStyle } from 'react-native';
-import { typography } from '../../theme';
-import { semanticColors } from '../../theme/semanticColors';
+import { typography, type ThemeColors, useThemedStyles } from '../../theme';
 
 /**
  * Two-or-more-segment tab control matching the Figma `componentSelectWorkout`
@@ -29,6 +28,8 @@ function SegmentedTabsInner<K extends string = string>({
     onChange,
     style,
 }: SegmentedTabsProps<K>) {
+    const styles = useThemedStyles(createStyles);
+
     const handlePress = useCallback(
         (key: K) => () => {
             if (key !== activeKey) onChange(key);
@@ -61,31 +62,33 @@ function SegmentedTabsInner<K extends string = string>({
     );
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flexDirection: 'row',
-        borderBottomWidth: 1,
-        borderBottomColor: semanticColors.borderSubtle,
-    },
-    tab: {
-        flex: 1,
-        minHeight: 50, // Figma height; also satisfies 44px min touch target
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderBottomWidth: 3,
-        borderBottomColor: 'transparent',
-    },
-    tabActive: {
-        borderBottomColor: semanticColors.accent,
-    },
-    tabText: {
-        fontSize: typography.fontSizes.md,
-        fontWeight: typography.fontWeights.semibold,
-        color: semanticColors.textSecondary,
-    },
-    tabTextActive: {
-        color: semanticColors.accent,
-    },
-});
+function createStyles(colors: ThemeColors) {
+    return StyleSheet.create({
+        container: {
+            flexDirection: 'row',
+            borderBottomWidth: 1,
+            borderBottomColor: colors.borderSubtle,
+        },
+        tab: {
+            flex: 1,
+            minHeight: 50, // Figma height; also satisfies 44px min touch target
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderBottomWidth: 3,
+            borderBottomColor: colors.transparent,
+        },
+        tabActive: {
+            borderBottomColor: colors.accent,
+        },
+        tabText: {
+            fontSize: typography.fontSizes.md,
+            fontWeight: typography.fontWeights.semibold,
+            color: colors.textSecondary,
+        },
+        tabTextActive: {
+            color: colors.accent,
+        },
+    });
+}
 
 export const SegmentedTabs = memo(SegmentedTabsInner) as typeof SegmentedTabsInner;

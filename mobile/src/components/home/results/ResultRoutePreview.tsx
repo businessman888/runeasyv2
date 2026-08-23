@@ -1,11 +1,15 @@
 import React, { memo, useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import Mapbox from "@rnmapbox/maps";
-import { colors } from "../../../theme";
+import { useMapThemePalette } from "../../../theme";
 import { semanticColors } from "../../../theme/semanticColors";
 import type { ActivityResultRoutePoint } from "../../../stores/feedbackStore";
 import { NoRoutePreview } from "./NoRoutePreview";
 import { FinishFlagMarker } from "../../map/FinishFlagMarker";
+import {
+  mapboxStyleURL,
+  ThemedMapStyle,
+} from "../../map/ThemedMapStyle";
 
 interface ResultRoutePreviewProps {
   activityId: string;
@@ -20,6 +24,7 @@ export const ResultRoutePreview = memo(function ResultRoutePreview({
   isTreadmill,
   isActive,
 }: ResultRoutePreviewProps) {
+  const mapPalette = useMapThemePalette();
   const id = activityId.replace(/[^a-zA-Z0-9]/g, "").slice(-20) || "route";
   const shape = useMemo(
     () => ({
@@ -53,10 +58,7 @@ export const ResultRoutePreview = memo(function ResultRoutePreview({
     <View style={styles.container} pointerEvents="none">
       <Mapbox.MapView
         style={StyleSheet.absoluteFillObject}
-        styleURL={
-          process.env.EXPO_PUBLIC_MAPBOX_STYLE_URL ||
-          "mapbox://styles/mapbox/dark-v11"
-        }
+        styleURL={mapboxStyleURL}
         logoEnabled={false}
         compassEnabled={false}
         attributionEnabled={false}
@@ -66,6 +68,7 @@ export const ResultRoutePreview = memo(function ResultRoutePreview({
         rotateEnabled={false}
         zoomEnabled={false}
       >
+        <ThemedMapStyle />
         <Mapbox.Camera
           centerCoordinate={streetCenter}
           zoomLevel={14}
@@ -75,7 +78,7 @@ export const ResultRoutePreview = memo(function ResultRoutePreview({
           <Mapbox.LineLayer
             id={`homeResultGlow${id}`}
             style={{
-              lineColor: colors.primary,
+              lineColor: mapPalette.routeGlow,
               lineWidth: 12,
               lineOpacity: 0.25,
               lineJoin: "round",
@@ -86,7 +89,7 @@ export const ResultRoutePreview = memo(function ResultRoutePreview({
           <Mapbox.LineLayer
             id={`homeResultLine${id}`}
             style={{
-              lineColor: colors.primary,
+              lineColor: mapPalette.route,
               lineWidth: 5,
               lineOpacity: 1,
               lineJoin: "round",

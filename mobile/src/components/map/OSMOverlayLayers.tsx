@@ -1,6 +1,6 @@
 import React from 'react';
 import Mapbox from '@rnmapbox/maps';
-import { mapViz } from '../../theme';
+import { useMapThemePalette } from '../../theme';
 
 /**
  * Realce de trilhas/paths e parques para corredores.
@@ -14,6 +14,8 @@ import { mapViz } from '../../theme';
  * para que o traçado da corrida fique por cima.
  */
 export function OSMOverlayLayers() {
+  const mapPalette = useMapThemePalette();
+
   return (
     <Mapbox.VectorSource id="osm-streets" url="mapbox://mapbox.mapbox-streets-v8">
       {/* Parques e áreas verdes — preenchimento sutil */}
@@ -24,8 +26,8 @@ export function OSMOverlayLayers() {
         minZoomLevel={12}
         filter={['match', ['get', 'class'], ['park', 'grass', 'pitch'], true, false]}
         style={{
-          fillColor: mapViz.osm.parkFill,
-          fillOutlineColor: mapViz.osm.parkOutline,
+          fillColor: mapPalette.parkFill,
+          fillOutlineColor: mapPalette.parkOutline,
           fillEmissiveStrength: 1,
         }}
       />
@@ -38,7 +40,7 @@ export function OSMOverlayLayers() {
         minZoomLevel={13}
         filter={['match', ['get', 'class'], ['path', 'track'], true, false]}
         style={{
-          lineColor: mapViz.osm.trail,
+          lineColor: mapPalette.trail,
           lineWidth: 2,
           lineOpacity: 0.5,
           lineDasharray: [2, 2],

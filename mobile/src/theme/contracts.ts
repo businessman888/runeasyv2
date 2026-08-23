@@ -17,6 +17,10 @@ export interface ThemeColors {
   readonly onboardingIconInkAlt: string;
   readonly textSecondary: string;
   readonly recovery: string;
+  readonly success: string;
+  readonly warning: string;
+  readonly danger: string;
+  readonly info: string;
   readonly textTertiary: string;
   readonly accent: string;
   readonly textOnAccent: string;
