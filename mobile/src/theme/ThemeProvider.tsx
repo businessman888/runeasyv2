@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useMemo, type ReactNode } from 'react';
-import { useColorScheme } from 'react-native';
+import React, { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
+import { Appearance, useColorScheme } from 'react-native';
 import type { Theme as NavigationTheme } from '@react-navigation/native';
 
 import { useThemeStore } from '../stores/themeStore';
@@ -38,6 +38,10 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   const preference = useThemeStore((state) => state.preference);
   const hasHydrated = useThemeStore((state) => state.hasHydrated);
   const setPreference = useThemeStore((state) => state.setPreference);
+
+  useEffect(() => {
+    Appearance.setColorScheme(preference === 'system' ? null : preference);
+  }, [preference]);
 
   const value = useMemo<AppThemeContextValue>(() => {
     const requestedThemeName = resolveRequestedThemeName(preference, systemScheme);

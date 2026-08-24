@@ -10,7 +10,7 @@ import {
     Linking,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { colors, spacing, fonts, borderRadius, createThemeStyles, useThemeSubscription } from '../theme';
+import { colors, spacing, fonts, borderRadius, createThemeStyles, useAppTheme, useThemeSubscription, type ThemePreference } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useAuthStore, useTrialModalStore, getDisplayName, getAvatarUrl } from '../stores';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
@@ -21,6 +21,12 @@ import { AppIcon } from '../components/ui/AppIcon';
 import { Skeleton } from '../components/Skeleton';
 import { DeviceRow } from '../components/devices/DeviceRow';
 import { WEARABLE_ORDER } from '../config/wearables.config';
+
+const THEME_LABELS: Record<ThemePreference, string> = {
+    light: 'Claro',
+    dark: 'Escuro',
+    system: 'Sistema',
+};
 
 // Initials from the user's real name — shown inside the avatar circle when the
 // user has no profile photo (Apple/Google login without a picture), until they
@@ -36,6 +42,7 @@ function getInitials(name: string): string {
 
 export function SettingsScreen({ navigation }: any) {
     useThemeSubscription();
+    const { preference } = useAppTheme();
     const { user, logout } = useAuthStore();
     const coachEnabled = useCoachStore((s) => s.enabled);
 
@@ -204,6 +211,26 @@ export function SettingsScreen({ navigation }: any) {
                                 <Text style={[styles.stateLabel, coachEnabled && styles.stateLabelOn]}>
                                     {coachEnabled ? 'Ligado' : 'Desligado'}
                                 </Text>
+                                <AppIcon name="chevronForward" size={20} tone="secondary" />
+                            </View>
+                        </TouchableOpacity>
+
+                        <View style={styles.menuDivider} />
+
+                        <TouchableOpacity
+                            style={styles.menuItem}
+                            onPress={() => navigation.navigate('Appearance')}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Aparência, tema ${THEME_LABELS[preference]}`}
+                        >
+                            <View style={styles.menuItemLeft}>
+                                <View style={styles.menuIconContainer}>
+                                    <AppIcon name="appearance" size={20} tone="primary" />
+                                </View>
+                                <Text style={styles.menuItemText}>Aparência</Text>
+                            </View>
+                            <View style={styles.menuItemRight}>
+                                <Text style={styles.stateLabel}>{THEME_LABELS[preference]}</Text>
                                 <AppIcon name="chevronForward" size={20} tone="secondary" />
                             </View>
                         </TouchableOpacity>

@@ -258,7 +258,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
             <View style={[styles.container, { paddingTop: insets.top + 20, justifyContent: 'center', alignItems: 'center' }]}>
                 <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
                 <Ionicons name="cloud-offline-outline" size={48} color={colors.error} />
-                <Text style={{ color: colors.white, marginTop: 16, fontSize: 16, fontWeight: '600' }}>Erro ao carregar perguntas</Text>
+                <Text style={{ color: semanticColors.textPrimary, marginTop: 16, fontSize: 16, fontWeight: '600' }}>Erro ao carregar perguntas</Text>
                 <Text style={{ color: semanticColors.textSecondary, marginTop: 8, textAlign: 'center', maxWidth: 300 }}>
                     Verifique sua conexão e tente novamente.
                 </Text>
@@ -290,7 +290,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
                     accessibilityLabel="Voltar"
                     style={styles.backBtn}
                 >
-                    <Ionicons name="chevron-back" size={22} color={colors.white} />
+                    <Ionicons name="chevron-back" size={22} color={semanticColors.textPrimary} />
                 </TouchableOpacity>
                 <Text style={styles.topBarTitle}>Prontidão diária</Text>
                 <Text style={styles.topBarCounter}>
@@ -459,7 +459,7 @@ const styles = createThemeStyles(() => ({
     question: {
         fontSize: 28,
         fontWeight: '700',
-        color: colors.white,
+        color: semanticColors.textPrimary,
         letterSpacing: -0.5,
         lineHeight: 36,
         marginBottom: spacing.xl,
@@ -502,7 +502,7 @@ const styles = createThemeStyles(() => ({
         color: colors.textSecondary,
     },
     optionDescriptionSelected: {
-        color: 'rgba(0,212,255,0.7)',
+        color: semanticColors.accent,
     },
     radio: {
         width: 22,
@@ -579,7 +579,7 @@ const styles = createThemeStyles(() => ({
     lockedHeading: {
         fontSize: typography.fontSizes['2xl'],
         fontWeight: '700',
-        color: colors.white,
+        color: semanticColors.textPrimary,
         textAlign: 'center',
     },
     lockedBody: {

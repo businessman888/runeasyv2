@@ -21,6 +21,7 @@ import {
     FeedbackScreen,
     WellnessScreen,
     SettingsScreen,
+    AppearanceScreen,
     CoachAnalysisScreen,
     WorkoutDetailScreen,
     NotificationsScreen,
@@ -485,6 +486,14 @@ export function AppNavigator() {
                         <Stack.Screen
                             name="NotificationSettings"
                             component={NotificationSettingsScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'card',
+                            }}
+                        />
+                        <Stack.Screen
+                            name="Appearance"
+                            component={AppearanceScreen}
                             options={{
                                 headerShown: false,
                                 presentation: 'card',

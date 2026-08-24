@@ -85,8 +85,8 @@ const ReadinessGauge: React.FC<{ score: number; color: 'green' | 'yellow' | 'red
 
     const colorMap = {
         green: semanticColors.accent,
-        yellow: '#FFD700',
-        red: '#FF4444',
+        yellow: semanticColors.warning,
+        red: semanticColors.danger,
     };
 
     const labelMap = {
@@ -140,7 +140,7 @@ const ReadinessGauge: React.FC<{ score: number; color: 'green' | 'yellow' | 'red
                 />
             </Svg>
             <View style={styles.gaugeCenter}>
-                <Text style={[styles.gaugeScore, { color: colors.white }]}>{score}%</Text>
+                <Text style={[styles.gaugeScore, { color: semanticColors.textPrimary }]}>{score}%</Text>
                 <Text style={[styles.gaugeLabel, { color: colorMap[color] }]}>{labelMap[color]}</Text>
             </View>
         </View>
@@ -234,7 +234,7 @@ export function ReadinessResultScreen({ navigation }: any) {
         return (
             <View style={styles.errorContainer}>
                 <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
-                <Ionicons name="warning-outline" size={64} color="#FFD700" />
+                <Ionicons name="warning-outline" size={64} color={semanticColors.warning} />
                 <Text style={styles.errorText}>{error || 'Erro ao carregar resultado'}</Text>
                 <TouchableOpacity style={styles.retryButton} onPress={fetchVerdict}>
                     <Text style={styles.retryButtonText}>Tentar Novamente</Text>
@@ -357,12 +357,12 @@ const styles = createThemeStyles(() => ({
     },
     backIcon: {
         fontSize: 24,
-        color: colors.white,
+        color: semanticColors.textPrimary,
     },
     headerTitle: {
         fontSize: typography.fontSizes.md,
         fontWeight: '600',
-        color: colors.white,
+        color: semanticColors.textPrimary,
     },
     calendarButton: {
         padding: spacing.xs,
@@ -425,7 +425,7 @@ const styles = createThemeStyles(() => ({
     analysisHeadline: {
         fontSize: typography.fontSizes.md,
         fontWeight: '700',
-        color: colors.white,
+        color: semanticColors.textPrimary,
         lineHeight: 24,
     },
     analysisReasoning: {
@@ -498,7 +498,7 @@ const styles = createThemeStyles(() => ({
     metricValue: {
         fontSize: typography.fontSizes.lg,
         fontWeight: '700',
-        color: colors.white,
+        color: semanticColors.textPrimary,
         textAlign: 'center',
     },
     metricSublabel: {
@@ -524,14 +524,14 @@ const styles = createThemeStyles(() => ({
     },
     loadingContainer: {
         flex: 1,
-        backgroundColor: semanticColors.textOnAccent,
+        backgroundColor: semanticColors.canvas,
         alignItems: 'center',
         justifyContent: 'center',
     },
     loadingText: {
         fontSize: typography.fontSizes.lg,
         fontWeight: '600',
-        color: colors.white,
+        color: semanticColors.textPrimary,
         marginTop: spacing.lg,
     },
     loadingSubtext: {
@@ -541,7 +541,7 @@ const styles = createThemeStyles(() => ({
     },
     errorContainer: {
         flex: 1,
-        backgroundColor: semanticColors.textOnAccent,
+        backgroundColor: semanticColors.canvas,
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: spacing.xl,

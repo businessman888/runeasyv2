@@ -26,7 +26,7 @@ export default {
   // expo-screen-orientation. Ver TABLET_RESPONSIVENESS_PLAN.md.
   orientation: "default",
   icon: "./assets/icon.png",
-  userInterfaceStyle: "dark",
+  userInterfaceStyle: "automatic",
   scheme: "runeasy",
   splash: {
     image: "./assets/splash-icon.png",

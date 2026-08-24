@@ -12,6 +12,7 @@ export * from './FeedbackScreen';
 export * from './EvolutionScreen';
 export * from './WellnessScreen';
 export * from './SettingsScreen';
+export * from './AppearanceScreen';
 export * from './StatsScreen';
 export * from './CoachAnalysisScreen';
 export * from './WorkoutDetailScreen';
