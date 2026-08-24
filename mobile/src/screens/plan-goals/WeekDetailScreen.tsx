@@ -29,6 +29,7 @@ import type { PlanWorkout } from '../../types/plan-overview.types';
 import { getPhaseStyle } from './phaseTokens';
 import { semanticColors } from '../../theme/semanticColors';
 import { createThemeStyles, useThemeSubscription } from '../../theme';
+import { getTodayStrSaoPaulo } from '../../utils/planDate';
 
 // ─── Figma tokens ────────────────────────────────────────────────────────────
 
@@ -47,17 +48,6 @@ function formatRange(start: string, end: string): string {
     const sLabel = `${MONTH_PT[s.getMonth()]} ${s.getDate().toString().padStart(2, '0')}`;
     const eLabel = `${MONTH_PT[e.getMonth()]} ${e.getDate().toString().padStart(2, '0')}`;
     return `${sLabel} – ${eLabel}`;
-}
-
-function getTodayStrSaoPaulo(): string {
-    const now = new Date();
-    const offsetMs = now.getTimezoneOffset() * 60 * 1000;
-    const utc = now.getTime() + offsetMs;
-    const sp = new Date(utc + -3 * 60 * 60 * 1000);
-    const y = sp.getFullYear();
-    const m = (sp.getMonth() + 1).toString().padStart(2, '0');
-    const d = sp.getDate().toString().padStart(2, '0');
-    return `${y}-${m}-${d}`;
 }
 
 function getWorkoutTypeName(type: string): string {

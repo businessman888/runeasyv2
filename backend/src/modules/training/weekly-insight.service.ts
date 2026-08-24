@@ -548,12 +548,38 @@ export class WeeklyInsightService {
       //
       // Best-effort: falha aqui não derruba o insight. A semana continua sendo
       // resumida; só não há ajuste de pace para contar.
+      //
+      // ── A BLINDAGEM DA SAÍDA (Fase 6.4) ──────────────────────────────────
+      //
+      // Quando a decisão desta semana é `aliviar_ritmo`, o app está pedindo ao
+      // corredor para SEGURAR o ritmo. Deixar a reprecificação acelerar o alvo
+      // fácil dos próximos dias faria o app contradizer o próprio conselho — e
+      // faz, hoje, em produção: `applyZonePacesToSegments` recrava TODAS as
+      // zonas, Z1 inclusive.
+      //
+      // A janela protegida é a semana que CONTÉM HOJE. Diferente do alvo da
+      // 6.2/6.3 (a semana seguinte) de propósito: aquelas ESCREVEM e esbarram na
+      // fronteira "hoje é intocável"; um conselho de esforço vale a partir de
+      // agora, então é essa semana que não pode acelerar embaixo dele.
+      //
+      // O predicado é o mesmo do `resolveWeek` da 6.3 — a primeira semana que
+      // ainda não terminou.
+      const todayStr = this.saoPauloTodayStr();
+      const protectWindow =
+        adjustment.code === 'aliviar_ritmo'
+          ? (allWeeks.find((w) => w.endStr >= todayStr) ?? null)
+          : null;
+
       let vdotChange: VdotChange | null = null;
       try {
         vdotChange = await this.vdotService.reestimateForPlan(
           userId,
           planId,
           week.weekNumber,
+          todayStr,
+          protectWindow
+            ? { start: protectWindow.startStr, end: protectWindow.endStr }
+            : null,
         );
       } catch (error) {
         this.logger.warn(
@@ -936,7 +962,7 @@ REGRAS INVIOLÁVEIS:
 - Os números e a recomendação abaixo JÁ ESTÃO DECIDIDOS. Você NÃO recalcula, NÃO contradiz e NÃO propõe outra recomendação.
 - Cite pelo menos dois números reais que recebeu.
 - 2 a 3 frases, segunda pessoa, português do Brasil, tom direto e sem bajulação.
-- Se houver AJUSTE DE RITMO, mencione-o em UMA frase como algo JÁ FEITO ("ajustei", não "vou ajustar") — os paces dos próximos treinos já foram reescritos.
+- Se houver AJUSTE DE RITMO, mencione-o em UMA frase como algo JÁ FEITO ("ajustei", não "vou ajustar"). QUANDO ele passa a valer está dito no próprio bloco — siga o que estiver escrito lá e não presuma que já vale para o treino de amanhã.
 - NÃO invente relações de causa e efeito entre os números. Correr mais devagar que o alvo nunca indica evolução: descreva o que aconteceu, e use a explicação do ajuste que você recebeu pronta.
 - Ao falar de RITMO DE TIRO ou de ALVO DE ZONA, use SÓ os números do bloco TIROS DA SEMANA. Nenhum outro número desta mensagem é ritmo de tiro ou alvo de zona.
 - "Extra", "a mais", "além do plano" só valem para o que estiver explicitamente rotulado como FORA DO PLANO. Km do plano nunca são extras.
@@ -1027,7 +1053,10 @@ Escreva a narrativa explicando o que aconteceu na semana e por que essa é a rec
     );
 
     if (vdotChange) {
-      parts.push(vdotFallbackSentence(vdotChange));
+      // Pode voltar vazia quando nada foi reprecificado — ver
+      // `vdotFallbackSentence`.
+      const frase = vdotFallbackSentence(vdotChange);
+      if (frase) parts.push(frase);
     }
     return parts.join(' ');
   }
@@ -1434,6 +1463,9 @@ function qualityEffortsBlock(efforts: MeasuredQualityEffort[]): string {
 
 function vdotChangeBlock(change: VdotChange | null): string {
   if (!change) return '';
+  // Nada foi reescrito (plano acabando, ou tudo dentro da janela protegida da
+  // Fase 6.4): anunciar "0 treinos reajustados" é pior que silêncio.
+  if (change.workoutsRepriced === 0) return '';
   const verbo = change.direction === 'up' ? 'subiu' : 'baixou';
   const efeito =
     change.direction === 'up'
@@ -1445,22 +1477,42 @@ function vdotChangeBlock(change: VdotChange | null): string {
         `  - ${e.dateStr} (${e.zones.join('/')}): alvo ${fmtBand(e.prescribedPaceMin, e.prescribedPaceMax)}, executado ${fmtPace(e.paceSecPerKm)}`,
     )
     .join('\n');
+  // Fase 6.4: os treinos DESTA semana ficaram de fora de propósito, porque a
+  // recomendação da semana é segurar o ritmo. Sem esta linha a narrativa diria
+  // que os paces mudaram enquanto o corredor abre o treino de amanhã e vê o
+  // mesmo número — o ajuste correto parecendo bug.
+  const adiado = change.protectedWeek
+    ? '- O ajuste vale A PARTIR DA SEMANA QUE VEM: os treinos desta semana mantiveram o ritmo de antes, porque a recomendação desta semana é segurar o ritmo. DIGA isso em vez de afirmar que os próximos treinos já mudaram.\n'
+    : '';
+
   return `
 AJUSTE DE RITMO JÁ APLICADO:
 - Seu nível estimado ${verbo} (${change.reason}).
 - A CAUSA foram exatamente estes treinos de qualidade, e nada mais:
 ${provas || '  - (sem detalhe por treino)'}
 - ${change.workoutsRepriced} treino(s) futuro(s) já foram reajustados: ${efeito}.
-- NÃO cite "VDOT" nem o número — fale de evolução/ajuste de ritmo, em linguagem de corredor.
+${adiado}- NÃO cite "VDOT" nem o número — fale de evolução/ajuste de ritmo, em linguagem de corredor.
 - É PROIBIDO atribuir o ajuste a qualquer outra coisa: treinos leves/easy, volume total, frequência, regularidade ou constância NÃO entram nessa conta. Se citar o motivo, cite os treinos de qualidade acima.
+- NÃO use o verbo "aliviar" para descrever este reajuste. "Aliviar o ritmo" é o nome de OUTRA coisa no app — a recomendação de segurar o esforço nos treinos leves — e usar a mesma palavra para as duas faz o corredor ler uma como a outra. Aqui, diga "ajustei o alvo dos seus treinos de qualidade".
 `;
 }
 
-/** Mesma frase, sem rede — usada quando a IA está indisponível. */
+/**
+ * Mesma frase, sem rede — usada quando a IA está indisponível.
+ *
+ * O verbo "aliviar" saiu daqui na Fase 6.4: ele é o nome do CONSELHO
+ * (`aliviar_ritmo`, que não escreve nada) e usá-lo também para a
+ * reprecificação — que escreve — punha as duas coisas com o mesmo nome na
+ * mesma tela.
+ */
 function vdotFallbackSentence(change: VdotChange): string {
+  if (change.workoutsRepriced === 0) return '';
+  const quando = change.protectedWeek
+    ? ' a partir da semana que vem'
+    : ' à frente';
   return change.direction === 'up'
-    ? `Seus treinos de qualidade mostraram evolução: ajustei o ritmo de ${change.workoutsRepriced} treino(s) à frente.`
-    : `Seus treinos de qualidade vieram acima do alvo: aliviei o ritmo de ${change.workoutsRepriced} treino(s) à frente.`;
+    ? `Seus treinos de qualidade mostraram evolução: ajustei o alvo de ${change.workoutsRepriced} treino(s)${quando}.`
+    : `Seus treinos de qualidade vieram acima do alvo: recalibrei o alvo de ${change.workoutsRepriced} treino(s)${quando}.`;
 }
 
 function num(v: number | string | null | undefined): number {

@@ -14,11 +14,13 @@ import {
     ADJUSTMENT_COPY,
     APPLY_ERROR_COPY,
     actionKindOf,
+    buildEffortCueCopy,
     isActionable,
 } from '../adjustmentCopy';
 import {
     isConflictReason,
     type SuggestedAdjustment,
+    type WeeklyInsight,
 } from '../../../types/weeklyInsight.types';
 
 /**
@@ -67,6 +69,12 @@ interface AdjustmentTrayProps {
      * contrato de preview/digest/conflito que a 6.2 estabeleceu.
      */
     onOpenWeekRelief?: () => void;
+    /**
+     * Fase 6.4 — a linha inteira do insight, para o conselho de esforço citar os
+     * NÚMEROS do corredor em vez de uma frase genérica. Opcional: sem ela o card
+     * cai no texto estático, que continua correto.
+     */
+    insight?: WeeklyInsight | null;
 }
 
 export const AdjustmentTray = memo(function AdjustmentTray({
@@ -76,10 +84,16 @@ export const AdjustmentTray = memo(function AdjustmentTray({
     onApply,
     onConflict,
     onOpenWeekRelief,
+    insight,
 }: AdjustmentTrayProps) {
     useThemeSubscription();
     const [justApplied, setJustApplied] = useState(false);
-    const copy = ADJUSTMENT_COPY[adjustment.code];
+    // `aliviar_ritmo` é o único código cuja copy depende do dado medido — os
+    // outros descrevem uma AÇÃO, que é a mesma toda semana.
+    const copy =
+        adjustment.code === 'aliviar_ritmo'
+            ? buildEffortCueCopy(insight)
+            : ADJUSTMENT_COPY[adjustment.code];
     // Pelo CÓDIGO, não pela classe: insights gerados antes da 6.3 têm
     // `class: 'prescription'` congelado no jsonb para `reduzir_volume`.
     const actionable = isActionable(adjustment.code);

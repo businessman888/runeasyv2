@@ -29,9 +29,13 @@ import { PremiumBackground } from '../components/ui/PremiumBackground';
 import { DashedDivider } from '../components/ui/DashedDivider';
 import { CoachDeepDiveSection } from '../components/training/CoachDeepDiveSection';
 import { ReliefSheet } from '../components/training/ReliefSheet';
+import { EffortCueCard, isEasyEffort } from '../components/training/EffortCue';
 import { useStartWorkoutFlow } from '../hooks/useStartWorkoutFlow';
+import { useEffortCue } from '../hooks/useEffortCue';
 import { useTrainingStore } from '../stores';
 import { transformWorkoutToUI } from '../utils/workoutTransform';
+import { mainEffortBand } from '../utils/workoutPreview';
+import { getTodayStrSaoPaulo } from '../utils/planDate';
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -128,10 +132,28 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
         if (!raw?.scheduled_date || raw?.source !== 'plan') return false;
         if (raw?.status !== 'pending' || raw?.is_race_day === true) return false;
 
-        const now = new Date();
-        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-        return String(raw.scheduled_date) > todayStr;
+        // O `todayStr` era montado do relógio LOCAL, o que contradizia o próprio
+        // comentário acima: quem estivesse fora de São Paulo via a fronteira
+        // deslocada em um dia. Agora usa a mesma conta do resto do plano.
+        return String(raw.scheduled_date) > getTodayStrSaoPaulo();
     }, [raw]);
+
+    /**
+     * Fase 6.4 — a orientação de esforço da semana.
+     *
+     * Só em treino FÁCIL e ainda por correr: num tempo ou intervalado, correr
+     * forte É o objetivo, e pedir para segurar ali seria repreender a pessoa por
+     * executar bem. O critério é o mesmo do card do dia — ver `isEasyEffort`.
+     */
+    const cue = useEffortCue();
+    const effortBand = useMemo(
+        () => mainEffortBand(raw?.instructions_json),
+        [raw],
+    );
+    const showEffortCue =
+        cue.active &&
+        raw?.status === 'pending' &&
+        isEasyEffort(effortBand.zone, raw?.type);
 
     const handleRelieved = useCallback(() => {
         // O treino mudou no servidor; recarrega esta tela pelo mesmo caminho do
@@ -250,6 +272,18 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
                         </Text>
                         <DashedDivider dash={[5, 5]} style={styles.phaseDivider} />
                     </>
+                )}
+
+                {/* Fase 6.4 — a orientação de esforço, IMEDIATAMENTE acima dos
+                    blocos: ela fala sobre como ler a faixa que vem logo abaixo,
+                    e separada dela perderia o referente. */}
+                {showEffortCue && (
+                    <View style={styles.effortCueWrap}>
+                        <EffortCueCard
+                            diagnosis={cue.diagnosis}
+                            targetPaceSec={effortBand.paceMax}
+                        />
+                    </View>
                 )}
 
                 {/* Blocks */}
@@ -467,6 +501,10 @@ const styles = createThemeStyles(() => ({
         marginBottom: spacing.md,
     },
     phaseDivider: {
+        marginBottom: spacing.lg,
+    },
+    // Fase 6.4 — respiro entre a orientação de esforço e o primeiro bloco.
+    effortCueWrap: {
         marginBottom: spacing.lg,
     },
     // Blocks — clean card, left zone accent, no full neon border

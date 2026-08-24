@@ -645,6 +645,117 @@ describe('VdotService — reestimativa', () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────────
+  /**
+   * Fase 6.4 — a blindagem da SAÍDA.
+   *
+   * A blindagem da ENTRADA (Z1/Z2 não votam) já existia e é testada em "NÃO
+   * move". O que estes testes protegem é o efeito na direção contrária: a
+   * subida vem da QUALIDADE, mas a propagação recrava TODAS as zonas — então,
+   * sem janela, o app aceleraria o alvo fácil na mesma semana em que o conselho
+   * `aliviar_ritmo` pede para segurar o ritmo.
+   *
+   * O cenário tem `f1` em 25/06 e `f2` em 02/07, com hoje em 20/06. A janela
+   * cobre a semana corrente, então protege `f1` e deixa `f2` passar.
+   */
+  describe('janela protegida (aliviar_ritmo)', () => {
+    const CUE_WEEK = { start: '2026-06-20', end: '2026-06-26' };
+
+    it('NÃO repreça o treino da semana do conselho — e repreça os demais', async () => {
+      const tables = await build({ workPace: 265 });
+      const antesF1 = JSON.parse(
+        JSON.stringify(
+          tables.workouts.find((w) => w.id === 'f1')!.instructions_json,
+        ),
+      );
+
+      const change = await service.reestimateForPlan(
+        'user-1',
+        'plan-1',
+        6,
+        TODAY,
+        CUE_WEEK,
+      );
+
+      expect(change!.workoutsRepriced).toBe(1); // só f2
+      expect(change!.protectedWeek).toBe(true);
+
+      // f1 está sob o conselho: sai intacto, pace incluído.
+      expect(
+        tables.workouts.find((w) => w.id === 'f1')!.instructions_json,
+      ).toEqual(antesF1);
+
+      // f2 é da semana seguinte: recebe o alvo novo normalmente.
+      const f2 = tables.workouts.find((w) => w.id === 'f2')!
+        .instructions_json as Array<Record<string, unknown>>;
+      const workF2 = (f2[1] as { work: { pace_min: number } }).work;
+      expect(workF2.pace_min).toBeLessThan(Z4_MIN);
+    });
+
+    it('o VDOT sobe assim mesmo — a conquista da qualidade não é adiada', async () => {
+      const tables = await build({ workPace: 265 });
+
+      const change = await service.reestimateForPlan(
+        'user-1',
+        'plan-1',
+        6,
+        TODAY,
+        CUE_WEEK,
+      );
+
+      // É o coração da opção escolhida: proteger a semana NÃO é o mesmo que
+      // segurar a subida. Adiar tudo puniria o esforço de qualidade por causa
+      // do comportamento nos treinos fáceis.
+      expect(change!.vdotAfter).toBe(41);
+      expect(tables.training_plans[0].vdot_current).toBe(41);
+      expect(tables.plan_vdot_history).toHaveLength(1);
+      expect(tables.plan_vdot_history[0].vdot_after).toBe(41);
+    });
+
+    it('o briefing do treino protegido NÃO é invalidado', async () => {
+      const tables = await build({ workPace: 265 });
+      await service.reestimateForPlan('user-1', 'plan-1', 6, TODAY, CUE_WEEK);
+
+      // O pace de `f1` não mudou, então o texto do coach continua verdadeiro —
+      // apagá-lo custaria uma geração de IA para reescrever o mesmo conteúdo.
+      expect(tables.workout_briefings.map((b) => b.workout_id)).toContain('f1');
+    });
+
+    it('SEM janela, a propagação é idêntica à de antes (não-regressão)', async () => {
+      const tables = await build({ workPace: 265 });
+
+      const change = await service.reestimateForPlan(
+        'user-1',
+        'plan-1',
+        6,
+        TODAY,
+      );
+
+      expect(change!.workoutsRepriced).toBe(2);
+      expect(change!.protectedWeek).toBe(false);
+      const f1 = tables.workouts.find((w) => w.id === 'f1')!
+        .instructions_json as Array<Record<string, unknown>>;
+      const workF1 = (f1[1] as { work: { pace_min: number } }).work;
+      expect(workF1.pace_min).toBeLessThan(Z4_MIN);
+    });
+
+    it('janela que não cobre treino nenhum → protectedWeek false', async () => {
+      // O conselho pode estar ativo numa semana sem treino editável. Anunciar
+      // um adiamento que não aconteceu confundiria mais que calar.
+      await build({ workPace: 265 });
+      const change = await service.reestimateForPlan(
+        'user-1',
+        'plan-1',
+        6,
+        TODAY,
+        { start: '2026-08-01', end: '2026-08-07' },
+      );
+
+      expect(change!.workoutsRepriced).toBe(2);
+      expect(change!.protectedWeek).toBe(false);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
   describe('semeadura', () => {
     it('grava o VDOT inicial e abre o histórico', async () => {
       const tables = await build();

@@ -39,6 +39,69 @@ function instructionPace(segment: unknown): number | null {
     return workPace == null ? null : paceValueToSecondsPerKm(workPace);
 }
 
+/**
+ * O BLOCO QUE DEFINE O TREINO — e a faixa de pace dele.
+ *
+ * ── POR QUE ISTO EXISTE (Fase 6.4) ───────────────────────────────────────────
+ *
+ * O card do dia mostrava `instructions_json[0].pace_min`: o **primeiro** bloco
+ * (o aquecimento) e a **borda rápida** da faixa dele. Dois erros no mesmo
+ * número, e o segundo é o pior — o cue `aliviar_ritmo` dispara exatamente
+ * quando o corredor passa de `pace_min`. O app exibia a borda rápida como alvo
+ * e depois repreendia quem correu nela.
+ *
+ * A preferência `main → repeat → primeiro` é a MESMA de
+ * `resolveWorkoutPaceSeconds` — é o bloco que caracteriza o treino. Num
+ * intervalado o esforço mora em `work`, não no topo do bloco.
+ *
+ * Devolve a faixa INTEIRA e a zona: quem exibe decide o que fazer com elas, e
+ * a zona é o que diz se um treino é fácil (Z1/Z2) sem depender de uma lista de
+ * `type` para manter em sincronia com o gerador.
+ */
+export interface MainEffortBand {
+    /** Borda RÁPIDA, em segundos/km. */
+    paceMin: number | null;
+    /** Borda LENTA, em segundos/km — o alvo da orientação de esforço. */
+    paceMax: number | null;
+    /** `Z1`…`Z5`, quando o segmento a declara. */
+    zone: string | null;
+}
+
+/** O sub-bloco onde o esforço realmente mora (o `work` de um intervalado). */
+function effortOf(segment: unknown): Record<string, unknown> | null {
+    if (!isRecord(segment)) return null;
+    if (positiveNumber(segment.pace_min) != null) return segment;
+    if (isRecord(segment.work)) return segment.work;
+    return null;
+}
+
+export function mainEffortBand(
+    instructions: readonly unknown[] | null | undefined,
+): MainEffortBand {
+    const empty: MainEffortBand = { paceMin: null, paceMax: null, zone: null };
+    const segments = instructions ?? [];
+    if (segments.length === 0) return empty;
+
+    const preferred =
+        segments.find((s) => isRecord(s) && s.type === 'main') ??
+        segments.find((s) => isRecord(s) && s.type === 'repeat') ??
+        segments[0];
+
+    const effort = effortOf(preferred);
+    if (!effort) return empty;
+
+    // A zona pode viver no sub-bloco de esforço ou no topo do `repeat` — mesma
+    // precedência que o backend usa em `applyZonePacesToSegments`.
+    const rawZone =
+        effort.zone ?? (isRecord(preferred) ? preferred.zone : undefined);
+
+    return {
+        paceMin: paceValueToSecondsPerKm(positiveNumber(effort.pace_min)),
+        paceMax: paceValueToSecondsPerKm(positiveNumber(effort.pace_max)),
+        zone: typeof rawZone === 'string' ? rawZone : null,
+    };
+}
+
 function instructionDuration(segment: unknown): number {
     if (!isRecord(segment)) return 0;
     const direct = positiveNumber(segment.duration_seconds) ?? 0;

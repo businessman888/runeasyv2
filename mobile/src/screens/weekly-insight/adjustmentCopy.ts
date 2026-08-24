@@ -1,6 +1,9 @@
 import type {
     AdjustmentCode,
+    WeeklyInsight,
+    Zone,
 } from '../../types/weeklyInsight.types';
+import { formatPaceLabel } from '../../utils/pace';
 
 /**
  * O texto da bandeja de reajuste — e a regra de enquadramento que ele carrega.
@@ -34,6 +37,12 @@ import type {
  * "mude o plano". Pace é da Fase 3; a Fase 6 escrevê-lo reabriria a corrida que
  * a fundação existe para fechar. É a diferença entre "segure o ritmo no pace que
  * já está lá" (verdadeiro, acionável hoje) e prometer um plano diferente.
+ *
+ * A Fase **6.4** deu nome a esse enquadramento: **a faixa já é a orientação; o
+ * app só ensina a lê-la.** O plano prescreve `pace_min–pace_max`, e o cue
+ * dispara quando o corredor passa da borda RÁPIDA. Então a mensagem verdadeira
+ * não é "seu plano vai mudar" nem "ignore o número" — é "mire na ponta lenta da
+ * sua faixa nesta semana". Toda superfície fecha com **"Seu plano não muda."**
  */
 
 export interface AdjustmentCopy {
@@ -72,10 +81,12 @@ export const ADJUSTMENT_COPY: Record<AdjustmentCode, AdjustmentCopy> = {
     },
 
     // ── Conselho: MIRE NO ALVO, nunca "mude o plano" ──
+    // Este é o FALLBACK. Quando a linha do insight traz os números medidos,
+    // `buildEffortCueCopy` monta um corpo concreto por cima deste.
     aliviar_ritmo: {
         badge: 'Dica da semana',
-        title: 'Segure o ritmo nos dias fáceis',
-        body: 'Seus treinos leves saíram mais rápidos que o pace prescrito. O ganho da rodagem leve vem justamente de correr devagar — na próxima, mire no ritmo que já está no treino.',
+        title: 'Segure na ponta lenta',
+        body: 'Seus treinos leves saíram mais rápidos que o alvo. O ganho da rodagem leve vem justamente de correr devagar — mire na ponta lenta da faixa que já está no seu treino. Seu plano não muda.',
         icon: 'trending-down-outline',
     },
     // ── Ação desde a 6.3 ──
@@ -138,6 +149,119 @@ export function actionKindOf(
     if (code === 'adiar_semana' || code === 'repetir_semana') return 'schedule';
     if (code === 'reduzir_volume') return 'volume';
     return null;
+}
+
+// ─── Fase 6.4 — a orientação de esforço, ancorada em número medido ───────────
+
+/**
+ * Os números do PRÓPRIO corredor que sustentam o conselho `aliviar_ritmo`.
+ *
+ * ⚠️ ── A ARMADILHA DE PRECISÃO (ler antes de mexer na copy) ─────────────────
+ *
+ * `avgDeltaSec` é medido contra o **CENTRO** da faixa prescrita; o cue dispara
+ * contra a **BORDA RÁPIDA** (`pace_min`). Os dois números descrevem coisas
+ * diferentes, e escrever "X s/km acima da borda rápida" usando `avgDeltaSec`
+ * produziria um número FALSO na tela — o tipo de erro que este app trata como
+ * pior que não dizer nada.
+ *
+ * Por isso esta função NÃO devolve delta. Devolve só o par (executado,
+ * previsto) e a contagem, cada um rotulado exatamente pelo que é. Quem escreve
+ * a frase não tem como confundir o que não recebeu.
+ */
+export interface EffortCueDiagnosis {
+    /** Treinos fáceis com pace esperado E executado disponíveis. */
+    easyMeasured: number;
+    /** Destes, quantos saíram rápidos demais (além da tolerância). */
+    easyTooFast: number;
+    /** Média EXECUTADA dos leves, em segundos/km. */
+    actualSec: number | null;
+    /** Média PREVISTA dos leves (centro da faixa), em segundos/km. */
+    expectedSec: number | null;
+}
+
+const EASY_ZONES: Zone[] = ['Z1', 'Z2'];
+
+/**
+ * Extrai o diagnóstico da linha do insight. `null` quando a sugestão não é
+ * `aliviar_ritmo` — o cue não existe fora dele.
+ *
+ * Nada aqui é calculado: os números já vêm decididos do backend (Fase 2A). O
+ * app só escolhe QUAL zona fácil representa a semana — a de maior amostra,
+ * porque uma média de 1 treino não descreve um hábito.
+ */
+export function deriveEffortCue(
+    insight: WeeklyInsight | null | undefined,
+): EffortCueDiagnosis | null {
+    const adjustment = insight?.suggested_adjustment;
+    if (!insight || adjustment?.code !== 'aliviar_ritmo') return null;
+
+    const metrics = adjustment.metrics ?? {};
+    const easyMeasured = Number(metrics.easyRunsMeasured) || 0;
+    const easyTooFast = Number(metrics.easyRunsTooFast) || 0;
+
+    const intensity = insight.intensity_adherence ?? {};
+    const bucket = EASY_ZONES.map((z) => intensity[z]).reduce(
+        (melhor, atual) =>
+            atual && (atual.n ?? 0) > (melhor?.n ?? 0) ? atual : melhor,
+        undefined as (typeof intensity)[Zone] | undefined,
+    );
+
+    return {
+        easyMeasured,
+        easyTooFast,
+        actualSec: bucket?.avgActualSec || null,
+        expectedSec: bucket?.avgExpectedSec || null,
+    };
+}
+
+/**
+ * A copy do card âmbar, concreta quando há dado e genérica quando não há.
+ *
+ * O corpo estático de `ADJUSTMENT_COPY` continua sendo a rede: um insight sem
+ * `intensity_adherence` (semana sem pace medido) ainda recebe um conselho
+ * legível, só sem os números.
+ */
+export function buildEffortCueCopy(
+    insight: WeeklyInsight | null | undefined,
+): AdjustmentCopy {
+    const base = ADJUSTMENT_COPY.aliviar_ritmo;
+    const cue = deriveEffortCue(insight);
+    if (!cue) return base;
+
+    const partes: string[] = [];
+
+    if (cue.easyMeasured > 0 && cue.easyTooFast > 0) {
+        const um = cue.easyTooFast === 1;
+        partes.push(
+            `${cue.easyTooFast} dos ${cue.easyMeasured} leves ${
+                um ? 'saiu mais rápido' : 'saíram mais rápidos'
+            } que o alvo`,
+        );
+    }
+
+    if (cue.actualSec && cue.expectedSec) {
+        // "média de X contra Y previsto" — cada número dito pelo que ele é.
+        // NUNCA "X s/km acima da borda rápida": ver a armadilha em
+        // `EffortCueDiagnosis`.
+        partes.push(
+            `média de ${formatPaceLabel(cue.actualSec)}/km contra ${formatPaceLabel(
+                cue.expectedSec,
+            )}/km previsto`,
+        );
+    }
+
+    if (partes.length === 0) return base;
+
+    return {
+        ...base,
+        body:
+            `${capitalizar(partes.join(' — '))}. O ganho da rodagem leve vem de correr devagar: ` +
+            'mire na ponta lenta da faixa que já está no seu treino. Seu plano não muda.',
+    };
+}
+
+function capitalizar(texto: string): string {
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
 /**

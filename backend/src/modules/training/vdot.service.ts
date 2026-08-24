@@ -159,6 +159,57 @@ export interface VdotChange {
    * que a regra EXCLUI do sinal.
    */
   evidence: MeasuredQualityEffort[];
+  /**
+   * A semana sob `aliviar_ritmo` ficou de fora da reprecificação (Fase 6.4).
+   *
+   * Não é estado persistido — é o que a narrativa precisa saber para dizer "a
+   * partir da semana que vem" em vez de anunciar um ajuste que o corredor não
+   * vai ver nos treinos dos próximos dias. Ver `protectWindow` em
+   * `reestimateForPlan`.
+   */
+  protectedWeek: boolean;
+}
+
+/**
+ * Janela de datas (YYYY-MM-DD, inclusiva) poupada da reprecificação.
+ *
+ * ── POR QUE ELA EXISTE — A BLINDAGEM DA SAÍDA (Fase 6.4) ─────────────────────
+ *
+ * A blindagem da ENTRADA já existia: Z1/Z2 não votam para mover o VDOT, porque
+ * "easy rápido demais" é ERRO de execução e usá-lo para subir o nível faria o
+ * app afirmar duas coisas opostas sobre o mesmo fato.
+ *
+ * O que ninguém previu foi o efeito na direção contrária. A subida vem da
+ * QUALIDADE, mas `applyZonePacesToSegments` recrava o pace de TODAS as zonas —
+ * Z1 inclusive, e 1 ponto de VDOT ≈ 10–15 s/km lá. Resultado, em produção: o
+ * corredor que corre tudo forte dispara `aliviar_ritmo` (o app pede para
+ * segurar) E a subida de VDOT (o app acelera o alvo fácil) na MESMA semana.
+ *
+ * A correção é cirúrgica: o VDOT sobe (a qualidade foi conquistada e é
+ * reconhecida agora, não adiada), o histórico registra, e só os treinos da
+ * semana sob o conselho ficam com o pace antigo. A divergência entre
+ * `vdot_current` e aqueles segmentos é consciente e TEM VALIDADE — a semana é
+ * corrida em dias e vira passado imutável. As semanas seguintes já saem certas.
+ *
+ * A alternativa (adiar a reestimativa inteira) puniria a conquista da qualidade
+ * por causa do comportamento nos fáceis, e podia travar o VDOT para sempre em
+ * quem dispara o conselho toda semana.
+ */
+export interface ProtectWindow {
+  start: string;
+  end: string;
+}
+
+/**
+ * Data dentro da janela? Comparação de string `YYYY-MM-DD` — a mesma disciplina
+ * do resto do plano, nunca `Date`: a ordem lexicográfica já é a cronológica, e
+ * converter reintroduziria o fuso de quem executa.
+ */
+function inWindow(
+  dateStr: string,
+  w: ProtectWindow | null | undefined,
+): boolean {
+  return !!w && dateStr >= w.start && dateStr <= w.end;
 }
 
 interface WorkoutRow {
@@ -231,12 +282,17 @@ export class VdotService {
   /**
    * Roda no fecho de uma semana do plano. Devolve a mudança quando houve — e
    * `null` quando não houve, que é o caso ESPERADO na maioria das semanas.
+   *
+   * `protectWindow` só chega quando a semana ficou sob o conselho
+   * `aliviar_ritmo` (Fase 6.4) — ver o comentário de `ProtectWindow`. Sem ele o
+   * comportamento é exatamente o de antes.
    */
   async reestimateForPlan(
     userId: string,
     planId: string,
     weekNumber: number,
     todayStr = toSaoPauloDateStr(new Date().toISOString()),
+    protectWindow: ProtectWindow | null = null,
   ): Promise<VdotChange | null> {
     const client = this.supabaseService.getClient();
 
@@ -287,6 +343,7 @@ export class VdotService {
       planId,
       vdotAfter,
       todayStr,
+      protectWindow,
       historyRow: {
         vdot_before: vdotBefore,
         vdot_after: vdotAfter,
@@ -336,6 +393,10 @@ export class VdotService {
       workoutsRepriced: applied.workouts,
       briefingsInvalidated: applied.briefings,
       evidence: sample.map(toMeasured),
+      // `true` só quando a janela de fato TIROU algum treino do patch. Um
+      // conselho ativo numa semana que já não tinha treino editável não mudou
+      // nada, e anunciar um adiamento inexistente confundiria mais que calar.
+      protectedWeek: applied.protectedWeek,
     };
   }
 
@@ -355,8 +416,13 @@ export class VdotService {
     planId: string;
     vdotAfter: number;
     todayStr: string;
+    protectWindow?: ProtectWindow | null;
     historyRow: Record<string, unknown>;
-  }): Promise<{ workouts: number; briefings: number } | null> {
+  }): Promise<{
+    workouts: number;
+    briefings: number;
+    protectedWeek: boolean;
+  } | null> {
     const MAX_ATTEMPTS = 2;
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -364,7 +430,16 @@ export class VdotService {
         params.planId,
         params.todayStr,
       );
-      const patch = this.buildRepricePatch(editable, params.vdotAfter);
+      // Fase 6.4 — a janela sai da lista ANTES do patch, e a diferença de
+      // tamanho é exatamente o que foi poupado. É isso que a narrativa precisa
+      // saber para dizer "a partir da semana que vem".
+      const janela = params.protectWindow;
+      const alvos = janela
+        ? editable.filter((w) => !inWindow(w.scheduled_date, janela))
+        : editable;
+      const protectedWeek = alvos.length < editable.length;
+
+      const patch = this.buildRepricePatch(alvos, params.vdotAfter);
 
       const digest = await this.planAdaptation.getStateDigest(
         params.planId,
@@ -398,7 +473,11 @@ export class VdotService {
       });
 
       if (result.applied) {
-        return result.affected ?? { workouts: patch.length, briefings: 0 };
+        const affected = result.affected ?? {
+          workouts: patch.length,
+          briefings: 0,
+        };
+        return { ...affected, protectedWeek };
       }
 
       const retriable =
@@ -663,6 +742,12 @@ export class VdotService {
    * dentro do segmento; volume exigiria redistribuir km entre treinos,
    * respeitar longão/deload/taper e reescalar segmentos — o pipeline de geração
    * inteiro.
+   *
+   * A Fase 6.4 não abriu exceção nessa fronteira: ela não escreve pace. O que
+   * ela faz é dizer à Fase 3 QUANDO não propagar — a janela `protectWindow`,
+   * para o app não acelerar o alvo fácil na mesma semana em que aconselha
+   * segurar o ritmo. A F3 continua sendo a única dona do pace; só deixou de
+   * atropelar o próprio conselho.
    *
    * Treino passado ou de HOJE não se toca: reescrever o alvo de algo que já foi
    * corrido reescreveria a história, e um insight semanal já fechado passaria a

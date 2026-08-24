@@ -1065,6 +1065,146 @@ describe('WeeklyInsightService — gatilho e ciclo de vida', () => {
         expect(generated).toHaveLength(2);
         expect(promptEnviado()).toContain('TIROS DA SEMANA: nenhum treino');
       });
+
+      // ── Fase 6.4 — o ajuste de VDOT e o conselho param de brigar ──────────
+      const mudancaDeVdot = (over: Record<string, unknown> = {}) => ({
+        planId: 'plan-1',
+        vdotBefore: 40,
+        vdotAfter: 41,
+        direction: 'up',
+        reason: '3 treinos de qualidade consistentemente acima do prescrito',
+        sampleSize: 3,
+        avgDeltaSeconds: -22,
+        workoutsRepriced: 9,
+        briefingsInvalidated: 0,
+        evidence: [],
+        protectedWeek: false,
+        ...over,
+      });
+
+      it('semana protegida → a narrativa diz A PARTIR DE QUANDO o ajuste vale', async () => {
+        await comIA();
+        vdotService.reestimateForPlan.mockResolvedValue(
+          mudancaDeVdot({ protectedWeek: true }),
+        );
+
+        await service.checkForClosedPlanWeeks();
+
+        // Sem esta instrução o coach anunciaria paces novos enquanto o corredor
+        // abre o treino de amanhã e vê o mesmo número — o ajuste CERTO parecendo
+        // bug. É a ressalva que a escolha do desenho B assumiu.
+        expect(promptEnviado()).toContain('A PARTIR DA SEMANA QUE VEM');
+      });
+
+      it('sem proteção, a narrativa não fala em adiamento', async () => {
+        await comIA();
+        vdotService.reestimateForPlan.mockResolvedValue(mudancaDeVdot());
+
+        await service.checkForClosedPlanWeeks();
+
+        expect(promptEnviado()).not.toContain('A PARTIR DA SEMANA QUE VEM');
+      });
+
+      it('proíbe o verbo "aliviar" para o reajuste de VDOT', async () => {
+        await comIA();
+        vdotService.reestimateForPlan.mockResolvedValue(mudancaDeVdot());
+
+        await service.checkForClosedPlanWeeks();
+
+        // "Aliviar o ritmo" é o nome do CONSELHO (que não escreve nada). Usar a
+        // mesma palavra para a reprecificação (que escreve) põe as duas coisas
+        // com o mesmo nome na mesma tela.
+        expect(promptEnviado()).toContain('NÃO use o verbo "aliviar"');
+      });
+
+      it('nada reprecificado → nenhum bloco de ajuste no prompt', async () => {
+        await comIA();
+        vdotService.reestimateForPlan.mockResolvedValue(
+          mudancaDeVdot({ workoutsRepriced: 0, protectedWeek: true }),
+        );
+
+        await service.checkForClosedPlanWeeks();
+
+        // "0 treino(s) já foram reajustados" é pior que silêncio.
+        expect(promptEnviado()).not.toContain('AJUSTE DE RITMO JÁ APLICADO');
+      });
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    /**
+     * Fase 6.4 — a blindagem da SAÍDA do VDOT.
+     *
+     * O app pedir "segure o ritmo" e, na mesma semana, acelerar o alvo fácil é
+     * uma contradição que já acontece em produção: os dois gatilhos são
+     * compatíveis (quem corre tudo forte dispara os dois) e a propagação recrava
+     * TODAS as zonas, Z1 inclusive.
+     */
+    describe('aliviar_ritmo protege a semana corrente (Fase 6.4)', () => {
+      /** Força o degrau 3 da escada sem tocar no fixture de treinos. */
+      const forcarCueDeRitmo = () => {
+        const real = service.buildPlanWeekMetrics.bind(service);
+        jest
+          .spyOn(service, 'buildPlanWeekMetrics')
+          .mockImplementation(async (...args: Parameters<typeof real>) => ({
+            ...(await real(...args)),
+            easyRunsMeasured: 2,
+            easyRunsTooFast: 2,
+          }));
+      };
+
+      it('passa a semana que CONTÉM HOJE como janela protegida', async () => {
+        await build(seedPlan());
+        // Dentro do plano: a semana 3 (15–17/06) é a corrente.
+        freezeToday('2026-06-16');
+        forcarCueDeRitmo();
+
+        await service.checkForClosedPlanWeeks();
+
+        expect(vdotService.reestimateForPlan).toHaveBeenCalledWith(
+          'user-1',
+          'plan-1',
+          expect.any(Number),
+          '2026-06-16',
+          { start: '2026-06-15', end: '2026-06-17' },
+        );
+      });
+
+      it('qualquer outro código NÃO protege nada', async () => {
+        await build(seedPlan());
+        freezeToday('2026-06-16');
+
+        await service.checkForClosedPlanWeeks();
+
+        // O seed produz `manter`: a propagação do VDOT segue igual à de sempre.
+        expect(vdotService.reestimateForPlan).toHaveBeenCalledWith(
+          'user-1',
+          'plan-1',
+          expect.any(Number),
+          '2026-06-16',
+          null,
+        );
+      });
+
+      it('segue NÃO acionável — o conselho não ganhou botão', async () => {
+        await build(seedPlan());
+        freezeToday('2026-06-16');
+        forcarCueDeRitmo();
+
+        await service.checkForClosedPlanWeeks();
+        const semana = tables.plan_week_insights.find(
+          (r) => r.week_number === 2,
+        );
+        expect(semana.suggested_adjustment).toMatchObject({
+          code: 'aliviar_ritmo',
+          class: 'prescription',
+        });
+
+        const r = await service.applyScheduleAdjustment(
+          'user-1',
+          String(semana.id),
+        );
+        expect(r).toMatchObject({ applied: false, reason: 'not_actionable' });
+      });
     });
 
     it('IA que falha não derruba a geração — cai no fallback', async () => {

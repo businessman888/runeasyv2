@@ -233,6 +233,7 @@ export function WeeklyInsightScreen() {
                 {latest.suggested_adjustment && (
                     <AdjustmentTray
                         adjustment={latest.suggested_adjustment}
+                        insight={latest}
                         applied={
                             latest.adjustment_applied_at !== null || weekRelieved
                         }

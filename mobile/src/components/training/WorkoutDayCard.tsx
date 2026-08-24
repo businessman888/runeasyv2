@@ -3,7 +3,10 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { typography, spacing, borderRadius, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
-import { paceValueToSecondsPerKm, formatPaceLabel } from '../../utils/pace';
+import { formatPaceRangeLabel } from '../../utils/pace';
+import { mainEffortBand } from '../../utils/workoutPreview';
+import { useEffortCue } from '../../hooks/useEffortCue';
+import { EffortCueChip, isEasyEffort } from './EffortCue';
 import {
     workoutDurationSeconds,
     formatDurationLabel,
@@ -72,15 +75,32 @@ function WorkoutDayCardInner({ workout: w, onPress }: WorkoutDayCardProps) {
         return { color: '#FFC107', label: 'Pendente' };
     })();
 
-    // pace_min do 1º bloco (aquecimento) em segundos/km (novo) ou decimal (legado);
-    // o util normaliza e formata como "m:ss".
+    // ── A FAIXA do bloco PRINCIPAL (Fase 6.4) ────────────────────────────────
+    //
+    // Antes: `instructions_json[0].pace_min` — o primeiro bloco (o AQUECIMENTO)
+    // e a borda RÁPIDA da faixa dele. O segundo erro era o grave: o cue
+    // `aliviar_ritmo` dispara exatamente quando o corredor passa de `pace_min`,
+    // então o card exibia a borda rápida como alvo e o app depois repreendia
+    // quem correu nela. Mostrar a faixa inteira é pré-requisito da orientação
+    // "mire na ponta lenta" — sem ela, a frase não faz sentido.
+    //
     // Treino por tempo não tem alvo de pace — não inventar "6:00" (número falso).
-    const paceSecs = paceValueToSecondsPerKm(w.instructions_json?.[0]?.pace_min);
+    const band = mainEffortBand(w.instructions_json);
+    const bandLabel = formatPaceRangeLabel(band.paceMin, band.paceMax);
     const paceText = timeBased
         ? 'No seu ritmo'
-        : paceSecs != null
-            ? `${formatPaceLabel(paceSecs)} /km`
+        : bandLabel != null
+            ? `${bandLabel} /km`
             : '6:00 /km';
+
+    // O chip só onde a orientação se aplica: treino FÁCIL e ainda por correr.
+    // Num tempo/intervalado, correr forte é o objetivo.
+    const cue = useEffortCue();
+    const showCue =
+        cue.active &&
+        !timeBased &&
+        isEasyEffort(band.zone, w.type) &&
+        (w.status ?? 'pending') === 'pending';
 
     return (
         <View style={styles.workoutDetailCard}>
@@ -130,6 +150,13 @@ function WorkoutDayCardInner({ workout: w, onPress }: WorkoutDayCardProps) {
                                 <Text style={styles.metricText}>{paceText}</Text>
                             </View>
                         </View>
+                        {/* Fase 6.4 — a faixa acima, e o chip apontando para
+                            qual extremidade mirar nesta semana. */}
+                        {showCue && (
+                            <View style={styles.cueRow}>
+                                <EffortCueChip targetPaceSec={band.paceMax} />
+                            </View>
+                        )}
                     </View>
                     <Image
                         source={{
@@ -247,6 +274,13 @@ const styles = createThemeStyles(() => ({
     workoutMetrics: {
         flexDirection: 'row',
         gap: spacing.lg,
+        // A faixa ("5:10–5:35 /km") é mais larga que o número solto que havia
+        // antes; em tela estreita ela quebra para a linha de baixo em vez de
+        // espremer a duração.
+        flexWrap: 'wrap',
+    },
+    cueRow: {
+        marginTop: spacing.sm,
     },
     metricItem: {
         flexDirection: 'row',

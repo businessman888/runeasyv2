@@ -298,9 +298,13 @@ export const MesoCardClimax = memo(function MesoCardClimax({
                     climax
                     animate={animate}
                 />
+                {/* "do seu plano", e não "dos PRÓXIMOS treinos": desde a Fase
+                    6.4 a semana sob o conselho de segurar o ritmo fica de fora
+                    da reprecificação, então "os próximos" podia descrever
+                    treinos que ainda mostram o alvo antigo. */}
                 <Text style={[storyType.body, styles.centerText]}>
                     Seu nível estimado saiu de {fmtVdot(model.vdotBefore)} e os ritmos
-                    dos próximos treinos já acompanharam
+                    do seu plano já acompanharam
                 </Text>
             </View>
         );

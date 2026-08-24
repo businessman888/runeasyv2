@@ -252,8 +252,9 @@ const MesoHero = memo(function MesoHero({
             </View>
 
             <Text style={styles.heroCaption}>
+                {/* "do seu plano" desde a Fase 6.4 — ver MesoStoryCards. */}
                 {vdot
-                    ? 'Os ritmos dos próximos treinos já foram ajustados'
+                    ? 'Os ritmos do seu plano já foram ajustados'
                     : model.hasClimb
                         ? `de volume até o pico — de ${formatKm(model.baseKm)} a ${formatKm(model.peakKm)} km por semana`
                         : 'nas quatro semanas deste bloco'}
