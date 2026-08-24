@@ -7,7 +7,7 @@ import Animated, {
     useSharedValue,
     withTiming,
 } from 'react-native-reanimated';
-import { colors, fonts } from '../../theme';
+import { colors, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { GlassSurface } from '../ui/GlassSurface';
 import { semanticColors } from '../../theme/semanticColors';
 import { AppIcon } from '../ui/AppIcon';
@@ -68,6 +68,7 @@ function AgendaCalendarInner({
     disableGlass = false,
     style,
 }: AgendaCalendarProps) {
+    useThemeSubscription();
     const reducedMotion = useReducedMotion();
     const today = useMemo(() => startOfDay(new Date()), []);
     const { weekDays, monthWeeks } = useCalendarGrid(currentMonth, selectedDay);
@@ -228,7 +229,7 @@ function AgendaCalendarInner({
 
 export const AgendaCalendar = memo(AgendaCalendarInner);
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     card: {
         paddingHorizontal: 12,
         paddingVertical: 16,
@@ -346,6 +347,6 @@ const styles = StyleSheet.create({
     pressed: {
         opacity: 0.6,
     },
-});
+}));
 
 export default AgendaCalendar;

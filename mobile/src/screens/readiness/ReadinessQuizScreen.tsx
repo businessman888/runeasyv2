@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing } from '../../theme';
+import { colors, typography, spacing, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { BASE_API_URL, API_URL, API_ENDPOINTS } from '../../config/api.config';
 import { authedFetch } from '../../services/apiClient';
@@ -43,6 +43,7 @@ interface ReadinessQuizScreenProps {
 }
 
 export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
+    useThemeSubscription();
     const [currentStep, setCurrentStep] = useState(0);
     const [answers, setAnswers] = useState<Record<string, number>>({});
     // Initialize with empty array to verify fetch works.
@@ -217,7 +218,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
     if (isLoading) {
         return (
             <View style={[styles.container, { paddingTop: insets.top + 20, justifyContent: 'center', alignItems: 'center' }]}>
-                <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
+                <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
                 <ActivityIndicator size="large" color={colors.primary} />
                 <Text style={{ color: semanticColors.textSecondary, marginTop: 16 }}>Carregando perguntas...</Text>
             </View>
@@ -228,7 +229,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
     if (lockReason === 'first_workout') {
         return (
             <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
-                <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
+                <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
                 <View style={styles.lockedContainer}>
                     <View style={styles.lockedIconWrap}>
                         <Ionicons name="footsteps-outline" size={36} color={colors.primary} />
@@ -255,7 +256,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
     if (!currentQuestion || questions.length === 0) {
         return (
             <View style={[styles.container, { paddingTop: insets.top + 20, justifyContent: 'center', alignItems: 'center' }]}>
-                <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
+                <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
                 <Ionicons name="cloud-offline-outline" size={48} color={colors.error} />
                 <Text style={{ color: colors.white, marginTop: 16, fontSize: 16, fontWeight: '600' }}>Erro ao carregar perguntas</Text>
                 <Text style={{ color: semanticColors.textSecondary, marginTop: 8, textAlign: 'center', maxWidth: 300 }}>
@@ -278,7 +279,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
 
     return (
         <View style={[styles.container, { paddingTop: insets.top }]}>
-            <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
+            <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
 
             {/* Top bar — back + step counter */}
             <View style={styles.topBar}>
@@ -397,7 +398,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: semanticColors.canvas,
@@ -603,6 +604,6 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: semanticColors.textOnAccent,
     },
-});
+}));
 
 export default ReadinessQuizScreen;

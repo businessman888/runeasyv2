@@ -20,7 +20,7 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import { QuizHeader, Hl } from '../components/onboarding/QuizHeader';
 import { DistanceTimeScreen } from './quiz/DistanceTimeScreen';
 import { AvailableDaysScreen } from './quiz/AvailableDaysScreen';
-import { borderRadius, colors, fonts, spacing } from '../theme';
+import { borderRadius, colors, fonts, spacing, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { PaceGoalFeasibility, retrospectiveGoalService } from '../services/retrospectiveGoalService';
 import type { RootStackParamList } from '../navigation/navigationRef';
@@ -119,6 +119,7 @@ function distanceKm(goal: string): number {
 }
 
 function CircleProgress({ current, total, reduceMotion }: { current: number; total: number; reduceMotion: boolean }) {
+    useThemeSubscription();
     const size = 48;
     const stroke = 4;
     const radius = (size - stroke) / 2;
@@ -175,6 +176,7 @@ function CleanSelect({
     options: SelectOption[];
     onChange: (value: string) => void;
 }) {
+    useThemeSubscription();
     const [open, setOpen] = useState(false);
     const selected = options.find((option) => option.id === value) ?? options[0];
     return (
@@ -262,6 +264,7 @@ function FeasibilityCoach({
     targetWeeks: number;
     onUseAlternative: () => void;
 }) {
+    useThemeSubscription();
     if (loading) {
         return (
             <View style={styles.coachLoading}>
@@ -323,6 +326,7 @@ function OverviewRow({
     value: string;
     last?: boolean;
 }) {
+    useThemeSubscription();
     return (
         <View style={styles.timelineRow}>
             <View style={styles.timelineRail}>
@@ -340,6 +344,7 @@ function OverviewRow({
 }
 
 export function CustomizeGoalScreen() {
+    useThemeSubscription();
     const navigation = useNavigation<
         NativeStackNavigationProp<RootStackParamList, 'CustomizeGoal'>
     >();
@@ -652,7 +657,7 @@ export function CustomizeGoalScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     header: {
         minHeight: 82,
         flexDirection: 'row',
@@ -935,4 +940,4 @@ const styles = StyleSheet.create({
     },
     nextButtonDisabled: { opacity: 0.35 },
     nextText: { fontFamily: fonts.bold, fontSize: 15, color: colors.background },
-});
+}));

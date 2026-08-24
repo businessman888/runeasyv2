@@ -4,6 +4,7 @@ import type { Theme as NavigationTheme } from '@react-navigation/native';
 
 import { useThemeStore } from '../stores/themeStore';
 import type { AppTheme, ResolvedThemeName, ThemePreference } from './contracts';
+import { setRuntimeTheme } from './themeRuntime';
 import { createNavigationTheme, darkTheme, themeRegistry } from './themes';
 
 interface AppThemeContextValue {
@@ -42,6 +43,8 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     const requestedThemeName = resolveRequestedThemeName(preference, systemScheme);
     const theme = themeRegistry[requestedThemeName] ?? darkTheme;
 
+    setRuntimeTheme(theme);
+
     return {
       theme,
       navigationTheme: createNavigationTheme(theme),
@@ -67,4 +70,9 @@ export function useAppTheme(): AppThemeContextValue {
   }
 
   return context;
+}
+
+/** Subscribes compatibility consumers that still read legacy theme tokens. */
+export function useThemeSubscription(): void {
+  useAppTheme();
 }

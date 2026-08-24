@@ -9,7 +9,7 @@ import {
     Platform,
     ActivityIndicator,
 } from 'react-native';
-import { colors, typography, spacing, borderRadius, shadows } from '../theme';
+import { colors, typography, spacing, borderRadius, shadows, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useAuthStore } from '../stores';
 import * as Storage from '../utils/storage';
@@ -29,6 +29,7 @@ const LEVEL_LABELS: Record<string, string> = {
 };
 
 export function PlanPreviewScreen({ navigation, route }: any) {
+    useThemeSubscription();
     const {
         userId,
         planId,
@@ -238,7 +239,7 @@ export function PlanPreviewScreen({ navigation, route }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: semanticColors.canvas,
@@ -484,4 +485,4 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: spacing.sm,
     },
-});
+}));

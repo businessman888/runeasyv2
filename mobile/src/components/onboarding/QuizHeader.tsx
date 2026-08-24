@@ -8,6 +8,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { QUIZ } from '../../screens/quiz/_tokens';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
 export const Hl = ({ children }: { children: React.ReactNode }) => (
     <Text style={styles.highlight}>{children}</Text>
@@ -20,6 +21,7 @@ interface QuizHeaderProps {
 }
 
 export function QuizHeader({ title, subtitle, style }: QuizHeaderProps) {
+    useThemeSubscription();
     return (
         <View style={[styles.container, style]}>
             <Text style={styles.title} accessibilityRole="header">
@@ -30,7 +32,7 @@ export function QuizHeader({ title, subtitle, style }: QuizHeaderProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         marginBottom: 24,
     },
@@ -50,6 +52,6 @@ const styles = StyleSheet.create({
     highlight: {
         color: QUIZ.color.cyan,
     },
-});
+}));
 
 export default QuizHeader;

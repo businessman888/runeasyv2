@@ -10,10 +10,11 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, fonts } from '../../theme';
+import { colors, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { APP_VARIANT, ENV_LABEL, SHOW_ENV_BADGE } from '../../config/env';
 
 export function EnvBadge() {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
 
     if (!SHOW_ENV_BADGE) return null;
@@ -31,7 +32,7 @@ export function EnvBadge() {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         position: 'absolute',
         left: 0,
@@ -63,4 +64,4 @@ const styles = StyleSheet.create({
         fontSize: 9,
         letterSpacing: 1,
     },
-});
+}));

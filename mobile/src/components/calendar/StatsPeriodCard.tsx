@@ -1,6 +1,6 @@
 import React, { memo, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { fonts, spacing } from '../../theme';
+import { fonts, spacing, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { AppIcon } from '../ui/AppIcon';
 import { useWorkoutScopeStore } from '../../stores';
@@ -29,6 +29,7 @@ function formatDuration(min: number): string {
 }
 
 function Tile({ label, value }: { label: string; value: string }) {
+    useThemeSubscription();
     return (
         <View style={styles.tile}>
             <Text style={styles.tileLabel}>{label}</Text>
@@ -40,6 +41,7 @@ function Tile({ label, value }: { label: string; value: string }) {
 }
 
 function StatsPeriodCardInner() {
+    useThemeSubscription();
     const scope = useWorkoutScopeStore((s) => s.scope); // 'plan' | 'activity'
     const mappedScope = scope === 'plan' ? 'workouts' : 'activities';
 
@@ -142,7 +144,7 @@ function StatsPeriodCardInner() {
 
 export const StatsPeriodCard = memo(StatsPeriodCardInner);
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     card: {
         backgroundColor: semanticColors.surface2,
         marginHorizontal: spacing.md,
@@ -220,6 +222,6 @@ const styles = StyleSheet.create({
         color: semanticColors.accent,
         fontFamily: fonts.semibold,
     },
-});
+}));
 
 export default StatsPeriodCard;

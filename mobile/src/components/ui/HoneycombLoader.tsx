@@ -19,7 +19,7 @@ import Animated, {
     cancelAnimation,
     Easing,
 } from 'react-native-reanimated';
-import { colors } from '../../theme';
+import { colors, useThemeSubscription, createThemeStyles } from '../../theme';
 
 const AnimatedIcon = Animated.createAnimatedComponent(MaterialCommunityIcons);
 
@@ -43,6 +43,7 @@ const POSITIONS: Array<{ x: number; y: number }> = [
 ];
 
 function Hexagon({ x, y, delay }: { x: number; y: number; delay: number }) {
+    useThemeSubscription();
     const [reduceMotion, setReduceMotion] = useState(false);
     const progress = useSharedValue(0);
 
@@ -96,6 +97,7 @@ function Hexagon({ x, y, delay }: { x: number; y: number; delay: number }) {
 }
 
 export function HoneycombLoader({ size = CONTAINER }: { size?: number }) {
+    useThemeSubscription();
     // Inner hexagon positions are computed in the fixed CONTAINER (72) space;
     // scale the whole cluster to honor a custom `size` without recomputing them.
     const scale = size / CONTAINER;
@@ -112,11 +114,11 @@ export function HoneycombLoader({ size = CONTAINER }: { size?: number }) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         position: 'relative',
     },
     hex: {
         position: 'absolute',
     },
-});
+}));

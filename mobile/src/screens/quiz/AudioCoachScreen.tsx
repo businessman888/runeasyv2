@@ -12,7 +12,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
-import { fonts } from '../../theme';
+import { fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { QUIZ } from './_tokens';
 
 // Mesmos bullets da tela de config permanente (CoachAudioSettingsScreen).
@@ -24,6 +24,7 @@ const BULLETS = [
 ];
 
 export function AudioCoachScreen() {
+    useThemeSubscription();
     return (
         <>
             <View style={styles.titleContainer}>
@@ -64,7 +65,7 @@ export function AudioCoachScreen() {
 
 export default AudioCoachScreen;
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     titleContainer: {
         marginBottom: 4,
         alignItems: 'center',
@@ -108,4 +109,4 @@ const styles = StyleSheet.create({
         fontSize: 14,
         lineHeight: 20,
     },
-});
+}));

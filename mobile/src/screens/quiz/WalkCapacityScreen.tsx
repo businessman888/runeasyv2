@@ -4,6 +4,7 @@ import { QuizHeader, Hl } from '../../components/onboarding/QuizHeader';
 import { SelectableOption } from '../../components/onboarding/SelectableOption';
 import { QUIZ } from './_tokens';
 import { WALK_CAPACITY_ICONS } from './_icons';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
 // Mostrada APENAS no fluxo "nunca corri" (recentDistance === 0). Quem nunca correu
 // não é tudo igual: um sedentário e alguém que caminha diariamente têm pontos de
@@ -21,6 +22,7 @@ interface WalkCapacityScreenProps {
 }
 
 export function WalkCapacityScreen({ value, onChange }: WalkCapacityScreenProps) {
+    useThemeSubscription();
     const [selected, setSelected] = useState<string | null>(value ?? null);
 
     useEffect(() => {
@@ -63,7 +65,7 @@ export function WalkCapacityScreen({ value, onChange }: WalkCapacityScreenProps)
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     options: {
         gap: QUIZ.gapOptions,
         marginBottom: 24,
@@ -79,6 +81,6 @@ const styles = StyleSheet.create({
         color: QUIZ.color.textDim,
         lineHeight: 20,
     },
-});
+}));
 
 export default WalkCapacityScreen;

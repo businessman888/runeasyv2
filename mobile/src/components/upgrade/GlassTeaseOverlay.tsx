@@ -10,7 +10,7 @@ import {
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { colors, spacing, shadows } from '../../theme';
+import { colors, spacing, shadows, useThemeSubscription, createThemeStyles, getThemeBlurTint, getThemeGlassSheenColors } from '../../theme';
 import { useProFeature } from '../../hooks/useProFeature';
 import { AnimatedBorder } from './AnimatedBorder';
 
@@ -25,12 +25,6 @@ const TEASE_RADIUS = 20;
 const ANDROID_BLUR_METHOD: 'dimezisBlurView' | undefined =
   Platform.OS === 'android' ? 'dimezisBlurView' : undefined;
 
-// Subtle top-light → bottom-shade sheen that sells "frosted glass" depth.
-const SHEEN_COLORS = [
-  'rgba(255, 255, 255, 0.05)',
-  'rgba(255, 255, 255, 0)',
-  'rgba(0, 0, 0, 0.10)',
-] as const;
 const SHEEN_LOCATIONS = [0, 0.5, 1] as const;
 
 export interface GlassTeaseOverlayProps {
@@ -89,6 +83,7 @@ function GlassTeaseOverlayImpl({
   style,
   overlayStyle,
 }: GlassTeaseOverlayProps) {
+  useThemeSubscription();
   const { openUpgrade } = useProFeature();
 
   // Non-interactive glass stack, under the overlay.
@@ -100,7 +95,7 @@ function GlassTeaseOverlayImpl({
       {/* Real frosted blur (iOS native / Android RenderEffect). */}
       <BlurView
         intensity={blurIntensity}
-        tint="dark"
+        tint={getThemeBlurTint()}
         experimentalBlurMethod={ANDROID_BLUR_METHOD}
         pointerEvents="none"
         style={StyleSheet.absoluteFill}
@@ -111,7 +106,7 @@ function GlassTeaseOverlayImpl({
         style={[StyleSheet.absoluteFill, { backgroundColor: veilColor }]}
       />
       <LinearGradient
-        colors={SHEEN_COLORS}
+        colors={getThemeGlassSheenColors()}
         locations={SHEEN_LOCATIONS}
         pointerEvents="none"
         style={StyleSheet.absoluteFill}
@@ -169,7 +164,7 @@ function GlassTeaseOverlayImpl({
 
 export const GlassTeaseOverlay = memo(GlassTeaseOverlayImpl);
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   container: {
     overflow: 'hidden',
     position: 'relative',
@@ -180,6 +175,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
   },
-});
+}));
 
 export default GlassTeaseOverlay;

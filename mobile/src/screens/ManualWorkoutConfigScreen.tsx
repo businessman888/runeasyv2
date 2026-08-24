@@ -11,7 +11,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { typography, spacing, borderRadius } from '../theme';
+import { typography, spacing, borderRadius, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { CustomCalendar } from '../components/CustomCalendar';
@@ -117,6 +117,7 @@ function dateToISODate(date: Date): string {
 }
 
 export function ManualWorkoutConfigScreen() {
+    useThemeSubscription();
     const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
     const createManualWorkout = useTrainingStore((s) => s.createManualWorkout);
@@ -349,7 +350,7 @@ export function ManualWorkoutConfigScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -552,4 +553,4 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.lg,
         fontWeight: typography.fontWeights.bold,
     },
-});
+}));

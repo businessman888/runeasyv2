@@ -6,18 +6,20 @@ import {
     TouchableOpacity,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { fonts } from '../../theme';
+import { fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
-// Design System Colors (Figma)
-const DS = {
+const getLocalThemePalette1 = () => ({
     bg: semanticColors.canvas,
     card: semanticColors.surface2,
     cyan: semanticColors.accent,
     cyanSelected: semanticColors.accentSubtle,
     text: semanticColors.textPrimary,
     textSecondary: semanticColors.textSecondary,
-};
+});
+
+// Design System Colors (Figma)
+
 
 // Days of week - SHORT names only
 const DAYS = [
@@ -37,6 +39,7 @@ interface IntenseDayScreenProps {
 }
 
 export function IntenseDayScreen({ value, availableDays = [], onChange }: IntenseDayScreenProps) {
+    useThemeSubscription();
     const [selectedDay, setSelectedDay] = useState<number | null>(value ?? null);
 
     useEffect(() => {
@@ -80,7 +83,7 @@ export function IntenseDayScreen({ value, availableDays = [], onChange }: Intens
             {/* Fire Icon with MaterialCommunityIcons */}
             <View style={styles.iconContainer}>
                 <View style={styles.iconWrapper}>
-                    <MaterialCommunityIcons name="fire" size={32} color={DS.cyan} />
+                    <MaterialCommunityIcons name="fire" size={32} color={getLocalThemePalette1().cyan} />
                 </View>
                 <Text style={styles.iconLabel}>Treino Intenso</Text>
             </View>
@@ -117,25 +120,25 @@ export function IntenseDayScreen({ value, availableDays = [], onChange }: Intens
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     titleContainer: {
         marginBottom: 24,
     },
     title: {
         fontFamily: fonts.bold,
         fontSize: 24,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         lineHeight: 32,
         marginBottom: 12,
     },
     titleHighlight: {
         fontFamily: fonts.bold,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     subtitle: {
         fontFamily: fonts.regular,
         fontSize: 15,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         lineHeight: 22,
     },
     iconContainer: {
@@ -154,7 +157,7 @@ const styles = StyleSheet.create({
     iconLabel: {
         fontFamily: fonts.semibold,
         fontSize: 16,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     daysContainer: {
         flexDirection: 'row',
@@ -166,7 +169,7 @@ const styles = StyleSheet.create({
     dayCard: {
         width: 70,
         height: 50,
-        backgroundColor: DS.card,
+        backgroundColor: getLocalThemePalette1().card,
         borderRadius: 15,
         alignItems: 'center',
         justifyContent: 'center',
@@ -174,26 +177,26 @@ const styles = StyleSheet.create({
         borderColor: 'transparent',
     },
     dayCardSelected: {
-        borderColor: DS.cyan,
-        backgroundColor: DS.cyanSelected,
+        borderColor: getLocalThemePalette1().cyan,
+        backgroundColor: getLocalThemePalette1().cyanSelected,
     },
     dayText: {
         fontFamily: fonts.bold,
         fontSize: 16,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
     },
     dayTextSelected: {
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     tipCard: {
-        backgroundColor: DS.card,
+        backgroundColor: getLocalThemePalette1().card,
         borderRadius: 12,
         padding: 16,
     },
     tipText: {
         fontFamily: fonts.regular,
         fontSize: 14,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         lineHeight: 20,
     },
     emptyContainer: {
@@ -205,9 +208,9 @@ const styles = StyleSheet.create({
     emptyText: {
         fontFamily: fonts.regular,
         fontSize: 16,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         textAlign: 'center',
     },
-});
+}));
 
 export default IntenseDayScreen;

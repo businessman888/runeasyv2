@@ -11,7 +11,7 @@ import { BlurView } from 'expo-blur';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, fonts, shadows } from '../theme';
+import { colors, fonts, shadows, createThemeStyles, useThemeSubscription, getThemeBlurTint } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useProFeature } from '../hooks/useProFeature';
 import { PrePaywallBackground } from '../components/upgrade/PrePaywallBackground';
@@ -50,7 +50,7 @@ const BENEFITS: Benefit[] = [
 const BenefitCard = memo(({ icon, title, body }: Benefit) => (
   <View style={styles.benefitCard}>
     {/* Glass: BlurView (iOS) behind the translucent fill; Android leans on the fill. */}
-    <BlurView intensity={20} tint="dark" pointerEvents="none" style={StyleSheet.absoluteFill} />
+    <BlurView intensity={20} tint={getThemeBlurTint()} pointerEvents="none" style={StyleSheet.absoluteFill} />
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.benefitVeil]} />
     <View style={styles.benefitContent}>
       <View style={styles.benefitHeader}>
@@ -70,6 +70,7 @@ BenefitCard.displayName = 'BenefitCard';
  * Presented as a modal sheet (rounded top, X + swipe-down to dismiss).
  */
 export function PrePaywallScreen() {
+  useThemeSubscription();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { presentPaywall } = useProFeature();
@@ -149,7 +150,7 @@ export function PrePaywallScreen() {
 
 export default PrePaywallScreen;
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   root: {
     flex: 1,
     backgroundColor: semanticColors.canvas,
@@ -249,7 +250,7 @@ const styles = StyleSheet.create({
     backgroundColor: semanticColors.surface1,
     paddingHorizontal: 24,
     paddingTop: 20,
-    shadowColor: '#000',
+    shadowColor: semanticColors.shadow,
     shadowOffset: { width: 0, height: -5 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
@@ -271,4 +272,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: semanticColors.textOnAccent,
   },
-});
+}));

@@ -10,7 +10,7 @@ import {
   UIManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, fonts } from '../../theme';
+import { colors, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
 if (
@@ -32,6 +32,7 @@ interface LowPowerBannerProps {
  * explicação + atalho para as configurações) e dispensável.
  */
 export function LowPowerBanner({ active }: LowPowerBannerProps) {
+  useThemeSubscription();
   const [expanded, setExpanded] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
@@ -94,7 +95,7 @@ export function LowPowerBanner({ active }: LowPowerBannerProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   container: {
     marginHorizontal: 12,
     marginTop: 8,
@@ -154,4 +155,4 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: fonts.semibold,
   },
-});
+}));

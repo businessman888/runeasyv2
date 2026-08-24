@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { View, Text, StyleSheet, ImageBackground, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, borderRadius, fonts } from '../../theme';
+import { colors, typography, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import type { Race } from '../../types/races.types';
 import { formatRaceDateShort, formatDistances, raceLevelLabel } from '../../utils/raceFormat';
@@ -13,6 +13,7 @@ interface RaceCardProps {
 }
 
 function RaceCardComponent({ race, onPress }: RaceCardProps) {
+    useThemeSubscription();
     const imageUri = race.image_url || race.image_thumbnail_url || undefined;
     const location = [race.city, race.country].filter(Boolean).join(', ');
 
@@ -58,7 +59,7 @@ function RaceCardComponent({ race, onPress }: RaceCardProps) {
 
 export const RaceCard = memo(RaceCardComponent);
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     card: {
         borderRadius: borderRadius.xl,
         overflow: 'hidden',
@@ -99,6 +100,6 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.md,
         color: semanticColors.textSecondary,
     },
-});
+}));
 
 export default RaceCard;

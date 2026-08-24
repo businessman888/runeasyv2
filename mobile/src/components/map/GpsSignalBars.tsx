@@ -1,6 +1,6 @@
 import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
-import { mapViz, fonts } from '../../theme';
+import { mapViz, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
 export type GpsQuality = 'excellent' | 'good' | 'weak' | 'poor' | 'acquiring';
@@ -25,13 +25,7 @@ const FILLED_BARS: Record<GpsQuality, number> = {
   acquiring: 0,
 };
 
-const QUALITY_COLOR: Record<GpsQuality, string> = {
-  excellent: mapViz.gps.excellent,
-  good: mapViz.gps.good,
-  weak: mapViz.gps.weak,
-  poor: mapViz.gps.poor,
-  acquiring: mapViz.gps.inactive,
-};
+
 
 const QUALITY_LABEL: Record<GpsQuality, string> = {
   excellent: 'excelente',
@@ -52,9 +46,16 @@ interface GpsSignalBarsProps {
  * inspirado no Runna. Coloração via tokens `mapViz.gps`. Não-interativo.
  */
 export const GpsSignalBars = memo(({ accuracy, style }: GpsSignalBarsProps) => {
+  useThemeSubscription();
   const quality = useMemo(() => getGpsQuality(accuracy), [accuracy]);
   const filled = FILLED_BARS[quality];
-  const color = QUALITY_COLOR[quality];
+  const color = ({
+  excellent: mapViz.gps.excellent,
+  good: mapViz.gps.good,
+  weak: mapViz.gps.weak,
+  poor: mapViz.gps.poor,
+  acquiring: mapViz.gps.inactive,
+})[quality];
 
   return (
     <View
@@ -82,7 +83,7 @@ export const GpsSignalBars = memo(({ accuracy, style }: GpsSignalBarsProps) => {
 
 GpsSignalBars.displayName = 'GpsSignalBars';
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   container: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -107,4 +108,4 @@ const styles = StyleSheet.create({
     width: 3,
     borderRadius: 1.5,
   },
-});
+}));

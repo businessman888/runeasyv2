@@ -1,11 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { CustomKeypad } from '../../components/CustomKeypad';
-import { borderRadius, colors, fonts, spacing } from '../../theme';
+import { borderRadius, colors, fonts, spacing, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
-// Design System
-const DS = {
+const getLocalThemePalette1 = () => ({
     bg: semanticColors.canvas,
     card: semanticColors.surface2,
     cyan: semanticColors.accent,
@@ -14,7 +13,10 @@ const DS = {
     glassBorder: semanticColors.borderSubtle,
     glassBg: semanticColors.surface2,
     activeBorder: semanticColors.accent,
-};
+});
+
+// Design System
+
 
 interface DistanceTimeValue {
     hours: number;
@@ -46,6 +48,7 @@ export function DistanceTimeScreen({
     mode = 'recent',
     coaching,
 }: DistanceTimeScreenProps) {
+    useThemeSubscription();
     // ===== ISOLATED LOCAL STATE =====
     // Initialized from props ONCE on mount. No useEffect, no sync loop.
     const [hours, setHours] = useState(() => initFromProp(value, 'hours'));
@@ -255,7 +258,7 @@ export function DistanceTimeScreen({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
     },
@@ -274,7 +277,7 @@ const styles = StyleSheet.create({
     title: {
         fontFamily: fonts.bold,
         fontSize: 28,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         lineHeight: 36,
     },
     titleTarget: {
@@ -283,14 +286,14 @@ const styles = StyleSheet.create({
     },
     titleHighlight: {
         fontFamily: fonts.bold,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     subtitle: {
         marginTop: spacing.sm,
         fontFamily: fonts.regular,
         fontSize: 15,
         lineHeight: 22,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
     },
     inputsContainer: {
         flexDirection: 'row',
@@ -311,12 +314,12 @@ const styles = StyleSheet.create({
         width: 100,
         height: 120,
         borderRadius: 20,
-        backgroundColor: DS.card,
+        backgroundColor: getLocalThemePalette1().card,
         borderWidth: 1,
-        borderColor: DS.glassBorder,
+        borderColor: getLocalThemePalette1().glassBorder,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#000',
+        shadowColor: semanticColors.shadow,
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.3,
         shadowRadius: 20,
@@ -334,7 +337,7 @@ const styles = StyleSheet.create({
         elevation: 0,
     },
     inputBlockActive: {
-        borderColor: DS.activeBorder,
+        borderColor: getLocalThemePalette1().activeBorder,
         borderWidth: 1,
         backgroundColor: semanticColors.surface2,
     },
@@ -344,7 +347,7 @@ const styles = StyleSheet.create({
     inputValue: {
         fontFamily: fonts.bold,
         fontSize: 32,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         marginBottom: 4,
         fontVariant: ['tabular-nums'],
     },
@@ -354,12 +357,12 @@ const styles = StyleSheet.create({
         marginBottom: 0,
     },
     inputValuePlaceholder: {
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
     },
     inputLabel: {
         fontFamily: fonts.medium,
         fontSize: 16,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
     },
     inputLabelTarget: {
         fontSize: 13,
@@ -367,7 +370,7 @@ const styles = StyleSheet.create({
     },
     inputLabelActive: {
         fontFamily: fonts.semibold,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     coachingTarget: {
         marginTop: spacing.base,
@@ -376,6 +379,6 @@ const styles = StyleSheet.create({
     flexSpacer: {
         flex: 1,
     },
-});
+}));
 
 export default DistanceTimeScreen;

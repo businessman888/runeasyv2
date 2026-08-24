@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { semanticColors } from '../theme/semanticColors';
-import { colors, typography, borderRadius } from '../theme';
+import { colors, typography, borderRadius, createThemeStyles, useThemeSubscription } from '../theme';
 
 interface WheelPickerModalProps {
     visible: boolean;
@@ -33,6 +33,7 @@ export const WheelPickerModal: React.FC<WheelPickerModalProps> = ({
     onConfirm,
     initialValue,
 }) => {
+    useThemeSubscription();
     const currentYear = new Date().getFullYear();
     const years = Array.from({ length: 80 }, (_, i) => currentYear - 10 - i);
 
@@ -152,10 +153,10 @@ export const WheelPickerModal: React.FC<WheelPickerModalProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: semanticColors.scrim,
         justifyContent: 'flex-end',
     },
     container: {
@@ -166,7 +167,7 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         ...Platform.select({
             ios: {
-                shadowColor: '#000',
+                shadowColor: semanticColors.shadow,
                 shadowOffset: { width: 0, height: -1 },
                 shadowOpacity: 0.25,
                 shadowRadius: 4,
@@ -182,7 +183,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(235,235,245,0.1)',
+        borderBottomColor: semanticColors.borderSubtle,
     },
     headerButton: {
         paddingHorizontal: 10,
@@ -191,7 +192,7 @@ const styles = StyleSheet.create({
     cancelText: {
         fontSize: 15,
         fontWeight: '500',
-        color: 'rgba(235,235,245,0.6)',
+        color: semanticColors.textSecondary,
     },
     confirmText: {
         fontSize: 15,
@@ -230,6 +231,6 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         color: colors.textLight,
     },
-});
+}));
 
 export default WheelPickerModal;

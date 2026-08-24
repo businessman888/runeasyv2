@@ -1,7 +1,7 @@
 import React, { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { colors, fonts } from "../../../theme";
+import { colors, fonts, createThemeStyles, useThemeSubscription } from "../../../theme";
 import { semanticColors } from "../../../theme/semanticColors";
 
 interface NoRoutePreviewProps {
@@ -11,6 +11,7 @@ interface NoRoutePreviewProps {
 export const NoRoutePreview = memo(function NoRoutePreview({
   isTreadmill,
 }: NoRoutePreviewProps) {
+  useThemeSubscription();
   return (
     <View style={styles.container}>
       <MaterialCommunityIcons
@@ -32,7 +33,7 @@ export const NoRoutePreview = memo(function NoRoutePreview({
   );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   container: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
@@ -57,4 +58,4 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
     fontSize: 11,
   },
-});
+}));

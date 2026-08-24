@@ -5,7 +5,7 @@ import Animated, {
     useAnimatedStyle,
     type SharedValue,
 } from 'react-native-reanimated';
-import { colors, spacing, borderRadius, typography, fonts } from '../../../theme';
+import { colors, spacing, borderRadius, typography, fonts, createThemeStyles, useThemeSubscription } from '../../../theme';
 import { formatKm } from '../../weekly-insight/format';
 import type { VolumeTrendPoint } from '../../../types/mesoInsight.types';
 
@@ -42,6 +42,7 @@ export const MesoVolumeArc = memo(function MesoVolumeArc({
     trend,
     progress,
 }: MesoVolumeArcProps) {
+    useThemeSubscription();
     if (trend.length === 0) return null;
 
     const max = Math.max(
@@ -104,6 +105,7 @@ const Bar = memo(function Bar({
     progress: SharedValue<number>;
     order: number;
 }) {
+    useThemeSubscription();
     const start = order * 0.12;
 
     const style = useAnimatedStyle(() => ({
@@ -118,7 +120,7 @@ const Bar = memo(function Bar({
     return <Animated.View style={[styles.done, style]} />;
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     card: {
         backgroundColor: colors.card,
         borderRadius: borderRadius.xl,
@@ -176,4 +178,4 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.xs,
         color: colors.textMuted,
     },
-});
+}));

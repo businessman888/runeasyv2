@@ -20,15 +20,18 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, FadeIn } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { semanticColors } from '../../theme/semanticColors';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
-const T = {
+const getLocalThemePalette1 = () => ({
   dark: semanticColors.textOnAccent,
   surface: semanticColors.surface2,
   cyan: semanticColors.accent,
   textPrimary: semanticColors.textPrimary,
   textMuted: semanticColors.textSecondary,
   neutralBorder: semanticColors.borderSubtle,
-};
+});
+
+
 
 const BELL = 46;
 
@@ -40,6 +43,7 @@ interface Props {
 }
 
 export const CoachBell = memo(({ unread, message, onOpen }: Props) => {
+  useThemeSubscription();
   const [open, setOpen] = useState(false);
   const [balloonH, setBalloonH] = useState(44);
 
@@ -88,7 +92,7 @@ export const CoachBell = memo(({ unread, message, onOpen }: Props) => {
         hitSlop={8}
       >
         <Animated.View style={[styles.bell, highlight ? styles.bellOn : styles.bellIdle, pressStyle]}>
-          <MaterialCommunityIcons name="bell" size={20} color={highlight ? T.dark : T.cyan} />
+          <MaterialCommunityIcons name="bell" size={20} color={highlight ? getLocalThemePalette1().dark : getLocalThemePalette1().cyan} />
           {unread && <View style={styles.dot} />}
         </Animated.View>
       </Pressable>
@@ -98,7 +102,7 @@ export const CoachBell = memo(({ unread, message, onOpen }: Props) => {
 
 CoachBell.displayName = 'CoachBell';
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   // Tamanho fixo = só o sino. O balão (absoluto) NÃO altera esta largura.
   wrap: {
     width: BELL,
@@ -113,12 +117,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   bellIdle: {
-    backgroundColor: T.surface,
-    borderColor: T.neutralBorder, // sem borda ciano por padrão
+    backgroundColor: getLocalThemePalette1().surface,
+    borderColor: getLocalThemePalette1().neutralBorder, // sem borda ciano por padrão
   },
   bellOn: {
-    backgroundColor: T.cyan,
-    borderColor: T.cyan,
+    backgroundColor: getLocalThemePalette1().cyan,
+    borderColor: getLocalThemePalette1().cyan,
     shadowColor: semanticColors.canvas,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.18,
@@ -132,9 +136,9 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: T.dark,
+    backgroundColor: getLocalThemePalette1().dark,
     borderWidth: 1.5,
-    borderColor: T.cyan,
+    borderColor: getLocalThemePalette1().cyan,
   },
 
   // ── Balão de chat (absoluto, à esquerda do sino) ──
@@ -143,7 +147,7 @@ const styles = StyleSheet.create({
     right: BELL + 12, // 12px à esquerda do sino
     maxWidth: 210,
     minWidth: 96,
-    backgroundColor: T.surface,
+    backgroundColor: getLocalThemePalette1().surface,
     borderRadius: 16,
     borderTopRightRadius: 6, // canto "de chat" do lado da cauda
     borderWidth: 1,
@@ -158,14 +162,14 @@ const styles = StyleSheet.create({
     zIndex: 30,
   },
   balloonSender: {
-    color: T.cyan,
+    color: getLocalThemePalette1().cyan,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.8,
     marginBottom: 3,
   },
   balloonText: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '500',
@@ -176,10 +180,10 @@ const styles = StyleSheet.create({
     top: 16,
     width: 12,
     height: 12,
-    backgroundColor: T.surface,
+    backgroundColor: getLocalThemePalette1().surface,
     borderRightWidth: 1,
     borderTopWidth: 1,
     borderColor: semanticColors.borderSubtle,
     transform: [{ rotate: '45deg' }],
   },
-});
+}));

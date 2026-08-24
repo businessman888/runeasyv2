@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn, useAnimatedStyle } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, typography, spacing, borderRadius, fonts } from '../../../theme';
+import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../../theme';
 import { useEnterAnimation } from '../hooks/useEnterAnimation';
 
 /**
@@ -48,6 +48,7 @@ export const CoachCallout = memo(function CoachCallout({
     index = 0,
     enabled = true,
 }: CoachCalloutProps) {
+    useThemeSubscription();
     const [expanded, setExpanded] = useState(false);
     const progress = useEnterAnimation(index, enabled);
 
@@ -108,7 +109,7 @@ export const CoachCallout = memo(function CoachCallout({
     );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     card: {
         borderRadius: borderRadius['2xl'],
         borderWidth: 1,
@@ -158,4 +159,4 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.sm,
         color: colors.primary,
     },
-});
+}));

@@ -9,7 +9,8 @@ import Animated, {
     withSequence,
     Easing,
 } from 'react-native-reanimated';
-import { colors, borderRadius } from '../../theme';
+import { colors, borderRadius, useThemeSubscription, createThemeStyles } from '../../theme';
+import { semanticColors } from "../../theme/semanticColors";
 
 interface LevelProgressBarProps {
     /** 0-100 */
@@ -18,6 +19,7 @@ interface LevelProgressBarProps {
 }
 
 export function LevelProgressBar({ percentage, height = 8 }: LevelProgressBarProps) {
+    useThemeSubscription();
     const widthAnim = useSharedValue(0);
     const shimmerX = useSharedValue(-1);
 
@@ -58,7 +60,7 @@ export function LevelProgressBar({ percentage, height = 8 }: LevelProgressBarPro
                 />
                 <Animated.View style={[styles.shimmer, shimmerStyle]}>
                     <LinearGradient
-                        colors={['transparent', 'rgba(255,255,255,0.45)', 'transparent']}
+                        colors={['transparent', semanticColors.textOnMediaMuted, 'transparent']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
                         style={StyleSheet.absoluteFill}
@@ -69,10 +71,10 @@ export function LevelProgressBar({ percentage, height = 8 }: LevelProgressBarPro
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     track: {
         width: '100%',
-        backgroundColor: 'rgba(255,255,255,0.06)',
+        backgroundColor: semanticColors.fillSubtle,
         overflow: 'hidden',
     },
     fillContainer: {
@@ -83,4 +85,4 @@ const styles = StyleSheet.create({
         ...StyleSheet.absoluteFillObject,
         width: '50%',
     },
-});
+}));

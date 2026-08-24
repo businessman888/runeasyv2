@@ -10,11 +10,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, typography } from '../../theme';
+import { colors, spacing, typography, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { useReadinessStore } from '../../stores/readinessStore';
 
 export function ReadinessSuccessScreen({ navigation }: any) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
     const { resetQuiz } = useReadinessStore();
 
@@ -72,7 +73,7 @@ export function ReadinessSuccessScreen({ navigation }: any) {
 
     return (
         <View style={[styles.container, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
-            <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
+            <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
 
             {/* Animated Check Icon */}
             <View style={styles.iconSection}>
@@ -117,7 +118,7 @@ export function ReadinessSuccessScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: semanticColors.canvas,
@@ -188,4 +189,4 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: semanticColors.textOnAccent,
     },
-});
+}));

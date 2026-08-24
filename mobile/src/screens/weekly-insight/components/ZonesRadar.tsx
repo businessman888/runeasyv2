@@ -2,10 +2,11 @@ import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import Svg, { Polygon, Line, Text as SvgText, Circle } from 'react-native-svg';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
-import { colors, typography, spacing, borderRadius, fonts } from '../../../theme';
+import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../../theme';
 import { SectionHeader } from './SectionHeader';
 import { useEnterAnimation } from '../hooks/useEnterAnimation';
 import type { ZoneBucket } from '../../../types/weeklyInsight.types';
+import { semanticColors } from "../../../theme/semanticColors";
 
 /**
  * DISTRIBUIÇÃO DE ZONAS — radar desenhado à mão em SVG.
@@ -106,6 +107,7 @@ export const ZonesRadar = memo(function ZonesRadar({
     index = 5,
     enabled = true,
 }: ZonesRadarProps) {
+    useThemeSubscription();
     const { width: windowWidth } = useWindowDimensions();
     const progress = useEnterAnimation(index, enabled);
 
@@ -198,7 +200,7 @@ export const ZonesRadar = memo(function ZonesRadar({
                                 key={`ring-${i}`}
                                 points={points}
                                 fill="none"
-                                stroke="rgba(255,255,255,0.07)"
+                                stroke={semanticColors.borderSubtle}
                                 strokeWidth={1}
                             />
                         ))}
@@ -211,7 +213,7 @@ export const ZonesRadar = memo(function ZonesRadar({
                                 y1={cy}
                                 x2={p.x}
                                 y2={p.y}
-                                stroke="rgba(255,255,255,0.06)"
+                                stroke={semanticColors.fillSubtle}
                                 strokeWidth={1}
                             />
                         ))}
@@ -220,7 +222,7 @@ export const ZonesRadar = memo(function ZonesRadar({
                         <Polygon
                             points={geometry.prescribed}
                             fill="none"
-                            stroke="rgba(255,255,255,0.30)"
+                            stroke={semanticColors.textTertiary}
                             strokeWidth={1.5}
                             strokeDasharray="5,4"
                         />
@@ -271,7 +273,7 @@ export const ZonesRadar = memo(function ZonesRadar({
 
                 <View style={styles.legend}>
                     <LegendItem color={colors.primary} label="Executado" filled />
-                    <LegendItem color="rgba(255,255,255,0.35)" label="Prescrito" dashed />
+                    <LegendItem color={semanticColors.textTertiary} label="Prescrito" dashed />
                 </View>
 
                 {hasExecuted ? (
@@ -311,6 +313,7 @@ function LegendItem({
     filled?: boolean;
     dashed?: boolean;
 }) {
+    useThemeSubscription();
     return (
         <View style={styles.legendItem}>
             <View
@@ -326,7 +329,7 @@ function LegendItem({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     section: { gap: spacing.md },
     card: {
         backgroundColor: colors.card,
@@ -411,4 +414,4 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         textAlign: 'center',
     },
-});
+}));

@@ -14,19 +14,21 @@ import Animated, {
     withDelay,
     Easing,
 } from 'react-native-reanimated';
-import { fonts } from '../../theme';
+import { fonts, useThemeSubscription, createThemeStyles } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-const DS = {
+const getLocalThemePalette1 = () => ({
     text: semanticColors.textPrimary,
-    textSecondary: 'rgba(235, 235, 245, 0.6)',
+    textSecondary: semanticColors.textSecondary,
     cyan: semanticColors.accent,
     cyanGlow: 'rgba(0, 127, 153, 0.3)',
     card: semanticColors.surface2,
-    glassBorder: 'rgba(235, 235, 245, 0.1)',
-};
+    glassBorder: semanticColors.borderSubtle,
+});
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedCircle = Animated.createAnimatedComponent(SvgCircle);
@@ -57,6 +59,7 @@ function buildPath(points: { x: number; y: number }[]): string {
 }
 
 export function AssessoriaCompareScreen() {
+    useThemeSubscription();
     const [reduceMotion, setReduceMotion] = useState(false);
 
     // 1 = fully offset (hidden), 0 = fully drawn.
@@ -146,7 +149,7 @@ export function AssessoriaCompareScreen() {
                             y1={CHART_H * 0.04}
                             x2={CHART_W}
                             y2={CHART_H * 0.04}
-                            stroke={DS.glassBorder}
+                            stroke={getLocalThemePalette1().glassBorder}
                             strokeWidth={1}
                             strokeDasharray="4,4"
                         />
@@ -155,7 +158,7 @@ export function AssessoriaCompareScreen() {
                             y1={CHART_H * 0.5}
                             x2={CHART_W}
                             y2={CHART_H * 0.5}
-                            stroke={DS.glassBorder}
+                            stroke={getLocalThemePalette1().glassBorder}
                             strokeWidth={1}
                             strokeDasharray="4,4"
                         />
@@ -165,7 +168,7 @@ export function AssessoriaCompareScreen() {
                             y1={CHART_H - 2}
                             x2={CHART_W}
                             y2={CHART_H - 2}
-                            stroke={DS.cyan}
+                            stroke={getLocalThemePalette1().cyan}
                             strokeWidth={1}
                             strokeOpacity={0.4}
                         />
@@ -173,7 +176,7 @@ export function AssessoriaCompareScreen() {
                         {/* gray "sem estrutura" line (stagnating) — drawn first */}
                         <AnimatedPath
                             d={semEstruturaPath}
-                            stroke={DS.textSecondary}
+                            stroke={getLocalThemePalette1().textSecondary}
                             strokeWidth={1.3}
                             fill="none"
                             strokeLinecap="round"
@@ -184,7 +187,7 @@ export function AssessoriaCompareScreen() {
                             cx={lastGray.x}
                             cy={lastGray.y}
                             r={4}
-                            fill={DS.textSecondary}
+                            fill={getLocalThemePalette1().textSecondary}
                             animatedProps={grayDotProps}
                         />
 
@@ -192,7 +195,7 @@ export function AssessoriaCompareScreen() {
                         <G>
                             <AnimatedPath
                                 d={planoPath}
-                                stroke={DS.cyan}
+                                stroke={getLocalThemePalette1().cyan}
                                 strokeWidth={4}
                                 strokeOpacity={0.25}
                                 fill="none"
@@ -202,7 +205,7 @@ export function AssessoriaCompareScreen() {
                             />
                             <AnimatedPath
                                 d={planoPath}
-                                stroke={DS.cyan}
+                                stroke={getLocalThemePalette1().cyan}
                                 strokeWidth={1.6}
                                 fill="none"
                                 strokeLinecap="round"
@@ -214,7 +217,7 @@ export function AssessoriaCompareScreen() {
                             cx={lastCyan.x}
                             cy={lastCyan.y}
                             r={4}
-                            fill={DS.cyan}
+                            fill={getLocalThemePalette1().cyan}
                             animatedProps={cyanDotProps}
                         />
                     </Svg>
@@ -245,19 +248,19 @@ export function AssessoriaCompareScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     titleContainer: {
         marginBottom: 24,
     },
     title: {
         fontFamily: fonts.bold,
         fontSize: 24,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         lineHeight: 36,
     },
     card: {
         width: CARD_WIDTH,
-        backgroundColor: DS.card,
+        backgroundColor: getLocalThemePalette1().card,
         borderRadius: 20,
         paddingTop: 18,
         paddingBottom: 18,
@@ -281,7 +284,7 @@ const styles = StyleSheet.create({
     yAxisLabel: {
         fontFamily: fonts.medium,
         fontSize: 9,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         transform: [{ rotate: '-90deg' }],
         width: CHART_H,
         textAlign: 'center',
@@ -295,13 +298,13 @@ const styles = StyleSheet.create({
     lineLabelGray: {
         bottom: 18,
         right: 4,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         textAlign: 'right',
     },
     lineLabelCyan: {
         top: 8,
         right: 4,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
         textAlign: 'right',
     },
     xAxisWrap: {
@@ -311,7 +314,7 @@ const styles = StyleSheet.create({
     xAxisLabel: {
         fontFamily: fonts.semibold,
         fontSize: 11,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
     },
     footer: {
         marginTop: 16,
@@ -320,10 +323,10 @@ const styles = StyleSheet.create({
     footerText: {
         fontFamily: fonts.semibold,
         fontSize: 11,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         textAlign: 'center',
         lineHeight: 15,
     },
-});
+}));
 
 export default AssessoriaCompareScreen;

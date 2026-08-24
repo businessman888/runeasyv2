@@ -47,7 +47,21 @@ import {
 } from '../../utils/treadmillChart';
 import type { RunMode } from './RunningScreen';
 import { semanticColors } from '../../theme/semanticColors';
-import { useMapThemePalette } from '../../theme';
+import { useMapThemePalette, createThemeStyles, useThemeSubscription } from '../../theme';
+
+const getLocalThemePalette1 = () => ({
+  bgPrimary: semanticColors.canvas,
+  cardSurface: semanticColors.surface2,
+  cardDarker: semanticColors.surface1,
+  cyan: semanticColors.accent,
+  textPrimary: semanticColors.textPrimary,
+  textSecondary: semanticColors.textSecondary,
+  textMuted: semanticColors.textTertiary,
+  divider: semanticColors.borderSubtle,
+  success: '#32CD32',
+  warning: '#FFC400',
+  danger: '#FF453A',
+});
 
 export interface TreadmillSummaryData {
   is_smart: boolean;
@@ -96,19 +110,7 @@ type RunSummaryRouteParams = {
 };
 
 // ─── Design Tokens (Figma) ────────────────────────────────────────────────────
-const T = {
-  bgPrimary: semanticColors.canvas,
-  cardSurface: semanticColors.surface2,
-  cardDarker: semanticColors.surface1,
-  cyan: semanticColors.accent,
-  textPrimary: semanticColors.textPrimary,
-  textSecondary: semanticColors.textSecondary,
-  textMuted: semanticColors.textTertiary,
-  divider: semanticColors.borderSubtle,
-  success: '#32CD32',
-  warning: '#FFC400',
-  danger: '#FF453A',
-};
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDistanceKm(meters: number) {
@@ -146,9 +148,9 @@ function getDeltaStatus(actual: number, target: number, tolerance = 0.05): Statu
   return 'bad';
 }
 function statusColor(s: Status) {
-  if (s === 'good') return T.success;
-  if (s === 'ok') return T.warning;
-  return T.danger;
+  if (s === 'good') return getLocalThemePalette1().success;
+  if (s === 'ok') return getLocalThemePalette1().warning;
+  return getLocalThemePalette1().danger;
 }
 function statusLabel(actual: number, target: number, fmt: (n: number) => string) {
   const delta = actual - target;
@@ -159,6 +161,7 @@ function statusLabel(actual: number, target: number, fmt: (n: number) => string)
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export function RunSummaryScreen() {
+  useThemeSubscription();
   const mapPalette = useMapThemePalette();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RunSummaryRouteParams, 'RunSummary'>>();
@@ -679,13 +682,13 @@ export function RunSummaryScreen() {
             accessibilityRole="button"
             accessibilityLabel="Voltar"
           >
-            <Ionicons name="chevron-back" size={22} color={T.textPrimary} />
+            <Ionicons name="chevron-back" size={22} color={getLocalThemePalette1().textPrimary} />
           </Pressable>
           <Text style={styles.screenTitle}>Relatório</Text>
           <View style={styles.iconBtn} />
         </SafeAreaView>
         <View style={styles.coldStartCenter}>
-          <ActivityIndicator size="large" color={T.cyan} />
+          <ActivityIndicator size="large" color={getLocalThemePalette1().cyan} />
           <Text style={styles.coldStartText}>Carregando treino...</Text>
         </View>
       </View>
@@ -698,7 +701,7 @@ export function RunSummaryScreen() {
       {isTreadmill ? (
         <View style={[sideLayout ? styles.mediaHalf : StyleSheet.absoluteFillObject, styles.treadmillBackdrop]}>
           <View style={styles.treadmillBackdropContent}>
-            <Ionicons name="walk" size={56} color={T.cyan} />
+            <Ionicons name="walk" size={56} color={getLocalThemePalette1().cyan} />
             <Text style={styles.treadmillBackdropTitle}>Esteira</Text>
             <Text style={styles.treadmillBackdropSubtitle}>
               {treadmillData?.is_smart && treadmillData?.device_name
@@ -791,7 +794,7 @@ export function RunSummaryScreen() {
             accessibilityLabel={is3D ? 'Desativar terreno 3D' : 'Ativar terreno 3D'}
             accessibilityState={{ selected: is3D }}
           >
-            <Text style={[styles.chip3dText, is3D && { color: T.cyan }]}>3D</Text>
+            <Text style={[styles.chip3dText, is3D && { color: getLocalThemePalette1().cyan }]}>3D</Text>
           </Pressable>
         )}
 
@@ -801,12 +804,12 @@ export function RunSummaryScreen() {
             <View style={styles.mapOverlayPill}>
               {enriching ? (
                 <>
-                  <ActivityIndicator size="small" color={T.cyan} />
+                  <ActivityIndicator size="small" color={getLocalThemePalette1().cyan} />
                   <Text style={styles.mapOverlayText}>Carregando rota...</Text>
                 </>
               ) : (
                 <>
-                  <Ionicons name="map-outline" size={16} color={T.textSecondary} />
+                  <Ionicons name="map-outline" size={16} color={getLocalThemePalette1().textSecondary} />
                   <Text style={styles.mapOverlayText}>Rota não disponível</Text>
                 </>
               )}
@@ -825,7 +828,7 @@ export function RunSummaryScreen() {
           accessibilityRole="button"
           accessibilityLabel="Voltar"
         >
-          <Ionicons name="chevron-back" size={22} color={T.textPrimary} />
+          <Ionicons name="chevron-back" size={22} color={getLocalThemePalette1().textPrimary} />
         </Pressable>
         <Text style={styles.screenTitle}>Relatório</Text>
         <Pressable
@@ -836,7 +839,7 @@ export function RunSummaryScreen() {
           accessibilityRole="button"
           accessibilityLabel="Compartilhar"
         >
-          <Ionicons name="share-outline" size={20} color={workoutId ? T.textPrimary : T.textMuted} />
+          <Ionicons name="share-outline" size={20} color={workoutId ? getLocalThemePalette1().textPrimary : getLocalThemePalette1().textMuted} />
         </Pressable>
       </SafeAreaView>
 
@@ -872,7 +875,7 @@ export function RunSummaryScreen() {
           {/* Pill offline (discreta) */}
           {savedLocally && (
             <View style={styles.offlinePill}>
-              <Ionicons name="cloud-offline-outline" size={13} color={T.warning} />
+              <Ionicons name="cloud-offline-outline" size={13} color={getLocalThemePalette1().warning} />
               <Text style={styles.offlinePillText}>
                 Salvo localmente — será enviado quando houver conexão
               </Text>
@@ -935,7 +938,7 @@ export function RunSummaryScreen() {
                 <Text style={styles.cardTitle}>Saúde</Text>
                 {activitySource === 'apple_watch' && (
                   <View style={styles.sourceBadge}>
-                    <Ionicons name="watch-outline" size={11} color={T.cyan} />
+                    <Ionicons name="watch-outline" size={11} color={getLocalThemePalette1().cyan} />
                     <Text style={styles.sourceBadgeText}>Apple Watch</Text>
                   </View>
                 )}
@@ -1007,17 +1010,17 @@ export function RunSummaryScreen() {
                     width={chartAvailableWidth}
                     spacing={treadmillChart.spacing}
                     thickness={2}
-                    color={T.cyan}
+                    color={getLocalThemePalette1().cyan}
                     areaChart
                     curved
-                    startFillColor={T.cyan}
-                    endFillColor={T.cyan}
+                    startFillColor={getLocalThemePalette1().cyan}
+                    endFillColor={getLocalThemePalette1().cyan}
                     startOpacity={0.45}
                     endOpacity={0.05}
                     initialSpacing={CHART_INITIAL_SPACING}
                     endSpacing={CHART_END_SPACING}
                     yAxisColor="transparent"
-                    xAxisColor={T.divider}
+                    xAxisColor={getLocalThemePalette1().divider}
                     rulesType="solid"
                     rulesColor={semanticColors.borderSubtle}
                     yAxisTextStyle={styles.chartAxisText}
@@ -1111,18 +1114,18 @@ export function RunSummaryScreen() {
                     height={170}
                     width={chartCfg.width}
                     thickness={2}
-                    color={T.cyan}
+                    color={getLocalThemePalette1().cyan}
                     areaChart
                     curved
-                    startFillColor={T.cyan}
-                    endFillColor={T.cyan}
+                    startFillColor={getLocalThemePalette1().cyan}
+                    endFillColor={getLocalThemePalette1().cyan}
                     startOpacity={0.45}
                     endOpacity={0.05}
                     initialSpacing={CHART_INITIAL_SPACING}
                     endSpacing={CHART_END_SPACING}
                     spacing={chartCfg.spacing}
                     yAxisColor="transparent"
-                    xAxisColor={T.divider}
+                    xAxisColor={getLocalThemePalette1().divider}
                     rulesType="solid"
                     rulesColor={semanticColors.borderSubtle}
                     yAxisTextStyle={styles.chartAxisText}
@@ -1201,18 +1204,18 @@ export function RunSummaryScreen() {
                     height={140}
                     width={elevCfg.width}
                     thickness={2}
-                    color={T.cyan}
+                    color={getLocalThemePalette1().cyan}
                     areaChart
                     curved
-                    startFillColor={T.cyan}
-                    endFillColor={T.cyan}
+                    startFillColor={getLocalThemePalette1().cyan}
+                    endFillColor={getLocalThemePalette1().cyan}
                     startOpacity={0.45}
                     endOpacity={0.05}
                     initialSpacing={CHART_INITIAL_SPACING}
                     endSpacing={CHART_END_SPACING}
                     spacing={elevCfg.spacing}
                     yAxisColor="transparent"
-                    xAxisColor={T.divider}
+                    xAxisColor={getLocalThemePalette1().divider}
                     rulesType="solid"
                     rulesColor={semanticColors.borderSubtle}
                     yAxisTextStyle={styles.chartAxisText}
@@ -1258,6 +1261,7 @@ export function RunSummaryScreen() {
 // ─── Subcomponents ────────────────────────────────────────────────────────────
 
 function Avatar({ uri, initials }: { uri: string | null; initials: string }) {
+  useThemeSubscription();
   if (uri) {
     return <Image source={{ uri }} style={styles.avatar} />;
   }
@@ -1269,6 +1273,7 @@ function Avatar({ uri, initials }: { uri: string | null; initials: string }) {
 }
 
 function MetricCell({ label, value }: { label: string; value: string }) {
+  useThemeSubscription();
   return (
     <View style={styles.metricCell}>
       <Text style={styles.metricLabel} numberOfLines={1}>{label}</Text>
@@ -1280,6 +1285,7 @@ function MetricCell({ label, value }: { label: string; value: string }) {
 }
 
 function SplitRow({ split }: { split: SplitData }) {
+  useThemeSubscription();
   const isFractional = split.distanceMeters < 1000;
   return (
     <View style={styles.splitRow}>
@@ -1319,13 +1325,14 @@ function CardEmptyState({
   subtitle?: string;
   loading?: boolean;
 }) {
+  useThemeSubscription();
   return (
     <View style={styles.emptyState}>
       {loading ? (
-        <ActivityIndicator size="small" color={T.cyan} />
+        <ActivityIndicator size="small" color={getLocalThemePalette1().cyan} />
       ) : (
         <View style={styles.emptyStateIconWrap}>
-          <Ionicons name={icon} size={22} color={T.textSecondary} />
+          <Ionicons name={icon} size={22} color={getLocalThemePalette1().textSecondary} />
         </View>
       )}
       <Text style={styles.emptyStateTitle}>{title}</Text>
@@ -1335,6 +1342,7 @@ function CardEmptyState({
 }
 
 function PaceStatRow({ label, value, isLast }: { label: string; value: string; isLast?: boolean }) {
+  useThemeSubscription();
   return (
     <View style={[styles.paceStatRow, !isLast && styles.paceStatRowBorder]}>
       <Text style={styles.paceStatLabel}>{label}</Text>
@@ -1356,6 +1364,7 @@ function CompareRow({
   status: Status;
   delta: string;
 }) {
+  useThemeSubscription();
   return (
     <View style={styles.compareRow}>
       <View style={{ flex: 1 }}>
@@ -1522,10 +1531,10 @@ function buildElevationChartConfig(
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   container: {
     flex: 1,
-    backgroundColor: T.bgPrimary,
+    backgroundColor: getLocalThemePalette1().bgPrimary,
   },
   // ── Tablet landscape (master-detail; phone nunca usa) ──────────────────────
   // Mídia (mapa/esteira) ocupa ~60% à esquerda.
@@ -1560,11 +1569,11 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   chip3dActive: {
-    borderColor: T.cyan,
+    borderColor: getLocalThemePalette1().cyan,
     backgroundColor: semanticColors.accentSubtle,
   },
   chip3dText: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -1582,13 +1591,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   coldStartText: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 14,
   },
 
   // Treadmill backdrop (no map for treadmill runs)
   treadmillBackdrop: {
-    backgroundColor: T.bgPrimary,
+    backgroundColor: getLocalThemePalette1().bgPrimary,
     alignItems: 'center',
     justifyContent: 'flex-start',
     paddingTop: 90,
@@ -1598,31 +1607,31 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   treadmillBackdropTitle: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontSize: 22,
     fontWeight: '700',
     marginTop: 6,
   },
   treadmillBackdropSubtitle: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 13,
   },
 
   // Treadmill speed chart card (replaces map area in the sheet)
   treadmillChartCard: {
-    backgroundColor: T.cardDarker,
+    backgroundColor: getLocalThemePalette1().cardDarker,
     borderRadius: 16,
     padding: 16,
     marginBottom: 14,
   },
   treadmillChartTitle: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 4,
   },
   treadmillChartSubtitle: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 12,
     marginBottom: 12,
   },
@@ -1632,19 +1641,19 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: T.divider,
+    borderTopColor: getLocalThemePalette1().divider,
   },
   treadmillStatBlock: {
     alignItems: 'center',
     flex: 1,
   },
   treadmillStatValue: {
-    color: T.cyan,
+    color: getLocalThemePalette1().cyan,
     fontSize: 16,
     fontWeight: '700',
   },
   treadmillStatLabel: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 11,
     marginTop: 2,
   },
@@ -1668,7 +1677,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   screenTitle: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontSize: 16,
     fontWeight: '600',
     backgroundColor: semanticColors.surface1,
@@ -1680,7 +1689,7 @@ const styles = StyleSheet.create({
 
   // Bottom sheet
   sheetBackground: {
-    backgroundColor: T.cardSurface,
+    backgroundColor: getLocalThemePalette1().cardSurface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
   },
@@ -1707,17 +1716,17 @@ const styles = StyleSheet.create({
     width: 47,
     height: 47,
     borderRadius: 24,
-    backgroundColor: T.cardDarker,
+    backgroundColor: getLocalThemePalette1().cardDarker,
   },
   avatarFallback: {
     backgroundColor: semanticColors.accentSubtle,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: T.cyan,
+    borderColor: getLocalThemePalette1().cyan,
   },
   avatarInitials: {
-    color: T.cyan,
+    color: getLocalThemePalette1().cyan,
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -1727,13 +1736,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   userName: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontSize: 14,
     fontWeight: '700',
     lineHeight: 20,
   },
   userDate: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 10,
     fontWeight: '500',
     lineHeight: 15,
@@ -1755,7 +1764,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   offlinePillText: {
-    color: T.warning,
+    color: getLocalThemePalette1().warning,
     fontSize: 11,
     fontWeight: '500',
   },
@@ -1767,7 +1776,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   runTitle: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontSize: 20,
     fontWeight: '500',
     lineHeight: 30,
@@ -1787,19 +1796,19 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   metricLabel: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 11,
     fontWeight: '500',
   },
   metricValue: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontSize: 14,
     fontWeight: '600',
   },
 
   // Cards (Splits / Pace / Compare)
   cardDark: {
-    backgroundColor: T.cardDarker,
+    backgroundColor: getLocalThemePalette1().cardDarker,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingTop: 14,
@@ -1807,7 +1816,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   cardTitle: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontSize: 20,
     fontWeight: '700',
     textAlign: 'center',
@@ -1844,7 +1853,7 @@ const styles = StyleSheet.create({
     borderBottomColor: semanticColors.borderSubtle,
   },
   splitsHeaderText: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 13,
     fontWeight: '500',
   },
@@ -1857,23 +1866,23 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   splitKmText: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 13,
     fontWeight: '500',
   },
   splitFraction: {
-    color: T.textMuted,
+    color: getLocalThemePalette1().textMuted,
     fontSize: 11,
     fontWeight: '400',
   },
   splitText: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 13,
     fontWeight: '500',
   },
   splitBar: {
     height: 8,
-    backgroundColor: T.cyan,
+    backgroundColor: getLocalThemePalette1().cyan,
     borderRadius: 4,
   },
 
@@ -1903,7 +1912,7 @@ const styles = StyleSheet.create({
     borderColor: semanticColors.borderSubtle,
   },
   sourceBadgeText: {
-    color: T.cyan,
+    color: getLocalThemePalette1().cyan,
     fontSize: 10,
     fontWeight: '600',
     letterSpacing: 0.3,
@@ -1912,7 +1921,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 0,
     top: 4,
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 11,
     fontWeight: '500',
   },
@@ -1930,16 +1939,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chartEmptyText: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 12,
     textAlign: 'center',
   },
   chartAxisText: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 10,
   },
   chartAxisLabelText: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 10,
     width: 48,
     textAlign: 'center',
@@ -1962,12 +1971,12 @@ const styles = StyleSheet.create({
     borderBottomColor: semanticColors.borderSubtle,
   },
   paceStatLabel: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 15,
     fontWeight: '500',
   },
   paceStatValue: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -1991,7 +2000,7 @@ const styles = StyleSheet.create({
     borderColor: semanticColors.borderSubtle,
   },
   mapOverlayText: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 12,
     fontWeight: '500',
   },
@@ -2013,13 +2022,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   emptyStateTitle: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontSize: 13,
     fontWeight: '600',
     textAlign: 'center',
   },
   emptyStateSubtitle: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 11,
     textAlign: 'center',
     paddingHorizontal: 12,
@@ -2034,21 +2043,21 @@ const styles = StyleSheet.create({
   },
   compareDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: T.divider,
+    backgroundColor: getLocalThemePalette1().divider,
     marginVertical: 6,
   },
   compareLabel: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontSize: 14,
     fontWeight: '600',
   },
   comparePlanned: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 12,
     marginTop: 2,
   },
   compareExecuted: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontSize: 18,
     fontWeight: '700',
   },
@@ -2071,4 +2080,4 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-});
+}));

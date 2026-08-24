@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Carousel, { type ICarouselInstance } from 'react-native-reanimated-carousel';
-import { colors, typography, spacing } from '../../theme';
+import { colors, typography, spacing, createThemeStyles, useThemeSubscription } from '../../theme';
 import { PATENTS, PatentDef } from '../../constants/patents';
 import { getPatentIndex, isPatentUnlocked } from '../../utils/patents';
 import { Patent } from './Patent';
@@ -17,6 +17,7 @@ const SIDE_SIZE = 78;
 const CAROUSEL_HEIGHT = 170;
 
 export function PatentCarousel({ currentLevel }: PatentCarouselProps) {
+    useThemeSubscription();
     const initialIndex = useMemo(() => getPatentIndex(currentLevel), [currentLevel]);
     const [activeIndex, setActiveIndex] = useState(initialIndex);
     const carouselRef = useRef<ICarouselInstance>(null);
@@ -77,7 +78,7 @@ export function PatentCarousel({ currentLevel }: PatentCarouselProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     wrapper: {
         height: CAROUSEL_HEIGHT,
         marginBottom: spacing.lg,
@@ -100,4 +101,4 @@ const styles = StyleSheet.create({
         fontWeight: typography.fontWeights.medium,
         textAlign: 'center',
     },
-});
+}));

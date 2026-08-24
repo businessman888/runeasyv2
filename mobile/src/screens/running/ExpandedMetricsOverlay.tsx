@@ -11,15 +11,12 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { fonts } from '../../theme';
+import { fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { SplitsBars } from '../../components/coach/SplitsBars';
 import type { LiveSplit } from '../../utils/livePace';
 
-const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
-
-// Tokens espelhados do TreadmillRunningView (mesmo design Figma).
-const T = {
+const getLocalThemePalette1 = () => ({
   bg: semanticColors.canvas,
   cardSurface: semanticColors.surface2,
   cardBorder: semanticColors.borderSubtle,
@@ -27,7 +24,12 @@ const T = {
   textPrimary: semanticColors.textPrimary,
   textSecondary: semanticColors.textSecondary,
   textMuted: semanticColors.textTertiary,
-};
+});
+
+const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
+
+// Tokens espelhados do TreadmillRunningView (mesmo design Figma).
+
 
 interface Props {
   onClose: () => void;
@@ -57,6 +59,7 @@ interface Props {
 
 /** Par "label / valor" sem fundo nem borda — idêntico ao FlatMetric da esteira. */
 function FlatMetric({ label, value }: { label: string; value: string }) {
+  useThemeSubscription();
   return (
     <View style={styles.metricCol}>
       <Text style={styles.metricLabel} allowFontScaling={false}>
@@ -100,6 +103,7 @@ export function ExpandedMetricsOverlay({
   workoutTitle,
   splits,
 }: Props) {
+  useThemeSubscription();
   const insets = useSafeAreaInsets();
   const showWorkoutPill = !!(dayLabel || workoutTitle);
 
@@ -150,7 +154,7 @@ export function ExpandedMetricsOverlay({
             accessibilityLabel="Recolher métricas"
             hitSlop={10}
           >
-            <Ionicons name="chevron-down" size={26} color={T.textPrimary} />
+            <Ionicons name="chevron-down" size={26} color={getLocalThemePalette1().textPrimary} />
           </Pressable>
 
           {showWorkoutPill ? (
@@ -218,7 +222,7 @@ export function ExpandedMetricsOverlay({
             accessibilityRole="button"
             accessibilityLabel="Iniciar treino"
           >
-            <Ionicons name="play" size={20} color={T.textPrimary} style={{ marginRight: 8 }} />
+            <Ionicons name="play" size={20} color={getLocalThemePalette1().textPrimary} style={{ marginRight: 8 }} />
             <Text style={styles.actionBtnText} allowFontScaling={false}>
               Iniciar
             </Text>
@@ -232,8 +236,8 @@ export function ExpandedMetricsOverlay({
             accessibilityRole="button"
             accessibilityLabel="Parar treino"
           >
-            <Ionicons name="pause" size={20} color={T.cyan} style={{ marginRight: 8 }} />
-            <Text style={[styles.actionBtnText, { color: T.cyan }]} allowFontScaling={false}>
+            <Ionicons name="pause" size={20} color={getLocalThemePalette1().cyan} style={{ marginRight: 8 }} />
+            <Text style={[styles.actionBtnText, { color: getLocalThemePalette1().cyan }]} allowFontScaling={false}>
               Parar
             </Text>
           </Pressable>
@@ -248,8 +252,8 @@ export function ExpandedMetricsOverlay({
               accessibilityRole="button"
               accessibilityLabel="Continuar treino"
             >
-              <Ionicons name="play" size={18} color={T.cyan} style={{ marginRight: 8 }} />
-              <Text style={[styles.actionBtnText, { color: T.cyan }]} allowFontScaling={false}>
+              <Ionicons name="play" size={18} color={getLocalThemePalette1().cyan} style={{ marginRight: 8 }} />
+              <Text style={[styles.actionBtnText, { color: getLocalThemePalette1().cyan }]} allowFontScaling={false}>
                 Continuar
               </Text>
             </Pressable>
@@ -266,11 +270,11 @@ export function ExpandedMetricsOverlay({
               accessibilityLabel="Finalizar treino"
             >
               {isFinishing ? (
-                <ActivityIndicator size="small" color={T.bg} />
+                <ActivityIndicator size="small" color={getLocalThemePalette1().bg} />
               ) : (
                 <>
-                  <Ionicons name="flag" size={18} color={T.bg} style={{ marginRight: 8 }} />
-                  <Text style={[styles.actionBtnText, { color: T.bg }]} allowFontScaling={false}>
+                  <Ionicons name="flag" size={18} color={getLocalThemePalette1().bg} style={{ marginRight: 8 }} />
+                  <Text style={[styles.actionBtnText, { color: getLocalThemePalette1().bg }]} allowFontScaling={false}>
                     Finalizar
                   </Text>
                 </>
@@ -283,10 +287,10 @@ export function ExpandedMetricsOverlay({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   container: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: T.bg,
+    backgroundColor: getLocalThemePalette1().bg,
     zIndex: 50,
   },
   topSafe: {
@@ -312,7 +316,7 @@ const styles = StyleSheet.create({
   workoutPill: {
     flex: 1,
     minHeight: 50,
-    backgroundColor: T.cardSurface,
+    backgroundColor: getLocalThemePalette1().cardSurface,
     borderRadius: 26,
     borderWidth: 1,
     borderColor: semanticColors.borderSubtle,
@@ -322,20 +326,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   workoutPillDay: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontFamily: fonts.medium,
     fontSize: 11,
     lineHeight: 13,
     marginBottom: 2,
   },
   workoutPillTitle: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.semibold,
     fontSize: 14,
     fontWeight: '600',
   },
   gpsCaption: {
-    color: T.textMuted,
+    color: getLocalThemePalette1().textMuted,
     fontFamily: fonts.medium,
     fontSize: 11,
     letterSpacing: 0.4,
@@ -356,13 +360,13 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
   },
   heroLabel: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontFamily: fonts.medium,
     fontSize: 16,
     marginBottom: 4,
   },
   heroValue: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.bold,
     fontSize: 64,
     fontWeight: '700',
@@ -370,7 +374,7 @@ const styles = StyleSheet.create({
     lineHeight: 72,
   },
   heroValueLive: {
-    color: T.cyan,
+    color: getLocalThemePalette1().cyan,
   },
   metricsGrid: {
     gap: 36,
@@ -383,13 +387,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   metricLabel: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontFamily: fonts.regular,
     fontSize: 15,
     marginBottom: 6,
   },
   metricValue: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.bold,
     fontSize: 22,
     fontWeight: '700',
@@ -400,7 +404,7 @@ const styles = StyleSheet.create({
   bottomDock: {
     paddingHorizontal: 22,
     paddingTop: 26,
-    backgroundColor: T.cardSurface,
+    backgroundColor: getLocalThemePalette1().cardSurface,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     shadowColor: semanticColors.canvas,
@@ -425,19 +429,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   actionBtnCyan: {
-    borderColor: T.cyan,
+    borderColor: getLocalThemePalette1().cyan,
   },
   actionBtnFilled: {
-    backgroundColor: T.cyan,
-    borderColor: T.cyan,
+    backgroundColor: getLocalThemePalette1().cyan,
+    borderColor: getLocalThemePalette1().cyan,
   },
   actionBtnHalf: {
     flex: 1,
   },
   actionBtnText: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.semibold,
     fontSize: 16,
     fontWeight: '600',
   },
-});
+}));

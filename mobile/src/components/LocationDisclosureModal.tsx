@@ -28,6 +28,8 @@ import {
   spacing,
   borderRadius,
   shadows,
+  createThemeStyles,
+  useThemeSubscription,
 } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 
@@ -44,6 +46,7 @@ export function LocationDisclosureModal({
   onAllow,
   onDismiss,
 }: LocationDisclosureModalProps) {
+  useThemeSubscription();
   const insets = useSafeAreaInsets();
 
   // Entrada: scale + fade (mesma identidade dos outros modais do app).
@@ -144,7 +147,7 @@ export function LocationDisclosureModal({
 
 const DIALOG_WIDTH = 340;
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   backdrop: {
     flex: 1,
     backgroundColor: semanticColors.scrim,
@@ -217,6 +220,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
     fontSize: typography.fontSizes.md,
   },
-});
+}));
 
 export default LocationDisclosureModal;

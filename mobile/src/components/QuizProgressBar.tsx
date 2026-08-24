@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { colors, typography, borderRadius } from '../theme';
+import { colors, typography, borderRadius, createThemeStyles, useThemeSubscription } from '../theme';
 
 interface QuizProgressBarProps {
     currentStep: number;
@@ -19,6 +19,7 @@ const FlashIcon = () => (
 );
 
 export function QuizProgressBar({ currentStep, totalSteps = 14 }: QuizProgressBarProps) {
+    useThemeSubscription();
     const progress = (currentStep / totalSteps) * 100;
     const xp = currentStep * 10; // 10 XP por step
 
@@ -54,7 +55,7 @@ export function QuizProgressBar({ currentStep, totalSteps = 14 }: QuizProgressBa
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         paddingHorizontal: 4,
         marginBottom: 24,
@@ -112,4 +113,4 @@ const styles = StyleSheet.create({
         fontWeight: typography.fontWeights.bold,
         color: colors.primary,
     },
-});
+}));

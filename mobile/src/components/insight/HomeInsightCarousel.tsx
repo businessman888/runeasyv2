@@ -8,7 +8,7 @@ import {
     type NativeScrollEvent,
     type NativeSyntheticEvent,
 } from 'react-native';
-import { colors, spacing } from '../../theme';
+import { colors, spacing, createThemeStyles, useThemeSubscription } from '../../theme';
 import { WeeklyInsightCard } from './WeeklyInsightCard';
 import { MesoInsightCard } from './MesoInsightCard';
 import type { WeeklyInsight } from '../../types/weeklyInsight.types';
@@ -35,6 +35,7 @@ export const HomeInsightCarousel = memo(function HomeInsightCarousel({
     onOpenWeekly,
     onOpenMeso,
 }: HomeInsightCarouselProps) {
+    useThemeSubscription();
     const { width: screenWidth } = useWindowDimensions();
     const scrollRef = useRef<ScrollView>(null);
     const [measuredWidth, setMeasuredWidth] = useState(0);
@@ -143,7 +144,7 @@ export const HomeInsightCarousel = memo(function HomeInsightCarousel({
     );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     root: {
         width: '100%',
         gap: spacing.sm,
@@ -173,6 +174,6 @@ const styles = StyleSheet.create({
         width: 18,
         backgroundColor: colors.primary,
     },
-});
+}));
 
 export default HomeInsightCarousel;

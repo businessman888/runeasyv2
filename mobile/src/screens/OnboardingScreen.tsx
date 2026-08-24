@@ -60,6 +60,7 @@ import { TimeCompareScreen } from './quiz/TimeCompareScreen';
 import { FixedNavigationButtons } from '../components/FixedNavigationButtons';
 import { AnimatedXP } from '../components/AnimatedXP';
 import { Ionicons } from '@expo/vector-icons';
+import { useThemeSubscription, createThemeStyles, getThemeStatusBarStyle } from '../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -69,12 +70,12 @@ const CHEVRON_SIZE = 32;
 // ============================================
 // FORCED COLORS (Figma exact values)
 // ============================================
-const FORCED_BG = semanticColors.canvas;
-const FORCED_BG_DEEP = semanticColors.surface1;
-const FORCED_CYAN = semanticColors.accent;
-const FORCED_TEXT = '#EBEBF5';
-const FORCED_TEXT_SECONDARY = semanticColors.textSecondary;
-const FORCED_GLASS_STROKE = semanticColors.borderSubtle;
+
+
+
+
+
+
 
 // XP economy
 const XP_PER_QUESTION = 5;        // ~15 questions × 5 = 75
@@ -103,6 +104,7 @@ interface AnimatedProgressBarProps {
 }
 
 const AnimatedProgressBar: React.FC<AnimatedProgressBarProps> = ({ fraction }) => {
+    useThemeSubscription();
     // Percentage-based fill so the track can flex to fill the row (clean, premium,
     // no fixed width to keep in sync with the layout).
     const progress = useSharedValue(0);
@@ -125,21 +127,21 @@ const AnimatedProgressBar: React.FC<AnimatedProgressBarProps> = ({ fraction }) =
     );
 };
 
-const progressStyles = StyleSheet.create({
+const progressStyles = createThemeStyles(() => ({
     track: {
         flex: 1,
         height: 8,
-        backgroundColor: FORCED_GLASS_STROKE,
+        backgroundColor: semanticColors.borderSubtle,
         borderRadius: 999,
         overflow: 'hidden',
     },
     fill: {
         height: 8,
-        backgroundColor: FORCED_CYAN,
+        backgroundColor: semanticColors.accent,
         borderRadius: 999,
         minWidth: 8,
     },
-});
+}));
 
 // ============================================
 // QUIZ STEPS
@@ -205,6 +207,7 @@ const ALL_QUIZ_STEPS: QuizStep[] = [
 ];
 
 export function OnboardingScreen({ navigation, route }: any) {
+    useThemeSubscription();
     const userId = route?.params?.userId;
     const { data, updateData, xpEarned, addXP, checkViability } = useOnboardingStore();
     const [currentStep, setCurrentStep] = useState(0);
@@ -589,14 +592,14 @@ export function OnboardingScreen({ navigation, route }: any) {
     return (
         <View style={styles.container}>
             <StatusBar
-                barStyle="light-content"
+                barStyle={getThemeStatusBarStyle()}
                 translucent
                 backgroundColor="transparent"
             />
 
             {/* Vertical premium gradient — base */}
             <LinearGradient
-                colors={[FORCED_BG, FORCED_BG_DEEP, FORCED_BG]}
+                colors={[semanticColors.canvas, semanticColors.surface1, semanticColors.canvas]}
                 locations={[0, 0.5, 1]}
                 start={{ x: 0.5, y: 0 }}
                 end={{ x: 0.5, y: 1 }}
@@ -626,7 +629,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                         <Ionicons
                             name="arrow-back"
                             size={24}
-                            color={showBackButton ? FORCED_TEXT : 'transparent'}
+                            color={showBackButton ? semanticColors.textPrimary : 'transparent'}
                         />
                     </TouchableOpacity>
                     <AnimatedProgressBar fraction={progressFraction} />
@@ -725,7 +728,7 @@ export function OnboardingScreen({ navigation, route }: any) {
     );
 }
 
-const headerStyles = StyleSheet.create({
+const headerStyles = createThemeStyles(() => ({
     // Single clean row: [← back] [progress bar (flex)] [XP pill]
     row: {
         flexDirection: 'row',
@@ -741,12 +744,12 @@ const headerStyles = StyleSheet.create({
         justifyContent: 'center',
         marginLeft: -6, // optically align the arrow glyph to the edge
     },
-});
+}));
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
-        backgroundColor: FORCED_BG,
+        backgroundColor: semanticColors.canvas,
     },
     topGlow: {
         position: 'absolute',
@@ -772,10 +775,10 @@ const styles = StyleSheet.create({
         bottom: 0,
         left: 0,
         right: 0,
-        backgroundColor: FORCED_BG,
+        backgroundColor: semanticColors.canvas,
         paddingHorizontal: 12,
         paddingTop: 8,
         borderTopWidth: StyleSheet.hairlineWidth,
-        borderTopColor: FORCED_GLASS_STROKE,
+        borderTopColor: semanticColors.borderSubtle,
     },
-});
+}));

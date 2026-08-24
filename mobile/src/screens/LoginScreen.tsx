@@ -13,7 +13,7 @@ import {
     ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, typography, spacing, fonts } from '../theme';
+import { colors, typography, spacing, fonts, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useAuthStore } from '../stores';
 import { supabase } from '../services/supabase';
@@ -82,6 +82,7 @@ const EyeIcon = ({ visible }: { visible: boolean }) => (
 );
 
 export function LoginScreen({ navigation }: { navigation: { navigate: (screen: string) => void } }) {
+    useThemeSubscription();
     const [isLoading, setIsLoading] = React.useState(false);
     const [isAppleLoading, setIsAppleLoading] = React.useState(false);
     const [isEmailLoading, setIsEmailLoading] = React.useState(false);
@@ -356,7 +357,7 @@ export function LoginScreen({ navigation }: { navigation: { navigate: (screen: s
             style={styles.container}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+            <StatusBar barStyle={getThemeStatusBarStyle()} translucent backgroundColor="transparent" />
 
             <ScrollView
                 contentContainerStyle={[
@@ -525,7 +526,7 @@ export function LoginScreen({ navigation }: { navigation: { navigate: (screen: s
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: semanticColors.canvas,
@@ -720,4 +721,4 @@ const styles = StyleSheet.create({
         color: colors.primary,
         fontFamily: fonts.semibold,
     },
-});
+}));

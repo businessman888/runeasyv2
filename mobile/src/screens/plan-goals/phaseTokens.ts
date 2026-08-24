@@ -17,7 +17,8 @@ export interface PhaseStyle {
     glow: string;            // shadow / glow tint for the current week
 }
 
-const PHASE_STYLES: Record<PhaseKey, PhaseStyle> = {
+function createPhaseStyles(): Record<PhaseKey, PhaseStyle> {
+  return {
     base: {
         label: 'Base',
         accent: semanticColors.accent,
@@ -42,12 +43,14 @@ const PHASE_STYLES: Record<PhaseKey, PhaseStyle> = {
         pillBg: 'rgba(50, 224, 138, 0.16)',
         glow: semanticColors.canvas,
     },
-};
-
-const FALLBACK: PhaseStyle = PHASE_STYLES.base;
+  };
+}
 
 export function getPhaseStyle(phase: string | null | undefined): PhaseStyle {
-    if (!phase) return FALLBACK;
+    const phaseStyles = createPhaseStyles();
+    const fallback = phaseStyles.base;
+
+    if (!phase) return fallback;
     const key = phase.toLowerCase() as PhaseKey;
-    return PHASE_STYLES[key] ?? FALLBACK;
+    return phaseStyles[key] ?? fallback;
 }

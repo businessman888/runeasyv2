@@ -10,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, typography, spacing, borderRadius, fonts } from '../../theme';
+import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { getReliefPreview, applyRelief } from '../../services/planAdaptation';
 import { useTrainingStore } from '../../stores/trainingStore';
@@ -71,6 +71,7 @@ export function ReliefSheet({
     onClose,
     onApplied,
 }: ReliefSheetProps) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
     const invalidatePlanCaches = useTrainingStore((s) => s.invalidatePlanCaches);
 
@@ -308,6 +309,7 @@ const OptionRow = React.memo(function OptionRow({
     selected: boolean;
     onSelect: () => void;
 }) {
+    useThemeSubscription();
     const byTime = current.distanceKm <= 0;
     const from = byTime
         ? formatMin(current.durationSeconds)
@@ -344,7 +346,7 @@ const OptionRow = React.memo(function OptionRow({
     );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     overlay: { flex: 1, backgroundColor: semanticColors.scrim },
     sheet: {
         backgroundColor: semanticColors.surface2,
@@ -489,6 +491,6 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.md,
         color: semanticColors.textPrimary,
     },
-});
+}));
 
 export default ReliefSheet;

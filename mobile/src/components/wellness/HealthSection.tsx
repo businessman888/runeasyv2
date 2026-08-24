@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { colors, typography, spacing, borderRadius, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import type { AppIconName, IconTone } from '../../theme/iconography';
 import { AppIcon } from '../ui/AppIcon';
@@ -19,6 +19,7 @@ function classifyResting(hr: number | null): { label: string; color: string; ton
 }
 
 export function HealthSection({ health }: HealthSectionProps) {
+    useThemeSubscription();
     const isIOS = Platform.OS === 'ios';
     const hkConnected = useHealthKitStore((s) => s.isConnected);
     const hkConnect = useHealthKitStore((s) => s.connect);
@@ -51,6 +52,7 @@ export function HealthSection({ health }: HealthSectionProps) {
 }
 
 function ConnectedGrid({ health }: { health: HealthBlock }) {
+    useThemeSubscription();
     const restingClass = classifyResting(health.restingHr);
 
     return (
@@ -113,6 +115,7 @@ function HealthCard({
     accent: string;
     badge?: string;
 }) {
+    useThemeSubscription();
     return (
         <View style={styles.card}>
             <View style={styles.cardHeader}>
@@ -141,6 +144,7 @@ function ConnectCard({
     onConnect: () => Promise<unknown>;
     loading: boolean;
 }) {
+    useThemeSubscription();
     return (
         <Pressable
             onPress={() => onConnect()}
@@ -171,6 +175,7 @@ function ConnectCard({
 }
 
 function AndroidSoonCard() {
+    useThemeSubscription();
     return (
         <View style={styles.soonCard}>
             <View style={styles.soonHeader}>
@@ -199,7 +204,7 @@ function AndroidSoonCard() {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     section: {
         gap: spacing.md,
     },
@@ -388,4 +393,4 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: semanticColors.borderSubtle,
     },
-});
+}));

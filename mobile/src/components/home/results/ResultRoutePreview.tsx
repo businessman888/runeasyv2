@@ -1,7 +1,7 @@
 import React, { memo, useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import Mapbox from "@rnmapbox/maps";
-import { useMapThemePalette } from "../../../theme";
+import { useMapThemePalette, createThemeStyles, useThemeSubscription } from "../../../theme";
 import { semanticColors } from "../../../theme/semanticColors";
 import type { ActivityResultRoutePoint } from "../../../stores/feedbackStore";
 import { NoRoutePreview } from "./NoRoutePreview";
@@ -24,6 +24,7 @@ export const ResultRoutePreview = memo(function ResultRoutePreview({
   isTreadmill,
   isActive,
 }: ResultRoutePreviewProps) {
+  useThemeSubscription();
   const mapPalette = useMapThemePalette();
   const id = activityId.replace(/[^a-zA-Z0-9]/g, "").slice(-20) || "route";
   const shape = useMemo(
@@ -111,7 +112,7 @@ export const ResultRoutePreview = memo(function ResultRoutePreview({
   );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   container: { ...StyleSheet.absoluteFillObject, backgroundColor: semanticColors.surface1 },
   inactiveSurface: {
     ...StyleSheet.absoluteFillObject,
@@ -121,4 +122,4 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(4,6,11,0.08)",
   },
-});
+}));

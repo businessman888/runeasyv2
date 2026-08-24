@@ -2,7 +2,7 @@ import React, { forwardRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, fonts } from '../../theme';
+import { colors, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { gradientForCard } from './storyTheme';
 import type { RetrospectiveData } from './types';
 
@@ -28,6 +28,7 @@ interface Props {
 
 export const ShareSummaryCard = forwardRef<View, Props>(
   function ShareSummaryCard({ data }, ref) {
+    useThemeSubscription();
     // Reusa o tom do clímax — é o card mais vibrante da sequência, e o
     // compilado é a peça que representa o ciclo inteiro.
     const gradient = gradientForCard(5);
@@ -93,6 +94,7 @@ function Stat({
   label: string;
   accent: string;
 }) {
+  useThemeSubscription();
   return (
     <View style={styles.stat}>
       <View style={styles.statValueRow}>
@@ -111,7 +113,7 @@ function fmt(v: number): string {
   return Number.isInteger(r) ? String(r) : r.toFixed(1).replace('.', ',');
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   wrapper: {
     width: SHARE_CARD_WIDTH,
     height: SHARE_CARD_HEIGHT,
@@ -177,4 +179,4 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(235,235,245,0.4)',
   },
-});
+}));

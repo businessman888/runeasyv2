@@ -9,7 +9,7 @@ import {
     Platform,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { fonts } from '../../theme';
+import { fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import {
     referralService,
@@ -17,8 +17,7 @@ import {
     ReferralError,
 } from '../../services/referralService';
 
-// Design tokens — exact values from the onboarding Figma frame (node 1307:1485)
-const DS = {
+const getLocalThemePalette1 = () => ({
     bg: semanticColors.canvas,
     pill: semanticColors.surface2,
     pillBorder: semanticColors.borderSubtle,
@@ -27,14 +26,17 @@ const DS = {
     pillBorderError: '#EF4444',
     cyan: semanticColors.accent,
     cyanMuted: semanticColors.accentSubtle,
-    text: '#EBEBF5',
+    text: semanticColors.textPrimary,
     textSecondary: semanticColors.textSecondary,
     textMuted: semanticColors.textTertiary,
     success: '#10B981',
     successBg: semanticColors.successSubtle,
     error: '#EF4444',
     errorBg: semanticColors.dangerSubtle,
-};
+});
+
+// Design tokens — exact values from the onboarding Figma frame (node 1307:1485)
+
 
 type Status = 'idle' | 'validating' | 'success' | 'error';
 
@@ -52,6 +54,7 @@ export function ReferralCodeScreen({
     referralInfluencerId,
     onChange,
 }: ReferralCodeScreenProps) {
+    useThemeSubscription();
     const [input, setInput] = useState(referralCode ?? '');
     const [status, setStatus] = useState<Status>(
         referralCode && referralInfluencerId ? 'success' : 'idle',
@@ -140,12 +143,12 @@ export function ReferralCodeScreen({
 
     const pillBorderColor =
         status === 'success'
-            ? DS.pillBorderSuccess
+            ? getLocalThemePalette1().pillBorderSuccess
             : status === 'error'
-            ? DS.pillBorderError
+            ? getLocalThemePalette1().pillBorderError
             : input.length > 0
-            ? DS.pillBorderActive
-            : DS.pillBorder;
+            ? getLocalThemePalette1().pillBorderActive
+            : getLocalThemePalette1().pillBorder;
 
     return (
         <View style={styles.container}>
@@ -158,7 +161,7 @@ export function ReferralCodeScreen({
 
             <View style={styles.giftIconContainer}>
                 <View style={styles.giftIconCircle}>
-                    <MaterialCommunityIcons name="account-heart-outline" size={36} color={DS.cyan} />
+                    <MaterialCommunityIcons name="account-heart-outline" size={36} color={getLocalThemePalette1().cyan} />
                 </View>
             </View>
 
@@ -166,7 +169,7 @@ export function ReferralCodeScreen({
                 <TextInput
                     style={styles.input}
                     placeholder="Código de referência"
-                    placeholderTextColor={DS.textMuted}
+                    placeholderTextColor={getLocalThemePalette1().textMuted}
                     value={input}
                     onChangeText={handleInputChange}
                     autoCapitalize="characters"
@@ -191,7 +194,7 @@ export function ReferralCodeScreen({
                     accessibilityState={{ disabled: !canSubmit, busy: status === 'validating' }}
                 >
                     {status === 'validating' ? (
-                        <ActivityIndicator size="small" color={DS.text} />
+                        <ActivityIndicator size="small" color={getLocalThemePalette1().text} />
                     ) : (
                         <Text
                             style={[
@@ -207,8 +210,8 @@ export function ReferralCodeScreen({
 
             {status === 'success' && (
                 <View style={[styles.badge, styles.badgeSuccess]}>
-                    <MaterialCommunityIcons name="check-circle" size={18} color={DS.success} />
-                    <Text style={[styles.badgeText, { color: DS.success }]}>
+                    <MaterialCommunityIcons name="check-circle" size={18} color={getLocalThemePalette1().success} />
+                    <Text style={[styles.badgeText, { color: getLocalThemePalette1().success }]}>
                         {statusMessage}
                     </Text>
                 </View>
@@ -216,8 +219,8 @@ export function ReferralCodeScreen({
 
             {status === 'error' && (
                 <View style={[styles.badge, styles.badgeError]}>
-                    <MaterialCommunityIcons name="alert-circle" size={18} color={DS.error} />
-                    <Text style={[styles.badgeText, { color: DS.error }]}>
+                    <MaterialCommunityIcons name="alert-circle" size={18} color={getLocalThemePalette1().error} />
+                    <Text style={[styles.badgeText, { color: getLocalThemePalette1().error }]}>
                         {statusMessage}
                     </Text>
                 </View>
@@ -226,7 +229,7 @@ export function ReferralCodeScreen({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         gap: 24,
@@ -239,13 +242,13 @@ const styles = StyleSheet.create({
         fontFamily: fonts.bold,
         fontSize: 32,
         lineHeight: 38,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
     },
     subtitle: {
         fontFamily: fonts.regular,
         fontSize: 16,
         lineHeight: 22,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
     },
     giftIconContainer: {
         alignItems: 'center',
@@ -265,7 +268,7 @@ const styles = StyleSheet.create({
     pill: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: DS.pill,
+        backgroundColor: getLocalThemePalette1().pill,
         borderRadius: 32,
         borderWidth: 1,
         paddingLeft: 20,
@@ -276,7 +279,7 @@ const styles = StyleSheet.create({
         flex: 1,
         fontFamily: fonts.medium,
         fontSize: 16,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         letterSpacing: 1,
         ...Platform.select({
             android: { paddingVertical: 0 },
@@ -286,7 +289,7 @@ const styles = StyleSheet.create({
         height: 48,
         paddingHorizontal: 20,
         borderRadius: 24,
-        backgroundColor: DS.cyan,
+        backgroundColor: getLocalThemePalette1().cyan,
         justifyContent: 'center',
         alignItems: 'center',
         minWidth: 96,
@@ -300,7 +303,7 @@ const styles = StyleSheet.create({
         color: semanticColors.textOnAccent,
     },
     sendButtonTextDisabled: {
-        color: DS.textMuted,
+        color: getLocalThemePalette1().textMuted,
     },
     badge: {
         flexDirection: 'row',
@@ -311,18 +314,18 @@ const styles = StyleSheet.create({
         borderRadius: 16,
     },
     badgeSuccess: {
-        backgroundColor: DS.successBg,
+        backgroundColor: getLocalThemePalette1().successBg,
         borderWidth: 1,
-        borderColor: DS.success,
+        borderColor: getLocalThemePalette1().success,
     },
     badgeError: {
-        backgroundColor: DS.errorBg,
+        backgroundColor: getLocalThemePalette1().errorBg,
         borderWidth: 1,
-        borderColor: DS.error,
+        borderColor: getLocalThemePalette1().error,
     },
     badgeText: {
         flex: 1,
         fontFamily: fonts.medium,
         fontSize: 13,
     },
-});
+}));

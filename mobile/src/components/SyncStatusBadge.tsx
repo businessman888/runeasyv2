@@ -3,15 +3,18 @@ import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { getSyncStatus, getProviderLabel, SyncStatus } from '../services/devices';
 import { semanticColors } from '../theme/semanticColors';
+import { useThemeSubscription, createThemeStyles } from '../theme';
 
-// Design System Colors
-const DS = {
+const getLocalThemePalette1 = () => ({
     cyan: semanticColors.accent,
     card: semanticColors.surface2,
     text: semanticColors.textPrimary,
     textSecondary: semanticColors.textSecondary,
     success: '#4ADE80',
-};
+});
+
+// Design System Colors
+
 
 const SyncIcon = ({ color }: { color: string }) => (
     <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
@@ -39,6 +42,7 @@ interface SyncStatusBadgeProps {
 }
 
 export function SyncStatusBadge({ compact = false }: SyncStatusBadgeProps) {
+    useThemeSubscription();
     const [status, setStatus] = useState<SyncStatus | null>(null);
 
     useEffect(() => {
@@ -55,7 +59,7 @@ export function SyncStatusBadge({ compact = false }: SyncStatusBadgeProps) {
 
         return (
             <View style={[styles.badge, styles.badgeConnected]}>
-                <SyncIcon color={DS.success} />
+                <SyncIcon color={getLocalThemePalette1().success} />
                 <Text style={styles.badgeText}>
                     {compact ? label : `${label} Sincronizado`}
                 </Text>
@@ -65,7 +69,7 @@ export function SyncStatusBadge({ compact = false }: SyncStatusBadgeProps) {
 
     return (
         <View style={[styles.badge, styles.badgeGps]}>
-            <GpsIcon color={DS.cyan} />
+            <GpsIcon color={getLocalThemePalette1().cyan} />
             <Text style={styles.badgeText}>
                 {compact ? 'GPS' : 'Pronto para rastrear via GPS'}
             </Text>
@@ -73,7 +77,7 @@ export function SyncStatusBadge({ compact = false }: SyncStatusBadgeProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     badge: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -95,6 +99,6 @@ const styles = StyleSheet.create({
     badgeText: {
         fontSize: 12,
         fontWeight: '500',
-        color: DS.text,
+        color: getLocalThemePalette1().text,
     },
-});
+}));

@@ -1,4 +1,5 @@
 import type { ThemeColors } from './contracts';
+import { createThemeObject } from './themeRuntime';
 
 /**
  * Semantic dark-theme colors.
@@ -12,9 +13,14 @@ export const darkColors = {
   surface2: '#141416',
   surface3: '#1B1B1E',
   glass: 'rgba(255,255,255,0.055)',
+  fillSubtle: 'rgba(255,255,255,0.06)',
+  fillMuted: 'rgba(255,255,255,0.10)',
+  fillStrong: 'rgba(255,255,255,0.20)',
   borderSubtle: 'rgba(255,255,255,0.08)',
   borderStrong: 'rgba(255,255,255,0.13)',
   textPrimary: '#F7F7F8',
+  textOnMedia: '#FFFFFF',
+  textOnMediaMuted: 'rgba(255,255,255,0.72)',
   textOnAccentMuted: 'rgba(5,5,6,0.68)',
   onboardingIconInk: '#0E0E1F',
   onboardingIconInkAlt: '#0F0F1E',
@@ -36,6 +42,7 @@ export const darkColors = {
   overlayMedium: 'rgba(5,5,6,0.46)',
   overlayStrong: 'rgba(5,5,6,0.85)',
   scrim: 'rgba(0,0,0,0.62)',
+  shadow: '#000000',
   transparent: 'transparent',
 } as const satisfies ThemeColors;
 
@@ -43,7 +50,10 @@ export const darkColors = {
  * @deprecated Compatibility alias while screens migrate to useAppTheme().
  * New theme-aware code must consume colors from the provider.
  */
-export const semanticColors = darkColors;
+export const semanticColors = createThemeObject(
+  darkColors as ThemeColors,
+  (theme) => theme.colors,
+);
 
 export type SemanticColor = keyof typeof semanticColors;
 export type SemanticColorValue = (typeof semanticColors)[SemanticColor];

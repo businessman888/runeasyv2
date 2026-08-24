@@ -10,10 +10,10 @@
  * useFonts). The previous `Poppins-*` / `Inter-*` references silently fell back
  * to the system font, so we standardize on the loaded brand font via `fonts`.
  */
-import { colors, fonts } from '../../theme';
+import { colors, createThemeObject, fonts } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
-export const QUIZ = {
+const darkQuiz = {
     color: {
         bg: semanticColors.canvas,
         card: semanticColors.surface2,
@@ -68,5 +68,28 @@ export const QUIZ = {
         radius: 12,
     },
 } as const;
+
+export const QUIZ = createThemeObject(darkQuiz, (theme) => ({
+    ...darkQuiz,
+    color: {
+        ...darkQuiz.color,
+        bg: theme.colors.canvas,
+        card: theme.colors.surface2,
+        glass: theme.colors.glass,
+        surface1: theme.colors.surface1,
+        surface3: theme.colors.surface3,
+        scrim: theme.colors.scrim,
+        textOnAccent: theme.colors.textOnAccent,
+        cyan: theme.colors.accent,
+        text: theme.colors.textPrimary,
+        textDim: theme.colors.textSecondary,
+        selectedFill: theme.colors.accentSubtle,
+        stroke: theme.colors.borderSubtle,
+        border: theme.colors.borderStrong,
+        danger: theme.colors.danger,
+        dangerSubtle: theme.colors.dangerSubtle,
+        warningSubtle: theme.colors.warningSubtle,
+    },
+}));
 
 export default QUIZ;

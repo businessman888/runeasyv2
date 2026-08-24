@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, typography, borderRadius, fonts } from '../../theme';
+import { colors, typography, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
 interface RaceDistanceSelectorSheetProps {
@@ -19,6 +19,7 @@ export function RaceDistanceSelectorSheet({
     onConfirm,
     onClose,
 }: RaceDistanceSelectorSheetProps) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
     const [selected, setSelected] = useState<number | null>(null);
 
@@ -70,7 +71,7 @@ export function RaceDistanceSelectorSheet({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: semanticColors.scrim },
     sheet: {
         position: 'absolute',
@@ -130,6 +131,6 @@ const styles = StyleSheet.create({
         color: semanticColors.textOnAccent,
     },
     ctaTextDisabled: { color: semanticColors.textSecondary },
-});
+}));
 
 export default RaceDistanceSelectorSheet;

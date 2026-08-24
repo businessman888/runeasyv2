@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors, typography, spacing, fonts } from '../../../theme';
+import { colors, typography, spacing, fonts, createThemeStyles, useThemeSubscription } from '../../../theme';
 
 /**
  * Cabeçalho de seção — eyebrow + título (+ nota opcional à direita).
@@ -23,6 +23,7 @@ export const SectionHeader = memo(function SectionHeader({
     title,
     note,
 }: SectionHeaderProps) {
+    useThemeSubscription();
     return (
         <View style={styles.wrap}>
             <View style={styles.left}>
@@ -34,7 +35,7 @@ export const SectionHeader = memo(function SectionHeader({
     );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     wrap: {
         flexDirection: 'row',
         alignItems: 'flex-end',
@@ -61,4 +62,4 @@ const styles = StyleSheet.create({
         color: colors.textMuted,
         paddingBottom: 2,
     },
-});
+}));

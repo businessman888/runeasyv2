@@ -4,6 +4,7 @@ import { QuizHeader, Hl } from '../../components/onboarding/QuizHeader';
 import { SelectableOption } from '../../components/onboarding/SelectableOption';
 import { QUIZ } from './_tokens';
 import { DISTANCE_ICONS } from './_icons';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
 // value 0 = "Nunca corri" (sentinela). Escolher essa opção adapta o fluxo:
 // pula tempo/pace/frequência/volume e leva à pergunta de caminhada (Fase A).
@@ -21,6 +22,7 @@ interface RecentDistanceScreenProps {
 }
 
 export function RecentDistanceScreen({ value, onChange }: RecentDistanceScreenProps) {
+    useThemeSubscription();
     const [selected, setSelected] = useState<number | null>(value ?? null);
 
     useEffect(() => {
@@ -63,7 +65,7 @@ export function RecentDistanceScreen({ value, onChange }: RecentDistanceScreenPr
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     options: {
         gap: QUIZ.gapOptions,
         marginBottom: 24,
@@ -79,6 +81,6 @@ const styles = StyleSheet.create({
         color: QUIZ.color.textDim,
         lineHeight: 20,
     },
-});
+}));
 
 export default RecentDistanceScreen;

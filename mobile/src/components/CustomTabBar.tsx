@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { TabBarIcon } from './TabBarIcon';
 import { AppPressable } from './ui/AppPressable';
-import { fonts } from '../theme';
+import { fonts, createThemeStyles, useThemeSubscription, getThemeBlurTint } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { useAuthStore, getAvatarUrl, getDisplayName } from '../stores';
@@ -35,6 +35,7 @@ function getIconName(routeName: string): IconName {
 
 /** Profile avatar with a neutral ring that strengthens when selected. */
 function ProfileTabAvatar({ isFocused }: { isFocused: boolean }) {
+    useThemeSubscription();
     const { user } = useAuthStore();
     const avatarUrl = getAvatarUrl(user);
 
@@ -61,6 +62,7 @@ function ProfileTabAvatar({ isFocused }: { isFocused: boolean }) {
 }
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
     const { isTablet, isLandscape } = useBreakpoint();
 
@@ -89,7 +91,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
             <View style={[styles.railContainer, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
                 <BlurView
                     intensity={40}
-                    tint="dark"
+                    tint={getThemeBlurTint()}
                     experimentalBlurMethod={ANDROID_BLUR_METHOD}
                     pointerEvents="none"
                     style={StyleSheet.absoluteFill}
@@ -148,7 +150,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                 {/* Frosted blur of the scroll content behind the floating pill. */}
                 <BlurView
                     intensity={40}
-                    tint="dark"
+                    tint={getThemeBlurTint()}
                     experimentalBlurMethod={ANDROID_BLUR_METHOD}
                     pointerEvents="none"
                     style={StyleSheet.absoluteFill}
@@ -213,7 +215,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     // Positioning + floating shadow. Transparent so the inner BlurView samples the
     // real scroll content behind the pill (a solid bg here would kill the blur).
     shadowWrap: {
@@ -322,6 +324,6 @@ const styles = StyleSheet.create({
         fontFamily: fonts.semibold,
         color: semanticColors.textPrimary,
     },
-});
+}));
 
 export default CustomTabBar;

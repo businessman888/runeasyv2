@@ -22,6 +22,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { QUIZ } from '../../screens/quiz/_tokens';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
+import { semanticColors } from "../../theme/semanticColors";
 
 const THUMB_SIZE = 26;
 const TRACK_HEIGHT = 6;
@@ -43,6 +45,7 @@ export function StepSlider({
     onLockScroll,
     onUnlockScroll,
 }: StepSliderProps) {
+    useThemeSubscription();
     const [trackWidth, setTrackWidth] = useState(0);
     const n = values.length;
     const step = n > 1 && trackWidth > 0 ? trackWidth / (n - 1) : 0;
@@ -201,7 +204,7 @@ export function StepSlider({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     // Horizontal padding equal to half the thumb so the thumb center can reach
     // both edges of the track without being clipped; markers align to the same.
     padded: {
@@ -234,7 +237,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: QUIZ.color.border,
         // Soft, premium shadow — not the old neon glow.
-        shadowColor: '#000',
+        shadowColor: semanticColors.shadow,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.25,
         shadowRadius: 4,
@@ -258,6 +261,6 @@ const styles = StyleSheet.create({
         fontFamily: QUIZ.optionTitle.fontFamily,
         color: QUIZ.color.cyan,
     },
-});
+}));
 
 export default StepSlider;

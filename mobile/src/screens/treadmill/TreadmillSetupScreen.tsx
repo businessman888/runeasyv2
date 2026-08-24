@@ -36,11 +36,10 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useTreadmillStore, BluetoothState } from '../../stores/treadmillStore';
 import type { TreadmillDevice } from '../../services/treadmillService';
 import { MANUAL_TREADMILL_SPEED } from '../../constants/bluetooth';
-import { fonts } from '../../theme';
+import { fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
-// ─── Visual tokens (Figma-aligned + brand neon) ───────────────────────────────
-const T = {
+const getLocalThemePalette1 = () => ({
   bg: semanticColors.canvas,
   bgGradient: semanticColors.surface1,
   card: semanticColors.surface2,
@@ -60,7 +59,10 @@ const T = {
   warningBg: semanticColors.warningSubtle,
   warningBorder: 'rgba(255, 196, 0, 0.4)',
   danger: '#FF453A',
-};
+});
+
+// ─── Visual tokens (Figma-aligned + brand neon) ───────────────────────────────
+
 
 type SetupRouteParams = {
   TreadmillSetup: {
@@ -97,6 +99,7 @@ function bluetoothStateMessage(state: BluetoothState): string | null {
 }
 
 export function TreadmillSetupScreen() {
+  useThemeSubscription();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<SetupRouteParams, 'TreadmillSetup'>>();
   const runParams = route.params.runParams;
@@ -197,7 +200,7 @@ export function TreadmillSetupScreen() {
             accessibilityLabel="Voltar"
             hitSlop={10}
           >
-            <Ionicons name="chevron-back" size={24} color={T.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={getLocalThemePalette1().textPrimary} />
           </Pressable>
           <View style={styles.headerTitleWrap}>
             <Text style={styles.headerTitle} allowFontScaling={false}>
@@ -222,7 +225,7 @@ export function TreadmillSetupScreen() {
         {bluetoothMsg && !isConnected ? (
           <View style={styles.warningCard}>
             <View style={styles.warningIconWrap}>
-              <Ionicons name="warning" size={20} color={T.warning} />
+              <Ionicons name="warning" size={20} color={getLocalThemePalette1().warning} />
             </View>
             <Text style={styles.warningText}>{bluetoothMsg}</Text>
             {bluetoothState === 'off' || bluetoothState === 'unauthorized' ? (
@@ -315,7 +318,7 @@ export function TreadmillSetupScreen() {
           <Ionicons
             name="play"
             size={20}
-            color={T.bg}
+            color={getLocalThemePalette1().bg}
             style={{ marginRight: 8 }}
           />
           <Text style={styles.primaryBtnText} allowFontScaling={false}>
@@ -335,6 +338,7 @@ export function TreadmillSetupScreen() {
  * "actively scanning" much better than a generic spinner does.
  */
 const RadarScanning = React.memo(function RadarScanning() {
+  useThemeSubscription();
   const p1 = useSharedValue(0);
   const p2 = useSharedValue(0);
   const p3 = useSharedValue(0);
@@ -371,7 +375,7 @@ const RadarScanning = React.memo(function RadarScanning() {
         <Animated.View style={[styles.radarRing, ring2Style]} />
         <Animated.View style={[styles.radarRing, ring3Style]} />
         <View style={styles.radarCore}>
-          <Ionicons name="bluetooth" size={28} color={T.cyan} />
+          <Ionicons name="bluetooth" size={28} color={getLocalThemePalette1().cyan} />
         </View>
       </View>
       <Text style={styles.radarTitle} allowFontScaling={false}>
@@ -390,10 +394,11 @@ const EmptyState = React.memo(function EmptyState({
 }: {
   onRetry: () => void;
 }) {
+  useThemeSubscription();
   return (
     <View style={styles.emptyCard}>
       <View style={styles.emptyIconWrap}>
-        <Ionicons name="bluetooth-outline" size={32} color={T.textSecondary} />
+        <Ionicons name="bluetooth-outline" size={32} color={getLocalThemePalette1().textSecondary} />
       </View>
       <Text style={styles.emptyTitle} allowFontScaling={false}>
         Nenhuma esteira encontrada
@@ -408,7 +413,7 @@ const EmptyState = React.memo(function EmptyState({
         accessibilityRole="button"
         accessibilityLabel="Procurar novamente"
       >
-        <Ionicons name="refresh" size={16} color={T.cyan} />
+        <Ionicons name="refresh" size={16} color={getLocalThemePalette1().cyan} />
         <Text style={styles.retryBtnText}>Procurar novamente</Text>
       </Pressable>
     </View>
@@ -424,6 +429,7 @@ const DeviceRow = React.memo(function DeviceRow({
   loading: boolean;
   onPress: () => void;
 }) {
+  useThemeSubscription();
   const scale = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -448,7 +454,7 @@ const DeviceRow = React.memo(function DeviceRow({
         </Text>
         <View style={styles.deviceRight}>
           {loading ? (
-            <ActivityIndicator size="small" color={T.cyan} />
+            <ActivityIndicator size="small" color={getLocalThemePalette1().cyan} />
           ) : (
             <SignalBars bars={bars} />
           )}
@@ -465,7 +471,8 @@ const DeviceRow = React.memo(function DeviceRow({
  * feedback without a textual label.
  */
 const SignalBars = React.memo(function SignalBars({ bars }: { bars: number }) {
-  const color = bars >= 4 ? T.success : bars >= 3 ? T.cyan : T.warning;
+  useThemeSubscription();
+  const color = bars >= 4 ? getLocalThemePalette1().success : bars >= 3 ? getLocalThemePalette1().cyan : getLocalThemePalette1().warning;
   return (
     <View style={styles.signalRow}>
       {[1, 2, 3, 4].map((i) => (
@@ -491,10 +498,11 @@ const ConnectedCard = React.memo(function ConnectedCard({
   device: TreadmillDevice;
   onDisconnect: () => void;
 }) {
+  useThemeSubscription();
   return (
     <View style={styles.connectedCard}>
       <View style={styles.connectedCheck}>
-        <Ionicons name="checkmark" size={28} color={T.bg} />
+        <Ionicons name="checkmark" size={28} color={getLocalThemePalette1().bg} />
       </View>
       <Text style={styles.connectedTitle} allowFontScaling={false}>
         {device.name}
@@ -532,6 +540,7 @@ const ManualSpeedCard = React.memo(function ManualSpeedCard({
   onDecrementFine: () => void;
   onReset: () => void;
 }) {
+  useThemeSubscription();
   return (
     <View style={styles.manualCard}>
       <Text style={styles.manualTitle} allowFontScaling={false}>
@@ -593,6 +602,7 @@ const SpeedRoundBtn = React.memo(function SpeedRoundBtn({
   onPress: () => void;
   accessibilityLabel: string;
 }) {
+  useThemeSubscription();
   const scale = useSharedValue(1);
   const style = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -610,7 +620,7 @@ const SpeedRoundBtn = React.memo(function SpeedRoundBtn({
       accessibilityLabel={accessibilityLabel}
     >
       <Animated.View style={[styles.speedBtn, style]}>
-        <Ionicons name={icon} size={26} color={T.cyan} />
+        <Ionicons name={icon} size={26} color={getLocalThemePalette1().cyan} />
       </Animated.View>
     </Pressable>
   );
@@ -625,6 +635,7 @@ const FineBtn = React.memo(function FineBtn({
   onPress: () => void;
   accessibilityLabel: string;
 }) {
+  useThemeSubscription();
   const scale = useSharedValue(1);
   const style = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -653,13 +664,13 @@ const FineBtn = React.memo(function FineBtn({
 
 /* ───────────────────────────── Styles ──────────────────────────────────── */
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   container: {
     flex: 1,
-    backgroundColor: T.bg,
+    backgroundColor: getLocalThemePalette1().bg,
   },
   safeTop: {
-    backgroundColor: T.bg,
+    backgroundColor: getLocalThemePalette1().bg,
   },
   header: {
     flexDirection: 'row',
@@ -680,7 +691,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.semibold,
     fontSize: 17,
     fontWeight: '600',
@@ -691,7 +702,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   statusOverline: {
-    color: T.textMuted,
+    color: getLocalThemePalette1().textMuted,
     fontFamily: fonts.medium,
     fontSize: 11,
     letterSpacing: 1.6,
@@ -702,8 +713,8 @@ const styles = StyleSheet.create({
   warningCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: T.warningBg,
-    borderColor: T.warningBorder,
+    backgroundColor: getLocalThemePalette1().warningBg,
+    borderColor: getLocalThemePalette1().warningBorder,
     borderWidth: 1,
     borderRadius: 16,
     padding: 14,
@@ -720,7 +731,7 @@ const styles = StyleSheet.create({
   },
   warningText: {
     flex: 1,
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.regular,
     fontSize: 13,
     lineHeight: 18,
@@ -729,13 +740,13 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: T.warning,
+    backgroundColor: getLocalThemePalette1().warning,
     borderRadius: 12,
     minHeight: 44,
     justifyContent: 'center',
   },
   warningCtaText: {
-    color: T.bg,
+    color: getLocalThemePalette1().bg,
     fontFamily: fonts.bold,
     fontSize: 12,
     fontWeight: '700',
@@ -744,13 +755,13 @@ const styles = StyleSheet.create({
   // Radar scanning
   radarCard: {
     alignItems: 'center',
-    backgroundColor: T.card,
+    backgroundColor: getLocalThemePalette1().card,
     borderRadius: 20,
     paddingVertical: 32,
     paddingHorizontal: 24,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: T.cardBorderSubtle,
+    borderColor: getLocalThemePalette1().cardBorderSubtle,
     overflow: 'hidden',
   },
   radarStage: {
@@ -766,7 +777,7 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 80,
     borderWidth: 2,
-    borderColor: T.cyan,
+    borderColor: getLocalThemePalette1().cyan,
   },
   radarCore: {
     width: 72,
@@ -776,22 +787,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: T.cyan,
-    shadowColor: T.cyan,
+    borderColor: getLocalThemePalette1().cyan,
+    shadowColor: getLocalThemePalette1().cyan,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 18,
     elevation: 12,
   },
   radarTitle: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.bold,
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 6,
   },
   radarSubtitle: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontFamily: fonts.regular,
     fontSize: 13,
     textAlign: 'center',
@@ -802,13 +813,13 @@ const styles = StyleSheet.create({
   // Empty state
   emptyCard: {
     alignItems: 'center',
-    backgroundColor: T.card,
+    backgroundColor: getLocalThemePalette1().card,
     borderRadius: 20,
     paddingVertical: 32,
     paddingHorizontal: 24,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: T.cardBorderSubtle,
+    borderColor: getLocalThemePalette1().cardBorderSubtle,
   },
   emptyIconWrap: {
     width: 64,
@@ -820,14 +831,14 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   emptyTitle: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.bold,
     fontSize: 17,
     fontWeight: '700',
     marginBottom: 6,
   },
   emptySubtitle: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontFamily: fonts.regular,
     fontSize: 13,
     textAlign: 'center',
@@ -842,12 +853,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 999,
-    borderColor: T.cyan,
+    borderColor: getLocalThemePalette1().cyan,
     borderWidth: 1,
     minHeight: 44,
   },
   retryBtnText: {
-    color: T.cyan,
+    color: getLocalThemePalette1().cyan,
     fontFamily: fonts.semibold,
     fontSize: 14,
     fontWeight: '600',
@@ -855,7 +866,7 @@ const styles = StyleSheet.create({
 
   // Devices header (Figma)
   devicesHeader: {
-    color: T.cyan,
+    color: getLocalThemePalette1().cyan,
     fontFamily: fonts.bold,
     fontSize: 16,
     fontWeight: '700',
@@ -865,7 +876,7 @@ const styles = StyleSheet.create({
   },
   devicesDivider: {
     height: 1,
-    backgroundColor: T.cardBorderSubtle,
+    backgroundColor: getLocalThemePalette1().cardBorderSubtle,
     marginBottom: 14,
   },
   // Device list
@@ -877,17 +888,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: T.card,
+    backgroundColor: getLocalThemePalette1().card,
     borderRadius: 16,
     paddingHorizontal: 20,
     paddingVertical: 22,
     borderWidth: 1,
-    borderColor: T.cardBorderSubtle,
+    borderColor: getLocalThemePalette1().cardBorderSubtle,
     minHeight: 78,
   },
   deviceName: {
     flex: 1,
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.bold,
     fontSize: 17,
     fontWeight: '700',
@@ -914,7 +925,7 @@ const styles = StyleSheet.create({
   // Connected card
   connectedCard: {
     alignItems: 'center',
-    backgroundColor: T.card,
+    backgroundColor: getLocalThemePalette1().card,
     borderRadius: 20,
     paddingVertical: 28,
     paddingHorizontal: 24,
@@ -926,25 +937,25 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: T.success,
+    backgroundColor: getLocalThemePalette1().success,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
-    shadowColor: T.success,
+    shadowColor: getLocalThemePalette1().success,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.55,
     shadowRadius: 16,
     elevation: 10,
   },
   connectedTitle: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.bold,
     fontSize: 20,
     fontWeight: '700',
     marginBottom: 6,
   },
   connectedSubtitle: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontFamily: fonts.regular,
     fontSize: 13,
     textAlign: 'center',
@@ -959,7 +970,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   disconnectText: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontFamily: fonts.medium,
     fontSize: 13,
     textDecorationLine: 'underline',
@@ -968,22 +979,22 @@ const styles = StyleSheet.create({
   // Manual speed card — clean, no neon glow, just a subtle card with cyan
   // accents on the number and round buttons.
   manualCard: {
-    backgroundColor: T.card,
+    backgroundColor: getLocalThemePalette1().card,
     borderRadius: 20,
     padding: 20,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: T.cardBorderSubtle,
+    borderColor: getLocalThemePalette1().cardBorderSubtle,
   },
   manualTitle: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.bold,
     fontSize: 17,
     fontWeight: '700',
     marginBottom: 4,
   },
   manualHelp: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontFamily: fonts.regular,
     fontSize: 13,
     lineHeight: 19,
@@ -1001,7 +1012,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: 'transparent',
     borderWidth: 1.5,
-    borderColor: T.cyan,
+    borderColor: getLocalThemePalette1().cyan,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1011,7 +1022,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   speedValue: {
-    color: T.cyan,
+    color: getLocalThemePalette1().cyan,
     fontFamily: fonts.bold,
     fontSize: 44,
     fontWeight: '700',
@@ -1019,7 +1030,7 @@ const styles = StyleSheet.create({
     lineHeight: 50,
   },
   speedUnit: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontFamily: fonts.regular,
     fontSize: 13,
     marginTop: -2,
@@ -1031,21 +1042,21 @@ const styles = StyleSheet.create({
   fineBtn: {
     minHeight: 44,
     borderRadius: 12,
-    backgroundColor: T.bg,
+    backgroundColor: getLocalThemePalette1().bg,
     borderWidth: 1,
-    borderColor: T.cardBorderSubtle,
+    borderColor: getLocalThemePalette1().cardBorderSubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
   fineBtnText: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.medium,
     fontSize: 13,
     fontWeight: '500',
   },
 
   errorText: {
-    color: T.danger,
+    color: getLocalThemePalette1().danger,
     fontFamily: fonts.medium,
     fontSize: 13,
     marginBottom: 10,
@@ -1060,20 +1071,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 14,
     gap: 10,
-    backgroundColor: T.bg,
+    backgroundColor: getLocalThemePalette1().bg,
     borderTopWidth: 1,
-    borderTopColor: T.cardBorderSubtle,
+    borderTopColor: getLocalThemePalette1().cardBorderSubtle,
   },
   secondaryBtn: {
     minHeight: 52,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: T.cardBorderSubtle,
+    borderColor: getLocalThemePalette1().cardBorderSubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
   secondaryBtnText: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.medium,
     fontSize: 14,
     fontWeight: '500',
@@ -1081,11 +1092,11 @@ const styles = StyleSheet.create({
   primaryBtn: {
     minHeight: 56,
     borderRadius: 16,
-    backgroundColor: T.cyan,
+    backgroundColor: getLocalThemePalette1().cyan,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: T.cyan,
+    shadowColor: getLocalThemePalette1().cyan,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 14,
@@ -1096,11 +1107,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
   },
   primaryBtnText: {
-    color: T.bg,
+    color: getLocalThemePalette1().bg,
     fontFamily: fonts.bold,
     fontSize: 16,
     fontWeight: '700',
   },
-});
+}));
 
 export default TreadmillSetupScreen;

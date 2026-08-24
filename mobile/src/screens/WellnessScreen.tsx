@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import { colors, typography, spacing, fonts } from '../theme';
+import { colors, typography, spacing, fonts, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useWellnessStore } from '../stores/wellnessStore';
 import { useHealthKitStore } from '../stores/healthKitStore';
@@ -30,6 +30,7 @@ import { useBreakpoint } from '../hooks/useBreakpoint';
 type Nav = NativeStackNavigationProp<Record<string, object | undefined>>;
 
 export function WellnessScreen() {
+    useThemeSubscription();
     const navigation = useNavigation<Nav>();
     // Tablet: coluna centralizada (a grade de performance já expande p/ 3-4 col).
     const { isTablet } = useBreakpoint();
@@ -71,7 +72,7 @@ export function WellnessScreen() {
 
     return (
         <SafeAreaView style={styles.safeArea} edges={['top']}>
-            <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
+            <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
 
             <View style={styles.header}>
                 <Text style={styles.title}>Wellness</Text>
@@ -162,7 +163,7 @@ export function WellnessScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     safeArea: {
         flex: 1,
         backgroundColor: semanticColors.canvas,
@@ -253,6 +254,6 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.xs,
         color: semanticColors.textSecondary,
     },
-});
+}));
 
 export default WellnessScreen;

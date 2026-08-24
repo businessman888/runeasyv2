@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, spacing, borderRadius } from '../../../../theme';
+import { colors, spacing, borderRadius, createThemeStyles, useThemeSubscription } from '../../../../theme';
 import { ShareCardData } from '../../../../types/sharing.types';
 import {
   formatDistance,
@@ -41,6 +41,7 @@ function buildTiles(data: ShareCardData): Tile[] {
 }
 
 export function Card04_MetricsFull({ data }: Props) {
+  useThemeSubscription();
   const typeLabel = workoutTypeLabel(data.workoutType).toUpperCase();
   const tiles = buildTiles(data);
 
@@ -77,7 +78,7 @@ export function Card04_MetricsFull({ data }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   content: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
@@ -117,4 +118,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
-});
+}));

@@ -1,17 +1,19 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { fonts } from '../theme';
+import { fonts, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 
-// Design System Colors matching Figma
-const DS = {
-    text: '#EBEBF5',
-    textSecondary: 'rgba(235, 235, 245, 0.6)',
+const getLocalThemePalette1 = () => ({
+    text: semanticColors.textPrimary,
+    textSecondary: semanticColors.textSecondary,
     card: semanticColors.surface2,
     glassBorder: semanticColors.borderSubtle,
     cyan: semanticColors.accent,
-};
+});
+
+// Design System Colors matching Figma
+
 
 interface CustomKeypadProps {
     onPress: (key: string) => void;
@@ -21,6 +23,7 @@ interface CustomKeypadProps {
 }
 
 export function CustomKeypad({ onPress, onDelete, disabled, compact = false }: CustomKeypadProps) {
+    useThemeSubscription();
     const keys = [
         ['1', '2', '3'],
         ['4', '5', '6'],
@@ -76,7 +79,7 @@ export function CustomKeypad({ onPress, onDelete, disabled, compact = false }: C
                     <MaterialCommunityIcons
                         name="backspace-outline"
                         size={24}
-                        color={disabled ? DS.textSecondary : DS.text}
+                        color={disabled ? getLocalThemePalette1().textSecondary : getLocalThemePalette1().text}
                     />
                 </TouchableOpacity>
             </View>
@@ -84,7 +87,7 @@ export function CustomKeypad({ onPress, onDelete, disabled, compact = false }: C
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         width: '100%',
         paddingHorizontal: 20,
@@ -123,4 +126,4 @@ const styles = StyleSheet.create({
     disabledText: {
         color: semanticColors.textSecondary,
     },
-});
+}));

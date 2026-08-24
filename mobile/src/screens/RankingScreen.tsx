@@ -8,7 +8,7 @@ import {
     Image,
     RefreshControl,
 } from 'react-native';
-import { colors, typography, spacing, borderRadius, fonts } from '../theme';
+import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useGamificationStore, RankingUser } from '../stores/gamificationStore';
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -53,6 +53,7 @@ function Avatar({ profile, size = 48, borderColor }: {
     size?: number;
     borderColor?: string;
 }) {
+    useThemeSubscription();
     const imageUrl = profile?.avatar_url || profile?.profile_pic || '';
     const hasImage = imageUrl.startsWith('http');
     return (
@@ -83,6 +84,7 @@ function Avatar({ profile, size = 48, borderColor }: {
 // ─── Podium Component ──────────────────────────────────────────
 
 function PodiumSection({ rankings }: { rankings: RankingUser[] }) {
+    useThemeSubscription();
     const first = rankings[0];
     const second = rankings[1];
     const third = rankings[2];
@@ -139,6 +141,7 @@ function PodiumSection({ rankings }: { rankings: RankingUser[] }) {
 // ─── Ranking Row Component ─────────────────────────────────────
 
 function RankingRow({ user }: { user: RankingUser }) {
+    useThemeSubscription();
     return (
         <View style={styles.rankRow}>
             <Text style={styles.rankNumber}>{String(user.rank).padStart(2, '0')}</Text>
@@ -172,6 +175,7 @@ function UserPositionCard({ rank, totalXP, streak, profile, currentLevel }: {
     profile: RankingUser['profile'];
     currentLevel: number;
 }) {
+    useThemeSubscription();
     return (
         <View style={styles.userPositionCard}>
             <Text style={styles.rankNumber}>{String(rank).padStart(2, '0')}</Text>
@@ -203,6 +207,7 @@ function AchievementsSection({ earned, total, navigation }: {
     total: number;
     navigation: any;
 }) {
+    useThemeSubscription();
     const progress = total > 0 ? earned / total : 0;
 
     return (
@@ -243,6 +248,7 @@ function AchievementsSection({ earned, total, navigation }: {
 // ─── Main Screen ───────────────────────────────────────────────
 
 export function RankingScreen({ navigation }: any) {
+    useThemeSubscription();
     const {
         rankingTab,
         setRankingTab,
@@ -419,7 +425,7 @@ export function RankingScreen({ navigation }: any) {
 
 // ─── Styles ────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     screen: {
         backgroundColor: semanticColors.canvas,
     },
@@ -759,6 +765,6 @@ const styles = StyleSheet.create({
         fontFamily: fonts.bold,
         color: colors.primary,
     },
-});
+}));
 
 export default RankingScreen;

@@ -21,7 +21,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { colors, fonts, spacing, borderRadius, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { DeviceRow } from '../../components/devices/DeviceRow';
 import {
@@ -40,6 +40,7 @@ export function WearableSelectionModal({
     onClose,
     onPick,
 }: WearableSelectionModalProps) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
 
     return (
@@ -96,7 +97,7 @@ export function WearableSelectionModal({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     overlay: {
         flex: 1,
         backgroundColor: semanticColors.scrim,
@@ -153,6 +154,6 @@ const styles = StyleSheet.create({
     listContent: {
         gap: 10,
     },
-});
+}));
 
 export default WearableSelectionModal;

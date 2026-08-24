@@ -27,13 +27,14 @@ import { UpgradeProCard } from '../../components/upgrade/UpgradeProCard';
 import { useProFeature } from '../../hooks/useProFeature';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { semanticColors } from '../../theme/semanticColors';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
 // ─── Figma tokens ────────────────────────────────────────────────────────────
-const BG = semanticColors.canvas;
-const TEXT_PRIMARY = semanticColors.textPrimary;
-const TEXT_SECONDARY = semanticColors.textSecondary;
-const TEXT_DIM = semanticColors.textTertiary;
-const CYAN = semanticColors.accent;
+
+
+
+
+
 
 const MONTH_PT_LONG = [
     'jan', 'fev', 'mar', 'abr', 'mai', 'jun',
@@ -47,6 +48,7 @@ function formatEndDate(iso: string): string {
 }
 
 export function PlanGoalsScreen() {
+    useThemeSubscription();
     const navigation = useNavigation<any>();
     // Tablet: semanas em 2 colunas (FlatList numColumns). Phone: 1 coluna (idêntico).
     const { isTablet } = useBreakpoint();
@@ -138,7 +140,7 @@ export function PlanGoalsScreen() {
                     accessibilityLabel="Voltar"
                     hitSlop={12}
                 >
-                    <Ionicons name="chevron-back" size={24} color={CYAN} />
+                    <Ionicons name="chevron-back" size={24} color={semanticColors.accent} />
                 </Pressable>
                 <Text style={styles.headerTitle}>Seu Plano</Text>
                 <View style={styles.headerSideBtn} />
@@ -146,7 +148,7 @@ export function PlanGoalsScreen() {
 
             {loading && !planOverview && (
                 <View style={styles.centered}>
-                    <ActivityIndicator color={CYAN} />
+                    <ActivityIndicator color={semanticColors.accent} />
                     <Text style={styles.centeredText}>Carregando seu plano...</Text>
                 </View>
             )}
@@ -156,7 +158,7 @@ export function PlanGoalsScreen() {
                     <MaterialCommunityIcons
                         name="cloud-off-outline"
                         size={48}
-                        color={TEXT_DIM}
+                        color={semanticColors.textTertiary}
                     />
                     <Text style={styles.centeredText}>{error}</Text>
                     <Pressable
@@ -197,7 +199,7 @@ export function PlanGoalsScreen() {
                         <RefreshControl
                             refreshing={loading}
                             onRefresh={fetchPlanOverview}
-                            tintColor={CYAN}
+                            tintColor={semanticColors.accent}
                         />
                     }
                     showsVerticalScrollIndicator={false}
@@ -208,6 +210,7 @@ export function PlanGoalsScreen() {
 }
 
 function ItemSeparator() {
+    useThemeSubscription();
     return <View style={{ height: 14 }} />;
 }
 
@@ -230,6 +233,7 @@ function PlanSummaryCard({
     completedKm,
     targetKm,
 }: PlanSummaryCardProps) {
+    useThemeSubscription();
     const overallPct = useMemo(() => {
         if (!targetKm) return 0;
         return Math.min(1, completedKm / targetKm);
@@ -268,7 +272,7 @@ function PlanSummaryCard({
                             <MaterialCommunityIcons
                                 name="flag-checkered"
                                 size={13}
-                                color={TEXT_SECONDARY}
+                                color={semanticColors.textSecondary}
                             />
                             <Text style={styles.summaryEnd}>{formatEndDate(endDate)}</Text>
                         </View>
@@ -327,9 +331,9 @@ function formatKm(km: number): string {
     return km < 10 ? km.toFixed(1) : Math.round(km).toString();
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     screen: {
-        backgroundColor: BG,
+        backgroundColor: semanticColors.canvas,
     },
     header: {
         flexDirection: 'row',
@@ -347,7 +351,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 17,
         fontWeight: '600',
-        color: TEXT_PRIMARY,
+        color: semanticColors.textPrimary,
     },
     centered: {
         flex: 1,
@@ -357,12 +361,12 @@ const styles = StyleSheet.create({
         padding: 24,
     },
     centeredText: {
-        color: TEXT_PRIMARY,
+        color: semanticColors.textPrimary,
         fontSize: 14,
         textAlign: 'center',
     },
     retryBtn: {
-        backgroundColor: CYAN,
+        backgroundColor: semanticColors.accent,
         paddingHorizontal: 22,
         paddingVertical: 11,
         borderRadius: 12,
@@ -421,7 +425,7 @@ const styles = StyleSheet.create({
     summaryTitle: {
         fontSize: 20,
         fontWeight: '700',
-        color: TEXT_PRIMARY,
+        color: semanticColors.textPrimary,
         lineHeight: 26,
     },
     summaryMetaRow: {
@@ -433,7 +437,7 @@ const styles = StyleSheet.create({
     summaryEnd: {
         fontSize: 12,
         fontWeight: '500',
-        color: TEXT_SECONDARY,
+        color: semanticColors.textSecondary,
     },
     weekCounterBubble: {
         flexDirection: 'row',
@@ -449,20 +453,20 @@ const styles = StyleSheet.create({
     weekCounterValue: {
         fontSize: 22,
         fontWeight: '800',
-        color: CYAN,
+        color: semanticColors.accent,
         lineHeight: 24,
     },
     weekCounterDivider: {
         fontSize: 14,
         fontWeight: '600',
-        color: TEXT_DIM,
+        color: semanticColors.textTertiary,
         lineHeight: 22,
         marginBottom: 1,
     },
     weekCounterTotal: {
         fontSize: 14,
         fontWeight: '600',
-        color: TEXT_SECONDARY,
+        color: semanticColors.textSecondary,
         lineHeight: 22,
         marginBottom: 1,
     },
@@ -479,18 +483,18 @@ const styles = StyleSheet.create({
     distanceValue: {
         fontSize: 36,
         fontWeight: '800',
-        color: TEXT_PRIMARY,
+        color: semanticColors.textPrimary,
         letterSpacing: -0.5,
     },
     distanceUnit: {
         fontSize: 16,
         fontWeight: '600',
-        color: TEXT_SECONDARY,
+        color: semanticColors.textSecondary,
     },
     distanceLabel: {
         fontSize: 12,
         fontWeight: '500',
-        color: TEXT_SECONDARY,
+        color: semanticColors.textSecondary,
         marginTop: -4,
     },
     distanceProgressTrack: {
@@ -528,16 +532,16 @@ const styles = StyleSheet.create({
     stripLabel: {
         fontSize: 11,
         fontWeight: '500',
-        color: TEXT_SECONDARY,
+        color: semanticColors.textSecondary,
     },
     stripValue: {
         fontSize: 18,
         fontWeight: '700',
-        color: TEXT_PRIMARY,
+        color: semanticColors.textPrimary,
     },
     stripValueDim: {
         fontSize: 14,
         fontWeight: '600',
-        color: TEXT_DIM,
+        color: semanticColors.textTertiary,
     },
-});
+}));

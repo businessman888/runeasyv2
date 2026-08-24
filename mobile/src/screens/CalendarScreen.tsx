@@ -14,7 +14,7 @@ import {
     Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, typography, spacing, borderRadius, fonts } from '../theme';
+import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { AppIcon } from '../components/ui/AppIcon';
 import { useResponsiveTheme } from '../theme/responsive';
@@ -60,38 +60,47 @@ const MOCK_DAY_WORKOUT: DayWorkout = {
 
 // Semantic icon adapters backed by the modular Ionicons package.
 function BackIcon({ size = 24, color = semanticColors.accent }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="chevronBack" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="accent" variant="filled" />;
 }
 
 function BellIcon({ size = 24, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="notification" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="primary" variant="filled" />;
 }
 
 function GoalsIcon({ size = 24, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="flag" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="primary" />;
 }
 
 function BoltIcon({ size = 16, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="energy" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" variant="filled" />;
 }
 
 function MoonIcon({ size = 48, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="sleep" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" variant="filled" />;
 }
 
 function TimerIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="time" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" />;
 }
 
 function PaceClockIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="trainingLoad" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" />;
 }
 
 function ArrowRightIcon({ size = 24, color = semanticColors.accent }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="chevronForward" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone={color === semanticColors.accent ? 'accent' : 'tertiary'} />;
 }
 
 function ProximoIcon({ size = 47 }: { size?: number }) {
+    useThemeSubscription();
     return (
         <View style={[styles.proximoIcon, { width: size, height: size }]}>
             <AppIcon name="running" size={24} tone="accent" variant="filled" />
@@ -100,38 +109,47 @@ function ProximoIcon({ size = 47 }: { size?: number }) {
 }
 
 function DistanceIcon({ size = 20, color = semanticColors.accent }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="location" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="accent" />;
 }
 
 function RPEIcon({ size = 20, color = semanticColors.accent }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="heartRate" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="accent" />;
 }
 
 function ClockOutlineIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="time" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" />;
 }
 
 function RunnerWarmupIcon({ size = 24, color = semanticColors.accent }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="walking" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="accent" />;
 }
 
 function RunnerSprintIcon({ size = 24, color = semanticColors.accent }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="running" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="accent" variant="filled" />;
 }
 
 function CooldownIcon({ size = 24, color = semanticColors.accent }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="wellness" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="accent" />;
 }
 
 function IdeaIcon({ size = 24, color = colors.warning }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="sparkles" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="warning" variant="filled" />;
 }
 
 function RunFastIcon({ size = 32, color = semanticColors.textOnAccent }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="running" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="tertiary" variant="filled" />;
 }
 
 function CloseIcon({ size = 24, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="close" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="primary" />;
 }
 
@@ -152,6 +170,7 @@ const SCOPE_TABS: { key: 'plan' | 'activity'; label: string }[] = [
 // WorkoutData / WorkoutBlock agora vêm de utils/workoutTransform (fonte única).
 
 export function CalendarScreen({ navigation }: any) {
+    useThemeSubscription();
     const { workouts: rawWorkouts, fetchWorkouts, fetchUpcomingWorkouts, plan, fetchPlan, generationStatus, checkPlanStatus, schedule: rawSchedule, fetchSchedule, isLoading: isTrainingLoading } = useTrainingStore();
     const { isProUser } = useProFeature();
     const { scope, setScope } = useWorkoutScopeStore();
@@ -844,7 +863,7 @@ export function CalendarScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: semanticColors.canvas,
@@ -1480,4 +1499,4 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.sm,
         color: semanticColors.textSecondary,
     },
-});
+}));

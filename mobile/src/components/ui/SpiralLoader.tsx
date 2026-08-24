@@ -9,7 +9,7 @@ import Animated, {
     Easing,
     cancelAnimation,
 } from 'react-native-reanimated';
-import { colors } from '../../theme';
+import { colors, useThemeSubscription, createThemeStyles } from '../../theme';
 
 /**
  * Premium post-workout loader — a ring of dots that pulse in a staggered
@@ -45,6 +45,7 @@ function Dot({
     x: number;
     y: number;
 }) {
+    useThemeSubscription();
     const progress = useSharedValue(0);
 
     useEffect(() => {
@@ -95,6 +96,7 @@ export function SpiralLoader({
     color = colors.primary,
     duration = 1500,
 }: SpiralLoaderProps) {
+    useThemeSubscription();
     const radius = size / 2 - size * DOT_RATIO;
 
     return (
@@ -123,7 +125,7 @@ export function SpiralLoader({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         position: 'relative',
         alignItems: 'center',
@@ -132,6 +134,6 @@ const styles = StyleSheet.create({
     dot: {
         position: 'absolute',
     },
-});
+}));
 
 export default SpiralLoader;

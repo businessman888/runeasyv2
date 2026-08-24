@@ -12,6 +12,7 @@ import {
   formatDurationLabel,
   isTimeBasedWorkout,
 } from '../utils/workoutTransform';
+import { createThemeStyles, useThemeSubscription } from '../theme';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -62,17 +63,17 @@ interface WorkoutCardProps {
 
 // ─── Figma design tokens ──────────────────────────────────────────────────────
 
-const CARD_BG = semanticColors.surface2;
-const CARD_BORDER_ACTIVE = semanticColors.borderSubtle;
-const TEXT_PRIMARY = semanticColors.textPrimary;
-const TEXT_SECONDARY = semanticColors.textSecondary;
-const SEPARATOR = semanticColors.borderSubtle;
-const BTN_ACTIVE_BG = semanticColors.accent;
-const BTN_ACTIVE_TEXT = semanticColors.textOnAccent;
-const BTN_DISABLED_BG = semanticColors.glass;
-const BTN_DISABLED_TEXT = semanticColors.textTertiary;
-const CHECKBOX_BORDER = semanticColors.borderStrong;
-const CHECKBOX_CHECKED_BG = semanticColors.accent;
+
+
+
+
+
+
+
+
+
+
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -166,6 +167,7 @@ function formatCardDate(dateStr?: string): string {
 
 export const WorkoutCard = memo(
   ({ workout, isToday, isCompleted, onStartWorkout, allBadges, executedOverride }: WorkoutCardProps) => {
+    useThemeSubscription();
     const pace = getPaceMinutes(workout);
     const dateLabel = formatCardDate(workout.scheduled_date);
     const intensityLabel = getIntensityLabel(workout.type);
@@ -302,10 +304,10 @@ WorkoutCard.displayName = 'WorkoutCard';
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   // Card container
   card: {
-    backgroundColor: CARD_BG,
+    backgroundColor: semanticColors.surface2,
     borderRadius: 20,
     ...Platform.select({
       ios: {
@@ -319,7 +321,7 @@ const styles = StyleSheet.create({
   },
   cardActive: {
     borderWidth: 1,
-    borderColor: CARD_BORDER_ACTIVE,
+    borderColor: semanticColors.borderSubtle,
   },
   cardCompleted: {
     borderWidth: 1,
@@ -342,17 +344,17 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 12,
     fontWeight: '600',
-    color: TEXT_SECONDARY,
+    color: semanticColors.textSecondary,
   },
   workoutName: {
     fontSize: 20,
     fontWeight: '600',
-    color: TEXT_PRIMARY,
+    color: semanticColors.textPrimary,
   },
   intensityText: {
     fontSize: 12,
     fontWeight: '600',
-    color: TEXT_SECONDARY,
+    color: semanticColors.textSecondary,
   },
   checkboxArea: {
     width: 93,
@@ -364,19 +366,19 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 5,
     borderWidth: 1,
-    borderColor: CHECKBOX_BORDER,
+    borderColor: semanticColors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkboxChecked: {
-    backgroundColor: CHECKBOX_CHECKED_BG,
-    borderColor: CHECKBOX_CHECKED_BG,
+    backgroundColor: semanticColors.accent,
+    borderColor: semanticColors.accent,
   },
 
   // Separator
   separator: {
     height: 1,
-    backgroundColor: SEPARATOR,
+    backgroundColor: semanticColors.borderSubtle,
     marginHorizontal: 13,
   },
 
@@ -401,17 +403,17 @@ const styles = StyleSheet.create({
   statColMiddle: {
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderRightWidth: StyleSheet.hairlineWidth,
-    borderColor: SEPARATOR,
+    borderColor: semanticColors.borderSubtle,
   },
   statLabel: {
     fontSize: 11,
     fontWeight: '500',
-    color: TEXT_SECONDARY,
+    color: semanticColors.textSecondary,
   },
   statValue: {
     fontSize: 13,
     fontWeight: '700',
-    color: TEXT_PRIMARY,
+    color: semanticColors.textPrimary,
   },
   badgesArea: {
     width: 94,
@@ -420,7 +422,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 9,
     borderLeftWidth: StyleSheet.hairlineWidth,
-    borderColor: SEPARATOR,
+    borderColor: semanticColors.borderSubtle,
     paddingRight: 4,
   },
 
@@ -430,7 +432,7 @@ const styles = StyleSheet.create({
     paddingVertical: 19,
   },
   startBtn: {
-    backgroundColor: BTN_ACTIVE_BG,
+    backgroundColor: semanticColors.accent,
     borderRadius: 10,
     height: 44,
     flexDirection: 'row',
@@ -448,7 +450,7 @@ const styles = StyleSheet.create({
     }),
   },
   startBtnDisabled: {
-    backgroundColor: BTN_DISABLED_BG,
+    backgroundColor: semanticColors.glass,
     ...Platform.select({
       ios: { shadowOpacity: 0 },
       android: { elevation: 0 },
@@ -457,9 +459,9 @@ const styles = StyleSheet.create({
   startBtnText: {
     fontSize: 14,
     fontWeight: '600',
-    color: BTN_ACTIVE_TEXT,
+    color: semanticColors.textOnAccent,
   },
   startBtnTextDisabled: {
-    color: BTN_DISABLED_TEXT,
+    color: semanticColors.textTertiary,
   },
-});
+}));

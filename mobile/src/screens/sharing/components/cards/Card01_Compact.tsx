@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors, spacing, borderRadius } from '../../../../theme';
+import { colors, spacing, borderRadius, createThemeStyles, useThemeSubscription } from '../../../../theme';
 import { ShareCardData } from '../../../../types/sharing.types';
 import { formatDistance, formatPace, formatDuration, workoutTypeLabel } from '../../utils/formatters';
 import { RouteSvg } from '../RouteSvg';
@@ -13,6 +13,7 @@ interface Props {
 }
 
 export function Card01_Compact({ data }: Props) {
+  useThemeSubscription();
   const typeLabel = workoutTypeLabel(data.workoutType).toUpperCase();
 
   return (
@@ -45,6 +46,7 @@ export function Card01_Compact({ data }: Props) {
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
+  useThemeSubscription();
   return (
     <View style={styles.metric}>
       <Text style={cardText.metricLabel}>{label}</Text>
@@ -53,7 +55,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   content: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
@@ -85,4 +87,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
-});
+}));

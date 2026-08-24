@@ -9,7 +9,7 @@ import {
     Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fonts, spacing } from '../theme';
+import { fonts, spacing, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { AppIcon } from './ui/AppIcon';
 
@@ -28,6 +28,7 @@ const PANEL_VPAD = 14;
 const FAB_RIGHT_OFFSET = spacing.lg;
 
 export function HomeFab({ onPressFreeRun, onPressManual }: HomeFabProps) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
     const [open, setOpen] = useState(false);
     const anim = useRef(new Animated.Value(0)).current;
@@ -132,6 +133,7 @@ interface FabOptionProps {
 }
 
 function FabOption({ label, onPress, icon }: FabOptionProps) {
+    useThemeSubscription();
     return (
         <View style={styles.row}>
             <View style={styles.labelCard}>
@@ -152,17 +154,17 @@ function FabOption({ label, onPress, icon }: FabOptionProps) {
     );
 }
 
-const PANEL_BG = semanticColors.surface2;
-const SUB_BTN_BG = semanticColors.surface3;
 
-const styles = StyleSheet.create({
+
+
+const styles = createThemeStyles(() => ({
     backdrop: {
         backgroundColor: semanticColors.canvas,
     },
     panel: {
         position: 'absolute',
         width: 137,
-        backgroundColor: PANEL_BG,
+        backgroundColor: semanticColors.surface2,
         borderRadius: 24,
         paddingVertical: PANEL_VPAD,
         paddingHorizontal: 3,
@@ -184,7 +186,7 @@ const styles = StyleSheet.create({
     labelCard: {
         height: 27,
         paddingHorizontal: 8,
-        backgroundColor: SUB_BTN_BG,
+        backgroundColor: semanticColors.surface3,
         borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
@@ -204,7 +206,7 @@ const styles = StyleSheet.create({
         width: SUB_BTN_SIZE,
         height: SUB_BTN_SIZE,
         borderRadius: SUB_BTN_SIZE / 2,
-        backgroundColor: SUB_BTN_BG,
+        backgroundColor: semanticColors.surface3,
         alignItems: 'center',
         justifyContent: 'center',
         shadowColor: semanticColors.canvas,
@@ -230,4 +232,4 @@ const styles = StyleSheet.create({
         shadowRadius: 12,
         elevation: 8,
     },
-});
+}));

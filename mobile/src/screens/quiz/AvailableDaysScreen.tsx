@@ -5,12 +5,11 @@ import {
     StyleSheet,
     TouchableOpacity,
 } from 'react-native';
-import { colors, typography, borderRadius, fonts } from '../../theme';
+import { colors, typography, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import Svg, { Path } from 'react-native-svg';
 
-// Design System Colors (Figma)
-const DS = {
+const getLocalThemePalette1 = () => ({
     bg: semanticColors.canvas,
     card: semanticColors.surface2,
     cyan: semanticColors.accent,
@@ -18,7 +17,10 @@ const DS = {
     text: semanticColors.textPrimary,
     textSecondary: semanticColors.textSecondary,
     warning: '#FFC400',
-};
+});
+
+// Design System Colors (Figma)
+
 
 const DAYS = [
     { id: 0, short: 'Dom', full: 'Domingo' },
@@ -35,7 +37,7 @@ const InfoIcon = () => (
     <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
         <Path
             d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM13 17H11V11H13V17ZM13 9H11V7H13V9Z"
-            fill={DS.warning}
+            fill={getLocalThemePalette1().warning}
         />
     </Svg>
 );
@@ -47,6 +49,7 @@ interface AvailableDaysScreenProps {
 }
 
 export function AvailableDaysScreen({ value, onChange, maxDays = 7 }: AvailableDaysScreenProps) {
+    useThemeSubscription();
     const [selectedDays, setSelectedDays] = useState<number[]>(value || []);
 
     useEffect(() => {
@@ -188,25 +191,25 @@ export function AvailableDaysScreen({ value, onChange, maxDays = 7 }: AvailableD
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     titleContainer: {
         marginBottom: 32,
     },
     title: {
         fontFamily: fonts.bold,
         fontSize: 28,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         lineHeight: 36,
         marginBottom: 12,
     },
     titleHighlight: {
         fontFamily: fonts.bold,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     subtitle: {
         fontFamily: fonts.regular,
         fontSize: 15,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         lineHeight: 22,
     },
     daysGrid: {
@@ -221,15 +224,15 @@ const styles = StyleSheet.create({
         width: 64,
         height: 64,
         borderRadius: 32, // Circular
-        backgroundColor: DS.card,
+        backgroundColor: getLocalThemePalette1().card,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1.5,
         borderColor: 'transparent',
     },
     dayButtonSelected: {
-        borderColor: DS.cyan,
-        backgroundColor: DS.cyanSelected,
+        borderColor: getLocalThemePalette1().cyan,
+        backgroundColor: getLocalThemePalette1().cyanSelected,
     },
     dayButtonDisabled: {
         opacity: 0.4,
@@ -237,13 +240,13 @@ const styles = StyleSheet.create({
     dayText: {
         fontFamily: fonts.semibold,
         fontSize: 16,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
     },
     dayTextSelected: {
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     dayTextDisabled: {
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
     },
     countContainer: {
         alignItems: 'center',
@@ -255,12 +258,12 @@ const styles = StyleSheet.create({
     countNumber: {
         fontFamily: fonts.bold,
         fontSize: 20,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     countLabel: {
         fontFamily: fonts.regular,
         fontSize: 15,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
     },
     warningCard: {
         flexDirection: 'row',
@@ -270,16 +273,16 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         paddingHorizontal: 16,
         borderWidth: 1,
-        borderColor: DS.warning,
+        borderColor: getLocalThemePalette1().warning,
         gap: 12,
     },
     warningText: {
         flex: 1,
         fontFamily: fonts.regular,
         fontSize: 13,
-        color: DS.warning,
+        color: getLocalThemePalette1().warning,
         lineHeight: 18,
     },
-});
+}));
 
 export default AvailableDaysScreen;

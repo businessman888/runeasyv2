@@ -1,7 +1,7 @@
 import React, { memo, useId, useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Svg, { Defs, LinearGradient, Path, Stop } from "react-native-svg";
-import { colors, fonts } from "../../../theme";
+import { colors, fonts, createThemeStyles, useThemeSubscription } from "../../../theme";
 import { semanticColors } from "../../../theme/semanticColors";
 
 interface ResultMetricProps {
@@ -44,6 +44,7 @@ export const ResultMetric = memo(function ResultMetric({
   series,
   color,
 }: ResultMetricProps) {
+  useThemeSubscription();
   const rawId = useId();
   const gradientId = `resultMetric${rawId.replace(/[^a-zA-Z0-9]/g, "")}`;
   const paths = useMemo(() => buildPaths(series, 62, 20), [series]);
@@ -88,7 +89,7 @@ export const ResultMetric = memo(function ResultMetric({
   );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   container: { flex: 1, minWidth: 0 },
   label: {
     color: semanticColors.textTertiary,
@@ -116,4 +117,4 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: semanticColors.borderSubtle,
   },
-});
+}));

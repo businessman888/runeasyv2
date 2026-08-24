@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { semanticColors } from '../theme/semanticColors';
 import Svg, { Path } from 'react-native-svg';
+import { createThemeStyles, useThemeSubscription } from '../theme';
 
 const FORCED_CYAN = '#00D4FF';
 
@@ -24,6 +25,7 @@ interface AnimatedXPProps {
 }
 
 export function AnimatedXP({ value }: AnimatedXPProps) {
+    useThemeSubscription();
     const [displayedValue, setDisplayedValue] = useState(value);
     const [popDelta, setPopDelta] = useState<number | null>(null);
     const prevValue = useRef(value);
@@ -101,7 +103,7 @@ export function AnimatedXP({ value }: AnimatedXPProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     wrap: {
         position: 'relative',
     },
@@ -141,6 +143,6 @@ const styles = StyleSheet.create({
         textShadowColor: FORCED_CYAN,
         textShadowRadius: 6,
     },
-});
+}));
 
 export default AnimatedXP;

@@ -9,19 +9,21 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { DateWheelPicker } from '../../components/DateWheelPicker';
-import { fonts } from '../../theme';
+import { fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
-// Design System
-const DS = {
+const getLocalThemePalette1 = () => ({
     bg: semanticColors.canvas,
     card: semanticColors.surface2,
     cyan: '#00E5FF',
     text: semanticColors.textPrimary,
-    textSecondary: 'rgba(235, 235, 245, 0.6)',
+    textSecondary: semanticColors.textSecondary,
     glassBorder: semanticColors.borderSubtle,
     modalOverlay: semanticColors.scrim,
-};
+});
+
+// Design System
+
 
 interface BirthDateValue {
     day: number;
@@ -35,6 +37,7 @@ interface BirthDateScreenProps {
 }
 
 export function BirthDateScreen({ value, onChange }: BirthDateScreenProps) {
+    useThemeSubscription();
     const [isModalVisible, setModalVisible] = useState(false);
     const [date, setDate] = useState<BirthDateValue | null>(value || null);
     const [tempDate, setTempDate] = useState<BirthDateValue>({ day: 15, month: 6, year: 1990 });
@@ -119,14 +122,14 @@ export function BirthDateScreen({ value, onChange }: BirthDateScreenProps) {
             >
                 <View style={styles.cardContent}>
                     <View style={styles.iconContainer}>
-                        <MaterialCommunityIcons name="calendar-month" size={24} color={DS.cyan} />
+                        <MaterialCommunityIcons name="calendar-month" size={24} color={getLocalThemePalette1().cyan} />
                     </View>
                     <View style={styles.labelContainer}>
                         <Text style={styles.cardLabel}>
                             {date ? formatDate(date) : 'Data de nascimento'}
                         </Text>
                     </View>
-                    <MaterialCommunityIcons name="chevron-down" size={24} color={DS.textSecondary} />
+                    <MaterialCommunityIcons name="chevron-down" size={24} color={getLocalThemePalette1().textSecondary} />
                 </View>
             </TouchableOpacity>
 
@@ -189,7 +192,7 @@ export function BirthDateScreen({ value, onChange }: BirthDateScreenProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         paddingTop: 8,
@@ -200,27 +203,27 @@ const styles = StyleSheet.create({
     title: {
         fontFamily: fonts.bold,
         fontSize: 24,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         lineHeight: 32,
         marginBottom: 12,
     },
     titleHighlight: {
         fontFamily: fonts.bold,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     subtitle: {
         fontFamily: fonts.regular,
         fontSize: 15,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         lineHeight: 22,
     },
     triggerCard: {
-        backgroundColor: DS.card,
+        backgroundColor: getLocalThemePalette1().card,
         borderRadius: 16,
         padding: 16,
         marginBottom: 24,
         borderWidth: 1,
-        borderColor: DS.glassBorder,
+        borderColor: getLocalThemePalette1().glassBorder,
     },
     cardContent: {
         flexDirection: 'row',
@@ -243,32 +246,32 @@ const styles = StyleSheet.create({
     cardLabel: {
         fontSize: 16,
         fontFamily: fonts.semibold,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
     },
     tipCard: {
         backgroundColor: semanticColors.glass,
         borderRadius: 12,
         padding: 16,
         borderWidth: 1,
-        borderColor: DS.glassBorder,
+        borderColor: getLocalThemePalette1().glassBorder,
     },
     tipText: {
         fontFamily: fonts.regular,
         fontSize: 13,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         lineHeight: 18,
     },
     // Modal Styles
     modalOverlay: {
         flex: 1,
-        backgroundColor: DS.modalOverlay,
+        backgroundColor: getLocalThemePalette1().modalOverlay,
         justifyContent: 'flex-end',
     },
     backdrop: {
         flex: 1,
     },
     modalSheet: {
-        backgroundColor: DS.card,
+        backgroundColor: getLocalThemePalette1().card,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         paddingBottom: Platform.OS === 'ios' ? 40 : 24,
@@ -281,17 +284,17 @@ const styles = StyleSheet.create({
         paddingHorizontal: 24,
         paddingVertical: 16,
         borderBottomWidth: 1,
-        borderBottomColor: DS.glassBorder,
+        borderBottomColor: getLocalThemePalette1().glassBorder,
     },
     cancelText: {
         fontFamily: fonts.medium,
         fontSize: 16,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
     },
     confirmText: {
         fontFamily: fonts.bold,
         fontSize: 16,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     liveAgeContainer: {
         alignItems: 'center',
@@ -301,11 +304,11 @@ const styles = StyleSheet.create({
     liveAgeText: {
         fontFamily: fonts.bold,
         fontSize: 20,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     pickerWrapper: {
         paddingVertical: 12,
     },
-});
+}));
 
 export default BirthDateScreen;

@@ -1,6 +1,6 @@
 import React, { memo, useCallback } from 'react';
 import { Pressable, Text, View, StyleSheet } from 'react-native';
-import { fonts } from '../../theme';
+import { fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { DayIndicator, type CalendarDayStatus } from './DayIndicator';
 
@@ -42,6 +42,7 @@ function CalendarDayInner({
     onPress,
     accessibilityLabel,
 }: CalendarDayProps) {
+    useThemeSubscription();
     const handlePress = useCallback(() => onPress(date), [onPress, date]);
 
     // Out-of-month day → keep the column width, render nothing.
@@ -96,7 +97,7 @@ function CalendarDayInner({
 
 export const CalendarDay = memo(CalendarDayInner);
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     cell: {
         flex: 1,
         height: CELL_HEIGHT,
@@ -155,6 +156,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-});
+}));
 
 export default CalendarDay;

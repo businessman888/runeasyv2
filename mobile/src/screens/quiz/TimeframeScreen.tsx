@@ -7,7 +7,7 @@ import {
     Dimensions,
     Platform,
 } from 'react-native';
-import { colors, typography, spacing } from '../../theme';
+import { colors, typography, spacing, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import Svg, { Path, Rect } from 'react-native-svg';
 
@@ -20,7 +20,7 @@ const BackspaceIcon = () => (
     <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
         <Path
             d="M22 3H7C6.31 3 5.77 3.35 5.41 3.88L0 12L5.41 20.11C5.77 20.64 6.31 21 7 21H22C23.1 21 24 20.1 24 19V5C24 3.9 23.1 3 22 3ZM19 15.59L17.59 17L14 13.41L10.41 17L9 15.59L12.59 12L9 8.41L10.41 7L14 10.59L17.59 7L19 8.41L15.41 12L19 15.59Z"
-            fill="rgba(235, 235, 245, 0.6)"
+            fill={semanticColors.textSecondary}
         />
     </Svg>
 );
@@ -50,6 +50,7 @@ interface TimeframeScreenProps {
 }
 
 export function TimeframeScreen({ paceMinutes: initialMinutes, paceSeconds: initialSeconds, dontKnowPace: initialDontKnow, onChange }: TimeframeScreenProps) {
+    useThemeSubscription();
     const [paceMinutes, setPaceMinutes] = useState(initialMinutes || '');
     const [paceSeconds, setPaceSeconds] = useState(initialSeconds || '');
     const [isEditingMinutes, setIsEditingMinutes] = useState(true);
@@ -218,7 +219,7 @@ export function TimeframeScreen({ paceMinutes: initialMinutes, paceSeconds: init
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: semanticColors.canvas,
@@ -422,6 +423,6 @@ const styles = StyleSheet.create({
     nextButtonDisabled: {
         shadowOpacity: 0.3,
     },
-});
+}));
 
 export default TimeframeScreen;

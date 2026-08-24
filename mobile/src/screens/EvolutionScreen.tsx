@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { colors, typography, spacing } from '../theme';
+import { colors, typography, spacing, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useReadinessStore, ReadinessAnswers } from '../stores/readinessStore';
 
@@ -56,7 +56,7 @@ const STEP_TO_STORE_KEY: Record<string, keyof ReadinessAnswers> = {
 // SVG Icons for Result Screen
 const CalendarIcon = () => (
     <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <Path d="M22.5 5.99993C22.5 5.20428 22.1839 4.44122 21.6213 3.87861C21.0587 3.316 20.2956 2.99993 19.5 2.99993H18.75V2.27103C18.75 1.86743 18.4397 1.52103 18.0361 1.50087C17.9347 1.49598 17.8333 1.51174 17.7382 1.54717C17.6431 1.58261 17.5561 1.637 17.4826 1.70704C17.4091 1.77707 17.3506 1.8613 17.3106 1.95462C17.2706 2.04794 17.25 2.14841 17.25 2.24993V2.99993H6.75V2.27103C6.75 1.86743 6.43969 1.52103 6.03609 1.50087C5.93469 1.49598 5.83334 1.51174 5.7382 1.54717C5.64307 1.58261 5.55611 1.637 5.48261 1.70704C5.40911 1.77707 5.3506 1.8613 5.31062 1.95462C5.27063 2.04794 5.25001 2.14841 5.25 2.24993V2.99993H4.5C3.70435 2.99993 2.94129 3.316 2.37868 3.87861C1.81607 4.44122 1.5 5.20428 1.5 5.99993V6.56243C1.5 6.61216 1.51975 6.65985 1.55492 6.69501C1.59008 6.73018 1.63777 6.74993 1.6875 6.74993H22.3125C22.3622 6.74993 22.4099 6.73018 22.4451 6.69501C22.4802 6.65985 22.5 6.61216 22.5 6.56243V5.99993ZM1.5 19.4999C1.5 20.2956 1.81607 21.0586 2.37868 21.6213C2.94129 22.1839 3.70435 22.4999 4.5 22.4999H19.5C20.2956 22.4999 21.0587 22.1839 21.6213 21.6213C22.1839 21.0586 22.5 20.2956 22.5 19.4999V8.39056C22.5 8.35326 22.4852 8.31749 22.4588 8.29112C22.4324 8.26475 22.3967 8.24993 22.3594 8.24993H1.64062C1.60333 8.24993 1.56756 8.26475 1.54119 8.29112C1.51482 8.31749 1.5 8.35326 1.5 8.39056V19.4999Z" fill="#EBEBF5" />
+        <Path d="M22.5 5.99993C22.5 5.20428 22.1839 4.44122 21.6213 3.87861C21.0587 3.316 20.2956 2.99993 19.5 2.99993H18.75V2.27103C18.75 1.86743 18.4397 1.52103 18.0361 1.50087C17.9347 1.49598 17.8333 1.51174 17.7382 1.54717C17.6431 1.58261 17.5561 1.637 17.4826 1.70704C17.4091 1.77707 17.3506 1.8613 17.3106 1.95462C17.2706 2.04794 17.25 2.14841 17.25 2.24993V2.99993H6.75V2.27103C6.75 1.86743 6.43969 1.52103 6.03609 1.50087C5.93469 1.49598 5.83334 1.51174 5.7382 1.54717C5.64307 1.58261 5.55611 1.637 5.48261 1.70704C5.40911 1.77707 5.3506 1.8613 5.31062 1.95462C5.27063 2.04794 5.25001 2.14841 5.25 2.24993V2.99993H4.5C3.70435 2.99993 2.94129 3.316 2.37868 3.87861C1.81607 4.44122 1.5 5.20428 1.5 5.99993V6.56243C1.5 6.61216 1.51975 6.65985 1.55492 6.69501C1.59008 6.73018 1.63777 6.74993 1.6875 6.74993H22.3125C22.3622 6.74993 22.4099 6.73018 22.4451 6.69501C22.4802 6.65985 22.5 6.61216 22.5 6.56243V5.99993ZM1.5 19.4999C1.5 20.2956 1.81607 21.0586 2.37868 21.6213C2.94129 22.1839 3.70435 22.4999 4.5 22.4999H19.5C20.2956 22.4999 21.0587 22.1839 21.6213 21.6213C22.1839 21.0586 22.5 20.2956 22.5 19.4999V8.39056C22.5 8.35326 22.4852 8.31749 22.4588 8.29112C22.4324 8.26475 22.3967 8.24993 22.3594 8.24993H1.64062C1.60333 8.24993 1.56756 8.26475 1.54119 8.29112C1.51482 8.31749 1.5 8.35326 1.5 8.39056V19.4999Z" fill={semanticColors.textPrimary} />
     </Svg>
 );
 
@@ -105,6 +105,7 @@ const StressIcon = () => (
 
 // Gauge Component for Result Screen
 const ReadinessGaugeInline: React.FC<{ score: number; color: 'green' | 'yellow' | 'red' }> = ({ score, color }) => {
+    useThemeSubscription();
     const animatedValue = useRef(new Animated.Value(0)).current;
 
     const colorMap = { green: '#00D4FF', yellow: '#FFD700', red: '#FF4444' };
@@ -123,7 +124,7 @@ const ReadinessGaugeInline: React.FC<{ score: number; color: 'green' | 'yellow' 
     return (
         <View style={resultStyles.gaugeContainer}>
             <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
-                <Circle cx={size / 2} cy={size / 2} r={radius} stroke="rgba(255, 255, 255, 0.1)" strokeWidth={strokeWidth} fill="transparent" />
+                <Circle cx={size / 2} cy={size / 2} r={radius} stroke={semanticColors.borderStrong} strokeWidth={strokeWidth} fill="transparent" />
                 <AnimatedCircle cx={size / 2} cy={size / 2} r={radius} stroke={colorMap[color]} strokeWidth={strokeWidth} fill="transparent" strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round" />
             </Svg>
             <View style={resultStyles.gaugeCenter}>
@@ -136,6 +137,7 @@ const ReadinessGaugeInline: React.FC<{ score: number; color: 'green' | 'yellow' 
 
 // Metric Card for Result Screen
 const MetricCardInline: React.FC<{ label: string; value: string; sublabel?: string; icon: 'sleep' | 'load' | 'energy' | 'stress' }> = ({ label, value, sublabel, icon }) => {
+    useThemeSubscription();
     const renderIcon = () => {
         switch (icon) {
             case 'sleep': return <SleepIcon />;
@@ -156,13 +158,14 @@ const MetricCardInline: React.FC<{ label: string; value: string; sublabel?: stri
 
 // Inline Result Component (keeps navbar)
 const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> = ({ navigation, onReset }) => {
+    useThemeSubscription();
     const { verdict, isLoading, error, fetchVerdict } = useReadinessStore();
     const insets = useSafeAreaInsets();
 
     if (isLoading) {
         return (
             <View style={[resultStyles.loadingContainer, { paddingTop: insets.top }]}>
-                <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
+                <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
                 <ActivityIndicator size="large" color={colors.primary} />
                 <Text style={resultStyles.loadingText}>Analisando sua prontidão...</Text>
             </View>
@@ -172,7 +175,7 @@ const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> 
     if (error || !verdict) {
         return (
             <View style={[resultStyles.errorContainer, { paddingTop: insets.top }]}>
-                <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
+                <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
                 <Text style={{ fontSize: 48 }}>⚠️</Text>
                 <Text style={resultStyles.errorText}>{error || 'Erro ao carregar resultado'}</Text>
                 <TouchableOpacity style={resultStyles.retryButton} onPress={fetchVerdict}>
@@ -186,7 +189,7 @@ const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> 
 
     return (
         <View style={[resultStyles.container, { paddingTop: insets.top }]}>
-            <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
+            <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
             <View style={resultStyles.header}>
                 <TouchableOpacity onPress={onReset} style={resultStyles.backButton}>
                     <Ionicons name="chevron-back" size={24} color={semanticColors.textPrimary} />
@@ -242,7 +245,7 @@ const ReadinessResultInline: React.FC<{ navigation: any; onReset: () => void }> 
 };
 
 // Styles for Result Screen
-const resultStyles = StyleSheet.create({
+const resultStyles = createThemeStyles(() => ({
     container: { flex: 1, backgroundColor: semanticColors.textOnAccent },
     safeArea: { backgroundColor: semanticColors.textOnAccent },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm },
@@ -284,9 +287,10 @@ const resultStyles = StyleSheet.create({
     errorText: { fontSize: typography.fontSizes.md, color: semanticColors.textSecondary, textAlign: 'center', marginTop: spacing.lg, marginBottom: spacing.xl },
     retryButton: { backgroundColor: colors.primary, paddingVertical: 14, paddingHorizontal: 32, borderRadius: 24 },
     retryButtonText: { fontSize: typography.fontSizes.md, fontWeight: '600', color: semanticColors.textOnAccent },
-});
+}));
 
 export function EvolutionScreen({ navigation }: any) {
+    useThemeSubscription();
     const [currentStep, setCurrentStep] = useState(0);
     const [answers, setAnswers] = useState<Record<string, number>>({});
     const [quizCompleted, setQuizCompleted] = useState(false);
@@ -466,7 +470,7 @@ export function EvolutionScreen({ navigation }: any) {
     if (statusLoading || readinessStatus === null || (questionsLoading && questions.length === 0)) {
         return (
             <View style={styles.container}>
-                <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
+                <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <ActivityIndicator size="large" color={colors.primary} />
                     <Text style={{ color: colors.white, marginTop: spacing.lg }}>
@@ -487,7 +491,7 @@ export function EvolutionScreen({ navigation }: any) {
     if (!quizCompleted && !hasCompletedToday && questions.length === 0) {
         return (
             <View style={[styles.container, { paddingTop: insets.top }]}>
-                <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
+                <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
                     <Text style={{ color: colors.white, marginTop: spacing.lg }}>Erro ao carregar perguntas</Text>
@@ -517,7 +521,7 @@ export function EvolutionScreen({ navigation }: any) {
         // If no verdict available but still completed, show success message
         return (
             <View style={[styles.container, { paddingTop: insets.top }]}>
-                <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
+                <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.lg }}>
                     <Ionicons name="checkmark-circle" size={80} color={colors.primary} />
                     <Text style={{ color: colors.white, fontSize: 24, fontWeight: '700', marginTop: spacing.lg, textAlign: 'center' }}>
@@ -552,7 +556,7 @@ export function EvolutionScreen({ navigation }: any) {
 
     return (
         <View style={{ paddingTop: insets.top + (Platform.OS === 'android' ? 10 : 0), paddingBottom: insets.bottom, backgroundColor: semanticColors.textOnAccent, flex: 1 }}>
-            <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
+            <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
 
             {/* Header */}
             {/* Header */}
@@ -681,7 +685,7 @@ export function EvolutionScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: semanticColors.textOnAccent,
@@ -885,4 +889,4 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 24,
     },
-});
+}));

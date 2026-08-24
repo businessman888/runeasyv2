@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { colors, spacing, borderRadius } from '../../../../theme';
+import { colors, spacing, borderRadius, createThemeStyles, useThemeSubscription } from '../../../../theme';
 import { ShareCardData } from '../../../../types/sharing.types';
 import { formatDistance, formatPace, formatDuration } from '../../utils/formatters';
 import { BadgeShield } from '../../../../components/BadgeShield';
@@ -51,6 +51,7 @@ function pickHero(data: ShareCardData): Hero | null {
 }
 
 export function Card03_Achievement({ data }: Props) {
+  useThemeSubscription();
   const hero = pickHero(data);
 
   return (
@@ -117,7 +118,7 @@ export function Card03_Achievement({ data }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   content: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
@@ -164,4 +165,4 @@ const styles = StyleSheet.create({
     height: 32,
     backgroundColor: 'rgba(255, 255, 255, 0.25)',
   },
-});
+}));

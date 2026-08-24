@@ -1,13 +1,15 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { fonts } from '../../theme';
+import { fonts, useThemeSubscription, createThemeStyles } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
-const DS = {
+const getLocalThemePalette1 = () => ({
     text: semanticColors.textPrimary,
     textSecondary: semanticColors.textSecondary,
     cyan: semanticColors.accent,
-};
+});
+
+
 
 interface InterstitialBaseProps {
     title: string;
@@ -24,6 +26,7 @@ export function InterstitialBase({
     subtitle,
     children,
 }: InterstitialBaseProps) {
+    useThemeSubscription();
     return (
         <>
             <View style={styles.titleContainer}>
@@ -40,32 +43,32 @@ export function InterstitialBase({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     titleContainer: {
         marginBottom: 24,
     },
     title: {
         fontFamily: fonts.bold,
         fontSize: 24,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         lineHeight: 36,
     },
     titleCenter: {
         textAlign: 'center',
     },
     titleHighlight: {
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     subtitle: {
         fontFamily: fonts.regular,
         fontSize: 15,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         lineHeight: 22.5,
         marginTop: 8,
     },
     bodyContainer: {
         width: '100%',
     },
-});
+}));
 
 export default InterstitialBase;

@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { semanticColors } from '../theme/semanticColors';
+import { createThemeStyles, useThemeSubscription } from '../theme';
 
 const checkAnimation = require('../assets/animate/animationCheck.json');
 
@@ -25,6 +26,7 @@ export function WorkoutCreatedPopup({
     title = 'Treino Criado!',
     message = 'Seu treino manual foi adicionando ao\ncalendário',
 }: WorkoutCreatedPopupProps) {
+    useThemeSubscription();
     const lottieRef = useRef<LottieView>(null);
 
     useEffect(() => {
@@ -72,7 +74,7 @@ export function WorkoutCreatedPopup({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     overlay: {
         flex: 1,
         backgroundColor: semanticColors.scrim,
@@ -143,4 +145,4 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         color: semanticColors.textOnAccent,
     },
-});
+}));

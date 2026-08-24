@@ -19,16 +19,16 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useAuthStore, getDisplayName } from '../stores/authStore';
 import { semanticColors } from '../theme/semanticColors';
-import { fonts } from '../theme';
+import { fonts, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../theme';
 
 // ============================================
 // FORCED COLORS (Figma 1391:1686)
 // ============================================
-const OVERLAY = semanticColors.scrim;
-const CYAN = semanticColors.accent;
-const TEXT = semanticColors.textPrimary;
-const TEXT_SECONDARY = semanticColors.textSecondary;
-const BTN_TEXT = semanticColors.textOnAccent;
+
+
+
+
+
 
 const FADE_IN_MS = 500;
 const FADE_OUT_MS = 300;
@@ -45,6 +45,7 @@ function getFirstName(user: ReturnType<typeof useAuthStore.getState>['user']): s
 }
 
 export function WelcomeScreen({ navigation }: any) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
     const user = useAuthStore((s) => s.user);
     const firstName = getFirstName(user);
@@ -95,7 +96,7 @@ export function WelcomeScreen({ navigation }: any) {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+            <StatusBar barStyle={getThemeStatusBarStyle()} translucent backgroundColor="transparent" />
 
             <ImageBackground source={bgImage} style={StyleSheet.absoluteFill} resizeMode="cover">
                 {/* Película escura sólida (Figma) */}
@@ -142,13 +143,13 @@ export function WelcomeScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: semanticColors.canvas,
     },
     overlay: {
-        backgroundColor: OVERLAY,
+        backgroundColor: semanticColors.scrim,
     },
     content: {
         flex: 1,
@@ -164,23 +165,23 @@ const styles = StyleSheet.create({
         fontSize: 24,
         lineHeight: 36,
         textAlign: 'center',
-        color: TEXT,
+        color: semanticColors.textPrimary,
     },
     subtitle: {
         fontFamily: fonts.regular,
         fontSize: 15,
         lineHeight: 22.5,
         textAlign: 'center',
-        color: TEXT_SECONDARY,
+        color: semanticColors.textSecondary,
         paddingHorizontal: 8,
     },
     button: {
         height: 55,
         borderRadius: 30,
-        backgroundColor: CYAN,
+        backgroundColor: semanticColors.accent,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: CYAN,
+        shadowColor: semanticColors.accent,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.6,
         shadowRadius: 12,
@@ -189,8 +190,8 @@ const styles = StyleSheet.create({
     buttonText: {
         fontFamily: fonts.bold,
         fontSize: 18,
-        color: BTN_TEXT,
+        color: semanticColors.textOnAccent,
     },
-});
+}));
 
 export default WelcomeScreen;

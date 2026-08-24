@@ -9,7 +9,7 @@ import {
     Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
+import { colors, typography, spacing, borderRadius, shadows, createThemeStyles, useThemeSubscription } from '../../theme';
 import type { ReadinessBlock } from '../../types/wellness.types';
 import { semanticColors } from '../../theme/semanticColors';
 import type { AppIconName, IconTone } from '../../theme/iconography';
@@ -42,23 +42,16 @@ const DIMENSION_ICONS: Record<keyof typeof DIMENSION_LABELS, AppIconName> = {
     motivation: 'energy',
 };
 
-const STATUS_GRADIENT: Record<'red' | 'yellow' | 'green', [string, string, string]> = {
-    green: [semanticColors.surface1, semanticColors.surface2, semanticColors.successSubtle],
-    yellow: [semanticColors.surface1, semanticColors.surface2, semanticColors.warningSubtle],
-    red: [semanticColors.surface1, semanticColors.surface2, semanticColors.dangerSubtle],
-};
 
-const STATUS_COLOR: Record<'red' | 'yellow' | 'green', string> = {
-    green: colors.success,
-    yellow: colors.warning,
-    red: colors.error,
-};
+
+
 
 export function ReadinessCard({
     readiness,
     isUnlocked,
     onPressQuiz,
 }: ReadinessCardProps) {
+    useThemeSubscription();
     if (readiness.hasCompletedToday) {
         return <ReadinessCardDone readiness={readiness} />;
     }
@@ -73,6 +66,7 @@ export function ReadinessCard({
 // =============================================================================
 
 function ReadinessCardPending({ onPress }: { onPress: () => void }) {
+    useThemeSubscription();
     const rotate = useRef(new Animated.Value(0)).current;
     const pulse = useRef(new Animated.Value(1)).current;
     const iconPulse = useRef(new Animated.Value(0.7)).current;
@@ -242,6 +236,7 @@ function ReadinessCardPending({ onPress }: { onPress: () => void }) {
 // =============================================================================
 
 function ReadinessCardLocked() {
+    useThemeSubscription();
     return (
         <LinearGradient
             colors={[semanticColors.surface1, semanticColors.surface2, semanticColors.surface1]}
@@ -282,9 +277,18 @@ function ReadinessCardLocked() {
 // =============================================================================
 
 function ReadinessCardDone({ readiness }: { readiness: ReadinessBlock }) {
+    useThemeSubscription();
     const color = readiness.statusColor ?? 'green';
-    const gradient = STATUS_GRADIENT[color];
-    const accent = STATUS_COLOR[color];
+    const gradient = ({
+    green: [semanticColors.surface1, semanticColors.surface2, semanticColors.successSubtle],
+    yellow: [semanticColors.surface1, semanticColors.surface2, semanticColors.warningSubtle],
+    red: [semanticColors.surface1, semanticColors.surface2, semanticColors.dangerSubtle],
+})[color] as [string, string, string];
+    const accent = ({
+    green: colors.success,
+    yellow: colors.warning,
+    red: colors.error,
+})[color];
     const score = readiness.score ?? 0;
     const dims = readiness.dimensions;
     const statusTone: IconTone = color === 'green' ? 'success' : color === 'yellow' ? 'warning' : 'danger';
@@ -357,7 +361,7 @@ function ReadinessCardDone({ readiness }: { readiness: ReadinessBlock }) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     // ============ PENDING ============
     pendingShell: {
         borderRadius: borderRadius['2xl'],
@@ -573,4 +577,4 @@ const styles = StyleSheet.create({
         width: '100%',
         borderRadius: borderRadius.full,
     },
-});
+}));

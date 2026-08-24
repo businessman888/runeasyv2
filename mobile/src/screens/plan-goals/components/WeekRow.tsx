@@ -10,14 +10,15 @@ import Animated, {
 import type { PlanWeek } from '../../../types/plan-overview.types';
 import { getPhaseStyle } from '../phaseTokens';
 import { semanticColors } from '../../../theme/semanticColors';
+import { createThemeStyles, useThemeSubscription } from '../../../theme';
 
 // ─── Figma tokens ────────────────────────────────────────────────────────────
-const CARD_BG = semanticColors.surface1;
-const CARD_BG_PAST = semanticColors.canvas;
-const TEXT_PRIMARY = semanticColors.textPrimary;
-const TEXT_TITLE = semanticColors.textPrimary;
-const TEXT_SECONDARY = semanticColors.textSecondary;
-const PROGRESS_TRACK = semanticColors.borderSubtle;
+
+
+
+
+
+
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -40,6 +41,7 @@ function formatRange(start: string, end: string): string {
 }
 
 export const WeekRow = memo(({ week, isFuture, isPast, onPress }: WeekRowProps) => {
+    useThemeSubscription();
     const period = formatRange(week.start_date, week.end_date);
     const phaseStyle = getPhaseStyle(week.phase);
     const progressPct =
@@ -154,7 +156,7 @@ export const WeekRow = memo(({ week, isFuture, isPast, onPress }: WeekRowProps) 
                     week.workouts.map((w) => (
                         <View key={w.id} style={styles.workoutRow}>
                             <View style={styles.workoutIconWrap}>
-                                <MaterialCommunityIcons name="run" size={14} color={TEXT_PRIMARY} />
+                                <MaterialCommunityIcons name="run" size={14} color={semanticColors.textPrimary} />
                             </View>
                             <Text style={styles.dayLabel}>{w.day_of_week}</Text>
                             <Text style={styles.workoutName} numberOfLines={1}>
@@ -180,9 +182,9 @@ export const WeekRow = memo(({ week, isFuture, isPast, onPress }: WeekRowProps) 
 
 WeekRow.displayName = 'WeekRow';
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     card: {
-        backgroundColor: CARD_BG,
+        backgroundColor: semanticColors.surface1,
         borderRadius: 18,
         paddingVertical: 14,
         paddingHorizontal: 14,
@@ -191,7 +193,7 @@ const styles = StyleSheet.create({
         borderColor: semanticColors.borderSubtle,
     },
     cardPast: {
-        backgroundColor: CARD_BG_PAST,
+        backgroundColor: semanticColors.canvas,
     },
     cardCurrent: {
         borderWidth: 1.5,
@@ -227,13 +229,13 @@ const styles = StyleSheet.create({
     period: {
         fontSize: 12,
         fontWeight: '600',
-        color: TEXT_SECONDARY,
+        color: semanticColors.textSecondary,
         letterSpacing: 0.3,
     },
     title: {
         fontSize: 19,
         fontWeight: '700',
-        color: TEXT_PRIMARY,
+        color: semanticColors.textPrimary,
     },
     phasePill: {
         flexDirection: 'row',
@@ -260,7 +262,7 @@ const styles = StyleSheet.create({
     },
     progressTrack: {
         height: 6,
-        backgroundColor: PROGRESS_TRACK,
+        backgroundColor: semanticColors.borderSubtle,
         borderRadius: 999,
         overflow: 'hidden',
     },
@@ -276,7 +278,7 @@ const styles = StyleSheet.create({
     totalLabel: {
         fontSize: 11,
         fontWeight: '600',
-        color: TEXT_SECONDARY,
+        color: semanticColors.textSecondary,
     },
     currentBadge: {
         flexDirection: 'row',
@@ -319,25 +321,25 @@ const styles = StyleSheet.create({
     dayLabel: {
         fontSize: 11,
         fontWeight: '600',
-        color: TEXT_SECONDARY,
+        color: semanticColors.textSecondary,
         width: 30,
     },
     workoutName: {
         flex: 1,
         fontSize: 13,
         fontWeight: '600',
-        color: TEXT_TITLE,
+        color: semanticColors.textPrimary,
     },
     workoutDistance: {
         fontSize: 11,
         fontWeight: '600',
-        color: TEXT_SECONDARY,
+        color: semanticColors.textSecondary,
     },
     emptyLabel: {
         fontSize: 12,
         fontWeight: '500',
-        color: TEXT_SECONDARY,
+        color: semanticColors.textSecondary,
         textAlign: 'center',
         paddingVertical: 8,
     },
-});
+}));

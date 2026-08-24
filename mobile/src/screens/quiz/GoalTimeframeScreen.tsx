@@ -6,18 +6,20 @@ import {
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { OptionCard } from '../../components/onboarding/OptionCard';
-import { fonts } from '../../theme';
+import { fonts, useThemeSubscription, createThemeStyles } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
-// Design System Colors (Figma)
-const DS = {
+const getLocalThemePalette1 = () => ({
     bg: semanticColors.canvas,
     card: semanticColors.surface2,
     cyan: semanticColors.accent,
     cyanSelected: semanticColors.accentSubtle,
     text: semanticColors.textPrimary,
     textSecondary: semanticColors.textSecondary,
-};
+});
+
+// Design System Colors (Figma)
+
 
 // Circular checkbox component
 const CircularCheckbox = ({ selected }: { selected: boolean }) => (
@@ -26,7 +28,7 @@ const CircularCheckbox = ({ selected }: { selected: boolean }) => (
             <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
                 <Path
                     d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"
-                    fill="#FFFFFF"
+                    fill={semanticColors.textOnAccent}
                 />
             </Svg>
         )}
@@ -38,7 +40,7 @@ const CalendarIcon = () => (
     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
         <Path
             d="M19 4H18V2H16V4H8V2H6V4H5C3.89 4 3 4.9 3 6V20C3 21.1 3.89 22 5 22H19C20.1 22 21 21.1 21 20V6C21 4.9 20.1 4 19 4ZM19 20H5V9H19V20ZM9 11H7V13H9V11ZM13 11H11V13H13V11ZM17 11H15V13H17V11ZM9 15H7V17H9V15ZM13 15H11V17H13V15ZM17 15H15V17H17V15Z"
-            fill={DS.cyan}
+            fill={getLocalThemePalette1().cyan}
         />
     </Svg>
 );
@@ -55,6 +57,7 @@ const TIMEFRAME_OPTIONS = [
 ];
 
 export function GoalTimeframeScreen({ value, onChange }: GoalTimeframeScreenProps) {
+    useThemeSubscription();
     const [selectedMonths, setSelectedMonths] = useState<number | null>(value ?? null);
 
     useEffect(() => {
@@ -128,25 +131,25 @@ export function GoalTimeframeScreen({ value, onChange }: GoalTimeframeScreenProp
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     titleContainer: {
         marginBottom: 32,
     },
     title: {
         fontFamily: fonts.bold,
         fontSize: 24,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         lineHeight: 32,
         marginBottom: 12,
     },
     titleHighlight: {
         fontFamily: fonts.bold,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     subtitle: {
         fontFamily: fonts.regular,
         fontSize: 15,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         lineHeight: 22,
     },
     optionsContainer: {
@@ -156,7 +159,7 @@ const styles = StyleSheet.create({
     optionCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: DS.card,
+        backgroundColor: getLocalThemePalette1().card,
         borderRadius: 15,
         padding: 16,
         borderWidth: 1.5,
@@ -164,21 +167,21 @@ const styles = StyleSheet.create({
         gap: 14,
     },
     optionCardSelected: {
-        borderColor: DS.cyan,
-        backgroundColor: DS.cyanSelected,
+        borderColor: getLocalThemePalette1().cyan,
+        backgroundColor: getLocalThemePalette1().cyanSelected,
     },
     checkbox: {
         width: 24,
         height: 24,
         borderRadius: 12,
         borderWidth: 2,
-        borderColor: DS.textSecondary,
+        borderColor: getLocalThemePalette1().textSecondary,
         alignItems: 'center',
         justifyContent: 'center',
     },
     checkboxSelected: {
-        backgroundColor: DS.cyan,
-        borderColor: DS.cyan,
+        backgroundColor: getLocalThemePalette1().cyan,
+        borderColor: getLocalThemePalette1().cyan,
     },
     optionContent: {
         flex: 1,
@@ -192,13 +195,13 @@ const styles = StyleSheet.create({
     optionTitle: {
         fontFamily: fonts.semibold,
         fontSize: 17,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
     },
     optionTitleSelected: {
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     recommendedBadge: {
-        backgroundColor: DS.cyan,
+        backgroundColor: getLocalThemePalette1().cyan,
         borderRadius: 8,
         paddingHorizontal: 8,
         paddingVertical: 2,
@@ -206,24 +209,24 @@ const styles = StyleSheet.create({
     recommendedText: {
         fontFamily: fonts.bold,
         fontSize: 10,
-        color: DS.bg,
+        color: getLocalThemePalette1().bg,
     },
     optionDescription: {
         fontFamily: fonts.regular,
         fontSize: 13,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
     },
     tipCard: {
-        backgroundColor: DS.card,
+        backgroundColor: getLocalThemePalette1().card,
         borderRadius: 12,
         padding: 16,
     },
     tipText: {
         fontFamily: fonts.regular,
         fontSize: 13,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         lineHeight: 18,
     },
-});
+}));
 
 export default GoalTimeframeScreen;

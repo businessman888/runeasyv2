@@ -11,13 +11,14 @@ import Animated, {
     withTiming,
     type SharedValue,
 } from 'react-native-reanimated';
-import { colors } from '../../../theme';
+import { colors, useThemeSubscription, createThemeStyles } from '../../../theme';
 import { storyType } from '../../retrospective/storyTheme';
 import { CountUp } from '../../weekly-insight/components/CountUp';
 import { formatKm } from '../../weekly-insight/format';
 import type { MesoStoryModel } from '../hooks/useMesoStory';
 import type { NextBlock } from '../hooks/useNextBlock';
 import type { VolumeTrendPoint } from '../../../types/mesoInsight.types';
+import { semanticColors } from "../../../theme/semanticColors";
 
 /**
  * OS 5 CARDS DO CAPÍTULO.
@@ -55,6 +56,7 @@ export const MESO_GRADIENT_INDEX = {
 // ── Peças comuns ─────────────────────────────────────────────────────────────
 
 const Eyebrow = memo(function Eyebrow({ children }: { children: string }) {
+    useThemeSubscription();
     return <Text style={storyType.eyebrow}>{children.toUpperCase()}</Text>;
 });
 
@@ -77,6 +79,7 @@ const Hero = memo(function Hero({
     climax?: boolean;
     animate: boolean;
 }) {
+    useThemeSubscription();
     const style = climax ? storyType.heroClimax : storyType.hero;
 
     return (
@@ -104,12 +107,13 @@ export const MesoCardOpening = memo(function MesoCardOpening({
 }: {
     model: MesoStoryModel;
 }) {
+    useThemeSubscription();
     return (
         <View style={styles.center}>
             <MaterialCommunityIcons
                 name="flag-checkered"
                 size={40}
-                color="rgba(235,235,245,0.55)"
+                color={semanticColors.textSecondary}
             />
             <Text style={[storyType.title, styles.openingTitle]}>
                 Bloco {model.blockIndex}{'\n'}fechado
@@ -138,6 +142,7 @@ export const MesoCardClimb = memo(function MesoCardClimb({
     model: MesoStoryModel;
     animate: boolean;
 }) {
+    useThemeSubscription();
     return (
         <View style={styles.center}>
             {model.hasClimb ? (
@@ -186,6 +191,7 @@ const ClimbBars = memo(function ClimbBars({
     trend: VolumeTrendPoint[];
     animate: boolean;
 }) {
+    useThemeSubscription();
     if (trend.length === 0) return null;
 
     const max = Math.max(1, ...trend.map((p) => Math.max(p.plannedKm, p.completedKm)));
@@ -219,6 +225,7 @@ const GrowBar = memo(function GrowBar({
     delay: number;
     animate: boolean;
 }) {
+    useThemeSubscription();
     const target = Math.max(3, Math.round(heightRatio * BAR_MAX_H));
     const progress = useStoryGrow(animate, delay);
 
@@ -242,6 +249,7 @@ export const MesoCardConsistency = memo(function MesoCardConsistency({
     model: MesoStoryModel;
     animate: boolean;
 }) {
+    useThemeSubscription();
     return (
         <View style={styles.center}>
             <Eyebrow>Você concluiu</Eyebrow>
@@ -278,6 +286,7 @@ export const MesoCardClimax = memo(function MesoCardClimax({
     model: MesoStoryModel;
     animate: boolean;
 }) {
+    useThemeSubscription();
     if (model.climax === 'vdot' && model.vdotAfter != null) {
         const subiu = (model.vdotAfter ?? 0) >= (model.vdotBefore ?? 0);
         return (
@@ -322,7 +331,7 @@ export const MesoCardClimax = memo(function MesoCardClimax({
             <MaterialCommunityIcons
                 name="run"
                 size={40}
-                color="rgba(235,235,245,0.55)"
+                color={semanticColors.textSecondary}
             />
             <Text style={[storyType.title, styles.centerText]}>
                 Quatro semanas{'\n'}de base
@@ -342,6 +351,7 @@ export const MesoCardNext = memo(function MesoCardNext({
 }: {
     next: NextBlock;
 }) {
+    useThemeSubscription();
     return (
         <View style={styles.center}>
             <MaterialCommunityIcons
@@ -418,7 +428,7 @@ function fmtVdot(v: number | null): string {
     return String(Math.round(v));
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     center: {
         flex: 1,
         alignItems: 'center',
@@ -451,6 +461,6 @@ const styles = StyleSheet.create({
     barFill: {
         width: '100%',
         borderRadius: 6,
-        backgroundColor: 'rgba(235,235,245,0.9)',
+        backgroundColor: semanticColors.textPrimary,
     },
-});
+}));

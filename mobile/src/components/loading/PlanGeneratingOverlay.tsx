@@ -14,7 +14,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, fonts, shadows, spacing } from '../../theme';
+import { colors, fonts, shadows, spacing, createThemeStyles, useThemeSubscription, getThemeBlurTint, getThemeGlassSheenColors } from '../../theme';
 import { RippleLoader } from './RippleLoader';
 import { semanticColors } from '../../theme/semanticColors';
 
@@ -23,12 +23,6 @@ import { semanticColors } from '../../theme/semanticColors';
 const ANDROID_BLUR_METHOD: 'dimezisBlurView' | undefined =
   Platform.OS === 'android' ? 'dimezisBlurView' : undefined;
 
-// Subtle top-light → bottom-shade sheen that sells "frosted glass" depth.
-const SHEEN_COLORS = [
-  'rgba(255, 255, 255, 0.05)',
-  'rgba(255, 255, 255, 0)',
-  'rgba(0, 0, 0, 0.10)',
-] as const;
 const SHEEN_LOCATIONS = [0, 0.5, 1] as const;
 
 const GENERATING_MESSAGES = [
@@ -42,6 +36,7 @@ const MESSAGE_INTERVAL_MS = 2600;
 // Rotating reassurance line. Isolated so its state updates don't re-render the
 // (animated) rings.
 const RotatingMessage = memo(() => {
+  useThemeSubscription();
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
@@ -77,6 +72,7 @@ function PlanGeneratingOverlayImpl({
   onRetry,
   canRetry = true,
 }: PlanGeneratingOverlayProps) {
+  useThemeSubscription();
   const isError = mode === 'error';
 
   return (
@@ -98,7 +94,7 @@ function PlanGeneratingOverlayImpl({
     >
       <BlurView
         intensity={60}
-        tint="dark"
+        tint={getThemeBlurTint()}
         experimentalBlurMethod={ANDROID_BLUR_METHOD}
         pointerEvents="none"
         style={StyleSheet.absoluteFill}
@@ -111,7 +107,7 @@ function PlanGeneratingOverlayImpl({
         ]}
       />
       <LinearGradient
-        colors={SHEEN_COLORS}
+        colors={getThemeGlassSheenColors()}
         locations={SHEEN_LOCATIONS}
         pointerEvents="none"
         style={StyleSheet.absoluteFill}
@@ -162,7 +158,7 @@ function PlanGeneratingOverlayImpl({
 
 export const PlanGeneratingOverlay = memo(PlanGeneratingOverlayImpl);
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   lift: {
     zIndex: 50,
     elevation: 50,
@@ -213,6 +209,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.primary,
   },
-});
+}));
 
 export default PlanGeneratingOverlay;

@@ -7,8 +7,18 @@ import {
     Dimensions,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { fonts } from '../../theme';
+import { fonts, useThemeSubscription, createThemeStyles } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
+
+const getLocalThemePalette1 = () => ({
+    bg: semanticColors.canvas,
+    cardBg: semanticColors.surface2,
+    cyan: semanticColors.accent,
+    text: semanticColors.textPrimary,
+    textSecondary: semanticColors.textSecondary,
+    glassBorder: semanticColors.borderSubtle,
+    pastDay: semanticColors.borderSubtle,
+});
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -20,15 +30,7 @@ const MONTHS = [
 const WEEKDAYS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
 
 // Design System — Figma node 414:663 exact tokens
-const DS = {
-    bg: semanticColors.canvas,
-    cardBg: semanticColors.surface2,
-    cyan: semanticColors.accent,
-    text: semanticColors.textPrimary,
-    textSecondary: semanticColors.textSecondary,
-    glassBorder: semanticColors.borderSubtle,
-    pastDay: semanticColors.borderSubtle,
-};
+
 
 // Card internal padding
 const CARD_PADDING_H = 12;
@@ -41,6 +43,7 @@ interface StartDateScreenProps {
 }
 
 export function StartDateScreen({ value, onChange }: StartDateScreenProps) {
+    useThemeSubscription();
     // Helper to create a date at midnight local time
     const createLocalDate = (year: number, month: number, day: number) => {
         const d = new Date(year, month, day);
@@ -160,7 +163,7 @@ export function StartDateScreen({ value, onChange }: StartDateScreenProps) {
                         style={styles.navButton}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
-                        <MaterialCommunityIcons name="arrow-left" size={22} color={DS.cyan} />
+                        <MaterialCommunityIcons name="arrow-left" size={22} color={getLocalThemePalette1().cyan} />
                     </TouchableOpacity>
 
                     <Text style={styles.monthYear}>
@@ -172,7 +175,7 @@ export function StartDateScreen({ value, onChange }: StartDateScreenProps) {
                         style={styles.navButton}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
-                        <MaterialCommunityIcons name="arrow-right" size={22} color={DS.cyan} />
+                        <MaterialCommunityIcons name="arrow-right" size={22} color={getLocalThemePalette1().cyan} />
                     </TouchableOpacity>
                 </View>
 
@@ -238,7 +241,7 @@ export function StartDateScreen({ value, onChange }: StartDateScreenProps) {
 // STYLES — Figma node 414:663 faithful
 // ============================================
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     wrapper: {
         flex: 1,
         paddingTop: 8,
@@ -251,30 +254,30 @@ const styles = StyleSheet.create({
     title: {
         fontFamily: fonts.bold,
         fontSize: 26,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         lineHeight: 34,
         marginBottom: 8,
     },
     titleHighlight: {
         fontFamily: fonts.bold,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     subtitle: {
         fontFamily: fonts.regular,
         fontSize: 15,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         lineHeight: 22,
     },
 
     // — Dark Card Container —
     card: {
-        backgroundColor: DS.cardBg,
+        backgroundColor: getLocalThemePalette1().cardBg,
         borderRadius: 20,
         paddingHorizontal: CARD_PADDING_H,
         paddingTop: 14,
         paddingBottom: 16,
         // Figma shadow
-        shadowColor: '#000',
+        shadowColor: semanticColors.shadow,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.25,
         shadowRadius: 6,
@@ -298,7 +301,7 @@ const styles = StyleSheet.create({
     monthYear: {
         fontFamily: fonts.medium,
         fontSize: 14,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         textAlign: 'center',
     },
 
@@ -316,7 +319,7 @@ const styles = StyleSheet.create({
     weekdayText: {
         fontFamily: fonts.medium,
         fontSize: 13,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
         letterSpacing: 0.3,
     },
 
@@ -338,7 +341,7 @@ const styles = StyleSheet.create({
     dayCellSelected: {
         // Figma: border 1px solid cyan, radius 15px
         borderWidth: 1,
-        borderColor: DS.cyan,
+        borderColor: getLocalThemePalette1().cyan,
         borderRadius: 15,
     },
 
@@ -346,19 +349,19 @@ const styles = StyleSheet.create({
     dayText: {
         fontFamily: fonts.medium,
         fontSize: 13,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
     },
     dayTextPast: {
-        color: DS.pastDay,
+        color: getLocalThemePalette1().pastDay,
     },
     dayTextToday: {
         fontFamily: fonts.bold,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     dayTextSelected: {
         fontFamily: fonts.semibold,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
-});
+}));
 
 export default StartDateScreen;

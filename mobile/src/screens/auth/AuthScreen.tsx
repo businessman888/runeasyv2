@@ -25,7 +25,7 @@ import Animated, {
     withSpring,
 } from 'react-native-reanimated';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { colors, fonts, spacing, borderRadius, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { useAuthActions } from '../../hooks/useAuthActions';
 import { AuthBackground } from '../../components/auth/AuthBackground';
@@ -62,6 +62,7 @@ const CARD_SPRING = { damping: 20, stiffness: 190 } as const;
 type AuthMode = 'method' | 'email' | 'signup';
 
 export function AuthScreen() {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
     const { width } = useWindowDimensions();
     const cardMaxWidth = Math.min(width - spacing.xl * 2, 420);
@@ -239,7 +240,7 @@ export function AuthScreen() {
                     <View style={styles.providerButton}>
                         {auth.isAppleLoading ? (
                             <View style={[styles.providerButton, styles.appleLoading]}>
-                                <ActivityIndicator size="small" color="#FFFFFF" />
+                                <ActivityIndicator size="small" color={semanticColors.textOnMedia} />
                                 <Text style={styles.appleLoadingText}>Conectando...</Text>
                             </View>
                         ) : (
@@ -510,7 +511,7 @@ export function AuthScreen() {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+            <StatusBar barStyle={getThemeStatusBarStyle()} translucent backgroundColor="transparent" />
             <AuthBackground />
 
             <KeyboardAvoidingView
@@ -548,7 +549,7 @@ export function AuthScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -656,7 +657,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#000000',
     },
     appleLoadingText: {
-        color: '#FFFFFF',
+        color: semanticColors.textOnMedia,
         fontSize: 16,
         fontFamily: fonts.semibold,
     },
@@ -669,7 +670,7 @@ const styles = StyleSheet.create({
         fontFamily: fonts.semibold,
     },
     emailProviderButton: {
-        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+        backgroundColor: semanticColors.fillSubtle,
         borderWidth: 1,
         borderColor: colors.border,
     },
@@ -795,6 +796,6 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontFamily: fonts.regular,
     },
-});
+}));
 
 export default AuthScreen;

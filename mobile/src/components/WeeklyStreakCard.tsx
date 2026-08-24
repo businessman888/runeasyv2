@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing } from '../theme';
+import { colors, typography, spacing, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { ScheduleDay } from '../stores/trainingStore';
 
@@ -23,6 +23,7 @@ interface WeekDay {
 }
 
 export function WeeklyStreakCard({ currentStreak, schedule }: WeeklyStreakCardProps) {
+    useThemeSubscription();
     const weekData = useMemo(() => {
         const now = new Date();
         const dayOfWeek = now.getDay(); // 0=Sunday
@@ -207,7 +208,7 @@ function getDayTextColor(day: WeekDay): string {
     }
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     card: {
         backgroundColor: semanticColors.surface1,
         borderRadius: 25,
@@ -294,4 +295,4 @@ const styles = StyleSheet.create({
         fontWeight: typography.fontWeights.semibold,
         textAlign: 'center',
     },
-});
+}));

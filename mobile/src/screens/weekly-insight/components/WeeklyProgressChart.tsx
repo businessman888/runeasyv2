@@ -2,10 +2,11 @@ import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
-import { colors, typography, spacing, borderRadius, fonts } from '../../../theme';
+import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../../theme';
 import { SectionHeader } from './SectionHeader';
 import { useEnterAnimation } from '../hooks/useEnterAnimation';
 import type { WeekPoint } from '../hooks/useWeeklySeries';
+import { semanticColors } from "../../../theme/semanticColors";
 
 /**
  * VOLUME POR SEMANA DO PLANO — a trajetória.
@@ -43,6 +44,7 @@ export const WeeklyProgressChart = memo(function WeeklyProgressChart({
     totalWeeks,
     index = 2,
 }: WeeklyProgressChartProps) {
+    useThemeSubscription();
     const { width: windowWidth } = useWindowDimensions();
     const progress = useEnterAnimation(index, points.length > 0);
 
@@ -120,7 +122,7 @@ export const WeeklyProgressChart = memo(function WeeklyProgressChart({
                     // Série 1 = prescrito (o arco completo, tracejado ao fundo).
                     data={planned}
                     strokeDashArray={[5, 5]}
-                    color="rgba(255,255,255,0.24)"
+                    color={semanticColors.textTertiary}
                     thickness={1.5}
                     hideDataPoints
                     // `areaChart` é GLOBAL: sem zerar aqui, o prescrito também
@@ -151,7 +153,7 @@ export const WeeklyProgressChart = memo(function WeeklyProgressChart({
                     yAxisColor="transparent"
                     xAxisColor={colors.border}
                     rulesType="solid"
-                    rulesColor="rgba(255,255,255,0.05)"
+                    rulesColor={semanticColors.fillSubtle}
                     yAxisTextStyle={styles.axisText}
                     xAxisLabelTextStyle={styles.axisText}
                     isAnimated
@@ -165,7 +167,7 @@ export const WeeklyProgressChart = memo(function WeeklyProgressChart({
                         solid
                     />
                     <LegendItem
-                        color="rgba(255,255,255,0.34)"
+                        color={semanticColors.textTertiary}
                         label="Prescrito"
                     />
                     <Text style={styles.unit}>km</Text>
@@ -184,6 +186,7 @@ function LegendItem({
     label: string;
     solid?: boolean;
 }) {
+    useThemeSubscription();
     return (
         <View style={styles.legendItem}>
             <View
@@ -200,7 +203,7 @@ function LegendItem({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     section: { gap: spacing.md },
     card: {
         backgroundColor: colors.card,
@@ -254,4 +257,4 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         textAlign: 'center',
     },
-});
+}));

@@ -37,7 +37,20 @@ import { resetCoachRun, stopCoach, enqueue as enqueueCoach } from '../../service
 import { buildMotivFinish } from '../../services/coach/coachMessages';
 import { LinearGradient } from 'expo-linear-gradient';
 import { semanticColors } from '../../theme/semanticColors';
-import { useMapThemePalette } from '../../theme';
+import { useMapThemePalette, createThemeStyles, useThemeSubscription } from '../../theme';
+
+const getLocalThemePalette1 = () => ({
+  // Backgrounds
+  bgPrimary: semanticColors.canvas,
+  cardSurface: semanticColors.surface2,
+  // Accent
+  cyan: semanticColors.accent,
+  warning: '#FFC400',
+  // Text
+  textPrimary: semanticColors.textPrimary,
+  textSecondary: semanticColors.textSecondary,
+  // Route
+});
 
 // ─── Tipos de rota ────────────────────────────────────────────────────────────
 export type RunMode = 'planned' | 'manual' | 'free';
@@ -59,18 +72,7 @@ type RunningRouteParams = {
 };
 
 // ─── Design Tokens (Figma) ────────────────────────────────────────────────────
-const T = {
-  // Backgrounds
-  bgPrimary: semanticColors.canvas,
-  cardSurface: semanticColors.surface2,
-  // Accent
-  cyan: semanticColors.accent,
-  warning: '#FFC400',
-  // Text
-  textPrimary: semanticColors.textPrimary,
-  textSecondary: semanticColors.textSecondary,
-  // Route
-};
+
 
 
 
@@ -90,6 +92,7 @@ function formatSplit(secondsPerKm: number | null | undefined): string {
  * unchanged — the treadmill branch never instantiates them.
  */
 export function RunningScreen() {
+  useThemeSubscription();
   const route = useRoute<RouteProp<RunningRouteParams, 'Running'>>();
 
   if (route.params?.environment === 'treadmill') {
@@ -112,6 +115,7 @@ export function RunningScreen() {
 }
 
 function OutdoorRunningView() {
+  useThemeSubscription();
   const mapPalette = useMapThemePalette();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RunningRouteParams, 'Running'>>();
@@ -349,7 +353,7 @@ function OutdoorRunningView() {
   if (!isReady || !initialPosition) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={T.cyan} />
+        <ActivityIndicator size="large" color={getLocalThemePalette1().cyan} />
         <Text style={[styles.loadingText, { marginTop: 12 }]}>
           {!isReady ? 'Carregando módulo GPS...' : 'Localizando você...'}
         </Text>
@@ -390,9 +394,9 @@ function OutdoorRunningView() {
   const isFinished    = sessionState === 'finished';
 
   const statusBannerBg =
-    isTraining  ? T.cyan :
-    isPaused    ? T.warning :
-    T.cardSurface;
+    isTraining  ? getLocalThemePalette1().cyan :
+    isPaused    ? getLocalThemePalette1().warning :
+    getLocalThemePalette1().cardSurface;
 
   // GPS "pronto" exige fix do puck E precisão decente (good/excellent) — antes do
   // treino o banner reflete o sinal real em vez de só a presença de um fix grosseiro.
@@ -405,11 +409,11 @@ function OutdoorRunningView() {
     'Parado';
 
   const statusTextColor =
-    isCalculating ? T.cyan :
-    T.bgPrimary;
+    isCalculating ? getLocalThemePalette1().cyan :
+    getLocalThemePalette1().bgPrimary;
 
   // Valores numéricos coloridos apenas quando treinando
-  const metricColor = isTraining ? T.cyan : T.textPrimary;
+  const metricColor = isTraining ? getLocalThemePalette1().cyan : getLocalThemePalette1().textPrimary;
 
   // Label de distância formatada (km com 2 casas)
   const distanceFormatted = (distance / 1000).toFixed(2);
@@ -519,7 +523,7 @@ function OutdoorRunningView() {
             accessibilityRole="button"
             accessibilityLabel="Voltar"
           >
-            <Ionicons name="chevron-back" size={24} color={T.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={getLocalThemePalette1().textPrimary} />
           </Pressable>
 
           {/* Título — texto puro centralizado (sem fundo/borda). Absoluto p/ ficar
@@ -544,7 +548,7 @@ function OutdoorRunningView() {
               {allCompleted ? (
                 <Ionicons name="checkmark-circle" size={24} color="#32CD32" />
               ) : (
-                <MaterialCommunityIcons name="bullseye-arrow" size={24} color={T.cyan} />
+                <MaterialCommunityIcons name="bullseye-arrow" size={24} color={getLocalThemePalette1().cyan} />
               )}
             </Pressable>
           ) : (
@@ -582,7 +586,7 @@ function OutdoorRunningView() {
           accessibilityLabel={showTrails ? 'Ocultar trilhas e parques' : 'Mostrar trilhas e parques'}
           accessibilityState={{ selected: showTrails }}
         >
-          <Ionicons name="leaf" size={20} color={showTrails ? T.cyan : T.textSecondary} />
+          <Ionicons name="leaf" size={20} color={showTrails ? getLocalThemePalette1().cyan : getLocalThemePalette1().textSecondary} />
         </Pressable>
 
         {/* Recentralizar — só quando o usuário arrastou o mapa e quebrou o follow */}
@@ -597,7 +601,7 @@ function OutdoorRunningView() {
             accessibilityRole="button"
             accessibilityLabel="Centralizar no meu local"
           >
-            <Ionicons name="locate" size={22} color={T.cyan} />
+            <Ionicons name="locate" size={22} color={getLocalThemePalette1().cyan} />
           </Pressable>
         )}
       </View>
@@ -614,7 +618,7 @@ function OutdoorRunningView() {
               <Ionicons
                 name="locate"
                 size={14}
-                color={T.cyan}
+                color={getLocalThemePalette1().cyan}
                 style={{ marginRight: 6 }}
               />
             )}
@@ -632,7 +636,7 @@ function OutdoorRunningView() {
               <Ionicons
                 name="expand-outline"
                 size={16}
-                color={isCalculating ? T.textSecondary : T.bgPrimary}
+                color={isCalculating ? getLocalThemePalette1().textSecondary : getLocalThemePalette1().bgPrimary}
               />
             </Pressable>
           </View>
@@ -683,8 +687,8 @@ function OutdoorRunningView() {
               accessibilityRole="button"
               accessibilityLabel="Iniciar treino"
             >
-              <Ionicons name="play" size={20} color={T.textPrimary} style={{ marginRight: 8 }} />
-              <Text style={[styles.ctaBtnText, { color: T.textPrimary }]}>Iniciar</Text>
+              <Ionicons name="play" size={20} color={getLocalThemePalette1().textPrimary} style={{ marginRight: 8 }} />
+              <Text style={[styles.ctaBtnText, { color: getLocalThemePalette1().textPrimary }]}>Iniciar</Text>
             </Pressable>
           )}
 
@@ -696,8 +700,8 @@ function OutdoorRunningView() {
               accessibilityRole="button"
               accessibilityLabel="Parar treino"
             >
-              <Ionicons name="pause" size={20} color={T.cyan} style={{ marginRight: 8 }} />
-              <Text style={[styles.ctaBtnText, { color: T.cyan }]}>Parar</Text>
+              <Ionicons name="pause" size={20} color={getLocalThemePalette1().cyan} style={{ marginRight: 8 }} />
+              <Text style={[styles.ctaBtnText, { color: getLocalThemePalette1().cyan }]}>Parar</Text>
             </Pressable>
           )}
 
@@ -711,8 +715,8 @@ function OutdoorRunningView() {
                 accessibilityRole="button"
                 accessibilityLabel="Continuar treino"
               >
-                <Ionicons name="play" size={20} color={T.cyan} style={{ marginRight: 8 }} />
-                <Text style={[styles.ctaBtnText, { color: T.cyan }]}>Continuar</Text>
+                <Ionicons name="play" size={20} color={getLocalThemePalette1().cyan} style={{ marginRight: 8 }} />
+                <Text style={[styles.ctaBtnText, { color: getLocalThemePalette1().cyan }]}>Continuar</Text>
               </Pressable>
               <Pressable
                 style={[styles.ctaBtn, styles.ctaBtnFilled, { flex: 1 }, isFinishing && { opacity: 0.6 }]}
@@ -722,11 +726,11 @@ function OutdoorRunningView() {
                 accessibilityLabel="Finalizar treino"
               >
                 {isFinishing ? (
-                  <ActivityIndicator size="small" color={T.bgPrimary} />
+                  <ActivityIndicator size="small" color={getLocalThemePalette1().bgPrimary} />
                 ) : (
                   <>
-                    <Ionicons name="flag" size={20} color={T.bgPrimary} style={{ marginRight: 8 }} />
-                    <Text style={[styles.ctaBtnText, { color: T.bgPrimary }]}>Finalizar</Text>
+                    <Ionicons name="flag" size={20} color={getLocalThemePalette1().bgPrimary} style={{ marginRight: 8 }} />
+                    <Text style={[styles.ctaBtnText, { color: getLocalThemePalette1().bgPrimary }]}>Finalizar</Text>
                   </>
                 )}
               </Pressable>
@@ -771,11 +775,11 @@ function OutdoorRunningView() {
         <View style={styles.finishingOverlay}>
           <View style={styles.finishingCard}>
             <View style={styles.finishingSpinnerWrap}>
-              <ActivityIndicator size="large" color={T.cyan} />
+              <ActivityIndicator size="large" color={getLocalThemePalette1().cyan} />
               <Ionicons
                 name="flag"
                 size={26}
-                color={T.cyan}
+                color={getLocalThemePalette1().cyan}
                 style={styles.finishingFlagIcon}
               />
             </View>
@@ -791,7 +795,7 @@ function OutdoorRunningView() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   // ── Layout base
   container: {
     flex: 1,
@@ -1111,4 +1115,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
-});
+}));

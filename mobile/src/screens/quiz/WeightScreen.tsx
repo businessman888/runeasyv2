@@ -4,6 +4,7 @@ import { QuizHeader, Hl } from '../../components/onboarding/QuizHeader';
 import { SelectableOption } from '../../components/onboarding/SelectableOption';
 import { ValueInputSheet } from '../../components/onboarding/ValueInputSheet';
 import { QUIZ } from './_tokens';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
 const WEIGHT_OPTIONS = [
     { value: 50, label: '50 kg', range: '45-55 kg' },
@@ -20,6 +21,7 @@ interface WeightScreenProps {
 }
 
 export function WeightScreen({ value, onChange }: WeightScreenProps) {
+    useThemeSubscription();
     const [selectedWeight, setSelectedWeight] = useState<number | null>(value || null);
     const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -80,7 +82,7 @@ export function WeightScreen({ value, onChange }: WeightScreenProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     options: {
         gap: QUIZ.gapOptions,
         marginBottom: 16,
@@ -96,6 +98,6 @@ const styles = StyleSheet.create({
         color: QUIZ.color.cyan,
         textDecorationLine: 'underline',
     },
-});
+}));
 
 export default WeightScreen;

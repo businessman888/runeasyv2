@@ -32,8 +32,9 @@ import {
   openAndroidTtsSettings,
   type VoiceStatus,
 } from '../../services/coach/ttsVoice';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
-const T = {
+const getLocalThemePalette1 = () => ({
   bg: semanticColors.canvas,
   cyan: semanticColors.accent,
   textPrimary: semanticColors.textPrimary,
@@ -43,7 +44,9 @@ const T = {
   warnBg: 'rgba(255, 196, 0, 0.12)',
   warnBorder: 'rgba(255, 196, 0, 0.40)',
   warnText: '#FFC400',
-};
+});
+
+
 
 const BULLETS = [
   'Conecte seus fones e receba avisos por voz enquanto corre, sem precisar olhar para a tela.',
@@ -53,6 +56,7 @@ const BULLETS = [
 ];
 
 export function CoachAudioSettingsScreen({ navigation }: any) {
+  useThemeSubscription();
   const insets = useSafeAreaInsets();
   const enabled = useCoachStore((s) => s.enabled);
   const setEnabled = useCoachStore((s) => s.setEnabled);
@@ -98,7 +102,7 @@ export function CoachAudioSettingsScreen({ navigation }: any) {
           accessibilityLabel="Fechar"
           hitSlop={8}
         >
-          <Ionicons name="close" size={26} color={T.textPrimary} />
+          <Ionicons name="close" size={26} color={getLocalThemePalette1().textPrimary} />
         </Pressable>
       </View>
 
@@ -154,12 +158,12 @@ export function CoachAudioSettingsScreen({ navigation }: any) {
         >
           {enabled ? (
             <Animated.View entering={FadeIn.duration(200)} style={styles.ctaContent}>
-              <Ionicons name="checkmark-circle" size={20} color={T.cyan} style={{ marginRight: 8 }} />
-              <Text style={[styles.ctaText, { color: T.cyan }]}>Coach ativado</Text>
+              <Ionicons name="checkmark-circle" size={20} color={getLocalThemePalette1().cyan} style={{ marginRight: 8 }} />
+              <Text style={[styles.ctaText, { color: getLocalThemePalette1().cyan }]}>Coach ativado</Text>
             </Animated.View>
           ) : (
             <Animated.View entering={FadeIn.duration(200)} style={styles.ctaContent}>
-              <Text style={[styles.ctaText, { color: T.buttonOffText }]}>Habilitar Coach</Text>
+              <Text style={[styles.ctaText, { color: getLocalThemePalette1().buttonOffText }]}>Habilitar Coach</Text>
             </Animated.View>
           )}
         </Pressable>
@@ -170,7 +174,7 @@ export function CoachAudioSettingsScreen({ navigation }: any) {
 
 export default CoachAudioSettingsScreen;
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   header: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -194,7 +198,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontSize: 24,
     fontWeight: '700',
     textAlign: 'center',
@@ -214,12 +218,12 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: T.textSecondary,
+    backgroundColor: getLocalThemePalette1().textSecondary,
     marginTop: 8,
   },
   bulletText: {
     flex: 1,
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 20,
@@ -227,33 +231,33 @@ const styles = StyleSheet.create({
   warnCard: {
     alignSelf: 'stretch',
     marginTop: 24,
-    backgroundColor: T.warnBg,
+    backgroundColor: getLocalThemePalette1().warnBg,
     borderWidth: 1,
-    borderColor: T.warnBorder,
+    borderColor: getLocalThemePalette1().warnBorder,
     borderRadius: 14,
     padding: 16,
     gap: 10,
   },
   warnTitle: {
-    color: T.warnText,
+    color: getLocalThemePalette1().warnText,
     fontSize: 14,
     fontWeight: '700',
   },
   warnBody: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontSize: 13,
     lineHeight: 18,
   },
   warnBtn: {
     alignSelf: 'flex-start',
     borderWidth: 1,
-    borderColor: T.warnBorder,
+    borderColor: getLocalThemePalette1().warnBorder,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
   warnBtnText: {
-    color: T.warnText,
+    color: getLocalThemePalette1().warnText,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -268,12 +272,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ctaOff: {
-    backgroundColor: T.buttonOff,
+    backgroundColor: getLocalThemePalette1().buttonOff,
   },
   ctaOn: {
     backgroundColor: semanticColors.accentSubtle,
     borderWidth: 1,
-    borderColor: T.cyan,
+    borderColor: getLocalThemePalette1().cyan,
   },
   ctaContent: {
     flexDirection: 'row',
@@ -284,4 +288,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-});
+}));

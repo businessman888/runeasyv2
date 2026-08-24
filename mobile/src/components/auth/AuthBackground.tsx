@@ -8,7 +8,7 @@ import Svg, {
     Rect,
     Stop,
 } from 'react-native-svg';
-import { colors } from '../../theme';
+import { colors, createThemeStyles, useThemeSubscription } from '../../theme';
 
 /**
  * AuthBackground — the generated backdrop behind the login/signup glass card.
@@ -30,6 +30,7 @@ const GRID_SIZE = 18; // px cell — matches the 18px reference grid.
 const GRID_STROKE = 'rgba(0, 212, 255, 0.06)'; // faint cyan texture.
 
 export const AuthBackground = memo(function AuthBackground() {
+    useThemeSubscription();
     const { width, height } = useWindowDimensions();
 
     // Glow centred horizontally, a little below the top edge (≈ where the
@@ -79,10 +80,10 @@ export const AuthBackground = memo(function AuthBackground() {
     );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     base: {
         backgroundColor: colors.background,
     },
-});
+}));
 
 export default AuthBackground;

@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius, fonts } from '../../theme';
+import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { ADJUSTMENT_SHORT } from '../../screens/weekly-insight/adjustmentCopy';
 import {
     formatKm,
@@ -39,6 +39,7 @@ export const WeeklyInsightCard = memo(function WeeklyInsightCard({
     unread,
     style,
 }: WeeklyInsightCardProps) {
+    useThemeSubscription();
     const adjustment = insight.suggested_adjustment;
     const completed = insight.completed_workouts ?? 0;
     const planned = insight.planned_workouts ?? 0;
@@ -89,7 +90,7 @@ export const WeeklyInsightCard = memo(function WeeklyInsightCard({
     );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     card: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -143,4 +144,4 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.xs,
         color: colors.primary,
     },
-});
+}));

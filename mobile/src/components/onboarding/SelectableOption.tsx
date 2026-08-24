@@ -15,6 +15,7 @@ import { OptionCard } from './OptionCard';
 import { QUIZ } from '../../screens/quiz/_tokens';
 import type { IoniconName } from '../../screens/quiz/_icons';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
 const Radio = ({ selected }: { selected: boolean }) => (
     <View style={[styles.radioOuter, selected && styles.radioOuterSelected]}>
@@ -39,6 +40,7 @@ export function SelectableOption({
     icon,
     disabled,
 }: SelectableOptionProps) {
+    useThemeSubscription();
     // Tablet: opção vira coluna centralizada e capada (não estica a tela).
     const { isTablet } = useBreakpoint();
     return (
@@ -70,7 +72,7 @@ export function SelectableOption({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     card: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -137,6 +139,6 @@ const styles = StyleSheet.create({
         borderRadius: QUIZ.bullet.dot / 2,
         backgroundColor: QUIZ.color.cyan,
     },
-});
+}));
 
 export default SelectableOption;

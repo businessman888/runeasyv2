@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, typography, spacing, borderRadius, fonts } from '../../theme';
+import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import {
     getWeekReliefPreview,
@@ -91,6 +91,7 @@ export function WeekReliefSheet({
     insightId,
     onApplied,
 }: WeekReliefSheetProps) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
     const invalidatePlanCaches = useTrainingStore((s) => s.invalidatePlanCaches);
 
@@ -350,6 +351,7 @@ const LevelRow = React.memo(function LevelRow({
     selected: boolean;
     onSelect: () => void;
 }) {
+    useThemeSubscription();
     // O percentual exibido é o ALCANÇADO, não o pedido. Quando os pisos limitam,
     // "−35%" seria uma promessa que a semana não cumpre.
     const limitado = option.achievedPct < option.targetPct;
@@ -394,6 +396,7 @@ const WorkoutRow = React.memo(function WorkoutRow({
 }: {
     change: WeekReliefChange;
 }) {
+    useThemeSubscription();
     const label = TYPE_LABEL[change.type ?? ''] ?? change.title ?? 'Treino';
 
     return (
@@ -421,7 +424,7 @@ const WorkoutRow = React.memo(function WorkoutRow({
     );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     overlay: { flex: 1, backgroundColor: semanticColors.scrim },
     sheet: {
         backgroundColor: semanticColors.surface2,
@@ -611,6 +614,6 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.md,
         color: semanticColors.textPrimary,
     },
-});
+}));
 
 export default WeekReliefSheet;

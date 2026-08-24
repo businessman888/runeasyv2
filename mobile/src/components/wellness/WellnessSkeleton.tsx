@@ -1,13 +1,14 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Skeleton, SkeletonText } from '../Skeleton';
-import { colors, spacing, borderRadius } from '../../theme';
+import { colors, spacing, borderRadius, createThemeStyles, useThemeSubscription } from '../../theme';
 
 /**
  * Full-screen skeleton shown while the wellness summary loads.
  * Mirrors the section ordering of WellnessScreen so layout doesn't jump.
  */
 export function WellnessSkeleton() {
+    useThemeSubscription();
     return (
         <View style={styles.container}>
             {/* Readiness card */}
@@ -49,7 +50,7 @@ export function WellnessSkeleton() {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         padding: spacing.base,
         gap: spacing.md,
@@ -77,4 +78,4 @@ const styles = StyleSheet.create({
         width: '48%',
         height: 96,
     },
-});
+}));

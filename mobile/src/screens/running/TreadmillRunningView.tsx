@@ -36,11 +36,10 @@ import { MANUAL_TREADMILL_SPEED } from '../../constants/bluetooth';
 import { useWorkoutGoals } from '../../hooks/useWorkoutGoals';
 import { GoalsModal } from '../../components/GoalsModal';
 import type { WorkoutBlockAPI } from '../../types/workoutGoals';
-import { fonts } from '../../theme';
+import { fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
-// ─── Visual tokens (Figma-aligned) ────────────────────────────────────────────
-const T = {
+const getLocalThemePalette1 = () => ({
   bg: semanticColors.canvas,
   cardSurface: semanticColors.surface2,
   cardBorder: semanticColors.borderSubtle,
@@ -51,7 +50,10 @@ const T = {
   warning: '#FFC400',
   warningBg: semanticColors.warningSubtle,
   warningBorder: 'rgba(255, 196, 0, 0.4)',
-};
+});
+
+// ─── Visual tokens (Figma-aligned) ────────────────────────────────────────────
+
 
 interface Props {
   workoutId?: string;
@@ -72,6 +74,7 @@ export function TreadmillRunningView({
   targetDistanceKm,
   workoutBlocks,
 }: Props) {
+  useThemeSubscription();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [isFinishing, setIsFinishing] = useState(false);
@@ -298,7 +301,7 @@ export function TreadmillRunningView({
             accessibilityLabel="Voltar"
             hitSlop={10}
           >
-            <Ionicons name="chevron-back" size={24} color={T.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={getLocalThemePalette1().textPrimary} />
           </Pressable>
 
           {showWorkoutPill ? (
@@ -346,12 +349,12 @@ export function TreadmillRunningView({
               {allCompleted ? (
                 <Ionicons name="checkmark-circle" size={24} color="#32CD32" />
               ) : (
-                <Ionicons name="cellular" size={22} color={T.cyan} />
+                <Ionicons name="cellular" size={22} color={getLocalThemePalette1().cyan} />
               )}
             </Pressable>
           ) : showWorkoutPill ? (
             <View style={styles.modeBadge}>
-              <Ionicons name="locate" size={20} color={T.bg} />
+              <Ionicons name="locate" size={20} color={getLocalThemePalette1().bg} />
             </View>
           ) : (
             <View style={styles.backBtn} />
@@ -368,7 +371,7 @@ export function TreadmillRunningView({
             <Ionicons
               name="warning"
               size={16}
-              color={T.warning}
+              color={getLocalThemePalette1().warning}
               style={{ marginRight: 8 }}
             />
             <Text style={styles.disconnectBannerText} allowFontScaling={false}>
@@ -446,7 +449,7 @@ export function TreadmillRunningView({
             <Ionicons
               name="play"
               size={20}
-              color={T.textPrimary}
+              color={getLocalThemePalette1().textPrimary}
               style={{ marginRight: 8 }}
             />
             <Text style={styles.actionBtnText} allowFontScaling={false}>
@@ -464,10 +467,10 @@ export function TreadmillRunningView({
             <Ionicons
               name="pause"
               size={20}
-              color={T.cyan}
+              color={getLocalThemePalette1().cyan}
               style={{ marginRight: 8 }}
             />
-            <Text style={[styles.actionBtnText, { color: T.cyan }]} allowFontScaling={false}>
+            <Text style={[styles.actionBtnText, { color: getLocalThemePalette1().cyan }]} allowFontScaling={false}>
               Pausar
             </Text>
           </Pressable>
@@ -484,10 +487,10 @@ export function TreadmillRunningView({
               <Ionicons
                 name="play"
                 size={18}
-                color={T.cyan}
+                color={getLocalThemePalette1().cyan}
                 style={{ marginRight: 8 }}
               />
-              <Text style={[styles.actionBtnText, { color: T.cyan }]} allowFontScaling={false}>
+              <Text style={[styles.actionBtnText, { color: getLocalThemePalette1().cyan }]} allowFontScaling={false}>
                 Continuar
               </Text>
             </Pressable>
@@ -504,16 +507,16 @@ export function TreadmillRunningView({
               accessibilityLabel="Finalizar treino"
             >
               {isFinishing ? (
-                <ActivityIndicator size="small" color={T.bg} />
+                <ActivityIndicator size="small" color={getLocalThemePalette1().bg} />
               ) : (
                 <>
                   <Ionicons
                     name="flag"
                     size={18}
-                    color={T.bg}
+                    color={getLocalThemePalette1().bg}
                     style={{ marginRight: 8 }}
                   />
-                  <Text style={[styles.actionBtnText, { color: T.bg }]} allowFontScaling={false}>
+                  <Text style={[styles.actionBtnText, { color: getLocalThemePalette1().bg }]} allowFontScaling={false}>
                     Finalizar
                   </Text>
                 </>
@@ -526,7 +529,7 @@ export function TreadmillRunningView({
       {isFinishing && (
         <View style={styles.finishingOverlay}>
           <View style={styles.finishingCard}>
-            <ActivityIndicator size="large" color={T.cyan} />
+            <ActivityIndicator size="large" color={getLocalThemePalette1().cyan} />
             <Text style={styles.finishingTitle} allowFontScaling={false}>
               Finalizando treino
             </Text>
@@ -563,6 +566,7 @@ const FlatMetric = React.memo(function FlatMetric({
   label: string;
   value: string;
 }) {
+  useThemeSubscription();
   return (
     <View style={styles.metricCol}>
       <Text style={styles.metricLabel} allowFontScaling={false}>
@@ -597,6 +601,7 @@ const ManualSpeedStrip = React.memo(function ManualSpeedStrip({
   onIncrementFine: () => void;
   onDecrementFine: () => void;
 }) {
+  useThemeSubscription();
   return (
     <View style={styles.manualStrip}>
       <StripBtn label="−1" onPress={onDecrement} accessibilityLabel="Diminuir 1 km/h" />
@@ -621,6 +626,7 @@ const StripBtn = React.memo(function StripBtn({
   onPress: () => void;
   accessibilityLabel: string;
 }) {
+  useThemeSubscription();
   const scale = useSharedValue(1);
   const style = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -648,10 +654,10 @@ const StripBtn = React.memo(function StripBtn({
 
 /* ───────────────────────────── Styles ──────────────────────────────────── */
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   container: {
     flex: 1,
-    backgroundColor: T.bg,
+    backgroundColor: getLocalThemePalette1().bg,
   },
   topSafe: {
     backgroundColor: 'transparent',
@@ -676,7 +682,7 @@ const styles = StyleSheet.create({
   workoutPill: {
     flex: 1,
     minHeight: 50,
-    backgroundColor: T.cardSurface,
+    backgroundColor: getLocalThemePalette1().cardSurface,
     borderRadius: 26,
     borderWidth: 1,
     borderColor: semanticColors.borderSubtle,
@@ -686,14 +692,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   workoutPillDay: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontFamily: fonts.medium,
     fontSize: 11,
     lineHeight: 13,
     marginBottom: 2,
   },
   workoutPillTitle: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.semibold,
     fontSize: 14,
     fontWeight: '600',
@@ -702,7 +708,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: T.cyan,
+    backgroundColor: getLocalThemePalette1().cyan,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -710,18 +716,18 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: T.cardSurface,
+    backgroundColor: getLocalThemePalette1().cardSurface,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: T.cardBorder,
+    borderColor: getLocalThemePalette1().cardBorder,
   },
   goalsBtnCompleted: {
     borderWidth: 2,
     borderColor: '#32CD32',
   },
   deviceCaption: {
-    color: T.textMuted,
+    color: getLocalThemePalette1().textMuted,
     fontFamily: fonts.medium,
     fontSize: 11,
     letterSpacing: 0.4,
@@ -734,8 +740,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: T.warningBg,
-    borderColor: T.warningBorder,
+    backgroundColor: getLocalThemePalette1().warningBg,
+    borderColor: getLocalThemePalette1().warningBorder,
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 12,
@@ -743,7 +749,7 @@ const styles = StyleSheet.create({
   },
   disconnectBannerText: {
     flex: 1,
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.regular,
     fontSize: 12,
     lineHeight: 16,
@@ -762,13 +768,13 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
   },
   heroLabel: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontFamily: fonts.medium,
     fontSize: 16,
     marginBottom: 4,
   },
   heroValue: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.bold,
     fontSize: 64,
     fontWeight: '700',
@@ -776,7 +782,7 @@ const styles = StyleSheet.create({
     lineHeight: 72,
   },
   heroValueLive: {
-    color: T.cyan,
+    color: getLocalThemePalette1().cyan,
   },
 
   // Flat metrics grid
@@ -791,13 +797,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   metricLabel: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontFamily: fonts.regular,
     fontSize: 15,
     marginBottom: 6,
   },
   metricValue: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.bold,
     fontSize: 22,
     fontWeight: '700',
@@ -816,15 +822,15 @@ const styles = StyleSheet.create({
   stripBtn: {
     width: 44,
     height: 40,
-    backgroundColor: T.bg,
+    backgroundColor: getLocalThemePalette1().bg,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: T.cardBorder,
+    borderColor: getLocalThemePalette1().cardBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stripBtnText: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.semibold,
     fontSize: 13,
     fontWeight: '600',
@@ -834,7 +840,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   manualValue: {
-    color: T.cyan,
+    color: getLocalThemePalette1().cyan,
     fontFamily: fonts.bold,
     fontSize: 18,
     fontWeight: '700',
@@ -845,7 +851,7 @@ const styles = StyleSheet.create({
   bottomDock: {
     paddingHorizontal: 22,
     paddingTop: 26,
-    backgroundColor: T.cardSurface,
+    backgroundColor: getLocalThemePalette1().cardSurface,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     shadowColor: semanticColors.canvas,
@@ -870,17 +876,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   actionBtnCyan: {
-    borderColor: T.cyan,
+    borderColor: getLocalThemePalette1().cyan,
   },
   actionBtnFilled: {
-    backgroundColor: T.cyan,
-    borderColor: T.cyan,
+    backgroundColor: getLocalThemePalette1().cyan,
+    borderColor: getLocalThemePalette1().cyan,
   },
   actionBtnHalf: {
     flex: 1,
   },
   actionBtnText: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.semibold,
     fontSize: 16,
     fontWeight: '600',
@@ -901,12 +907,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 28,
     borderRadius: 24,
-    backgroundColor: T.cardSurface,
+    backgroundColor: getLocalThemePalette1().cardSurface,
     borderWidth: 1,
-    borderColor: T.cardBorder,
+    borderColor: getLocalThemePalette1().cardBorder,
   },
   finishingTitle: {
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
     fontFamily: fonts.bold,
     fontSize: 18,
     fontWeight: '700',
@@ -914,13 +920,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   finishingSubtitle: {
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     fontFamily: fonts.regular,
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 18,
     marginTop: 6,
   },
-});
+}));
 
 export default TreadmillRunningView;

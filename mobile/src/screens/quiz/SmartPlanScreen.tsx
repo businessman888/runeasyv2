@@ -23,24 +23,27 @@ import { usePlacement } from 'expo-superwall';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PAYWALL_PLACEMENTS } from '../../services/paywall';
 import { semanticColors } from '../../theme/semanticColors';
+import { createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../../theme';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// =============================================
-// Design System — Figma node 180:848
-// =============================================
-const DS = {
+const getLocalThemePalette1 = () => ({
     bg: semanticColors.onboardingIconInk,
     card: semanticColors.surface2,
     cardL2: semanticColors.surface1,
     cyan: semanticColors.accent,
     cyanMuted: semanticColors.accentSubtle,
     text: semanticColors.textPrimary,
-    textSecondary: 'rgba(235, 235, 245, 0.6)',
+    textSecondary: semanticColors.textSecondary,
     glassBorder: semanticColors.borderSubtle,
     gold: '#FFC400',
     goldMuted: semanticColors.warningSubtle,
-};
+});
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// =============================================
+// Design System — Figma node 180:848
+// =============================================
+
 
 // Helper to get goal label
 const getGoalLabel = (goal: string): string => {
@@ -66,6 +69,7 @@ const CHART_W = SCREEN_WIDTH - 80; // Inner chart canvas
 const CHART_H = 160;
 
 const ProgressChart = () => {
+    useThemeSubscription();
     const animVal = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
@@ -105,16 +109,16 @@ const ProgressChart = () => {
         <Svg width={CHART_W} height={CHART_H + 10} style={{ marginTop: 10 }}>
             <Defs>
                 <SvgLinearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                    <Stop offset="0" stopColor={DS.cyan} stopOpacity="0.35" />
-                    <Stop offset="1" stopColor={DS.cyan} stopOpacity="0.02" />
+                    <Stop offset="0" stopColor={getLocalThemePalette1().cyan} stopOpacity="0.35" />
+                    <Stop offset="1" stopColor={getLocalThemePalette1().cyan} stopOpacity="0.02" />
                 </SvgLinearGradient>
             </Defs>
             {/* Gradient fill under curve */}
             <Path d={fillPath} fill="url(#chartGrad)" />
             {/* Line on top */}
-            <Path d={linePath} stroke={DS.cyan} strokeWidth={3} fill="none" strokeLinecap="round" />
+            <Path d={linePath} stroke={getLocalThemePalette1().cyan} strokeWidth={3} fill="none" strokeLinecap="round" />
             {/* End dot */}
-            <SvgCircle cx={CHART_W} cy={10} r={5} fill={DS.cyan} />
+            <SvgCircle cx={CHART_W} cy={10} r={5} fill={getLocalThemePalette1().cyan} />
         </Svg>
     );
 };
@@ -123,6 +127,7 @@ const ProgressChart = () => {
 // MAIN COMPONENT
 // =============================================
 export function SmartPlanScreen({ navigation, route }: any) {
+    useThemeSubscription();
     const { data, generatedPlan: storePlan } = useOnboardingStore();
     const isPro = useSubscriptionStore((s) => s.isProUser);
     const userId = route?.params?.userId;
@@ -220,7 +225,7 @@ export function SmartPlanScreen({ navigation, route }: any) {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+            <StatusBar barStyle={getThemeStatusBarStyle()} translucent backgroundColor="transparent" />
 
             <ScrollView
                 style={styles.scrollView}
@@ -233,13 +238,13 @@ export function SmartPlanScreen({ navigation, route }: any) {
                         ============================================= */}
                     <View style={styles.topHeader}>
                         <View style={styles.topHeaderLeft}>
-                            <MaterialCommunityIcons name="lightning-bolt-circle" size={40} color={DS.cyan} />
+                            <MaterialCommunityIcons name="lightning-bolt-circle" size={40} color={getLocalThemePalette1().cyan} />
                             <Text style={styles.topHeaderTitle}>
                                 Planejamento para os {getGoalLabel(goal)}!
                             </Text>
                         </View>
                         <TouchableOpacity onPress={handleShare} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                            <MaterialCommunityIcons name="share-variant-outline" size={24} color={DS.textSecondary} />
+                            <MaterialCommunityIcons name="share-variant-outline" size={24} color={getLocalThemePalette1().textSecondary} />
                         </TouchableOpacity>
                     </View>
 
@@ -310,14 +315,14 @@ export function SmartPlanScreen({ navigation, route }: any) {
                         ============================================= */}
                     <View style={styles.badgeCard}>
                         <View style={styles.badgeIconCircle}>
-                            <MaterialCommunityIcons name="trophy" size={28} color={DS.gold} />
+                            <MaterialCommunityIcons name="trophy" size={28} color={getLocalThemePalette1().gold} />
                         </View>
                         <View style={styles.badgeTextContainer}>
                             <Text style={styles.badgeTitle}>Badge de Boas-Vindas</Text>
                             <Text style={styles.badgeSubtitle}>CONQUISTADO</Text>
                         </View>
                         <View style={styles.badgeCheckCircle}>
-                            <MaterialCommunityIcons name="check" size={18} color={DS.bg} />
+                            <MaterialCommunityIcons name="check" size={18} color={getLocalThemePalette1().bg} />
                         </View>
                     </View>
 
@@ -335,17 +340,17 @@ export function SmartPlanScreen({ navigation, route }: any) {
                             <Text style={styles.workoutTitle}>{workoutTitle}</Text>
                             <View style={styles.workoutMetrics}>
                                 <View style={styles.wMetricItem}>
-                                    <MaterialCommunityIcons name="timer-outline" size={16} color={DS.textSecondary} />
+                                    <MaterialCommunityIcons name="timer-outline" size={16} color={getLocalThemePalette1().textSecondary} />
                                     <Text style={styles.wMetricText}>{workoutDuration}</Text>
                                 </View>
                                 <View style={styles.wMetricItem}>
-                                    <MaterialCommunityIcons name="speedometer" size={16} color={DS.textSecondary} />
+                                    <MaterialCommunityIcons name="speedometer" size={16} color={getLocalThemePalette1().textSecondary} />
                                     <Text style={styles.wMetricText}>{workoutPace}</Text>
                                 </View>
                             </View>
                         </View>
                         <View style={styles.runnerCircle}>
-                            <MaterialCommunityIcons name="run-fast" size={25} color={DS.bg} />
+                            <MaterialCommunityIcons name="run-fast" size={25} color={getLocalThemePalette1().bg} />
                         </View>
                     </View>
 
@@ -361,7 +366,7 @@ export function SmartPlanScreen({ navigation, route }: any) {
                             </View>
                         </View>
                         <View style={styles.lockIconContainer}>
-                            <MaterialCommunityIcons name="lock" size={30} color={DS.textSecondary} />
+                            <MaterialCommunityIcons name="lock" size={30} color={getLocalThemePalette1().textSecondary} />
                         </View>
                     </View>
 
@@ -376,7 +381,7 @@ export function SmartPlanScreen({ navigation, route }: any) {
                             </View>
                         </View>
                         <View style={styles.lockIconContainer}>
-                            <MaterialCommunityIcons name="lock" size={30} color={DS.textSecondary} />
+                            <MaterialCommunityIcons name="lock" size={30} color={getLocalThemePalette1().textSecondary} />
                         </View>
                     </View>
 
@@ -385,7 +390,7 @@ export function SmartPlanScreen({ navigation, route }: any) {
                         ============================================= */}
                     <View style={styles.aiTipCard}>
                         <View style={styles.aiTipIconCol}>
-                            <MaterialCommunityIcons name="lightbulb-on" size={32} color={DS.cyan} />
+                            <MaterialCommunityIcons name="lightbulb-on" size={32} color={getLocalThemePalette1().cyan} />
                         </View>
                         <View style={styles.aiTipTextCol}>
                             <Text style={styles.aiTipTitle}>Dica do treinador IA</Text>
@@ -408,14 +413,14 @@ export function SmartPlanScreen({ navigation, route }: any) {
                     <View style={styles.paywallCard}>
                         {/* Lock icon circle */}
                         <View style={styles.paywallLockCircle}>
-                            <MaterialCommunityIcons name="lock" size={40} color={DS.cyan} />
+                            <MaterialCommunityIcons name="lock" size={40} color={getLocalThemePalette1().cyan} />
                         </View>
 
                         {/* Text section */}
                         <Text style={styles.paywallTitle}>Plano Completo Bloqueado</Text>
                         <Text style={styles.paywallSubtitle}>
                             Desbloqueie seus{' '}
-                            <Text style={{ color: DS.cyan, fontWeight: '700' }}>30 treinos, </Text>
+                            <Text style={{ color: getLocalThemePalette1().cyan, fontWeight: '700' }}>30 treinos, </Text>
                             feedback{'\n'}de IA e recursos completos.
                         </Text>
 
@@ -427,7 +432,7 @@ export function SmartPlanScreen({ navigation, route }: any) {
                                 activeOpacity={0.8}
                             >
                                 <Text style={styles.unlockButtonText}>Desbloquear Tudo</Text>
-                                <MaterialCommunityIcons name="arrow-right" size={22} color={DS.bg} />
+                                <MaterialCommunityIcons name="arrow-right" size={22} color={getLocalThemePalette1().bg} />
                             </TouchableOpacity>
                             <Text style={styles.trialText}>
                                 7 dias grátis depois R$ 29,90/mês. Cancele quando{'\n'}quiser.
@@ -457,7 +462,7 @@ export function SmartPlanScreen({ navigation, route }: any) {
 // =============================================
 // STYLES — Figma node 180:848
 // =============================================
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: semanticColors.canvas,
@@ -485,7 +490,7 @@ const styles = StyleSheet.create({
     topHeaderTitle: {
         fontSize: 14,
         fontWeight: '700',
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
 
     // — 2. Title Section —
@@ -496,7 +501,7 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 28,
         fontWeight: '600',
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         lineHeight: 36,
         marginBottom: 12,
     },
@@ -507,19 +512,19 @@ const styles = StyleSheet.create({
         lineHeight: 24,
     },
     goalHighlight: {
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
 
     // — 3. Metrics Card (single horizontal bar) —
     metricsCard: {
         flexDirection: 'row',
-        backgroundColor: DS.card,
+        backgroundColor: getLocalThemePalette1().card,
         borderRadius: 15,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 20,
         // Figma shadow
-        shadowColor: '#000',
+        shadowColor: semanticColors.shadow,
         shadowOffset: { width: 2, height: 2 },
         shadowOpacity: 0.25,
         shadowRadius: 4,
@@ -539,23 +544,23 @@ const styles = StyleSheet.create({
     metricValue: {
         fontSize: 15,
         fontWeight: '600',
-        color: DS.text,
+        color: getLocalThemePalette1().text,
     },
     metricDivider: {
         width: 0.5,
         height: 40,
-        backgroundColor: DS.glassBorder,
+        backgroundColor: getLocalThemePalette1().glassBorder,
     },
 
     // — 4. Chart Card —
     chartCard: {
-        backgroundColor: DS.card,
+        backgroundColor: getLocalThemePalette1().card,
         borderRadius: 20,
         padding: 16,
         marginBottom: 20,
         borderWidth: 1,
-        borderColor: DS.glassBorder,
-        shadowColor: '#000',
+        borderColor: getLocalThemePalette1().glassBorder,
+        shadowColor: semanticColors.shadow,
         shadowOffset: { width: 1, height: 1 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
@@ -575,7 +580,7 @@ const styles = StyleSheet.create({
     chartMetaValue: {
         fontSize: 24,
         fontWeight: '700',
-        color: DS.text,
+        color: getLocalThemePalette1().text,
     },
     chartGainContainer: {
         alignItems: 'flex-end',
@@ -583,7 +588,7 @@ const styles = StyleSheet.create({
     chartGainValue: {
         fontSize: 20,
         fontWeight: '700',
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     chartGainSub: {
         fontSize: 14,
@@ -608,21 +613,21 @@ const styles = StyleSheet.create({
     chartLabelRight: {
         fontSize: 14,
         fontWeight: '500',
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
 
     // — 5. Badge Card —
     badgeCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: DS.cardL2,
+        backgroundColor: getLocalThemePalette1().cardL2,
         borderRadius: 20,
         padding: 18,
         marginBottom: 24,
         borderWidth: 1,
-        borderColor: DS.gold,
+        borderColor: getLocalThemePalette1().gold,
         // Figma gold glow
-        shadowColor: DS.gold,
+        shadowColor: getLocalThemePalette1().gold,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.3,
         shadowRadius: 6,
@@ -632,7 +637,7 @@ const styles = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: DS.goldMuted,
+        backgroundColor: getLocalThemePalette1().goldMuted,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -643,19 +648,19 @@ const styles = StyleSheet.create({
     badgeTitle: {
         fontSize: 14,
         fontWeight: '600',
-        color: DS.text,
+        color: getLocalThemePalette1().text,
     },
     badgeSubtitle: {
         fontSize: 12,
         fontWeight: '400',
-        color: DS.gold,
+        color: getLocalThemePalette1().gold,
         marginTop: 2,
     },
     badgeCheckCircle: {
         width: 28,
         height: 28,
         borderRadius: 14,
-        backgroundColor: DS.gold,
+        backgroundColor: getLocalThemePalette1().gold,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -670,34 +675,34 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 16,
         fontWeight: '600',
-        color: DS.text,
+        color: getLocalThemePalette1().text,
     },
     todayBadge: {
-        backgroundColor: DS.cyanMuted,
+        backgroundColor: getLocalThemePalette1().cyanMuted,
         borderRadius: 5,
         paddingVertical: 2,
         paddingHorizontal: 12,
         borderWidth: 1,
-        borderColor: DS.cyanMuted,
+        borderColor: getLocalThemePalette1().cyanMuted,
     },
     todayBadgeText: {
         fontSize: 13,
         fontWeight: '600',
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
 
     // — Workout Card ACTIVE —
     workoutCardActive: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: DS.cardL2,
+        backgroundColor: getLocalThemePalette1().cardL2,
         borderRadius: 15,
         padding: 16,
         marginBottom: 15,
         borderWidth: 1,
-        borderColor: DS.cyanMuted,
+        borderColor: getLocalThemePalette1().cyanMuted,
         // Glow
-        shadowColor: DS.cyanMuted,
+        shadowColor: getLocalThemePalette1().cyanMuted,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.4,
         shadowRadius: 6,
@@ -715,7 +720,7 @@ const styles = StyleSheet.create({
     workoutTitle: {
         fontSize: 16,
         fontWeight: '600',
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
         marginBottom: 14,
     },
     workoutMetrics: {
@@ -736,11 +741,11 @@ const styles = StyleSheet.create({
         width: 50,
         height: 50,
         borderRadius: 25,
-        backgroundColor: DS.cyan,
+        backgroundColor: getLocalThemePalette1().cyan,
         alignItems: 'center',
         justifyContent: 'center',
         // Glow
-        shadowColor: DS.cyanMuted,
+        shadowColor: getLocalThemePalette1().cyanMuted,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5,
         shadowRadius: 6,
@@ -751,7 +756,7 @@ const styles = StyleSheet.create({
     workoutCardLocked: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: DS.cardL2,
+        backgroundColor: getLocalThemePalette1().cardL2,
         borderRadius: 15,
         padding: 16,
         marginBottom: 15,
@@ -761,14 +766,14 @@ const styles = StyleSheet.create({
         width: 178,
         height: 22,
         borderRadius: 20,
-        backgroundColor: DS.card,
+        backgroundColor: getLocalThemePalette1().card,
         marginBottom: 12,
     },
     skeletonSmall: {
         width: 75,
         height: 18,
         borderRadius: 20,
-        backgroundColor: DS.card,
+        backgroundColor: getLocalThemePalette1().card,
     },
     lockIconContainer: {
         width: 50,
@@ -780,12 +785,12 @@ const styles = StyleSheet.create({
     // — 7. AI Tip Card —
     aiTipCard: {
         flexDirection: 'row',
-        backgroundColor: DS.card,
+        backgroundColor: getLocalThemePalette1().card,
         borderRadius: 20,
         padding: 18,
         marginBottom: 24,
         // Cyan glow
-        shadowColor: DS.cyan,
+        shadowColor: getLocalThemePalette1().cyan,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.15,
         shadowRadius: 4,
@@ -803,24 +808,24 @@ const styles = StyleSheet.create({
     aiTipTitle: {
         fontSize: 15,
         fontWeight: '600',
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
         marginBottom: 6,
     },
     aiTipBody: {
         fontSize: 11,
         fontWeight: '400',
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         lineHeight: 16,
     },
 
     // — 8. Paywall Section —
     weeksBadge: {
-        backgroundColor: DS.glassBorder,
+        backgroundColor: getLocalThemePalette1().glassBorder,
         borderRadius: 5,
         paddingVertical: 2,
         paddingHorizontal: 10,
         borderWidth: 1,
-        borderColor: DS.glassBorder,
+        borderColor: getLocalThemePalette1().glassBorder,
     },
     weeksBadgeText: {
         fontSize: 13,
@@ -828,15 +833,15 @@ const styles = StyleSheet.create({
         color: semanticColors.textSecondary,
     },
     paywallCard: {
-        backgroundColor: DS.cardL2,
+        backgroundColor: getLocalThemePalette1().cardL2,
         borderRadius: 15,
         padding: 24,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: DS.glassBorder,
+        borderColor: getLocalThemePalette1().glassBorder,
         marginBottom: 20,
         // Shadow
-        shadowColor: '#000',
+        shadowColor: semanticColors.shadow,
         shadowOffset: { width: 2, height: 2 },
         shadowOpacity: 0.25,
         shadowRadius: 4,
@@ -851,7 +856,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginBottom: 18,
         // Cyan glow
-        shadowColor: DS.cyan,
+        shadowColor: getLocalThemePalette1().cyan,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.4,
         shadowRadius: 6,
@@ -860,7 +865,7 @@ const styles = StyleSheet.create({
     paywallTitle: {
         fontSize: 20,
         fontWeight: '700',
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         textAlign: 'center',
         marginBottom: 8,
     },
@@ -885,7 +890,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: DS.cyan,
+        backgroundColor: getLocalThemePalette1().cyan,
         borderRadius: 30,
         paddingVertical: 16,
         width: '100%',
@@ -916,7 +921,7 @@ const styles = StyleSheet.create({
         backgroundColor: semanticColors.canvas,
     },
     ctaButton: {
-        backgroundColor: DS.cyan,
+        backgroundColor: getLocalThemePalette1().cyan,
         borderRadius: 40,
         alignItems: 'center',
         justifyContent: 'center',
@@ -933,6 +938,6 @@ const styles = StyleSheet.create({
         color: semanticColors.textOnAccent,
         marginTop: 2,
     },
-});
+}));
 
 export default SmartPlanScreen;

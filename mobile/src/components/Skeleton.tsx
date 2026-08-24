@@ -11,7 +11,7 @@ import Animated, {
     interpolate,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors } from '../theme';
+import { colors, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
@@ -33,6 +33,7 @@ interface SkeletonProps {
  * API kept identical to the previous version so existing consumers keep working.
  */
 export function Skeleton({ width, height, borderRadius = 8, style }: SkeletonProps) {
+    useThemeSubscription();
     const [reduceMotion, setReduceMotion] = useState(false);
     const [boxWidth, setBoxWidth] = useState(0);
     const progress = useSharedValue(0);
@@ -134,6 +135,7 @@ export function SkeletonText({
     height?: number;
     style?: ViewStyle;
 }) {
+    useThemeSubscription();
     return <Skeleton width={width} height={height} borderRadius={4} style={style} />;
 }
 
@@ -147,6 +149,7 @@ export function SkeletonCircle({
     size?: number;
     style?: ViewStyle;
 }) {
+    useThemeSubscription();
     return <Skeleton width={size} height={size} borderRadius={size / 2} style={style} />;
 }
 
@@ -160,6 +163,7 @@ export function SkeletonCard({
     height?: number;
     style?: ViewStyle;
 }) {
+    useThemeSubscription();
     return (
         <View style={[styles.cardContainer, { height }, style]}>
             <Skeleton width="100%" height={height} borderRadius={16} />
@@ -167,7 +171,7 @@ export function SkeletonCard({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     skeleton: {
         backgroundColor: semanticColors.borderStrong,
     },
@@ -178,4 +182,4 @@ const styles = StyleSheet.create({
         width: '100%',
         overflow: 'hidden',
     },
-});
+}));

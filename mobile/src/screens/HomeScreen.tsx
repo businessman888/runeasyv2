@@ -8,7 +8,7 @@ import {
     TouchableOpacity,
 } from 'react-native';
 import * as Storage from '../utils/storage';
-import { colors, typography, spacing, borderRadius, fonts } from '../theme';
+import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { AppIcon } from '../components/ui/AppIcon';
 import { useResponsiveTheme } from '../theme/responsive';
@@ -68,38 +68,47 @@ const MOCK_TEASE_WORKOUT: WorkoutData = {
 
 // Semantic icon adapters backed by the modular Ionicons package.
 function RunningIcon({ size = 32, color = semanticColors.accent }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="running" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone={color === semanticColors.accent ? 'accent' : 'tertiary'} />;
 }
 
 function DistanceIcon({ size = 20, color = semanticColors.accent }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="location" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone={color === semanticColors.accent ? 'accent' : 'secondary'} />;
 }
 
 function PaceIcon({ size = 20, color = semanticColors.accent }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="trainingLoad" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone={color === semanticColors.accent ? 'accent' : 'secondary'} />;
 }
 
 function CalendarSmallIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="calendar" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" />;
 }
 
 function ShoeIcon({ size = 24, color = semanticColors.textOnAccent }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="walking" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone={color === semanticColors.textOnAccent ? 'tertiary' : 'primary'} variant="filled" />;
 }
 
 function LockIcon({ size = 24, color = semanticColors.textTertiary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="lock" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone={color === semanticColors.textTertiary ? 'tertiary' : 'primary'} variant="filled" />;
 }
 
 function MoonIcon({ size = 32, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="sleep" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" variant="filled" />;
 }
 
 function BedIcon({ size = 24, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <AppIcon name="sleep" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" />;
 }
 
 export function HomeScreen({ navigation }: any) {
+    useThemeSubscription();
     const { user } = useAuthStore();
     // Responsividade tablet: layout aditivo. Phone (isTablet=false) renderiza o
     // caminho original idêntico — sem wrappers extras nem mudança de ordem.
@@ -1008,7 +1017,7 @@ export function HomeScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: semanticColors.canvas,
@@ -1546,4 +1555,4 @@ const styles = StyleSheet.create({
         elevation: 6,
     },
 
-});
+}));

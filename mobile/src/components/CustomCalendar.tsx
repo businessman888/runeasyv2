@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { semanticColors } from '../theme/semanticColors';
+import { createThemeStyles, useThemeSubscription } from '../theme';
 
 interface CustomCalendarProps {
     visible: boolean;
@@ -40,6 +41,7 @@ export function CustomCalendar({
     minDate,
     maxDate,
 }: CustomCalendarProps) {
+    useThemeSubscription();
     const [tempDate, setTempDate] = useState<Date>(selectedDate);
     const [currentMonth, setCurrentMonth] = useState<Date>(new Date(selectedDate));
 
@@ -208,13 +210,13 @@ export function CustomCalendar({
     );
 }
 
-const COLOR_BG = semanticColors.surface2;
-const COLOR_ACCENT = semanticColors.accent;
-const COLOR_TEXT = semanticColors.textPrimary;
-const COLOR_TEXT_MUTED = semanticColors.textSecondary;
-const COLOR_TEXT_DARK = semanticColors.textOnAccent;
 
-const styles = StyleSheet.create({
+
+
+
+
+
+const styles = createThemeStyles(() => ({
     overlay: {
         flex: 1,
         backgroundColor: semanticColors.scrim,
@@ -225,10 +227,10 @@ const styles = StyleSheet.create({
     card: {
         width: '100%',
         maxWidth: 355,
-        backgroundColor: COLOR_BG,
+        backgroundColor: semanticColors.surface2,
         borderRadius: 20,
         borderWidth: 1,
-        borderColor: COLOR_ACCENT,
+        borderColor: semanticColors.accent,
         paddingHorizontal: 6,
         paddingTop: 14,
         paddingBottom: 8,
@@ -244,7 +246,7 @@ const styles = StyleSheet.create({
         fontFamily: 'Poppins',
         fontSize: 20,
         fontWeight: '500',
-        color: COLOR_TEXT,
+        color: semanticColors.textPrimary,
     },
     navRow: {
         flexDirection: 'row',
@@ -278,7 +280,7 @@ const styles = StyleSheet.create({
         fontFamily: 'Poppins',
         fontSize: 14,
         fontWeight: '400',
-        color: COLOR_TEXT_MUTED,
+        color: semanticColors.textSecondary,
     },
     dayBtn: {
         width: 34,
@@ -288,16 +290,16 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     dayBtnSelected: {
-        backgroundColor: COLOR_ACCENT,
+        backgroundColor: semanticColors.accent,
     },
     dayText: {
         fontFamily: 'Poppins',
         fontSize: 14,
         fontWeight: '400',
-        color: COLOR_TEXT,
+        color: semanticColors.textPrimary,
     },
     dayTextSelected: {
-        color: COLOR_TEXT_DARK,
+        color: semanticColors.textOnAccent,
         fontWeight: '600',
     },
     dayTextDisabled: {
@@ -321,6 +323,6 @@ const styles = StyleSheet.create({
         fontFamily: 'Poppins',
         fontSize: 14,
         fontWeight: '500',
-        color: COLOR_ACCENT,
+        color: semanticColors.accent,
     },
-});
+}));

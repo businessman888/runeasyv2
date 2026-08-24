@@ -11,7 +11,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { colors, typography, spacing, borderRadius, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { useWellnessStore } from '../../stores/wellnessStore';
 import { Skeleton, SkeletonText } from '../Skeleton';
@@ -28,6 +28,7 @@ function formatDuration(sec: number | null): string {
 }
 
 export function OverviewSection() {
+    useThemeSubscription();
     const navigation = useNavigation<Nav>();
     const summary = useWellnessStore((s) => s.summary);
     const loading = useWellnessStore((s) => s.loading);
@@ -138,6 +139,7 @@ function DistanceCard({
     deltaPct: number | null;
     onPress: () => void;
 }) {
+    useThemeSubscription();
     const showDelta = deltaPct !== null;
     const positive = (deltaPct ?? 0) > 0;
     const deltaColor = !showDelta
@@ -193,6 +195,7 @@ function FrequencyCard({
     planned: number;
     onPress: () => void;
 }) {
+    useThemeSubscription();
     const pct = planned > 0 ? Math.min(1, done / planned) : 0;
 
     return (
@@ -244,6 +247,7 @@ function SmallCard({
     unit?: string;
     hint?: string;
 }) {
+    useThemeSubscription();
     return (
         <View style={styles.smallCard}>
             <View style={[styles.cardIcon, { backgroundColor: `${iconColor}1A` }]}>
@@ -260,6 +264,7 @@ function SmallCard({
 }
 
 function OverviewSkeleton() {
+    useThemeSubscription();
     return (
         <View style={styles.section}>
             <View style={styles.header}>
@@ -278,7 +283,7 @@ function OverviewSkeleton() {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     section: {
         gap: spacing.sm,
     },
@@ -431,4 +436,4 @@ const styles = StyleSheet.create({
         color: semanticColors.textSecondary,
         marginTop: 2,
     },
-});
+}));

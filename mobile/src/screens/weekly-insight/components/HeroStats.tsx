@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
-import { colors, typography, spacing, borderRadius, fonts } from '../../../theme';
+import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../../theme';
 import { useEnterAnimation } from '../hooks/useEnterAnimation';
 import { CountUp } from './CountUp';
 import type { WeeklyInsight } from '../../../types/weeklyInsight.types';
@@ -32,6 +32,7 @@ export const HeroStats = memo(function HeroStats({
     insight,
     index = 1,
 }: HeroStatsProps) {
+    useThemeSubscription();
     const progress = useEnterAnimation(index);
 
     const animatedStyle = useAnimatedStyle(() => ({
@@ -103,6 +104,7 @@ function Stat({
     hero?: boolean;
     index: number;
 }) {
+    useThemeSubscription();
     return (
         <View style={styles.stat}>
             <Text style={styles.label} numberOfLines={1}>
@@ -130,7 +132,7 @@ function Stat({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     card: {
         flexDirection: 'row',
         backgroundColor: colors.card,
@@ -176,4 +178,4 @@ const styles = StyleSheet.create({
         backgroundColor: colors.border,
         marginVertical: spacing.xs,
     },
-});
+}));

@@ -8,13 +8,10 @@ import {
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { CustomKeypad } from '../../components/CustomKeypad';
-import { fonts } from '../../theme';
+import { fonts, useThemeSubscription, createThemeStyles } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// Design System — Figma exact tokens (node 565:481)
-const DS = {
+const getLocalThemePalette1 = () => ({
     bg: semanticColors.onboardingIconInkAlt,
     cardBg: semanticColors.surface2,
     inputBgActive: semanticColors.accentSubtle,
@@ -23,7 +20,12 @@ const DS = {
     text: semanticColors.textPrimary,
     textSecondary: semanticColors.textSecondary,
     glassBorder: semanticColors.borderSubtle,
-};
+});
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Design System — Figma exact tokens (node 565:481)
+
 
 interface PaceConfirmScreenProps {
     paceMinutes?: string;
@@ -40,6 +42,7 @@ export function PaceConfirmScreen({
     dontKnowPace: initialDontKnow,
     onChange,
 }: PaceConfirmScreenProps) {
+    useThemeSubscription();
     const [minutes, setMinutes] = useState(initialMin || '');
     const [seconds, setSeconds] = useState(initialSec || '');
     const [dontKnow, setDontKnow] = useState(initialDontKnow || false);
@@ -204,7 +207,7 @@ export function PaceConfirmScreen({
                         <Svg width={10} height={10} viewBox="0 0 24 24" fill="none">
                             <Path
                                 d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"
-                                fill={DS.bg}
+                                fill={getLocalThemePalette1().bg}
                             />
                         </Svg>
                     )}
@@ -233,7 +236,7 @@ export function PaceConfirmScreen({
 // STYLES — Figma node 565:481 faithful
 // ============================================
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         paddingTop: 24,
@@ -241,24 +244,24 @@ const styles = StyleSheet.create({
 
     // — Single Card Container (Figma: 339×128px, border-radius 15) —
     card: {
-        backgroundColor: DS.cardBg,
+        backgroundColor: getLocalThemePalette1().cardBg,
         borderRadius: 15,
         borderWidth: 1,
-        borderColor: DS.glassBorder,
+        borderColor: getLocalThemePalette1().glassBorder,
         paddingTop: 14,
         paddingBottom: 20,
         paddingHorizontal: 20,
         alignItems: 'center',
         marginHorizontal: 4,
         // Figma shadow
-        shadowColor: '#000',
+        shadowColor: semanticColors.shadow,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.25,
         shadowRadius: 6,
         elevation: 3,
     },
     cardActive: {
-        borderColor: DS.cyan,
+        borderColor: getLocalThemePalette1().cyan,
     },
     cardDisabled: {
         opacity: 0.45,
@@ -268,13 +271,13 @@ const styles = StyleSheet.create({
     cardTitle: {
         fontFamily: fonts.semibold,
         fontSize: 15,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         marginBottom: 16,
         letterSpacing: 0.3,
         textAlign: 'center',
     },
     cardTitleActive: {
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
 
     // — Input Row —
@@ -290,45 +293,45 @@ const styles = StyleSheet.create({
         height: 65,
         borderRadius: 15,
         borderWidth: 1,
-        borderColor: DS.glassBorder,
+        borderColor: getLocalThemePalette1().glassBorder,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: 'transparent',
     },
     inputBlockActive: {
-        backgroundColor: DS.inputBgActive,
-        borderColor: DS.cyan,
+        backgroundColor: getLocalThemePalette1().inputBgActive,
+        borderColor: getLocalThemePalette1().cyan,
     },
 
     // — Number Text (Figma: 32px SemiBold) —
     inputValue: {
         fontFamily: fonts.semibold,
         fontSize: 32,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
     },
     inputValueDim: {
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
     },
     inputValueFilled: {
-        color: DS.text,
+        color: getLocalThemePalette1().text,
     },
 
     // — Separator ":" —
     separator: {
         fontFamily: fonts.semibold,
         fontSize: 32,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         marginHorizontal: 6,
     },
     separatorFilled: {
-        color: DS.text,
+        color: getLocalThemePalette1().text,
     },
 
     // — Unit "min/km" —
     unitLabel: {
         fontFamily: fonts.regular,
         fontSize: 12,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         marginLeft: 14,
     },
 
@@ -346,23 +349,23 @@ const styles = StyleSheet.create({
         height: 15,
         borderRadius: 5,
         borderWidth: 1,
-        borderColor: DS.glassBorder,
-        backgroundColor: DS.glassBorder,
+        borderColor: getLocalThemePalette1().glassBorder,
+        backgroundColor: getLocalThemePalette1().glassBorder,
         alignItems: 'center',
         justifyContent: 'center',
     },
     checkboxActive: {
-        backgroundColor: DS.cyan,
-        borderColor: DS.cyan,
+        backgroundColor: getLocalThemePalette1().cyan,
+        borderColor: getLocalThemePalette1().cyan,
     },
     checkboxText: {
         fontFamily: fonts.regular,
         fontSize: 12,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
     },
     checkboxTextActive: {
-        color: DS.text,
+        color: getLocalThemePalette1().text,
     },
-});
+}));
 
 export default PaceConfirmScreen;

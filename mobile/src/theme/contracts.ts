@@ -9,9 +9,14 @@ export interface ThemeColors {
   readonly surface2: string;
   readonly surface3: string;
   readonly glass: string;
+  readonly fillSubtle: string;
+  readonly fillMuted: string;
+  readonly fillStrong: string;
   readonly borderSubtle: string;
   readonly borderStrong: string;
   readonly textPrimary: string;
+  readonly textOnMedia: string;
+  readonly textOnMediaMuted: string;
   readonly textOnAccentMuted: string;
   readonly onboardingIconInk: string;
   readonly onboardingIconInkAlt: string;
@@ -33,6 +38,7 @@ export interface ThemeColors {
   readonly overlayMedium: string;
   readonly overlayStrong: string;
   readonly scrim: string;
+  readonly shadow: string;
   readonly transparent: string;
 }
 

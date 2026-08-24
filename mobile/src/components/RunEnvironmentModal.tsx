@@ -29,13 +29,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useRunEnvironmentStore } from '../stores/runEnvironmentStore';
 import { navigate } from '../navigation/navigationRef';
-import { fonts } from '../theme';
+import { fonts, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 
-// Figma tokens (1315-1609). Card width is computed from modal width minus
-// horizontal padding × 2 so cards never overshoot the container even when
-// the modal is shrunken by safe-area or small screens.
-const F = {
+const getLocalThemePalette1 = () => ({
   modalBg: semanticColors.surface2,
   modalRadius: 20,
   modalWidth: 340,
@@ -60,9 +57,15 @@ const F = {
   cyan: semanticColors.accent,
   backdrop: semanticColors.scrim,
   cardBorder: semanticColors.borderSubtle,
-};
+});
+
+// Figma tokens (1315-1609). Card width is computed from modal width minus
+// horizontal padding × 2 so cards never overshoot the container even when
+// the modal is shrunken by safe-area or small screens.
+
 
 export function RunEnvironmentModal() {
+  useThemeSubscription();
   const visible = useRunEnvironmentStore((s) => s.visible);
   const pendingParams = useRunEnvironmentStore((s) => s.pendingParams);
   const close = useRunEnvironmentStore((s) => s.close);
@@ -128,7 +131,7 @@ export function RunEnvironmentModal() {
               <View style={styles.cardsWrap}>
                 <OptionCard
                   iconName="sunny"
-                  iconColor={F.cyan}
+                  iconColor={getLocalThemePalette1().cyan}
                   title="Ao ar livre"
                   subtitle="GPS tracking com mapa."
                   onPress={handleOutdoor}
@@ -136,7 +139,7 @@ export function RunEnvironmentModal() {
                 />
                 <OptionCard
                   iconName="walk"
-                  iconColor={F.iconColor}
+                  iconColor={getLocalThemePalette1().iconColor}
                   title="Na esteira"
                   subtitle="Conecte sua esteira."
                   onPress={handleTreadmill}
@@ -187,6 +190,7 @@ const OptionCard = React.memo(function OptionCard({
   onPress,
   accessibilityHint,
 }: OptionCardProps) {
+  useThemeSubscription();
   const scale = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -207,7 +211,7 @@ const OptionCard = React.memo(function OptionCard({
     >
       <Animated.View style={[styles.card, animStyle]}>
         <View style={styles.iconTile}>
-          <Ionicons name={iconName} size={F.iconInner} color={iconColor} />
+          <Ionicons name={iconName} size={getLocalThemePalette1().iconInner} color={iconColor} />
         </View>
         <View style={styles.cardTextCol}>
           <Text style={styles.cardTitle} allowFontScaling={false}>
@@ -222,22 +226,22 @@ const OptionCard = React.memo(function OptionCard({
   );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   backdrop: {
     flex: 1,
-    backgroundColor: F.backdrop,
+    backgroundColor: getLocalThemePalette1().backdrop,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
   },
   dialog: {
-    width: F.modalWidth,
+    width: getLocalThemePalette1().modalWidth,
     maxWidth: '100%',
-    backgroundColor: F.modalBg,
-    borderRadius: F.modalRadius,
-    paddingTop: F.modalPadTop,
-    paddingBottom: F.modalPadBottom,
-    paddingHorizontal: F.modalPadH,
+    backgroundColor: getLocalThemePalette1().modalBg,
+    borderRadius: getLocalThemePalette1().modalRadius,
+    paddingTop: getLocalThemePalette1().modalPadTop,
+    paddingBottom: getLocalThemePalette1().modalPadBottom,
+    paddingHorizontal: getLocalThemePalette1().modalPadH,
     shadowColor: semanticColors.canvas,
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.45,
@@ -245,33 +249,33 @@ const styles = StyleSheet.create({
     elevation: 16,
   },
   title: {
-    color: F.titleColor,
+    color: getLocalThemePalette1().titleColor,
     fontFamily: fonts.bold,
-    fontSize: F.titleSize,
+    fontSize: getLocalThemePalette1().titleSize,
     fontWeight: '700',
-    lineHeight: F.titleSize * 1.35,
+    lineHeight: getLocalThemePalette1().titleSize * 1.35,
     marginBottom: 18,
   },
   cardsWrap: {
-    gap: F.cardGap,
+    gap: getLocalThemePalette1().cardGap,
     marginBottom: 6,
   },
   card: {
     width: '100%',
-    height: F.cardHeight,
-    backgroundColor: F.cardBg,
-    borderRadius: F.cardRadius,
+    height: getLocalThemePalette1().cardHeight,
+    backgroundColor: getLocalThemePalette1().cardBg,
+    borderRadius: getLocalThemePalette1().cardRadius,
     borderWidth: 1,
-    borderColor: F.cardBorder,
+    borderColor: getLocalThemePalette1().cardBorder,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
   },
   iconTile: {
-    width: F.iconSize,
-    height: F.iconSize,
-    borderRadius: F.iconRadius,
-    backgroundColor: F.iconBg,
+    width: getLocalThemePalette1().iconSize,
+    height: getLocalThemePalette1().iconSize,
+    borderRadius: getLocalThemePalette1().iconRadius,
+    backgroundColor: getLocalThemePalette1().iconBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -282,17 +286,17 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   cardTitle: {
-    color: F.titleColor,
+    color: getLocalThemePalette1().titleColor,
     fontFamily: fonts.bold,
-    fontSize: F.optionTitleSize,
+    fontSize: getLocalThemePalette1().optionTitleSize,
     fontWeight: '700',
-    lineHeight: F.optionTitleSize * 1.35,
+    lineHeight: getLocalThemePalette1().optionTitleSize * 1.35,
   },
   cardSubtitle: {
-    color: F.subtitleColor,
+    color: getLocalThemePalette1().subtitleColor,
     fontFamily: fonts.regular,
-    fontSize: F.optionSubtitleSize,
-    lineHeight: F.optionSubtitleSize * 1.4,
+    fontSize: getLocalThemePalette1().optionSubtitleSize,
+    lineHeight: getLocalThemePalette1().optionSubtitleSize * 1.4,
   },
   cancelHit: {
     alignSelf: 'flex-start',
@@ -302,11 +306,11 @@ const styles = StyleSheet.create({
     minHeight: 40,
   },
   cancelText: {
-    color: F.subtitleColor,
+    color: getLocalThemePalette1().subtitleColor,
     fontFamily: fonts.medium,
-    fontSize: F.cancelSize,
-    lineHeight: F.cancelSize * 1.4,
+    fontSize: getLocalThemePalette1().cancelSize,
+    lineHeight: getLocalThemePalette1().cancelSize * 1.4,
   },
-});
+}));
 
 export default RunEnvironmentModal;

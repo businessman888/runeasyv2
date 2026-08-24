@@ -4,7 +4,7 @@ import Animated, {
     SharedValue,
     useAnimatedStyle,
 } from 'react-native-reanimated';
-import { borderRadius, colors } from '../../theme';
+import { borderRadius, colors, createThemeStyles, useThemeSubscription } from '../../theme';
 
 type StoryProgressBarsProps = {
     count: number;
@@ -25,6 +25,7 @@ type BarProps = {
  * the active bar never re-renders its siblings.
  */
 const Bar = memo(({ index, activeIndex, progress }: BarProps) => {
+    useThemeSubscription();
     const fillStyle = useAnimatedStyle(() => {
         let ratio: number;
         if (index < activeIndex) ratio = 1;
@@ -52,7 +53,7 @@ export const StoryProgressBars = memo(
 );
 StoryProgressBars.displayName = 'StoryProgressBars';
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     row: {
         flexDirection: 'row',
         gap: 6,
@@ -70,4 +71,4 @@ const styles = StyleSheet.create({
         borderRadius: borderRadius.full,
         backgroundColor: colors.white,
     },
-});
+}));

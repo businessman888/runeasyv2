@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 
 import { ScreenContainer } from '../../components/ScreenContainer';
-import { colors, typography, spacing, borderRadius, fonts } from '../../theme';
+import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { useWeeklyInsightStore } from '../../stores/weeklyInsightStore';
 import { useTrainingStore } from '../../stores/trainingStore';
 import { formatWeekRange } from './format';
@@ -63,6 +63,7 @@ const IDX = {
 } as const;
 
 export function WeeklyInsightScreen() {
+    useThemeSubscription();
     const navigation = useNavigation();
 
     const { latest, loading, error, applying, fetch, markSeen, applyAdjustment } =
@@ -270,6 +271,7 @@ function Header({
     week?: number;
     totalWeeks?: number;
 }) {
+    useThemeSubscription();
     // "Semana 3 de 12" — o "de N" é a informação de contexto mais barata da
     // tela, e ela faltava por completo.
     const title = week
@@ -299,7 +301,7 @@ function Header({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -358,6 +360,6 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.md,
         color: colors.text,
     },
-});
+}));
 
 export default WeeklyInsightScreen;

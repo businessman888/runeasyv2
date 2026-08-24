@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
-import { colors, typography, spacing, borderRadius, fonts } from '../../../theme';
+import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../../theme';
 import { ZONE_COLORS } from '../../../theme/zoneColors';
 import { SectionHeader } from './SectionHeader';
 import { useEnterAnimation } from '../hooks/useEnterAnimation';
@@ -36,6 +36,7 @@ export const IntensityCard = memo(function IntensityCard({
     intensity,
     index = 4,
 }: IntensityCardProps) {
+    useThemeSubscription();
     const progress = useEnterAnimation(index);
     const zones = ZONE_ORDER.filter((z) => (intensity?.[z]?.n ?? 0) > 0);
 
@@ -140,6 +141,7 @@ function PaceCell({
     muted?: boolean;
     accent?: string;
 }) {
+    useThemeSubscription();
     return (
         <View style={styles.paceCell}>
             <Text style={styles.paceLabel}>{label}</Text>
@@ -156,7 +158,7 @@ function PaceCell({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     section: { gap: spacing.md },
     card: {
         backgroundColor: colors.card,
@@ -237,4 +239,4 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         textAlign: 'center',
     },
-});
+}));

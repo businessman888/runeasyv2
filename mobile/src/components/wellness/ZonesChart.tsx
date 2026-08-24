@@ -1,8 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Platform } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { colors, typography, spacing, borderRadius, createThemeStyles, useThemeSubscription } from '../../theme';
 import { ZONE_COLORS, ZONE_LABELS } from '../../theme/zoneColors';
 import type { ZonesBlock } from '../../types/wellness.types';
+import { semanticColors } from "../../theme/semanticColors";
 
 interface ZonesChartProps {
     zones: ZonesBlock;
@@ -21,6 +22,7 @@ const ZONES: Array<{
     ];
 
 export function ZonesChart({ zones }: ZonesChartProps) {
+    useThemeSubscription();
     if (zones.totalMinutes === 0) {
         return (
             <View style={styles.section}>
@@ -61,6 +63,7 @@ function ZoneRow({
     pct: number;
     minutes: number;
 }) {
+    useThemeSubscription();
     const widthAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
@@ -104,7 +107,7 @@ function ZoneRow({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     section: {
         gap: spacing.md,
     },
@@ -148,7 +151,7 @@ const styles = StyleSheet.create({
     barTrack: {
         height: 10,
         borderRadius: 5,
-        backgroundColor: 'rgba(255,255,255,0.06)',
+        backgroundColor: semanticColors.fillSubtle,
         overflow: 'hidden',
     },
     barFill: {
@@ -180,4 +183,4 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         textAlign: 'center',
     },
-});
+}));

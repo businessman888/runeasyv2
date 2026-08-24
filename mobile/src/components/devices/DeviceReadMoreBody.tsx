@@ -17,7 +17,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 
 import { ScreenContainer } from '../ScreenContainer';
-import { colors, fonts, spacing } from '../../theme';
+import { colors, fonts, spacing, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import {
     WEARABLES,
@@ -32,6 +32,7 @@ export interface DeviceReadMoreBodyProps {
 }
 
 export function DeviceReadMoreBody({ provider, onClose }: DeviceReadMoreBodyProps) {
+    useThemeSubscription();
     const config = WEARABLES[provider];
     const blocks = config.readMore ?? [];
 
@@ -63,6 +64,7 @@ export function DeviceReadMoreBody({ provider, onClose }: DeviceReadMoreBodyProp
 }
 
 function Block({ block }: { block: ReadMoreBlock }) {
+    useThemeSubscription();
     switch (block.type) {
         case 'title':
             return <Text style={styles.title}>{block.text}</Text>;
@@ -99,7 +101,7 @@ function Block({ block }: { block: ReadMoreBlock }) {
     }
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     topBar: {
         flexDirection: 'row',
         justifyContent: 'flex-end',
@@ -187,6 +189,6 @@ const styles = StyleSheet.create({
         fontFamily: fonts.bold,
         color: colors.primary,
     },
-});
+}));
 
 export default DeviceReadMoreBody;

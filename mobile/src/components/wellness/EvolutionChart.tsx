@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { colors, typography, spacing, borderRadius, createThemeStyles, useThemeSubscription } from '../../theme';
 import type { EvolutionBlock, EvolutionMetric, WeekPoint } from '../../types/wellness.types';
+import { semanticColors } from "../../theme/semanticColors";
 
 const TABS: Array<{ key: EvolutionMetric; label: string; unit: string; invert?: boolean }> = [
     { key: 'distance', label: 'Distância', unit: 'km' },
@@ -30,6 +31,7 @@ function formatPace(seconds: number): string {
 }
 
 export function EvolutionChart({ evolution, activeTab, onChangeTab }: EvolutionChartProps) {
+    useThemeSubscription();
     // Reativo a rotação; capado em 900 p/ não estourar a coluna centralizada do
     // Wellness em tablet (em phone a largura é < 900, então fica idêntico).
     const { width: windowWidth } = useWindowDimensions();
@@ -92,9 +94,9 @@ export function EvolutionChart({ evolution, activeTab, onChangeTab }: EvolutionC
                         endSpacing={10}
                         spacing={Math.max(20, chartWidth / 8)}
                         yAxisColor="transparent"
-                        xAxisColor="rgba(255,255,255,0.08)"
+                        xAxisColor={semanticColors.borderSubtle}
                         rulesType="solid"
-                        rulesColor="rgba(255,255,255,0.06)"
+                        rulesColor={semanticColors.fillSubtle}
                         yAxisTextStyle={styles.axisText}
                         xAxisLabelTextStyle={styles.axisText}
                         noOfSections={4}
@@ -124,7 +126,7 @@ export function EvolutionChart({ evolution, activeTab, onChangeTab }: EvolutionC
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     section: {
         gap: spacing.md,
     },
@@ -195,4 +197,4 @@ const styles = StyleSheet.create({
         color: colors.textMuted,
         fontWeight: typography.fontWeights.semibold,
     },
-});
+}));

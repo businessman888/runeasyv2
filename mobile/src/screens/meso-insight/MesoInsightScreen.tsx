@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Animated from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, typography, fonts } from '../../theme';
+import { colors, spacing, typography, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { useMesoInsightStore } from '../../stores/mesoInsightStore';
 import { useTrainingStore } from '../../stores/trainingStore';
 import { MesoStoryDeck } from './stories/MesoStoryDeck';
@@ -34,6 +34,7 @@ import { useDeckTransition } from './hooks/useDeckTransition';
  */
 
 export function MesoInsightScreen() {
+    useThemeSubscription();
     const navigation = useNavigation();
     const { latest, loading, fetch, markSeen } = useMesoInsightStore();
 
@@ -128,7 +129,7 @@ export function MesoInsightScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     root: { flex: 1, backgroundColor: colors.background },
 
     fallback: {
@@ -167,4 +168,4 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.md,
         color: colors.textLight,
     },
-});
+}));

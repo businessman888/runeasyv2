@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius, fonts } from '../../theme';
+import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { formatKm } from '../../screens/weekly-insight/format';
 import { PHASE_LABELS, type MesoInsight } from '../../types/mesoInsight.types';
 
@@ -33,6 +33,7 @@ export const MesoInsightCard = memo(function MesoInsightCard({
     unread,
     style,
 }: MesoInsightCardProps) {
+    useThemeSubscription();
     const fase = PHASE_LABELS[insight.dominant_phase] ?? insight.dominant_phase;
 
     return (
@@ -68,7 +69,7 @@ export const MesoInsightCard = memo(function MesoInsightCard({
     );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     card: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -122,4 +123,4 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.sm,
         color: colors.textSecondary,
     },
-});
+}));

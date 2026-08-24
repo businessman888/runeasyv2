@@ -1,7 +1,7 @@
 import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius, fonts } from '../../../theme';
+import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../../theme';
 import { formatKm, formatPercent } from '../../../screens/weekly-insight/format';
 import {
     PHASE_LABELS,
@@ -30,6 +30,7 @@ export const MesoInsightCardBody = memo(function MesoInsightCardBody({
     insight: MesoInsight;
     onOpen: () => void;
 }) {
+    useThemeSubscription();
     const trend = insight.volume_trend ?? [];
 
     // Escala das barras pelo MAIOR valor do bloco (prescrito ou corrido), para
@@ -139,6 +140,7 @@ const MesoFooter = memo(function MesoFooter({
 }: {
     insight: MesoInsight;
 }) {
+    useThemeSubscription();
     const vdot = insight.vdot_highlight;
     const efforts = insight.quality_efforts ?? [];
 
@@ -187,7 +189,7 @@ const MesoFooter = memo(function MesoFooter({
 /** Altura máxima das barras do arco. */
 const TREND_H = 56;
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     trend: {
         flexDirection: 'row',
         alignItems: 'flex-end',
@@ -243,4 +245,4 @@ const styles = StyleSheet.create({
         fontFamily: fonts.semibold,
         color: colors.textLight,
     },
-});
+}));

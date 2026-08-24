@@ -4,6 +4,7 @@ import { QuizHeader, Hl } from '../../components/onboarding/QuizHeader';
 import { SelectableOption } from '../../components/onboarding/SelectableOption';
 import { QUIZ } from './_tokens';
 import { LEVEL_ICONS } from './_icons';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
 interface LevelOption {
     storeValue: string;
@@ -23,6 +24,7 @@ interface LevelScreenProps {
 }
 
 export function LevelScreen({ value, onChange }: LevelScreenProps) {
+    useThemeSubscription();
     const [selected, setSelected] = useState<string | null>(value || null);
 
     useEffect(() => {
@@ -57,10 +59,10 @@ export function LevelScreen({ value, onChange }: LevelScreenProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     options: {
         gap: QUIZ.gapOptions,
     },
-});
+}));
 
 export default LevelScreen;

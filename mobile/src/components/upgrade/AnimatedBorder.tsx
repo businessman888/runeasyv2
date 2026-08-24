@@ -22,6 +22,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { semanticColors } from '../../theme/semanticColors';
+import { useThemeSubscription } from '../../theme';
 const AnimatedRect = Animated.createAnimatedComponent(Rect);
 
 export interface AnimatedBorderProps {
@@ -41,6 +42,7 @@ function AnimatedBorderImpl({
   durationMs = 3200,
   beamFraction = 0.18,
 }: AnimatedBorderProps) {
+  useThemeSubscription();
   const [size, setSize] = useState({ width: 0, height: 0 });
   const progress = useSharedValue(0);
 

@@ -4,6 +4,7 @@ import { QuizHeader, Hl } from '../../components/onboarding/QuizHeader';
 import { SelectableOption } from '../../components/onboarding/SelectableOption';
 import { QUIZ } from './_tokens';
 import { WEEKLY_KM_ICONS } from './_icons';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
 // Número âncora do motor de volume (Fase B): o plano abre a partir daqui, não do
 // rótulo "iniciante". Faixas (não campo numérico) porque ninguém sabe o volume
@@ -22,6 +23,7 @@ interface CurrentWeeklyKmScreenProps {
 }
 
 export function CurrentWeeklyKmScreen({ value, onChange }: CurrentWeeklyKmScreenProps) {
+    useThemeSubscription();
     const [selected, setSelected] = useState<string | null>(value ?? null);
 
     useEffect(() => {
@@ -58,11 +60,11 @@ export function CurrentWeeklyKmScreen({ value, onChange }: CurrentWeeklyKmScreen
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     options: {
         gap: QUIZ.gapOptions,
         marginBottom: 24,
     },
-});
+}));
 
 export default CurrentWeeklyKmScreen;

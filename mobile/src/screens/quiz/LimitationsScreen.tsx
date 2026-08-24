@@ -11,6 +11,7 @@ import {
 import { QuizHeader, Hl } from '../../components/onboarding/QuizHeader';
 import { SelectableOption } from '../../components/onboarding/SelectableOption';
 import { QUIZ } from './_tokens';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
 interface LimitationsScreenProps {
     value?: { hasLimitation: boolean; details: string } | null;
@@ -18,6 +19,7 @@ interface LimitationsScreenProps {
 }
 
 export function LimitationsScreen({ value, onChange }: LimitationsScreenProps) {
+    useThemeSubscription();
     // Initialize state from props ONCE — no useEffect syncing to avoid infinite loops
     const [hasLimitation, setHasLimitation] = useState<boolean | null>(
         value && typeof value.hasLimitation === 'boolean' ? value.hasLimitation : null
@@ -97,7 +99,7 @@ export function LimitationsScreen({ value, onChange }: LimitationsScreenProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         paddingTop: 8,
@@ -134,6 +136,6 @@ const styles = StyleSheet.create({
         marginTop: 10,
         lineHeight: 16,
     },
-});
+}));
 
 export default LimitationsScreen;

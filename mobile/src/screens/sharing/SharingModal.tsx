@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { colors, typography, spacing, borderRadius, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { useSharingStore } from '../../stores/sharingStore';
 import { CardTemplateId, ShareCardData } from '../../types/sharing.types';
@@ -39,6 +39,7 @@ interface SharingModalProps {
 }
 
 export function SharingModal({ visible, onClose, workoutId }: SharingModalProps) {
+  useThemeSubscription();
   const { cardData, isLoading, error, selectedCard, fetchCardData, setSelectedCard, reset } =
     useSharingStore();
 
@@ -230,6 +231,7 @@ function CarouselBody({
   isCapturing,
   bodyHeight,
 }: CarouselBodyProps) {
+  useThemeSubscription();
   const ActiveComponent = cards[currentIndex]?.Component ?? cards[0]?.Component;
 
   // Available area for the preview within each carousel page
@@ -313,6 +315,7 @@ interface CardPreviewProps {
 }
 
 function CardPreview({ children, renderedW, renderedH, scale }: CardPreviewProps) {
+  useThemeSubscription();
   return (
     <View
       style={[
@@ -341,6 +344,7 @@ function CardPreview({ children, renderedW, renderedH, scale }: CardPreviewProps
 }
 
 function CheckerBackground({ width, height }: { width: number; height: number }) {
+  useThemeSubscription();
   const cell = 14;
   const cols = Math.ceil(width / cell);
   const rows = Math.ceil(height / cell);
@@ -374,6 +378,7 @@ interface ActionButtonProps {
 }
 
 function ActionButton({ label, icon, onPress, disabled }: ActionButtonProps) {
+  useThemeSubscription();
   return (
     <TouchableOpacity
       style={[styles.actionBtn, disabled && styles.actionBtnDisabled]}
@@ -388,7 +393,7 @@ function ActionButton({ label, icon, onPress, disabled }: ActionButtonProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   safe: {
     flex: 1,
     backgroundColor: semanticColors.canvas,
@@ -526,4 +531,4 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeights.medium,
     letterSpacing: 0.2,
   },
-});
+}));

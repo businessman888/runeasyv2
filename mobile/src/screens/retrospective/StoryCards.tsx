@@ -8,7 +8,7 @@ import Animated, {
   ReduceMotion,
   ZoomIn,
 } from 'react-native-reanimated';
-import { colors, fonts } from '../../theme';
+import { colors, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { storyType, StoryGradient } from './storyTheme';
 import type { RetrospectiveData } from './types';
@@ -38,6 +38,7 @@ export const StoryCardShell = memo(function StoryCardShell({
   children,
   onShare,
 }: ShellProps) {
+  useThemeSubscription();
   return (
     <LinearGradient
       colors={gradient.colors}
@@ -73,6 +74,7 @@ const HeroNumber = memo(function HeroNumber({
   unit?: string;
   climax?: boolean;
 }) {
+  useThemeSubscription();
   return (
     <Animated.View style={styles.heroRow} entering={ENTER_HERO}>
       <Text
@@ -89,6 +91,7 @@ const HeroNumber = memo(function HeroNumber({
 });
 
 const Eyebrow = memo(function Eyebrow({ children }: { children: string }) {
+  useThemeSubscription();
   return (
     <Animated.Text style={storyType.eyebrow} entering={ENTER_EYEBROW}>
       {children.toUpperCase()}
@@ -99,6 +102,7 @@ const Eyebrow = memo(function Eyebrow({ children }: { children: string }) {
 // ── Card 1 — Abertura ────────────────────────────────────────────────────────
 
 export const CardOpening = memo(function CardOpening({ data }: { data: RetrospectiveData }) {
+  useThemeSubscription();
   const weeks = data.planDurationWeeks;
   const goal = data.planGoalLabel;
   const context = [goal && `Meta ${goal}`, weeks && `${weeks} semanas`].filter(Boolean).join(' · ');
@@ -132,6 +136,7 @@ export const CardOpening = memo(function CardOpening({ data }: { data: Retrospec
 // ── Card 2 — Volume total ────────────────────────────────────────────────────
 
 export const CardVolume = memo(function CardVolume({ data }: { data: RetrospectiveData }) {
+  useThemeSubscription();
   return (
     <View style={styles.center}>
       <Eyebrow>Você correu</Eyebrow>
@@ -151,6 +156,7 @@ export const CardConsistency = memo(function CardConsistency({
 }: {
   data: RetrospectiveData;
 }) {
+  useThemeSubscription();
   return (
     <View style={styles.center}>
       <Eyebrow>Consistência</Eyebrow>
@@ -186,6 +192,7 @@ export const CardConsistency = memo(function CardConsistency({
 // ── Card 4 — Pace ────────────────────────────────────────────────────────────
 
 export const CardPace = memo(function CardPace({ data }: { data: RetrospectiveData }) {
+  useThemeSubscription();
   const hasTarget = data.targetPaceFormatted && data.targetPaceFormatted !== '—';
   // Pace menor = mais rápido. `paceVsGoalPercent` já vem como alvo/real × 100:
   // acima de 100 significa que correu MAIS RÁPIDO que o alvo.
@@ -219,6 +226,7 @@ export const CardPace = memo(function CardPace({ data }: { data: RetrospectiveDa
 const MARATHON_KM = 42.195;
 
 export const CardFun = memo(function CardFun({ data }: { data: RetrospectiveData }) {
+  useThemeSubscription();
   const marathons = data.totalDistanceKm / MARATHON_KM;
   // Abaixo de uma maratona, "0,4 maratonas" é desanimador e pouco legível —
   // nesse caso o enquadramento vira "voltas na pista", que é concreto e sempre
@@ -252,6 +260,7 @@ export const CardFun = memo(function CardFun({ data }: { data: RetrospectiveData
 // ── Card 6 — CLÍMAX: maior corrida única ─────────────────────────────────────
 
 export const CardClimax = memo(function CardClimax({ data }: { data: RetrospectiveData }) {
+  useThemeSubscription();
   return (
     <View style={styles.center}>
       <MaterialCommunityIcons name="trophy-outline" size={48} color={colors.accent} />
@@ -290,6 +299,7 @@ export const CardNextGoal = memo(function CardNextGoal({
   options: NextGoalOption[];
   compact?: boolean;
 }) {
+  useThemeSubscription();
   return (
     <View style={styles.ctaLayout}>
       <View style={[styles.ctaIntro, compact && styles.ctaIntroCompact]}>
@@ -432,7 +442,7 @@ function formatLongDate(dateStr: string): string {
   return `${d} de ${MONTHS[m - 1] ?? ''}`;
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   shell: {
     flex: 1,
     borderRadius: 28,
@@ -617,4 +627,4 @@ const styles = StyleSheet.create({
   ctaBtnDescriptionPrimary: {
     color: semanticColors.textOnAccentMuted,
   },
-});
+}));

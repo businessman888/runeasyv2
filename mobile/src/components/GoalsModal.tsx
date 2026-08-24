@@ -11,9 +11,9 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import type { GoalStep } from '../types/workoutGoals';
 import { semanticColors } from '../theme/semanticColors';
+import { createThemeStyles, useThemeSubscription } from '../theme';
 
-// ─── Design Tokens (Figma node 666:560) ──────────────────────────────────────
-const T = {
+const getLocalThemePalette1 = () => ({
   modalBg: semanticColors.surface2,
   blockBg: semanticColors.surface1,
   borderDefault: semanticColors.borderSubtle,
@@ -24,7 +24,10 @@ const T = {
   textSecondary: semanticColors.textSecondary,
   checkGreen: '#32CD32',
   circleGray: semanticColors.borderStrong,
-};
+});
+
+// ─── Design Tokens (Figma node 666:560) ──────────────────────────────────────
+
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -37,6 +40,7 @@ interface GoalsModalProps {
 
 // ─── Block Card ──────────────────────────────────────────────────────────────
 const GoalBlockCard = memo(({ step }: { step: GoalStep }) => {
+  useThemeSubscription();
   // Intervalado (repeat) e principal contínuo compartilham o layout com pace +
   // linha de recuperação.
   const isMain = step.type === 'main' || step.type === 'repeat';
@@ -45,10 +49,10 @@ const GoalBlockCard = memo(({ step }: { step: GoalStep }) => {
 
   // Border color: completed → accent muted, active main → cyan, default → glass stroke
   const borderColor = isCompleted
-    ? T.borderCompleted
+    ? getLocalThemePalette1().borderCompleted
     : isActive && isMain
-    ? T.borderActive
-    : T.borderDefault;
+    ? getLocalThemePalette1().borderActive
+    : getLocalThemePalette1().borderDefault;
 
   // Progresso 0..1 já calculado pelo hook (distância OU tempo, e por sub-etapa
   // dentro de um intervalado).
@@ -73,7 +77,7 @@ const GoalBlockCard = memo(({ step }: { step: GoalStep }) => {
           <Text
             style={[
               styles.blockTitle,
-              isCompleted && { color: T.cyan },
+              isCompleted && { color: getLocalThemePalette1().cyan },
             ]}
           >
             {step.title}
@@ -83,12 +87,12 @@ const GoalBlockCard = memo(({ step }: { step: GoalStep }) => {
         {/* Ícone de status */}
         <View style={styles.blockStatusIcon}>
           {isCompleted ? (
-            <Ionicons name="checkmark-circle" size={30} color={T.cyan} />
+            <Ionicons name="checkmark-circle" size={30} color={getLocalThemePalette1().cyan} />
           ) : (
             <MaterialCommunityIcons
               name="circle-outline"
               size={30}
-              color={isActive ? T.cyan : T.circleGray}
+              color={isActive ? getLocalThemePalette1().cyan : getLocalThemePalette1().circleGray}
             />
           )}
         </View>
@@ -102,7 +106,7 @@ const GoalBlockCard = memo(({ step }: { step: GoalStep }) => {
         {/* Ícone de tempo (para warmup/cooldown) ou sem ícone para main */}
         {!isMain && (
           <View style={styles.timeIconContainer}>
-            <Ionicons name="time-outline" size={30} color={T.textSecondary} />
+            <Ionicons name="time-outline" size={30} color={getLocalThemePalette1().textSecondary} />
           </View>
         )}
 
@@ -143,6 +147,7 @@ const GoalBlockCard = memo(({ step }: { step: GoalStep }) => {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 export function GoalsModal({ visible, onClose, goalSteps }: GoalsModalProps) {
+  useThemeSubscription();
 
   return (
     <Modal
@@ -166,7 +171,7 @@ export function GoalsModal({ visible, onClose, goalSteps }: GoalsModalProps) {
               accessibilityRole="button"
               accessibilityLabel="Fechar modal de metas"
             >
-              <Ionicons name="close" size={24} color={T.textPrimary} />
+              <Ionicons name="close" size={24} color={getLocalThemePalette1().textPrimary} />
             </Pressable>
           </View>
 
@@ -188,7 +193,7 @@ export function GoalsModal({ visible, onClose, goalSteps }: GoalsModalProps) {
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   overlay: {
     flex: 1,
     backgroundColor: semanticColors.scrim,
@@ -198,7 +203,7 @@ const styles = StyleSheet.create({
   modalContainer: {
     width: '92%',
     maxHeight: SCREEN_HEIGHT * 0.90,
-    backgroundColor: T.modalBg,
+    backgroundColor: getLocalThemePalette1().modalBg,
     borderRadius: 20,
     paddingHorizontal: 5,
     paddingTop: 15,
@@ -218,7 +223,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: T.cyan,
+    color: getLocalThemePalette1().cyan,
     textAlign: 'center',
   },
   closeBtn: {
@@ -244,7 +249,7 @@ const styles = StyleSheet.create({
 
   // ── Block card
   blockCard: {
-    backgroundColor: T.blockBg,
+    backgroundColor: getLocalThemePalette1().blockBg,
     borderRadius: 20,
     borderWidth: 1,
     overflow: 'hidden',
@@ -262,19 +267,19 @@ const styles = StyleSheet.create({
   blockLabel: {
     fontSize: 13,
     fontWeight: '500',
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
     marginBottom: 2,
   },
   blockLabelGlow: {
-    color: T.cyan,
-    textShadowColor: T.cyan,
+    color: getLocalThemePalette1().cyan,
+    textShadowColor: getLocalThemePalette1().cyan,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 6,
   },
   blockTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: T.textPrimary,
+    color: getLocalThemePalette1().textPrimary,
   },
   blockStatusIcon: {
     width: 40,
@@ -285,7 +290,7 @@ const styles = StyleSheet.create({
   // ── Divider
   blockDivider: {
     height: 1,
-    backgroundColor: T.borderDefault,
+    backgroundColor: getLocalThemePalette1().borderDefault,
     marginHorizontal: 11,
   },
 
@@ -309,13 +314,13 @@ const styles = StyleSheet.create({
   detailTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: T.cyan,
+    color: getLocalThemePalette1().cyan,
     marginBottom: 2,
   },
   detailDescription: {
     fontSize: 13,
     fontWeight: '500',
-    color: T.textSecondary,
+    color: getLocalThemePalette1().textSecondary,
   },
   paceContainer: {
     paddingLeft: 8,
@@ -323,7 +328,7 @@ const styles = StyleSheet.create({
   paceText: {
     fontSize: 13,
     fontWeight: '500',
-    color: T.cyan,
+    color: getLocalThemePalette1().cyan,
   },
 
   // ── Recovery section
@@ -342,7 +347,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: 3,
-    backgroundColor: T.cyan,
+    backgroundColor: getLocalThemePalette1().cyan,
     borderRadius: 2,
   },
-});
+}));

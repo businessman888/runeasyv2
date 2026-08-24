@@ -2,20 +2,22 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Dimensions, AccessibilityInfo } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { fonts } from '../../theme';
+import { fonts, useThemeSubscription, createThemeStyles } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-const DS = {
+const getLocalThemePalette1 = () => ({
     text: semanticColors.textPrimary,
     textSecondary: semanticColors.textSecondary,
     cyan: semanticColors.accent,
     card: semanticColors.surface2,
-    muted: 'rgba(235, 235, 245, 0.45)',
+    muted: semanticColors.textTertiary,
     cyanFill: semanticColors.accentSubtle,
     cyanBorder: semanticColors.accent,
-};
+});
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+
 
 const CARD_WIDTH = Math.min(SCREEN_WIDTH - 40, 360);
 
@@ -43,6 +45,7 @@ const Bullet: React.FC<{
     delay: number;
     reduceMotion: boolean;
 }> = ({ text, icon, iconColor, textColor, delay, reduceMotion }) => {
+    useThemeSubscription();
     const entering = reduceMotion
         ? FadeIn.duration(150)
         : FadeInDown.delay(delay).duration(360);
@@ -56,6 +59,7 @@ const Bullet: React.FC<{
 };
 
 export function TimeCompareScreen() {
+    useThemeSubscription();
     const [reduceMotion, setReduceMotion] = useState(false);
 
     useEffect(() => {
@@ -79,8 +83,8 @@ export function TimeCompareScreen() {
             {/* SEM PLANO */}
             <View style={styles.card}>
                 <Animated.View entering={headerEntering(0)} style={styles.cardHeader}>
-                    <Ionicons name="close-circle" size={22} color={DS.muted} />
-                    <Text style={[styles.cardHeaderText, { color: DS.textSecondary }]}>
+                    <Ionicons name="close-circle" size={22} color={getLocalThemePalette1().muted} />
+                    <Text style={[styles.cardHeaderText, { color: getLocalThemePalette1().textSecondary }]}>
                         SEM PLANO
                     </Text>
                 </Animated.View>
@@ -90,8 +94,8 @@ export function TimeCompareScreen() {
                         key={text}
                         text={text}
                         icon="close"
-                        iconColor={DS.muted}
-                        textColor={DS.textSecondary}
+                        iconColor={getLocalThemePalette1().muted}
+                        textColor={getLocalThemePalette1().textSecondary}
                         delay={90 + i * 90}
                         reduceMotion={reduceMotion}
                     />
@@ -101,8 +105,8 @@ export function TimeCompareScreen() {
             {/* COM PLANO */}
             <View style={[styles.card, styles.cardPremium]}>
                 <Animated.View entering={headerEntering(480)} style={styles.cardHeader}>
-                    <Ionicons name="checkmark-circle" size={22} color={DS.cyan} />
-                    <Text style={[styles.cardHeaderText, { color: DS.text }]}>COM PLANO</Text>
+                    <Ionicons name="checkmark-circle" size={22} color={getLocalThemePalette1().cyan} />
+                    <Text style={[styles.cardHeaderText, { color: getLocalThemePalette1().text }]}>COM PLANO</Text>
                 </Animated.View>
 
                 {COM_PLANO.map((text, i) => (
@@ -110,8 +114,8 @@ export function TimeCompareScreen() {
                         key={text}
                         text={text}
                         icon="checkmark-circle"
-                        iconColor={DS.cyan}
-                        textColor={DS.text}
+                        iconColor={getLocalThemePalette1().cyan}
+                        textColor={getLocalThemePalette1().text}
                         delay={570 + i * 90}
                         reduceMotion={reduceMotion}
                     />
@@ -121,32 +125,32 @@ export function TimeCompareScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     titleContainer: {
         marginBottom: 20,
     },
     title: {
         fontFamily: fonts.medium,
         fontSize: 20,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         lineHeight: 30,
     },
     titleHighlight: {
         fontFamily: fonts.semibold,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     card: {
         width: CARD_WIDTH,
-        backgroundColor: DS.card,
+        backgroundColor: getLocalThemePalette1().card,
         borderRadius: 20,
         padding: 18,
         alignSelf: 'center',
         marginBottom: 14,
     },
     cardPremium: {
-        backgroundColor: DS.cyanFill,
+        backgroundColor: getLocalThemePalette1().cyanFill,
         borderWidth: 1,
-        borderColor: DS.cyanBorder,
+        borderColor: getLocalThemePalette1().cyanBorder,
         marginBottom: 0,
     },
     cardHeader: {
@@ -172,6 +176,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         lineHeight: 20,
     },
-});
+}));
 
 export default TimeCompareScreen;

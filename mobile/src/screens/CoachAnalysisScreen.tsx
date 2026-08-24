@@ -50,10 +50,9 @@ import { RpeSelector } from '../components/workout/RpeSelector';
 import { paceValueToSecondsPerKm } from '../utils/pace';
 import { SharingModal } from './sharing/SharingModal';
 import { semanticColors } from '../theme/semanticColors';
-import { useMapThemePalette } from '../theme';
+import { useMapThemePalette, createThemeStyles, useThemeSubscription } from '../theme';
 
-// ─── Design Tokens (alinhados ao RunSummary/Figma) ────────────────────────────
-const T = {
+const getLocalThemePalette1 = () => ({
     bgPrimary: semanticColors.canvas,
     cardSurface: semanticColors.surface2,
     cardDarker: semanticColors.surface1,
@@ -68,7 +67,10 @@ const T = {
     danger: '#FF453A',
     purple: '#9747FF',
     gold: '#FFD700',
-};
+});
+
+// ─── Design Tokens (alinhados ao RunSummary/Figma) ────────────────────────────
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDistanceKm(meters: number) {
@@ -115,7 +117,7 @@ function getDeltaStatus(actual: number, target: number, tolerance = 0.05): Statu
     return 'bad';
 }
 function statusColor(s: Status) {
-    return s === 'good' ? T.success : s === 'ok' ? T.warning : T.danger;
+    return s === 'good' ? getLocalThemePalette1().success : s === 'ok' ? getLocalThemePalette1().warning : getLocalThemePalette1().danger;
 }
 function statusLabel(actual: number, target: number, fmt: (n: number) => string) {
     const delta = actual - target;
@@ -126,6 +128,7 @@ function statusLabel(actual: number, target: number, fmt: (n: number) => string)
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export function CoachAnalysisScreen({ navigation, route }: any) {
+    useThemeSubscription();
     const mapPalette = useMapThemePalette();
     const { feedbackId } = route?.params || {};
     const insets = useSafeAreaInsets();
@@ -513,11 +516,11 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
 
     const heroToneColor = useMemo(() => {
         switch (feedback?.hero_tone) {
-            case 'celebration': return T.success;
-            case 'encouragement': return T.cyan;
-            case 'improvement': return T.warning;
-            case 'caution': return T.danger;
-            default: return T.cyan;
+            case 'celebration': return getLocalThemePalette1().success;
+            case 'encouragement': return getLocalThemePalette1().cyan;
+            case 'improvement': return getLocalThemePalette1().warning;
+            case 'caution': return getLocalThemePalette1().danger;
+            default: return getLocalThemePalette1().cyan;
         }
     }, [feedback?.hero_tone]);
 
@@ -628,7 +631,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                         accessibilityRole="button"
                         accessibilityLabel="Voltar"
                     >
-                        <Ionicons name="chevron-back" size={22} color={T.textPrimary} />
+                        <Ionicons name="chevron-back" size={22} color={getLocalThemePalette1().textPrimary} />
                     </Pressable>
                     <View style={styles.titlePill}>
                         <Text style={styles.titlePillMain}>Análise do Treinador</Text>
@@ -646,7 +649,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
             {isTreadmill ? (
                 <View style={[StyleSheet.absoluteFillObject, styles.treadmillBackdrop]}>
                     <View style={styles.treadmillBackdropContent}>
-                        <Ionicons name="walk" size={56} color={T.cyan} />
+                        <Ionicons name="walk" size={56} color={getLocalThemePalette1().cyan} />
                         <Text style={styles.treadmillBackdropTitle}>Esteira</Text>
                         <Text style={styles.treadmillBackdropSubtitle}>
                             {treadmillData?.is_smart && treadmillData?.device_name
@@ -735,7 +738,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                         accessibilityLabel={is3D ? 'Desativar terreno 3D' : 'Ativar terreno 3D'}
                         accessibilityState={{ selected: is3D }}
                     >
-                        <Text style={[styles.chip3dText, is3D && { color: T.cyan }]}>3D</Text>
+                        <Text style={[styles.chip3dText, is3D && { color: getLocalThemePalette1().cyan }]}>3D</Text>
                     </Pressable>
                 )}
 
@@ -745,12 +748,12 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                         <View style={styles.mapOverlayPill}>
                             {enriching ? (
                                 <>
-                                    <ActivityIndicator size="small" color={T.cyan} />
+                                    <ActivityIndicator size="small" color={getLocalThemePalette1().cyan} />
                                     <Text style={styles.mapOverlayText}>Carregando rota...</Text>
                                 </>
                             ) : (
                                 <>
-                                    <Ionicons name="map-outline" size={16} color={T.textSecondary} />
+                                    <Ionicons name="map-outline" size={16} color={getLocalThemePalette1().textSecondary} />
                                     <Text style={styles.mapOverlayText}>Rota não disponível</Text>
                                 </>
                             )}
@@ -769,7 +772,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                     accessibilityRole="button"
                     accessibilityLabel="Voltar"
                 >
-                    <Ionicons name="chevron-back" size={22} color={T.textPrimary} />
+                    <Ionicons name="chevron-back" size={22} color={getLocalThemePalette1().textPrimary} />
                 </Pressable>
                 <View style={styles.titlePill}>
                     <Text style={styles.titlePillSub}>Relatório</Text>
@@ -783,7 +786,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                     accessibilityRole="button"
                     accessibilityLabel="Compartilhar"
                 >
-                    <Ionicons name="share-outline" size={20} color={workoutId ? T.cyan : T.textMuted} />
+                    <Ionicons name="share-outline" size={20} color={workoutId ? getLocalThemePalette1().cyan : getLocalThemePalette1().textMuted} />
                 </Pressable>
             </SafeAreaView>
 
@@ -871,7 +874,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
 
                         <DetailedRow
                             iconName="speedometer"
-                            iconColor={T.cyan}
+                            iconColor={getLocalThemePalette1().cyan}
                             iconBg="rgba(0,212,255,0.15)"
                             label="Pace"
                             target={targetPaceSeconds ? `${formatPaceSeconds(targetPaceSeconds)} /km` : '--'}
@@ -883,7 +886,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                         />
                         <DetailedRow
                             iconName="navigate"
-                            iconColor={T.purple}
+                            iconColor={getLocalThemePalette1().purple}
                             iconBg="rgba(151,71,255,0.18)"
                             label="Distância"
                             target={targetDistanceKm ? `${targetDistanceKm.toFixed(1)} km` : '--'}
@@ -895,7 +898,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                         />
                         <DetailedRow
                             iconName="trending-up"
-                            iconColor={T.warning}
+                            iconColor={getLocalThemePalette1().warning}
                             iconBg="rgba(255,196,0,0.18)"
                             label="Elevação"
                             target="--"
@@ -931,19 +934,19 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                                         width={chartAvailableWidth}
                                         spacing={treadmillChart.spacing}
                                         thickness={2}
-                                        color={T.cyan}
+                                        color={getLocalThemePalette1().cyan}
                                         areaChart
                                         curved
-                                        startFillColor={T.cyan}
-                                        endFillColor={T.cyan}
+                                        startFillColor={getLocalThemePalette1().cyan}
+                                        endFillColor={getLocalThemePalette1().cyan}
                                         startOpacity={0.45}
                                         endOpacity={0.05}
                                         initialSpacing={CHART_INITIAL_SPACING}
                                         endSpacing={CHART_END_SPACING}
                                         yAxisColor="transparent"
-                                        xAxisColor={T.divider}
+                                        xAxisColor={getLocalThemePalette1().divider}
                                         rulesType="solid"
-                                        rulesColor="rgba(235,235,245,0.06)"
+                                        rulesColor={semanticColors.borderSubtle}
                                         yAxisTextStyle={styles.chartAxisText}
                                         xAxisLabelTextStyle={styles.chartAxisLabelText}
                                         showVerticalLines={false}
@@ -1029,20 +1032,20 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                                         height={170}
                                         width={chartCfg.width}
                                         thickness={2}
-                                        color={T.cyan}
+                                        color={getLocalThemePalette1().cyan}
                                         areaChart
                                         curved
-                                        startFillColor={T.cyan}
-                                        endFillColor={T.cyan}
+                                        startFillColor={getLocalThemePalette1().cyan}
+                                        endFillColor={getLocalThemePalette1().cyan}
                                         startOpacity={0.45}
                                         endOpacity={0.05}
                                         initialSpacing={CHART_INITIAL_SPACING}
                                         endSpacing={CHART_END_SPACING}
                                         spacing={chartCfg.spacing}
                                         yAxisColor="transparent"
-                                        xAxisColor={T.divider}
+                                        xAxisColor={getLocalThemePalette1().divider}
                                         rulesType="solid"
-                                        rulesColor="rgba(235,235,245,0.06)"
+                                        rulesColor={semanticColors.borderSubtle}
                                         yAxisTextStyle={styles.chartAxisText}
                                         xAxisLabelTextStyle={styles.chartAxisLabelText}
                                         yAxisLabelTexts={chartCfg.yAxisLabelTexts}
@@ -1054,7 +1057,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                                         showVerticalLines={false}
                                         hideDataPoints={false}
                                         dataPointsRadius={3.5}
-                                        dataPointsColor={'#FFFFFF'}
+                                        dataPointsColor={semanticColors.textOnMedia}
                                         dataPointsShape={'circular'}
                                         showReferenceLine1={chartCfg.refValue > 0}
                                         referenceLine1Position={chartCfg.refValue}
@@ -1112,20 +1115,20 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                                         height={140}
                                         width={elevCfg.width}
                                         thickness={2}
-                                        color={T.cyan}
+                                        color={getLocalThemePalette1().cyan}
                                         areaChart
                                         curved
-                                        startFillColor={T.cyan}
-                                        endFillColor={T.cyan}
+                                        startFillColor={getLocalThemePalette1().cyan}
+                                        endFillColor={getLocalThemePalette1().cyan}
                                         startOpacity={0.45}
                                         endOpacity={0.05}
                                         initialSpacing={CHART_INITIAL_SPACING}
                                         endSpacing={CHART_END_SPACING}
                                         spacing={elevCfg.spacing}
                                         yAxisColor="transparent"
-                                        xAxisColor={T.divider}
+                                        xAxisColor={getLocalThemePalette1().divider}
                                         rulesType="solid"
-                                        rulesColor="rgba(235,235,245,0.06)"
+                                        rulesColor={semanticColors.borderSubtle}
                                         yAxisTextStyle={styles.chartAxisText}
                                         xAxisLabelTextStyle={styles.chartAxisLabelText}
                                         yAxisLabelTexts={elevCfg.yAxisLabelTexts}
@@ -1151,7 +1154,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                     {/* Análise Inteligente */}
                     <View style={styles.analysisHeader}>
                         <Text style={styles.sectionTitle}>Análise Inteligente</Text>
-                        <Ionicons name="bulb" size={20} color={T.cyan} />
+                        <Ionicons name="bulb" size={20} color={getLocalThemePalette1().cyan} />
                     </View>
 
                     {strength ? (
@@ -1197,12 +1200,12 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                     {(vo2 || (latestActivityLoading && latestExtrasMatch)) && (
                         <View style={[styles.cardDark, styles.vo2Card]}>
                             <View style={styles.vo2Header}>
-                                <Ionicons name="pulse" size={20} color={T.cyan} />
+                                <Ionicons name="pulse" size={20} color={getLocalThemePalette1().cyan} />
                                 <Text style={styles.vo2Title}>VO² Máximo Estimado</Text>
                             </View>
                             {!vo2 && latestActivityLoading ? (
                                 <View style={[styles.vo2Body, { paddingVertical: 8 }]}>
-                                    <ActivityIndicator size="small" color={T.cyan} />
+                                    <ActivityIndicator size="small" color={getLocalThemePalette1().cyan} />
                                 </View>
                             ) : (
                                 <>
@@ -1243,7 +1246,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
 
                     {/* Tip — monitor cardíaco */}
                     <View style={styles.tipCard}>
-                        <Ionicons name="notifications" size={22} color={T.textSecondary} />
+                        <Ionicons name="notifications" size={22} color={getLocalThemePalette1().textSecondary} />
                         <Text style={styles.tipText}>
                             Para maior precisão nas zonas de esforço, considere parear um{' '}
                             <Text style={styles.tipBold}>monitor cardíaco</Text> externo.
@@ -1276,6 +1279,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
 // ─── Subcomponents ────────────────────────────────────────────────────────────
 
 function Avatar({ uri, initials }: { uri: string | null; initials: string }) {
+    useThemeSubscription();
     if (uri) return <Image source={{ uri }} style={styles.avatar} />;
     return (
         <View style={[styles.avatar, styles.avatarFallback]}>
@@ -1285,6 +1289,7 @@ function Avatar({ uri, initials }: { uri: string | null; initials: string }) {
 }
 
 function MetricCell({ label, value }: { label: string; value: string }) {
+    useThemeSubscription();
     return (
         <View style={styles.metricCell}>
             <Text style={styles.metricLabel} numberOfLines={1}>{label}</Text>
@@ -1297,9 +1302,10 @@ function MetricCell({ label, value }: { label: string; value: string }) {
 
 function CircularScore({
     percentage,
-    color = T.cyan,
+    color = getLocalThemePalette1().cyan,
     loading,
 }: { percentage: number; color?: string; loading?: boolean }) {
+    useThemeSubscription();
     const SIZE = 116;
     const STROKE = 3;
     const radius = (SIZE - STROKE * 2) / 2;
@@ -1310,7 +1316,7 @@ function CircularScore({
         return (
             <View style={{ width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center' }}>
                 <svg width={SIZE} height={SIZE}>
-                    <circle cx={SIZE / 2} cy={SIZE / 2} r={radius} stroke={T.divider} strokeWidth={STROKE} fill={T.cardDarker} />
+                    <circle cx={SIZE / 2} cy={SIZE / 2} r={radius} stroke={getLocalThemePalette1().divider} strokeWidth={STROKE} fill={getLocalThemePalette1().cardDarker} />
                     <circle
                         cx={SIZE / 2} cy={SIZE / 2} r={radius}
                         stroke={color} strokeWidth={STROKE} fill="none"
@@ -1338,7 +1344,7 @@ function CircularScore({
                     <ActivityIndicator color={color} />
                 ) : (
                     <View style={[styles.scoreInnerCircle, { backgroundColor: color }]}>
-                        <Ionicons name="checkmark" size={28} color={T.cardDarker} />
+                        <Ionicons name="checkmark" size={28} color={getLocalThemePalette1().cardDarker} />
                     </View>
                 )}
             </View>
@@ -1360,7 +1366,8 @@ function DetailedRow({
     delta: string | null;
     isLast?: boolean;
 }) {
-    const color = status ? statusColor(status) : T.cyan;
+    useThemeSubscription();
+    const color = status ? statusColor(status) : getLocalThemePalette1().cyan;
     return (
         <View style={[styles.detailedRow, !isLast && styles.detailedRowBorder]}>
             <View style={styles.detailedCellMetric}>
@@ -1384,6 +1391,7 @@ function DetailedRow({
 }
 
 function SplitRow({ split }: { split: SplitData }) {
+    useThemeSubscription();
     const isFractional = split.distanceMeters < 1000;
     return (
         <View style={styles.splitRow}>
@@ -1420,13 +1428,14 @@ function CardEmptyState({
     subtitle?: string;
     loading?: boolean;
 }) {
+    useThemeSubscription();
     return (
         <View style={styles.emptyState}>
             {loading ? (
-                <ActivityIndicator size="small" color={T.cyan} />
+                <ActivityIndicator size="small" color={getLocalThemePalette1().cyan} />
             ) : (
                 <View style={styles.emptyStateIconWrap}>
-                    <Ionicons name={icon} size={22} color={T.textSecondary} />
+                    <Ionicons name={icon} size={22} color={getLocalThemePalette1().textSecondary} />
                 </View>
             )}
             <Text style={styles.emptyStateTitle}>{title}</Text>
@@ -1436,6 +1445,7 @@ function CardEmptyState({
 }
 
 function PaceStatRow({ label, value, isLast }: { label: string; value: string; isLast?: boolean }) {
+    useThemeSubscription();
     return (
         <View style={[styles.paceStatRow, !isLast && styles.paceStatRowBorder]}>
             <Text style={styles.paceStatLabel}>{label}</Text>
@@ -1453,7 +1463,8 @@ function AnalysisCard({
     description: string;
     tip?: string;
 }) {
-    const color = tone === 'success' ? T.success : T.warning;
+    useThemeSubscription();
+    const color = tone === 'success' ? getLocalThemePalette1().success : getLocalThemePalette1().warning;
     return (
         <View style={[styles.analysisCard, { borderColor: color, backgroundColor: color + '1F' }]}>
             <View style={styles.analysisCardIcon}>
@@ -1476,8 +1487,9 @@ function AnalysisCard({
 function Vo2Trend({
     isInterrupted, trendPercent,
 }: { isInterrupted: boolean; trendPercent: number }) {
+    useThemeSubscription();
     const positive = !isInterrupted && trendPercent >= 0;
-    const color = isInterrupted ? T.textMuted : positive ? T.success : T.danger;
+    const color = isInterrupted ? getLocalThemePalette1().textMuted : positive ? getLocalThemePalette1().success : getLocalThemePalette1().danger;
     const bg = isInterrupted ? 'rgba(156,163,175,0.15)'
         : positive ? 'rgba(50,205,50,0.15)' : 'rgba(255,107,107,0.15)';
     const txt = isInterrupted
@@ -1492,16 +1504,17 @@ function Vo2Trend({
 }
 
 function ConquestCard({ conquest, loading }: { conquest: any; loading?: boolean }) {
+    useThemeSubscription();
     if (loading) {
         return (
             <View style={[styles.cardDark, styles.conquestCard]}>
                 <View style={styles.conquestHeader}>
-                    <Ionicons name="trophy" size={26} color={T.warning} />
+                    <Ionicons name="trophy" size={26} color={getLocalThemePalette1().warning} />
                     <Text style={styles.conquestLabel}>CONQUISTA</Text>
                 </View>
                 <View style={styles.conquestBody}>
                     <View style={{ flex: 1 }}>
-                        <ActivityIndicator size="small" color={T.warning} style={{ alignSelf: 'flex-start' }} />
+                        <ActivityIndicator size="small" color={getLocalThemePalette1().warning} style={{ alignSelf: 'flex-start' }} />
                         <Text style={[styles.conquestSub, { marginTop: 8 }]}>Calculando sua conquista…</Text>
                     </View>
                 </View>
@@ -1514,7 +1527,7 @@ function ConquestCard({ conquest, loading }: { conquest: any; loading?: boolean 
         return (
             <View style={[styles.cardDark, styles.conquestCard, styles.conquestCardSuccess]}>
                 <View style={styles.conquestHeader}>
-                    <Ionicons name="trophy" size={26} color={T.warning} />
+                    <Ionicons name="trophy" size={26} color={getLocalThemePalette1().warning} />
                     <Text style={styles.conquestLabel}>CONQUISTA</Text>
                 </View>
                 <View style={styles.conquestBody}>
@@ -1526,7 +1539,7 @@ function ConquestCard({ conquest, loading }: { conquest: any; loading?: boolean 
                         <Text style={styles.conquestXp}>+{conquest.xp_earned} XP</Text>
                     </View>
                     <View style={styles.medalCircle}>
-                        <Ionicons name="medal" size={32} color={T.warning} />
+                        <Ionicons name="medal" size={32} color={getLocalThemePalette1().warning} />
                     </View>
                 </View>
             </View>
@@ -1537,8 +1550,8 @@ function ConquestCard({ conquest, loading }: { conquest: any; loading?: boolean 
         return (
             <View style={[styles.cardDark, styles.conquestCard, styles.conquestCardFailed]}>
                 <View style={styles.conquestHeader}>
-                    <Ionicons name="warning" size={22} color={T.danger} />
-                    <Text style={[styles.conquestLabel, { color: T.danger }]}>META NÃO BATIDA</Text>
+                    <Ionicons name="warning" size={22} color={getLocalThemePalette1().danger} />
+                    <Text style={[styles.conquestLabel, { color: getLocalThemePalette1().danger }]}>META NÃO BATIDA</Text>
                 </View>
                 <View style={styles.conquestBody}>
                     <View style={{ flex: 1 }}>
@@ -1546,7 +1559,7 @@ function ConquestCard({ conquest, loading }: { conquest: any; loading?: boolean 
                         <Text style={styles.conquestSub}>
                             {conquest.executed_distance_km.toFixed(1)} km de {conquest.planned_distance_km} km planejados
                         </Text>
-                        <Text style={[styles.conquestXp, { color: T.danger }]}>Nenhum XP contabilizado</Text>
+                        <Text style={[styles.conquestXp, { color: getLocalThemePalette1().danger }]}>Nenhum XP contabilizado</Text>
                     </View>
                 </View>
             </View>
@@ -1556,7 +1569,7 @@ function ConquestCard({ conquest, loading }: { conquest: any; loading?: boolean 
     return (
         <View style={[styles.cardDark, styles.conquestCard]}>
             <View style={styles.conquestHeader}>
-                <Ionicons name="trophy" size={26} color={T.warning} />
+                <Ionicons name="trophy" size={26} color={getLocalThemePalette1().warning} />
                 <Text style={styles.conquestLabel}>ATIVIDADE LIVRE</Text>
             </View>
             <View style={styles.conquestBody}>
@@ -1684,8 +1697,8 @@ function formatTimeShort(iso: string): string {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: T.bgPrimary },
+const styles = createThemeStyles(() => ({
+    container: { flex: 1, backgroundColor: getLocalThemePalette1().bgPrimary },
 
     // Toggle de Terreno 3D — chip flutuante sobre o mapa
     chip3d: {
@@ -1702,11 +1715,11 @@ const styles = StyleSheet.create({
         zIndex: 20,
     },
     chip3dActive: {
-        borderColor: T.cyan,
+        borderColor: getLocalThemePalette1().cyan,
         backgroundColor: semanticColors.accentSubtle,
     },
     chip3dText: {
-        color: T.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         fontSize: 14,
         fontWeight: '700',
     },
@@ -1724,13 +1737,13 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     coldStartText: {
-        color: T.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         fontSize: 14,
     },
 
     // Treadmill backdrop (no map for treadmill runs)
     treadmillBackdrop: {
-        backgroundColor: T.bgPrimary,
+        backgroundColor: getLocalThemePalette1().bgPrimary,
         alignItems: 'center',
         justifyContent: 'flex-start',
         paddingTop: 90,
@@ -1740,31 +1753,31 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     treadmillBackdropTitle: {
-        color: T.textPrimary,
+        color: getLocalThemePalette1().textPrimary,
         fontSize: 22,
         fontWeight: '700',
         marginTop: 6,
     },
     treadmillBackdropSubtitle: {
-        color: T.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         fontSize: 13,
     },
 
     // Treadmill speed chart card
     treadmillChartCard: {
-        backgroundColor: T.cardDarker,
+        backgroundColor: getLocalThemePalette1().cardDarker,
         borderRadius: 16,
         padding: 16,
         marginBottom: 14,
     },
     treadmillChartTitle: {
-        color: T.textPrimary,
+        color: getLocalThemePalette1().textPrimary,
         fontSize: 14,
         fontWeight: '600',
         marginBottom: 4,
     },
     treadmillChartSubtitle: {
-        color: T.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         fontSize: 12,
         marginBottom: 12,
     },
@@ -1774,19 +1787,19 @@ const styles = StyleSheet.create({
         marginTop: 12,
         paddingTop: 12,
         borderTopWidth: 1,
-        borderTopColor: T.divider,
+        borderTopColor: getLocalThemePalette1().divider,
     },
     treadmillStatBlock: {
         alignItems: 'center',
         flex: 1,
     },
     treadmillStatValue: {
-        color: T.cyan,
+        color: getLocalThemePalette1().cyan,
         fontSize: 16,
         fontWeight: '700',
     },
     treadmillStatLabel: {
-        color: T.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         fontSize: 11,
         marginTop: 2,
     },
@@ -1811,12 +1824,12 @@ const styles = StyleSheet.create({
         paddingHorizontal: 18, paddingVertical: 6,
         borderRadius: 18, alignItems: 'center',
     },
-    titlePillSub: { color: T.cyan, fontSize: 11, fontWeight: '500' },
-    titlePillMain: { color: T.textPrimary, fontSize: 14, fontWeight: '700' },
+    titlePillSub: { color: getLocalThemePalette1().cyan, fontSize: 11, fontWeight: '500' },
+    titlePillMain: { color: getLocalThemePalette1().textPrimary, fontSize: 14, fontWeight: '700' },
 
     // Bottom sheet
     sheetBackground: {
-        backgroundColor: T.cardSurface,
+        backgroundColor: getLocalThemePalette1().cardSurface,
         borderTopLeftRadius: 20, borderTopRightRadius: 20,
     },
     sheetHandle: { backgroundColor: semanticColors.glass, width: 60, height: 6 },
@@ -1827,30 +1840,30 @@ const styles = StyleSheet.create({
         flexDirection: 'row', alignItems: 'center', gap: 14,
         paddingTop: 4, paddingBottom: 14,
     },
-    avatar: { width: 47, height: 47, borderRadius: 24, backgroundColor: T.cardDarker },
+    avatar: { width: 47, height: 47, borderRadius: 24, backgroundColor: getLocalThemePalette1().cardDarker },
     avatarFallback: {
         backgroundColor: semanticColors.accentSubtle,
         alignItems: 'center', justifyContent: 'center',
-        borderWidth: 1, borderColor: T.cyan,
+        borderWidth: 1, borderColor: getLocalThemePalette1().cyan,
     },
-    avatarInitials: { color: T.cyan, fontSize: 16, fontWeight: '700', letterSpacing: 0.5 },
+    avatarInitials: { color: getLocalThemePalette1().cyan, fontSize: 16, fontWeight: '700', letterSpacing: 0.5 },
     userTextWrap: { flex: 1, minWidth: 0 },
-    userName: { color: T.textPrimary, fontSize: 14, fontWeight: '700', lineHeight: 20 },
-    userDate: { color: T.textSecondary, fontSize: 10, fontWeight: '500', lineHeight: 15, marginTop: 2 },
+    userName: { color: getLocalThemePalette1().textPrimary, fontSize: 14, fontWeight: '700', lineHeight: 20 },
+    userDate: { color: getLocalThemePalette1().textSecondary, fontSize: 10, fontWeight: '500', lineHeight: 15, marginTop: 2 },
 
     // Hero block
     heroBlock: { alignItems: 'center', paddingVertical: 12, marginBottom: 18 },
     heroMessage: {
-        color: T.textPrimary, fontSize: 18, fontWeight: '700',
+        color: getLocalThemePalette1().textPrimary, fontSize: 18, fontWeight: '700',
         textAlign: 'center', marginTop: 28, paddingHorizontal: 20,
     },
     heroSubtitle: {
-        color: T.textSecondary, fontSize: 13, fontWeight: '500',
+        color: getLocalThemePalette1().textSecondary, fontSize: 13, fontWeight: '500',
         textAlign: 'center', marginTop: 6,
     },
     scoreRing: {
         width: 96, height: 96, borderRadius: 48,
-        borderWidth: 3, backgroundColor: T.cardDarker,
+        borderWidth: 3, backgroundColor: getLocalThemePalette1().cardDarker,
         alignItems: 'center', justifyContent: 'center',
     },
     scoreInnerCircle: {
@@ -1868,22 +1881,22 @@ const styles = StyleSheet.create({
     // 5 metrics
     metricsRow: { flexDirection: 'row', paddingVertical: 8, marginBottom: 18 },
     metricCell: { flex: 1, alignItems: 'center', paddingHorizontal: 2, gap: 6 },
-    metricLabel: { color: T.textSecondary, fontSize: 11, fontWeight: '500' },
-    metricValue: { color: T.textPrimary, fontSize: 14, fontWeight: '600' },
+    metricLabel: { color: getLocalThemePalette1().textSecondary, fontSize: 11, fontWeight: '500' },
+    metricValue: { color: getLocalThemePalette1().textPrimary, fontSize: 14, fontWeight: '600' },
 
     // Cards (genérico)
     cardDark: {
-        backgroundColor: T.cardDarker,
+        backgroundColor: getLocalThemePalette1().cardDarker,
         borderRadius: 20,
         paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16,
         marginBottom: 14,
     },
     cardTitle: {
-        color: T.textPrimary, fontSize: 20, fontWeight: '700',
+        color: getLocalThemePalette1().textPrimary, fontSize: 20, fontWeight: '700',
         textAlign: 'center', paddingBottom: 16,
     },
     cardTitleLeft: {
-        color: T.textPrimary, fontSize: 16, fontWeight: '700',
+        color: getLocalThemePalette1().textPrimary, fontSize: 16, fontWeight: '700',
     },
 
     // Métricas detalhadas
@@ -1892,16 +1905,16 @@ const styles = StyleSheet.create({
         marginBottom: 14,
     },
     detailedBadge: {
-        backgroundColor: T.cyanSoft,
+        backgroundColor: getLocalThemePalette1().cyanSoft,
         paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10,
     },
-    detailedBadgeText: { fontSize: 11, color: T.cyan, fontWeight: '600' },
+    detailedBadgeText: { fontSize: 11, color: getLocalThemePalette1().cyan, fontWeight: '600' },
     detailedTableHeader: {
         flexDirection: 'row',
         paddingBottom: 10,
-        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: T.divider,
+        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: getLocalThemePalette1().divider,
     },
-    detailedTableHeaderText: { fontSize: 11, color: T.textSecondary, fontWeight: '500' },
+    detailedTableHeaderText: { fontSize: 11, color: getLocalThemePalette1().textSecondary, fontWeight: '500' },
     detailedRow: {
         flexDirection: 'row', alignItems: 'center', paddingVertical: 12,
     },
@@ -1913,9 +1926,9 @@ const styles = StyleSheet.create({
         width: 28, height: 28, borderRadius: 14,
         alignItems: 'center', justifyContent: 'center',
     },
-    detailedLabel: { color: T.textPrimary, fontSize: 13, fontWeight: '600' },
+    detailedLabel: { color: getLocalThemePalette1().textPrimary, fontSize: 13, fontWeight: '600' },
     detailedTarget: {
-        flex: 1, color: T.textSecondary, fontSize: 13, textAlign: 'center',
+        flex: 1, color: getLocalThemePalette1().textSecondary, fontSize: 13, textAlign: 'center',
     },
     detailedExecuted: { flex: 1, alignItems: 'flex-end', gap: 4 },
     detailedExecutedValue: { fontSize: 14, fontWeight: '700' },
@@ -1936,13 +1949,13 @@ const styles = StyleSheet.create({
         flexDirection: 'row', alignItems: 'center', paddingBottom: 8,
         borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: semanticColors.borderSubtle,
     },
-    splitsHeaderText: { color: T.textSecondary, fontSize: 13, fontWeight: '500' },
+    splitsHeaderText: { color: getLocalThemePalette1().textSecondary, fontSize: 13, fontWeight: '500' },
     splitsBody: { paddingTop: 4 },
     splitRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
-    splitKmText: { color: T.textSecondary, fontSize: 13, fontWeight: '500' },
-    splitFraction: { color: T.textMuted, fontSize: 11, fontWeight: '400' },
-    splitText: { color: T.textSecondary, fontSize: 13, fontWeight: '500' },
-    splitBar: { height: 8, backgroundColor: T.cyan, borderRadius: 4 },
+    splitKmText: { color: getLocalThemePalette1().textSecondary, fontSize: 13, fontWeight: '500' },
+    splitFraction: { color: getLocalThemePalette1().textMuted, fontSize: 11, fontWeight: '400' },
+    splitText: { color: getLocalThemePalette1().textSecondary, fontSize: 13, fontWeight: '500' },
+    splitBar: { height: 8, backgroundColor: getLocalThemePalette1().cyan, borderRadius: 4 },
 
     // Pace card
     paceCardHeader: {
@@ -1951,7 +1964,7 @@ const styles = StyleSheet.create({
     },
     chartUnitInline: {
         position: 'absolute', right: 0, top: 4,
-        color: T.textSecondary, fontSize: 11, fontWeight: '500',
+        color: getLocalThemePalette1().textSecondary, fontSize: 11, fontWeight: '500',
     },
     chartWrap: { paddingTop: 4, paddingBottom: 8, minHeight: 200, overflow: 'hidden' },
     chartEmpty: {
@@ -1960,13 +1973,13 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     chartEmptyText: {
-        color: T.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         fontSize: 12,
         textAlign: 'center',
     },
-    chartAxisText: { color: T.textSecondary, fontSize: 10 },
+    chartAxisText: { color: getLocalThemePalette1().textSecondary, fontSize: 10 },
     chartAxisLabelText: {
-        color: T.textSecondary, fontSize: 10, width: 48,
+        color: getLocalThemePalette1().textSecondary, fontSize: 10, width: 48,
         textAlign: 'center', marginLeft: -24,
     },
     paceList: { marginTop: 12, paddingTop: 4 },
@@ -1977,8 +1990,8 @@ const styles = StyleSheet.create({
     paceStatRowBorder: {
         borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: semanticColors.borderSubtle,
     },
-    paceStatLabel: { color: T.textSecondary, fontSize: 15, fontWeight: '500' },
-    paceStatValue: { color: T.textPrimary, fontSize: 16, fontWeight: '600' },
+    paceStatLabel: { color: getLocalThemePalette1().textSecondary, fontSize: 15, fontWeight: '500' },
+    paceStatValue: { color: getLocalThemePalette1().textPrimary, fontSize: 16, fontWeight: '600' },
 
     // Map overlay
     mapOverlay: {
@@ -1991,7 +2004,7 @@ const styles = StyleSheet.create({
         backgroundColor: semanticColors.surface1,
         borderWidth: 1, borderColor: semanticColors.borderSubtle,
     },
-    mapOverlayText: { color: T.textSecondary, fontSize: 12, fontWeight: '500' },
+    mapOverlayText: { color: getLocalThemePalette1().textSecondary, fontSize: 12, fontWeight: '500' },
 
     // Empty states
     emptyState: { paddingVertical: 18, paddingHorizontal: 8, alignItems: 'center', gap: 8 },
@@ -2000,9 +2013,9 @@ const styles = StyleSheet.create({
         backgroundColor: semanticColors.glass,
         alignItems: 'center', justifyContent: 'center', marginBottom: 4,
     },
-    emptyStateTitle: { color: T.textPrimary, fontSize: 13, fontWeight: '600', textAlign: 'center' },
+    emptyStateTitle: { color: getLocalThemePalette1().textPrimary, fontSize: 13, fontWeight: '600', textAlign: 'center' },
     emptyStateSubtitle: {
-        color: T.textSecondary, fontSize: 11,
+        color: getLocalThemePalette1().textSecondary, fontSize: 11,
         textAlign: 'center', paddingHorizontal: 12, lineHeight: 16,
     },
 
@@ -2011,7 +2024,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
         marginTop: 4, marginBottom: 12, paddingHorizontal: 4,
     },
-    sectionTitle: { color: T.textPrimary, fontSize: 16, fontWeight: '700' },
+    sectionTitle: { color: getLocalThemePalette1().textPrimary, fontSize: 16, fontWeight: '700' },
     analysisCard: {
         flexDirection: 'row', borderRadius: 20, padding: 16,
         marginBottom: 12, borderWidth: 2,
@@ -2023,27 +2036,27 @@ const styles = StyleSheet.create({
         marginRight: 12,
     },
     analysisCardContent: { flex: 1 },
-    analysisCardTitle: { color: T.textPrimary, fontSize: 15, fontWeight: '700', marginBottom: 4 },
-    analysisCardText: { color: T.textSecondary, fontSize: 13, lineHeight: 18 },
+    analysisCardTitle: { color: getLocalThemePalette1().textPrimary, fontSize: 15, fontWeight: '700', marginBottom: 4 },
+    analysisCardText: { color: getLocalThemePalette1().textSecondary, fontSize: 13, lineHeight: 18 },
     analysisTipLabel: { color: '#FFA500', fontWeight: '700' },
 
     // VO2
     vo2Card: { borderWidth: 1, borderColor: semanticColors.borderSubtle },
     vo2Header: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-    vo2Title: { color: T.cyan, fontSize: 14, fontWeight: '700' },
+    vo2Title: { color: getLocalThemePalette1().cyan, fontSize: 14, fontWeight: '700' },
     vo2Body: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     },
     vo2ValueWrap: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
-    vo2Value: { color: T.textPrimary, fontSize: 38, fontWeight: '700' },
-    vo2Unit: { color: T.textSecondary, fontSize: 13 },
+    vo2Value: { color: getLocalThemePalette1().textPrimary, fontSize: 38, fontWeight: '700' },
+    vo2Unit: { color: getLocalThemePalette1().textSecondary, fontSize: 13 },
     vo2TrendBadge: {
         flexDirection: 'row', alignItems: 'center', gap: 4,
         paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
     },
     vo2TrendText: { fontSize: 13, fontWeight: '700' },
     vo2Message: {
-        color: T.textMuted, fontSize: 12, fontStyle: 'italic',
+        color: getLocalThemePalette1().textMuted, fontSize: 12, fontStyle: 'italic',
         marginTop: 8,
     },
 
@@ -2057,35 +2070,35 @@ const styles = StyleSheet.create({
     },
     conquestHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
     conquestLabel: {
-        color: T.warning, fontSize: 13, fontWeight: '700', letterSpacing: 1,
+        color: getLocalThemePalette1().warning, fontSize: 13, fontWeight: '700', letterSpacing: 1,
     },
     conquestBody: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     },
-    conquestTitle: { color: T.textPrimary, fontSize: 18, fontWeight: '700' },
-    conquestSub: { color: T.textSecondary, fontSize: 13, marginTop: 2 },
-    conquestXp: { color: T.gold, fontSize: 14, fontWeight: '700', marginTop: 8 },
+    conquestTitle: { color: getLocalThemePalette1().textPrimary, fontSize: 18, fontWeight: '700' },
+    conquestSub: { color: getLocalThemePalette1().textSecondary, fontSize: 13, marginTop: 2 },
+    conquestXp: { color: getLocalThemePalette1().gold, fontSize: 14, fontWeight: '700', marginTop: 8 },
     medalCircle: {
         width: 56, height: 56, borderRadius: 28,
-        borderWidth: 2, borderColor: T.warning,
+        borderWidth: 2, borderColor: getLocalThemePalette1().warning,
         backgroundColor: 'rgba(255,196,0,0.10)',
         alignItems: 'center', justifyContent: 'center',
     },
 
     // Tip
     tipCard: {
-        flexDirection: 'row', backgroundColor: T.cardDarker,
+        flexDirection: 'row', backgroundColor: getLocalThemePalette1().cardDarker,
         borderRadius: 20, padding: 16, gap: 12,
         marginBottom: 18, alignItems: 'flex-start',
     },
     tipText: { flex: 1, color: semanticColors.textSecondary, fontSize: 13, lineHeight: 18 },
-    tipBold: { color: T.textPrimary, fontWeight: '700' },
+    tipBold: { color: getLocalThemePalette1().textPrimary, fontWeight: '700' },
 
     // Botão Concluir
     concludeButton: {
-        backgroundColor: T.cyan, paddingVertical: 16,
+        backgroundColor: getLocalThemePalette1().cyan, paddingVertical: 16,
         borderRadius: 15, alignItems: 'center',
         marginTop: 4, marginBottom: 4,
     },
-    concludeButtonText: { color: T.textPrimary, fontSize: 18, fontWeight: '700' },
-});
+    concludeButtonText: { color: getLocalThemePalette1().textPrimary, fontSize: 18, fontWeight: '700' },
+}));

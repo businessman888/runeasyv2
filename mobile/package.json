@@ -11,12 +11,13 @@
     "ios:staging": "cross-env APP_ENV=staging expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "design:check": "node scripts/check-design-tokens.js && node scripts/check-color-literal-baseline.js",
+    "design:check": "node scripts/check-design-tokens.js && node scripts/check-color-literal-baseline.js && npm run theme:audit",
     "design:update-baseline": "node scripts/check-color-literal-baseline.js --update",
     "inspect:watch-ipa": "node scripts/inspect-watch-ipa.js",
     "prebuild:clean": "expo prebuild --clean",
     "build:staging": "eas build --profile staging",
-    "build:production": "eas build --profile production"
+    "build:production": "eas build --profile production",
+    "theme:audit": "node scripts/migrate-theme-runtime.js --check && node scripts/audit-theme-coverage.js"
   },
   "dependencies": {
     "@bacons/apple-targets": "^4.0.6",

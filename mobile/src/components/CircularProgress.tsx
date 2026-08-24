@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
-import { colors, typography } from '../theme';
+import { colors, typography, createThemeStyles, useThemeSubscription } from '../theme';
 
 interface CircularProgressProps {
     percentage: number;
@@ -21,6 +21,7 @@ export function CircularProgress({
     showPercentage = true,
     children,
 }: CircularProgressProps) {
+    useThemeSubscription();
     const radius = (size - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
     const strokeDashoffset = circumference - (percentage / 100) * circumference;
@@ -85,7 +86,7 @@ export function CircularProgress({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         position: 'relative',
         alignItems: 'center',
@@ -104,6 +105,6 @@ const styles = StyleSheet.create({
         fontWeight: typography.fontWeights.bold as any,
         color: colors.text,
     },
-});
+}));
 
 export default CircularProgress;

@@ -1,4 +1,6 @@
 import { semanticColors } from './semanticColors';
+import type { ThemeColors } from './contracts';
+import { createThemeObject } from './themeRuntime';
 
 export * from './contracts';
 export * from './lightColors';
@@ -7,9 +9,10 @@ export * from './semanticColors';
 export * from './themes';
 export * from './ThemeProvider';
 export * from './useThemedStyles';
+export * from './themeRuntime';
 
 // Design System Colors - Dark Theme (Figma design)
-export const colors = {
+const darkLegacyColors = {
     // Backgrounds - Dark Navy
     background: semanticColors.canvas,
     backgroundLight: semanticColors.surface1,
@@ -68,6 +71,56 @@ export const colors = {
     tabBarGlassFill: 'rgba(13, 13, 15, 0.78)',
     tabBarIdleBorder: semanticColors.borderStrong,
 };
+export type LegacyThemeColors = typeof darkLegacyColors;
+
+function createLegacyColors(themeColors: ThemeColors): LegacyThemeColors {
+    return {
+        ...darkLegacyColors,
+        background: themeColors.canvas,
+        backgroundLight: themeColors.surface1,
+        card: themeColors.surface2,
+        cardDark: themeColors.surface1,
+        highlight: themeColors.surface3,
+        primary: themeColors.accent,
+        primaryLight: themeColors.info,
+        primaryDark: themeColors.accent,
+        accent: themeColors.warning,
+        success: themeColors.success,
+        error: themeColors.danger,
+        warning: themeColors.warning,
+        info: themeColors.info,
+        text: themeColors.textPrimary,
+        textLight: themeColors.textPrimary,
+        textSecondary: themeColors.textSecondary,
+        textMuted: themeColors.textTertiary,
+        border: themeColors.borderSubtle,
+        borderLight: themeColors.borderSubtle,
+        streakCard: themeColors.surface1,
+        streakDayCard: themeColors.surface2,
+        recovery: themeColors.recovery,
+        missed: themeColors.danger,
+        completed: themeColors.success,
+        glassWhite: themeColors.borderStrong,
+        glassLight: themeColors.glass,
+        glassDark: themeColors.overlayMedium,
+        proGlassOverlay: themeColors.overlayMedium,
+        proGlassOverlayStrong: themeColors.overlayStrong,
+        proGlassBorder: themeColors.borderStrong,
+        proGlassBorderCyan: themeColors.borderSubtle,
+        proCardGlassFill: themeColors.glass,
+        proCtaFill: themeColors.surface3,
+        proDivider: themeColors.borderSubtle,
+        proMutedText: themeColors.textSecondary,
+        tabBarGlassFill: themeColors.glass,
+        tabBarIdleBorder: themeColors.borderStrong,
+    };
+}
+
+/** @deprecated Prefer semantic colors from useAppTheme() in new code. */
+export const colors = createThemeObject(
+    darkLegacyColors,
+    (theme) => createLegacyColors(theme.colors),
+);
 
 // Plus Jakarta Sans — loaded at runtime in App.tsx via @expo-google-fonts.
 // Reference these instead of relying on fontWeight alone (custom fonts on RN
@@ -175,7 +228,8 @@ export const shadows = {
 // visually coherent with the rest of the app; the few gradient stops that don't
 // exist as semantic tokens are declared here once (single source of truth) and
 // never hardcoded in screens. Mirrors the approach of theme/zoneColors.ts.
-export const mapViz = {
+function createMapViz() {
+  return {
     // Route line — brand cyan with a glow halo behind it.
     routeColor: colors.primary,
     routeGlow: colors.primary,
@@ -206,7 +260,7 @@ export const mapViz = {
         good: colors.success,
         weak: colors.warning,
         poor: colors.error,
-        inactive: 'rgba(235, 235, 245, 0.15)', // empty bar
+        inactive: semanticColors.borderStrong,
     },
 
     // OSM overlay (trilhas/paths + parques), realçado para corredores.
@@ -215,7 +269,14 @@ export const mapViz = {
         parkFill: 'rgba(16, 185, 129, 0.12)', // success @ 12%
         parkOutline: 'rgba(16, 185, 129, 0.40)', // success @ 40%
     },
-};
+  };
+}
+
+const darkMapViz = createMapViz();
+export const mapViz = createThemeObject(
+    darkMapViz,
+    () => createMapViz(),
+);
 
 export default {
     colors,

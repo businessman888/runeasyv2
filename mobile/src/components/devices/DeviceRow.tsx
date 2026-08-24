@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import { colors, fonts } from '../../theme';
+import { colors, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { WEARABLES, type WearableProvider } from '../../config/wearables.config';
 import {
@@ -39,6 +39,7 @@ interface DeviceRowProps {
 }
 
 function DeviceRowComponent({ provider, onPress, connectedStatusOnly }: DeviceRowProps) {
+    useThemeSubscription();
     const navigation = useNavigation<Nav>();
     const config = WEARABLES[provider];
     const { isApplicable, status, lastSyncedAt } = useWearableConnection(provider);
@@ -97,7 +98,7 @@ function DeviceRowComponent({ provider, onPress, connectedStatusOnly }: DeviceRo
 
 export const DeviceRow = memo(DeviceRowComponent);
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     row: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -147,6 +148,6 @@ const styles = StyleSheet.create({
         fontSize: 12.5,
         color: semanticColors.textSecondary,
     },
-});
+}));
 
 export default DeviceRow;

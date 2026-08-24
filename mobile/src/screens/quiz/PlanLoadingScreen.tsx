@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { useOnboardingStore, PlanPreview } from '../../stores/onboardingStore';
-import { fonts } from '../../theme';
+import { fonts, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
 const { width } = Dimensions.get('window');
@@ -28,6 +28,7 @@ const MESSAGE_INTERVAL = 2000; // 2 seconds (4 messages in 8s)
 const TOTAL_DURATION = 8000; // 8 seconds fixed
 
 export function PlanLoadingScreen({ navigation, route }: any) {
+    useThemeSubscription();
     const { userId } = route?.params || {};
     const fetchPlanPreview = useOnboardingStore((s) => s.fetchPlanPreview);
 
@@ -101,7 +102,7 @@ export function PlanLoadingScreen({ navigation, route }: any) {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+            <StatusBar barStyle={getThemeStatusBarStyle()} translucent backgroundColor="transparent" />
 
             {/* Progress Bar */}
             <View style={styles.progressBarContainer}>
@@ -144,7 +145,7 @@ export function PlanLoadingScreen({ navigation, route }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: semanticColors.canvas,
@@ -196,6 +197,6 @@ const styles = StyleSheet.create({
         color: semanticColors.textSecondary,
         textAlign: 'center',
     },
-});
+}));
 
 export default PlanLoadingScreen;

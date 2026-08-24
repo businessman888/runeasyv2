@@ -13,7 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import Carousel from 'react-native-reanimated-carousel';
-import { fonts, colors } from '../../theme';
+import { fonts, colors, createThemeStyles, useThemeSubscription, getThemeBlurTint } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { InterstitialBase } from './_InterstitialBase';
 
@@ -27,9 +27,9 @@ const ITEM_WIDTH = SCREEN_WIDTH - 48; // 24px de peek de cada lado
 const CARD_GAP = 8;
 const CARD_HEIGHT = 380;
 
-const CYAN = colors.primary;
-const TEXT = semanticColors.textPrimary;
-const TEXT_DIM = semanticColors.textSecondary;
+
+
+
 
 const ANDROID_BLUR_METHOD: 'dimezisBlurView' | undefined =
     Platform.OS === 'android' ? 'dimezisBlurView' : undefined;
@@ -115,7 +115,7 @@ const TestimonialCard = memo(({ item }: { item: Testimonial }) => (
             <View style={styles.glass}>
                 <BlurView
                     intensity={28}
-                    tint="dark"
+                    tint={getThemeBlurTint()}
                     experimentalBlurMethod={ANDROID_BLUR_METHOD}
                     pointerEvents="none"
                     style={StyleSheet.absoluteFill}
@@ -129,7 +129,7 @@ const TestimonialCard = memo(({ item }: { item: Testimonial }) => (
                             <Text style={styles.name} numberOfLines={1}>
                                 {item.name}
                             </Text>
-                            <Ionicons name="checkmark-circle" size={16} color={CYAN} />
+                            <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
                         </View>
                         <Text style={styles.age}>{item.age} anos</Text>
                     </View>
@@ -143,6 +143,7 @@ const TestimonialCard = memo(({ item }: { item: Testimonial }) => (
 TestimonialCard.displayName = 'TestimonialCard';
 
 export function TestimonialsScreen() {
+    useThemeSubscription();
     const renderItem = useCallback(
         ({ item }: { item: Testimonial }) => <TestimonialCard item={item} />,
         [],
@@ -156,12 +157,12 @@ export function TestimonialsScreen() {
         >
             {/* Card de "louros" com borda cyan suave */}
             <View style={styles.laurelCard}>
-                <Ionicons name="leaf-outline" size={34} color={CYAN} />
+                <Ionicons name="leaf-outline" size={34} color={colors.primary} />
                 <Text style={styles.laurelText}>
                     Milhares{'\n'}de atletas com 100%{'\n'}de desempenho{' '}
                     <Text style={styles.laurelHighlight}>melhorado</Text>
                 </Text>
-                <Ionicons name="leaf-outline" size={34} color={CYAN} style={styles.leafMirror} />
+                <Ionicons name="leaf-outline" size={34} color={colors.primary} style={styles.leafMirror} />
             </View>
 
             {/* Pills de avatares */}
@@ -182,7 +183,7 @@ export function TestimonialsScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     // Laurel card
     laurelCard: {
         flexDirection: 'row',
@@ -202,10 +203,10 @@ const styles = StyleSheet.create({
         fontSize: 16,
         lineHeight: 22,
         textAlign: 'center',
-        color: TEXT,
+        color: semanticColors.textPrimary,
     },
     laurelHighlight: {
-        color: CYAN,
+        color: colors.primary,
     },
     leafMirror: {
         transform: [{ scaleX: -1 }],
@@ -272,12 +273,12 @@ const styles = StyleSheet.create({
     name: {
         fontFamily: fonts.semibold,
         fontSize: 16,
-        color: TEXT,
+        color: semanticColors.textPrimary,
     },
     age: {
         fontFamily: fonts.regular,
         fontSize: 12,
-        color: TEXT_DIM,
+        color: semanticColors.textSecondary,
         marginTop: 2,
     },
     quote: {
@@ -286,6 +287,6 @@ const styles = StyleSheet.create({
         lineHeight: 19,
         color: semanticColors.textSecondary,
     },
-});
+}));
 
 export default TestimonialsScreen;

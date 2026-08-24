@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, typography, borderRadius, fonts } from '../../theme';
+import { colors, typography, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 
@@ -32,6 +32,7 @@ const formatDateString = (date: Date) => {
 };
 
 export function ManualRaceDateScreen() {
+    useThemeSubscription();
     const data = useOnboardingStore((s) => s.data);
     const updateData = useOnboardingStore((s) => s.updateData);
 
@@ -165,7 +166,7 @@ export function ManualRaceDateScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     wrapper: { flex: 1, paddingTop: 8 },
     titleContainer: { marginBottom: 20 },
     title: {
@@ -242,6 +243,6 @@ const styles = StyleSheet.create({
     dayText: { fontFamily: fonts.medium, fontSize: 13, color: colors.text },
     dayTextPast: { color: semanticColors.textTertiary },
     dayTextSelected: { fontFamily: fonts.semibold, color: colors.primary },
-});
+}));
 
 export default ManualRaceDateScreen;

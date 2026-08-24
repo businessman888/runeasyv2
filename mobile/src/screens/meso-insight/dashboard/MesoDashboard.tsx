@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, borderRadius, typography, fonts } from '../../../theme';
+import { colors, spacing, borderRadius, typography, fonts, createThemeStyles, useThemeSubscription } from '../../../theme';
 import { useEnterAnimation } from '../../weekly-insight/hooks/useEnterAnimation';
 import { CoachCallout } from '../../weekly-insight/components/CoachCallout';
 import { SectionHeader } from '../../weekly-insight/components/SectionHeader';
@@ -64,6 +64,7 @@ export const MesoDashboard = memo(function MesoDashboard({
     active,
     onBack,
 }: MesoDashboardProps) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
     const headerInset = insets.top + DASHBOARD_HEADER_HEIGHT;
 
@@ -196,6 +197,7 @@ const MesoHero = memo(function MesoHero({
     model: MesoStoryModel;
     active: boolean;
 }) {
+    useThemeSubscription();
     const progress = useEnterAnimation(IDX.hero, active);
     const style = useAnimatedStyle(() => ({
         opacity: progress.value,
@@ -271,6 +273,7 @@ const Section = memo(function Section({
     active: boolean;
     children: React.ReactNode;
 }) {
+    useThemeSubscription();
     const progress = useEnterAnimation(index, active);
     const style = useAnimatedStyle(() => ({
         opacity: progress.value,
@@ -288,6 +291,7 @@ const ArcSection = memo(function ArcSection({
     trend: MesoStoryModel['trend'];
     active: boolean;
 }) {
+    useThemeSubscription();
     const progress = useEnterAnimation(IDX.arc, active);
     return <MesoVolumeArc trend={trend} progress={progress} />;
 });
@@ -305,6 +309,7 @@ const Stat = memo(function Stat({
     label: string;
     accent?: boolean;
 }) {
+    useThemeSubscription();
     return (
         <View style={styles.stat}>
             <View style={styles.statValueRow}>
@@ -322,6 +327,7 @@ const Stat = memo(function Stat({
  * seção parecer quebrada, quando na verdade um bloco de base não tem tiros.
  */
 const QualityList = memo(function QualityList({ insight }: { insight: MesoInsight }) {
+    useThemeSubscription();
     const efforts = insight.quality_efforts ?? [];
 
     if (efforts.length === 0) {
@@ -377,6 +383,7 @@ const QualityList = memo(function QualityList({ insight }: { insight: MesoInsigh
 });
 
 const NextChapter = memo(function NextChapter({ next }: { next: NextBlock }) {
+    useThemeSubscription();
     return (
         <View style={styles.nextCard}>
             <MaterialCommunityIcons
@@ -402,7 +409,7 @@ const NextChapter = memo(function NextChapter({ next }: { next: NextBlock }) {
     );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     root: { flex: 1, backgroundColor: colors.background },
 
     header: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 3, borderWidth: 0 },
@@ -590,4 +597,4 @@ const styles = StyleSheet.create({
         lineHeight: 19,
         color: colors.textSecondary,
     },
-});
+}));

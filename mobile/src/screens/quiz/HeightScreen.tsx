@@ -11,18 +11,20 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Line } from 'react-native-svg';
 import { QuizHeader, Hl } from '../../components/onboarding/QuizHeader';
 import { ValueInputSheet } from '../../components/onboarding/ValueInputSheet';
-import { fonts } from '../../theme';
+import { fonts, useThemeSubscription, createThemeStyles } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
-// Design System Colors (Figma)
-const DS = {
+const getLocalThemePalette1 = () => ({
     bg: semanticColors.canvas,
     card: semanticColors.surface2,
     cyan: semanticColors.accent,
     cyanSelected: semanticColors.accentSubtle,
     text: semanticColors.textPrimary,
-    textSecondary: 'rgba(235, 235, 245, 0.6)',
-};
+    textSecondary: semanticColors.textSecondary,
+});
+
+// Design System Colors (Figma)
+
 
 const RULER_HEIGHT = 320;
 const MIN_HEIGHT = 140;
@@ -41,6 +43,7 @@ interface HeightScreenProps {
 }
 
 export function HeightScreen({ value, onChange, onLockScroll, onUnlockScroll }: HeightScreenProps) {
+    useThemeSubscription();
     const [selectedHeight, setSelectedHeight] = useState<number>(value || 175);
     const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -152,7 +155,7 @@ export function HeightScreen({ value, onChange, onLockScroll, onUnlockScroll }: 
                                     y1={y}
                                     x2={isMajor ? 12 : 6}
                                     y2={y}
-                                    stroke={DS.textSecondary}
+                                    stroke={getLocalThemePalette1().textSecondary}
                                     strokeWidth={isMajor ? 2 : 1}
                                 />
                             );
@@ -205,7 +208,7 @@ export function HeightScreen({ value, onChange, onLockScroll, onUnlockScroll }: 
                         <MaterialCommunityIcons
                             name="human"
                             size={120}
-                            color={DS.cyan}
+                            color={getLocalThemePalette1().cyan}
                         />
                     </View>
                     <View style={styles.heightDisplay}>
@@ -240,25 +243,25 @@ export function HeightScreen({ value, onChange, onLockScroll, onUnlockScroll }: 
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     titleContainer: {
         marginBottom: 16,
     },
     title: {
         fontFamily: fonts.bold,
         fontSize: 24,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         lineHeight: 32,
         marginBottom: 8,
     },
     titleHighlight: {
         fontFamily: fonts.bold,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     subtitle: {
         fontFamily: fonts.regular,
         fontSize: 15,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         lineHeight: 22,
     },
     contentContainer: {
@@ -290,16 +293,16 @@ const styles = StyleSheet.create({
         borderRadius: 8,
     },
     markerSelected: {
-        backgroundColor: DS.cyanSelected,
+        backgroundColor: getLocalThemePalette1().cyanSelected,
     },
     markerText: {
         fontFamily: fonts.medium,
         fontSize: 14,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
     },
     markerTextSelected: {
         fontFamily: fonts.bold,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     indicator: {
         position: 'absolute',
@@ -310,11 +313,11 @@ const styles = StyleSheet.create({
     },
     indicatorLine: {
         height: 2,
-        backgroundColor: DS.cyan,
+        backgroundColor: getLocalThemePalette1().cyan,
         width: 50,
     },
     indicatorBadge: {
-        backgroundColor: DS.cyan,
+        backgroundColor: getLocalThemePalette1().cyan,
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 6,
@@ -323,7 +326,7 @@ const styles = StyleSheet.create({
     indicatorText: {
         fontFamily: fonts.bold,
         fontSize: 14,
-        color: DS.bg,
+        color: getLocalThemePalette1().bg,
     },
     figureContainer: {
         flex: 1,
@@ -342,12 +345,12 @@ const styles = StyleSheet.create({
     heightValue: {
         fontFamily: fonts.bold,
         fontSize: 48,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     heightUnit: {
         fontFamily: fonts.medium,
         fontSize: 20,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         marginLeft: 4,
     },
     customToggle: {
@@ -358,16 +361,16 @@ const styles = StyleSheet.create({
     customToggleText: {
         fontFamily: fonts.medium,
         fontSize: 14,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
         textDecorationLine: 'underline',
     },
     customInputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: DS.card,
+        backgroundColor: getLocalThemePalette1().card,
         borderRadius: 12,
         borderWidth: 2,
-        borderColor: DS.cyan,
+        borderColor: getLocalThemePalette1().cyan,
         paddingHorizontal: 16,
         marginTop: 12,
     },
@@ -375,11 +378,11 @@ const styles = StyleSheet.create({
         flex: 1,
         fontFamily: fonts.bold,
         fontSize: 20,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         paddingVertical: 12,
     },
     customSubmitButton: {
-        backgroundColor: DS.cyan,
+        backgroundColor: getLocalThemePalette1().cyan,
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 8,
@@ -387,8 +390,8 @@ const styles = StyleSheet.create({
     customSubmitText: {
         fontFamily: fonts.bold,
         fontSize: 14,
-        color: DS.bg,
+        color: getLocalThemePalette1().bg,
     },
-});
+}));
 
 export default HeightScreen;

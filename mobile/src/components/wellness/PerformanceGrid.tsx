@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, type DimensionValue } from 'react-native';
-import { colors, typography, spacing } from '../../theme';
+import { colors, typography, spacing, createThemeStyles, useThemeSubscription } from '../../theme';
 import { PerformanceCard } from './PerformanceCard';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import type { PerformanceBlock } from '../../types/wellness.types';
@@ -18,6 +18,7 @@ function formatPace(seconds: number): string {
 }
 
 export function PerformanceGrid({ performance, frequencyPlanned }: PerformanceGridProps) {
+    useThemeSubscription();
     // Colunas responsivas: phone 2 (default '48%' do card), tablet 3, largeTablet 4.
     const { isTablet, isLargeTablet } = useBreakpoint();
     const cardWidth: DimensionValue | undefined = isLargeTablet
@@ -93,7 +94,7 @@ export function PerformanceGrid({ performance, frequencyPlanned }: PerformanceGr
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     section: {
         gap: spacing.md,
     },
@@ -121,4 +122,4 @@ const styles = StyleSheet.create({
         gap: spacing.sm,
         rowGap: spacing.sm,
     },
-});
+}));

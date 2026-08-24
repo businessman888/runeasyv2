@@ -22,7 +22,7 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import { BASE_API_URL } from '../config/api.config';
 import { authedFetch } from '../services/apiClient';
 import * as Storage from '../utils/storage';
-import { colors, fonts } from '../theme';
+import { colors, fonts, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { openSystemShareSheet } from './sharing/utils/shareHandlers';
 
@@ -69,6 +69,7 @@ const BACKGROUND_IN = FadeIn.duration(420).reduceMotion(ReduceMotion.System);
 const BACKGROUND_OUT = FadeOut.duration(320).reduceMotion(ReduceMotion.System);
 
 export function RetrospectiveScreen() {
+    useThemeSubscription();
     const navigation = useNavigation<
         NativeStackNavigationProp<RootStackParamList, 'Retrospective'>
     >();
@@ -403,7 +404,7 @@ function renderCard(
     }
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     root: {
         flex: 1,
         backgroundColor: colors.background,
@@ -431,7 +432,7 @@ const styles = StyleSheet.create({
         marginTop: 2,
         fontFamily: fonts.medium,
         fontSize: 11,
-        color: 'rgba(235,235,245,0.58)',
+        color: semanticColors.textSecondary,
     },
     headerActions: {
         flexDirection: 'row',
@@ -504,4 +505,4 @@ const styles = StyleSheet.create({
         fontSize: 15,
         color: colors.background,
     },
-});
+}));

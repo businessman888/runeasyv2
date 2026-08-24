@@ -3,13 +3,15 @@ import { View, StyleSheet, Dimensions } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { StatusBar } from 'expo-status-bar';
 import { semanticColors } from '../theme/semanticColors';
+import { createThemeStyles, useThemeSubscription, getThemeExpoStatusBarStyle } from '../theme';
 
 const { width, height } = Dimensions.get('window');
 
 export function SplashScreen() {
+    useThemeSubscription();
     return (
         <View style={styles.container}>
-            <StatusBar style="light" translucent backgroundColor="transparent" />
+            <StatusBar style={getThemeExpoStatusBarStyle()} translucent backgroundColor="transparent" />
             <LottieView
                 source={require('../assets/animate/runLoad.json')}
                 autoPlay
@@ -20,7 +22,7 @@ export function SplashScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: semanticColors.canvas,
@@ -31,4 +33,4 @@ const styles = StyleSheet.create({
         width: width * 0.8,
         height: width * 0.8,
     },
-});
+}));

@@ -14,12 +14,8 @@ import React, { memo, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import type { LiveSplit } from '../../utils/livePace';
+import { semanticColors, createThemeStyles, useThemeSubscription } from '../../theme';
 
-const T = {
-  textPrimary: '#EBEBF5',
-  textCompleted: 'rgba(235, 235, 245, 0.60)',
-  cyan: '#00D4FF',
-};
 
 const BAR_MIN_H = 8;
 const BAR_MAX_H = 30;
@@ -37,6 +33,7 @@ interface Props {
 }
 
 export const SplitsBars = memo(({ splits }: Props) => {
+  useThemeSubscription();
   const scrollRef = useRef<ScrollView>(null);
 
   if (!splits || splits.length === 0) return null;
@@ -68,7 +65,7 @@ export const SplitsBars = memo(({ splits }: Props) => {
       >
         {splits.map((s, i) => {
           const isCurrent = i === lastIdx;
-          const color = isCurrent ? T.cyan : T.textCompleted;
+          const color = isCurrent ? semanticColors.accent : semanticColors.textSecondary;
           return (
             <Animated.View key={s.km} entering={FadeIn.duration(300)} style={styles.barCol}>
               <Text style={[styles.pace, { color }]} allowFontScaling={false}>
@@ -90,13 +87,13 @@ export const SplitsBars = memo(({ splits }: Props) => {
 
 SplitsBars.displayName = 'SplitsBars';
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   container: {
     marginTop: 28,
     alignSelf: 'stretch', // ocupa a largura para a ScrollView poder rolar
   },
   title: {
-    color: T.textPrimary,
+    color: semanticColors.textPrimary,
     fontSize: 15,
     fontWeight: '700',
     marginBottom: 14,
@@ -128,9 +125,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   km: {
-    color: 'rgba(235, 235, 245, 0.40)',
+    color: semanticColors.textTertiary,
     fontSize: 10,
     fontWeight: '600',
     marginTop: 6,
   },
-});
+}));

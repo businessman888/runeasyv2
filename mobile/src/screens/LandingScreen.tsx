@@ -24,7 +24,7 @@ import Animated, {
     withSpring,
     withTiming,
 } from 'react-native-reanimated';
-import { borderRadius, colors, fonts } from '../theme';
+import { borderRadius, colors, fonts, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { StoryProgressBars } from '../components/landing/StoryProgressBars';
 import { PrePaywallBackground } from '../components/upgrade/PrePaywallBackground';
@@ -70,6 +70,7 @@ type TypewriterTextProps = {
  * while the copy is being written. Screen readers receive the complete phrase.
  */
 const TypewriterText = memo(({ active, reducedMotion, style, text }: TypewriterTextProps) => {
+    useThemeSubscription();
     const [visibleCharacters, setVisibleCharacters] = useState(reducedMotion ? text.length : 0);
 
     useEffect(() => {
@@ -145,6 +146,7 @@ type SlideProps = {
 };
 
 const Slide = memo(({ slide, index, activeIndex, padTop, padBottom, reducedMotion }: SlideProps) => {
+    useThemeSubscription();
     const isActive = index === activeIndex;
     const startsVisible = reducedMotion && index === 0;
     const imageOpacity = useSharedValue(startsVisible ? 1 : 0);
@@ -311,6 +313,7 @@ type LandingScreenProps = {
 };
 
 export function LandingScreen({ navigation }: LandingScreenProps) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
     const reducedMotion = useReducedMotion();
 
@@ -392,7 +395,7 @@ export function LandingScreen({ navigation }: LandingScreenProps) {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+            <StatusBar barStyle={getThemeStatusBarStyle()} translucent backgroundColor="transparent" />
 
             {/* Premium radial-glow background (shared with PrePaywall) */}
             <PrePaywallBackground />
@@ -483,7 +486,7 @@ export function LandingScreen({ navigation }: LandingScreenProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -631,4 +634,4 @@ const styles = StyleSheet.create({
         color: colors.backgroundLight,
         letterSpacing: 0.15,
     },
-});
+}));

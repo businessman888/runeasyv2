@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, borderRadius, spacing, fonts, shadows } from '../../theme';
+import { colors, borderRadius, spacing, fonts, shadows, createThemeStyles, useThemeSubscription, getThemeBlurTint } from '../../theme';
 import { useProFeature } from '../../hooks/useProFeature';
 import { semanticColors } from '../../theme/semanticColors';
 import { AnimatedBorder } from './AnimatedBorder';
@@ -18,7 +18,7 @@ import { ProCtaButton } from './ProCtaButton';
 
 const BG_IMAGE = require('../../assets/images/bgCardUpToPlan.png');
 const CARD_RADIUS = 20;
-const CYAN = colors.primary;
+
 
 export type UpgradeProCardVariant = 'compact' | 'medium' | 'fullscreen';
 
@@ -62,6 +62,7 @@ function UpgradeProCardImpl({
   onPress,
   style,
 }: UpgradeProCardProps) {
+  useThemeSubscription();
   const { openUpgrade } = useProFeature();
 
   const handlePress = useCallback(() => {
@@ -98,7 +99,7 @@ function UpgradeProCardImpl({
           relies on the tint + veil below. */}
       <BlurView
         intensity={25}
-        tint="dark"
+        tint={getThemeBlurTint()}
         pointerEvents="none"
         style={StyleSheet.absoluteFill}
       />
@@ -149,7 +150,7 @@ function UpgradeProCardImpl({
             <View style={styles.bulletList}>
               {bullets!.slice(0, 4).map((bullet) => (
                 <View key={bullet} style={styles.bulletRow}>
-                  <Ionicons name="checkmark" size={20} color={CYAN} />
+                  <Ionicons name="checkmark" size={20} color={colors.primary} />
                   <Text style={styles.bulletText}>{bullet}</Text>
                 </View>
               ))}
@@ -194,7 +195,7 @@ function UpgradeProCardImpl({
 
 export const UpgradeProCard = memo(UpgradeProCardImpl);
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   cardBase: {
     borderRadius: CARD_RADIUS,
     overflow: 'hidden',
@@ -231,7 +232,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   proLabel: {
-    color: CYAN,
+    color: colors.primary,
     fontFamily: fonts.bold,
     fontSize: 24,
   },
@@ -242,7 +243,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: CYAN,
+    backgroundColor: colors.primary,
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing.md,
     paddingVertical: 4,
@@ -319,6 +320,6 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 400,
   },
-});
+}));
 
 export default UpgradeProCard;

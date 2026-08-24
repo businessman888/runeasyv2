@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { colors, typography, spacing } from '../theme';
+import { colors, typography, spacing, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useAuthStore, getDisplayName, getAvatarUrl } from '../stores';
 import { CustomCalendar } from '../components/CustomCalendar';
@@ -22,30 +22,37 @@ import { ScreenContainer } from '../components/ScreenContainer';
 
 // Icon components using @expo/vector-icons
 function BackIcon({ size = 24, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <Ionicons name="chevron-back" size={size} color={color} />;
 }
 
 function PersonIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <Ionicons name="person-outline" size={size} color={color} />;
 }
 
 function LockIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <Ionicons name="lock-closed-outline" size={size} color={color} />;
 }
 
 function CalendarIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <Ionicons name="calendar-outline" size={size} color={color} />;
 }
 
 function EditIcon({ size = 16, color = semanticColors.textOnAccent }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <MaterialCommunityIcons name="pencil" size={size} color={color} />;
 }
 
 function InfoIcon({ size = 20, color = semanticColors.accent }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <Ionicons name="information-circle-outline" size={size} color={color} />;
 }
 
 export function PersonalInfoScreen({ navigation }: any) {
+    useThemeSubscription();
     const { user } = useAuthStore();
 
     // Parse birth date from user profile or use default
@@ -419,7 +426,7 @@ export function PersonalInfoScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -602,4 +609,4 @@ const styles = StyleSheet.create({
     bottomSpacer: {
         height: 120,
     },
-});
+}));

@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
-import { colors } from '../../theme';
+import { colors, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
 const SHIELD_ICON = require('../../assets/images/shieldPro.png');
@@ -26,6 +26,7 @@ export interface ProTeaseBadgeProps {
  * card already announces the action, so it stays out of the a11y tree.
  */
 function ProTeaseBadgeImpl({ variant, size = 56 }: ProTeaseBadgeProps) {
+  useThemeSubscription();
   return (
     <Animated.View
       entering={ZoomIn.springify().damping(12)}
@@ -49,7 +50,7 @@ function ProTeaseBadgeImpl({ variant, size = 56 }: ProTeaseBadgeProps) {
 
 export const ProTeaseBadge = memo(ProTeaseBadgeImpl);
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   lockBadge: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -59,6 +60,6 @@ const styles = StyleSheet.create({
     // No elevation/shadow on purpose: Android renders elevation as a dark blob
     // behind the circle. The cyan border + tint carry the premium look.
   },
-});
+}));
 
 export default ProTeaseBadge;

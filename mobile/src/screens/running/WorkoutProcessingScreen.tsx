@@ -12,7 +12,7 @@ import { SpiralLoader } from '../../components/ui/SpiralLoader';
 import { useTrainingStore } from '../../stores/trainingStore';
 import { useFeedbackStore } from '../../stores/feedbackStore';
 import { saveTreadmillCache } from '../../utils/treadmillCache';
-import { colors, fonts } from '../../theme';
+import { colors, fonts, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../../theme';
 
 /**
  * Post-workout processing screen — the premium, event-driven loader that
@@ -45,6 +45,7 @@ const FEEDBACK_POLL_INTERVAL_MS = 2500;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function WorkoutProcessingScreen({ navigation, route }: any) {
+    useThemeSubscription();
     const { mode, submit, summaryParams } = route?.params || {};
     const isPlan = mode === 'planned';
 
@@ -242,7 +243,7 @@ export function WorkoutProcessingScreen({ navigation, route }: any) {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+            <StatusBar barStyle={getThemeStatusBarStyle()} translucent backgroundColor="transparent" />
 
             <View style={styles.content}>
                 <SpiralLoader size={80} />
@@ -262,7 +263,7 @@ export function WorkoutProcessingScreen({ navigation, route }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: colors.cardDark, // Semantic canvas alias shared with PlanLoadingScreen.
@@ -292,6 +293,6 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         minHeight: 40,
     },
-});
+}));
 
 export default WorkoutProcessingScreen;

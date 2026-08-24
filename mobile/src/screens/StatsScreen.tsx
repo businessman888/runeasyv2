@@ -8,11 +8,12 @@ import {
     TouchableOpacity,
     Platform,
 } from 'react-native';
-import { colors, typography, spacing, borderRadius, shadows } from '../theme';
+import { colors, typography, spacing, borderRadius, shadows, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useStatsStore, useFeedbackStore, useGamificationStore } from '../stores';
 
 export function StatsScreen({ navigation }: any) {
+    useThemeSubscription();
     const { fetchAllStats } = useStatsStore();
     const { latestSummary } = useFeedbackStore();
     const { stats: gamStats } = useGamificationStore();
@@ -202,7 +203,7 @@ export function StatsScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -682,4 +683,4 @@ const styles = StyleSheet.create({
         fontWeight: typography.fontWeights.bold,
         color: colors.white,
     },
-});
+}));

@@ -8,7 +8,7 @@ import Animated, {
     withRepeat,
     withTiming,
 } from 'react-native-reanimated';
-import { colors, spacing, borderRadius } from '../../../theme';
+import { colors, spacing, borderRadius, createThemeStyles, useThemeSubscription } from '../../../theme';
 
 /**
  * Esqueleto de carregamento — a tela mantém a FORMA enquanto o dado chega.
@@ -26,6 +26,7 @@ import { colors, spacing, borderRadius } from '../../../theme';
 const PULSE_MS = 900;
 
 export const InsightSkeleton = memo(function InsightSkeleton() {
+    useThemeSubscription();
     const reduced = useReducedMotion();
     const pulse = useSharedValue(0.5);
 
@@ -66,7 +67,7 @@ export const InsightSkeleton = memo(function InsightSkeleton() {
     );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     wrap: {
         paddingHorizontal: spacing.base,
         gap: spacing.xl,
@@ -85,4 +86,4 @@ const styles = StyleSheet.create({
     },
     chart: { height: 210 },
     card: { height: 140 },
-});
+}));

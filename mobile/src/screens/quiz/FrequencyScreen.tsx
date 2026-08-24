@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { QuizHeader, Hl } from '../../components/onboarding/QuizHeader';
 import { StepSlider } from '../../components/onboarding/StepSlider';
 import { QUIZ } from './_tokens';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
 // ── Smart recommendation logic ──────────────────────────────────────────
 interface FrequencyRecommendation {
@@ -80,6 +81,7 @@ export function FrequencyScreen({
     onLockScroll,
     onUnlockScroll,
 }: FrequencyScreenProps) {
+    useThemeSubscription();
     const recommendation = useMemo(
         () => getRecommendation(goal, experience_level),
         [goal, experience_level],
@@ -157,7 +159,7 @@ export function FrequencyScreen({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     readout: {
         flexDirection: 'row',
         alignItems: 'baseline',
@@ -207,6 +209,6 @@ const styles = StyleSheet.create({
         color: QUIZ.color.textDim,
         lineHeight: 18,
     },
-});
+}));
 
 export default FrequencyScreen;

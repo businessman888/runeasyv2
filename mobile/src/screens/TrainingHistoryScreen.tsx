@@ -9,7 +9,7 @@ import {
     Image,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, typography, spacing } from '../theme';
+import { colors, typography, spacing, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useFeedbackStore } from '../stores/feedbackStore';
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -17,27 +17,33 @@ import { WorkoutHistorySkeleton } from '../components/skeletons/ScreenSkeletons'
 
 // Icon components using @expo/vector-icons
 function BackIcon({ size = 24, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <Ionicons name="chevron-back" size={size} color={color} />;
 }
 
 function SearchIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <Ionicons name="search-outline" size={size} color={color} />;
 }
 
 function FilterIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <Ionicons name="options-outline" size={size} color={color} />;
 }
 
 function ChevronRightIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <Ionicons name="chevron-forward" size={size} color={color} />;
 }
 
 function CheckIcon({ size = 14, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <Ionicons name="checkmark" size={size} color={color} />;
 }
 
 // Colored dot icon with glow effect
 function BolinhaIcon({ color = semanticColors.accent }: { color?: string }) {
+    useThemeSubscription();
     return (
         <View style={{
             width: 10,
@@ -66,6 +72,7 @@ const getWorkoutDotColor = (type: string): string => {
 };
 
 export function TrainingHistoryScreen({ navigation }: any) {
+    useThemeSubscription();
     const [searchQuery, setSearchQuery] = useState('');
     const {
         workoutHistory,
@@ -298,7 +305,7 @@ export function TrainingHistoryScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -543,4 +550,4 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 6,
     },
-});
+}));

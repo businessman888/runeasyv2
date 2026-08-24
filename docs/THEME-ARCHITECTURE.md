@@ -2,81 +2,78 @@
 
 ## Estado atual
 
-A fundação continua dark-first e preserva visualmente o tema aprovado. O registry
-contém `darkTheme` e `lightTheme`; a preferência persistida continua `dark` e o
-tema claro fica disponível inicialmente apenas no Dev Menu para validação.
+A base suporta `dark`, `light` e `system` com alternância em runtime. A cobertura de código foi auditada em 107 telas e 113 componentes, sem migrações pendentes detectáveis. O light mode continua no Dev Menu até a conclusão da matriz visual em iOS e Android.
 
-O light mode não deve ser exposto em Configurações de produção antes de:
+## Fluxo
 
-1. a matriz de contraste dos dois temas ser validada em dispositivos reais;
-2. `userInterfaceStyle` mudar de `dark` para `automatic`;
-3. os componentes prioritários deixarem de importar o alias estático legado;
-4. mapas, gráficos, modais, glass e estados especiais passarem pela QA visual.
+```text
+themeStore (dark | light | system)
+              ↓
+        ThemeProvider
+              ↓
+tema ativo + React Navigation + runtimeVersion
+              ↓
+useAppTheme / useThemedStyles
+              ↓
+compatibilidade: createThemeObject + createThemeStyles
+```
 
 ## Camadas
 
-- `contracts.ts`: contrato compartilhado de cores e preferências.
-- `semanticColors.ts`: valores do dark atual e alias temporário de compatibilidade.
-- `lightColors.ts`: paleta light candidata, validada incrementalmente no Dev Menu.
-- `themes.ts`: registry de temas e adaptador para React Navigation.
-- `ThemeProvider.tsx`: resolução da preferência do usuário e do sistema.
-- `themeStore.ts`: preferência persistida `system | dark | light`.
+- `contracts.ts`: contrato tipado de cores e preferências.
+- `semanticColors.ts`: paleta dark e alias reativo de compatibilidade.
+- `lightColors.ts`: paleta light acessível.
+- `themes.ts`: registry e adaptador do React Navigation.
+- `ThemeProvider.tsx`: resolução do tema e contexto.
+- `themeRuntime.ts`: ponte reativa para consumidores legados, StatusBar, blur e glass.
+- `useThemedStyles.ts`: API preferida para código novo.
+- `themeStore.ts`: preferência persistida.
+- `mapTheme.ts`: paleta e preset do Mapbox.
 
-## Regra para componentes
+## Regras de implementação
 
-Código novo ou migrado deve consumir `useAppTheme()`. O alias
-`semanticColors` existe apenas para permitir migração incremental sem mudanças
-visuais em massa.
+Código novo deve preferir `useAppTheme()` ou `useThemedStyles()`. `semanticColors`, `colors`, `QUIZ` e `mapViz` são compatíveis com alternância dinâmica, mas existem para migração gradual.
 
-A migração cromática não autoriza trocar wrappers, JSX, dimensões, espaçamentos,
-tipografia ou comportamento interativo. Os estilos devem ser criados a partir do
-tema mantendo todas as propriedades não cromáticas intactas.
+Não usar `StyleSheet.create` no escopo do módulo quando o objeto acessa tokens do tema. Use `createThemeStyles(() => ...)` em código legado ou estilos memoizados a partir de `theme` em código novo.
 
-## Cores de domínio e exceções
+Migração cromática não autoriza alterar JSX, layout, copy, dimensões, espaçamentos ou comportamento.
 
-Cores de mapas, zonas, gráficos, badges, patentes e marcas devem permanecer em
-paletas próprias e documentadas. Elas não substituem cores de superfície ou
-texto do tema.
+## Papéis semânticos
 
-O puck e o indicador de posição do usuário são invariantes e ficam fora de
-qualquer migração de tema. Ícones ilustrativos do onboarding também preservam
-sua composição e paleta interna; somente as superfícies ao redor deles podem
-responder ao tema.
+Superfícies e conteúdo:
 
-## Mapbox
+- `canvas`, `surface1`, `surface2`, `surface3`, `glass`;
+- `fillSubtle`, `fillMuted`, `fillStrong`;
+- `borderSubtle`, `borderStrong`;
+- `textPrimary`, `textSecondary`, `textTertiary`;
+- `textOnAccent`, `textOnMedia`, `textOnMediaMuted`;
+- `scrim`, overlays, `shadow`, `transparent`.
 
-`ThemedMapStyle` centraliza o Style URL e aplica `lightPreset: day | night`
-ao import `basemap` do Mapbox Standard. O ID pode ser sobrescrito por
-`EXPO_PUBLIC_MAPBOX_BASEMAP_IMPORT_ID` sem alterar os componentes.
+Cores de mapas, zonas, badges, patentes, marcas e dados permanecem em paletas de domínio.
 
-`useMapThemePalette()` controla somente rotas, halo, trilhas e parques. Os
-valores do dark preservam a aparência anterior; o light usa o accent com
-contraste adequado ao basemap claro.
+## Mapbox e puck
 
-O puck e o indicador de localização não consomem essa paleta.
+`ThemedMapStyle` aplica `lightPreset: day | night` ao import `basemap`. Rotas e overlays consomem `useMapThemePalette()`.
 
+Os arquivos abaixo são invariantes e não podem ser migrados:
 
-## Proteção contra novos hardcodes
+- `components/map/MapLocationPuck.tsx`;
+- `components/map/UserLocationIndicator.tsx`.
 
-`npm run design:check` valida tanto os neutros legados quanto a baseline de
-literais existente. Qualquer cor nova, removida ou cuja contagem mude exige
-decisão explícita.
+## Guardrails
 
-Ao migrar um grupo de arquivos:
+```bash
+npm run typecheck
+npm run theme:audit
+npm run design:check
+```
 
-1. substituir os literais por tokens;
-2. executar `npm run design:update-baseline`;
-3. revisar a redução registrada em `scripts/design-color-baseline.json`;
-4. executar novamente `npm run design:check`.
+`theme:audit` verifica assinaturas do provider, StyleSheets estáticos, propriedades nativas fixas e arquivos visuais fora do design system. `design:check` controla neutros legados e a baseline de literais.
 
-A baseline não transforma hardcodes em tokens; ela é um mecanismo temporário
-para impedir que a dívida aumente durante a migração.
-## Sequência para habilitar light mode
+## Ativação de produção
 
-1. Consolidar os hardcodes residuais em tokens ou paletas de domínio.
-2. Migrar componentes compartilhados para `useAppTheme()`.
-3. Validar `lightTheme` em Dev Menu com a mesma interface de `darkTheme`.
-4. Validar contraste, glass, mapas, gráficos, modais e estados.
-5. Alterar a configuração nativa para `automatic`.
-6. Expor a preferência na tela de Configurações.
-
+1. concluir QA visual dark/light/system em iOS e Android;
+2. validar contraste, modais, charts, estados e persistência;
+3. confirmar Mapbox e puck em dispositivo real;
+4. alterar `userInterfaceStyle` para `automatic`;
+5. expor a preferência em Settings em uma mudança separada.

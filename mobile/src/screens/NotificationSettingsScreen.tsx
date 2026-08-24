@@ -10,12 +10,13 @@ import {
     Platform,
     Animated,
 } from 'react-native';
-import { colors, typography, spacing } from '../theme';
+import { colors, typography, spacing, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useAuthStore } from '../stores';
 
 // SVG Icons
 function BackIcon({ size = 24, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     if (Platform.OS === 'web') {
         return (
             <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
@@ -27,6 +28,7 @@ function BackIcon({ size = 24, color = semanticColors.textPrimary }: { size?: nu
 }
 
 function InfoIcon({ size = 20, color = semanticColors.accent }: { size?: number; color?: string }) {
+    useThemeSubscription();
     if (Platform.OS === 'web') {
         return (
             <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
@@ -45,6 +47,7 @@ function CustomToggle({
     value: boolean;
     onValueChange: () => void;
 }) {
+    useThemeSubscription();
     return (
         <TouchableOpacity
             style={[
@@ -77,6 +80,7 @@ interface NotificationSection {
 }
 
 export function NotificationSettingsScreen({ navigation }: any) {
+    useThemeSubscription();
     const { user } = useAuthStore();
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -290,7 +294,7 @@ export function NotificationSettingsScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: semanticColors.canvas,
@@ -384,7 +388,7 @@ const styles = StyleSheet.create({
         width: 28,
         height: 28,
         borderRadius: 14,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: semanticColors.textOnMedia,
     },
     toggleThumbActive: {
         alignSelf: 'flex-end',
@@ -412,4 +416,4 @@ const styles = StyleSheet.create({
     spacer: {
         height: 100,
     },
-});
+}));

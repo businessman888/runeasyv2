@@ -12,7 +12,7 @@ import Animated, {
     withSpring,
     withTiming,
 } from 'react-native-reanimated';
-import { borderRadius, colors, fonts, spacing } from '../../theme';
+import { borderRadius, colors, fonts, spacing, createThemeStyles, useThemeSubscription } from '../../theme';
 import { GlassSurface } from '../ui/GlassSurface';
 import { semanticColors } from '../../theme/semanticColors';
 
@@ -34,6 +34,7 @@ interface HomeRetrospectiveCardProps {
 export const HomeRetrospectiveCard = memo(function HomeRetrospectiveCard({
     onPress,
 }: HomeRetrospectiveCardProps) {
+    useThemeSubscription();
     const reduceMotion = useReducedMotion();
     const pulse = useSharedValue(0);
     const pressedScale = useSharedValue(1);
@@ -145,7 +146,7 @@ export const HomeRetrospectiveCard = memo(function HomeRetrospectiveCard({
     );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     outer: {
         width: '100%',
     },
@@ -264,6 +265,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         backgroundColor: colors.primary,
     },
-});
+}));
 
 export default HomeRetrospectiveCard;

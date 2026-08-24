@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { mapViz, colors, fonts } from '../../theme';
+import { mapViz, colors, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import type { StatMapMetric } from '../../utils/runMetrics';
 
@@ -32,6 +32,7 @@ interface StatMapSelectorProps {
  * polyline cyan original (estado inicial — não altera o que já existia).
  */
 export function StatMapSelector({ mode, onChange, hasElevation = true }: StatMapSelectorProps) {
+  useThemeSubscription();
   const chips = CHIPS.filter((c) => c.mode !== 'elevation' || hasElevation);
 
   return (
@@ -65,6 +66,7 @@ export function StatMapSelector({ mode, onChange, hasElevation = true }: StatMap
 }
 
 function Legend({ mode }: { mode: StatMapMetric }) {
+  useThemeSubscription();
   const stops =
     mode === 'pace'
       ? [mapViz.pace.fast, mapViz.pace.midFast, mapViz.pace.mid, mapViz.pace.midSlow, mapViz.pace.slow, mapViz.pace.verySlow]
@@ -85,7 +87,7 @@ function Legend({ mode }: { mode: StatMapMetric }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   container: {
     gap: 12,
   },
@@ -140,4 +142,4 @@ const styles = StyleSheet.create({
     flex: 1,
     height: '100%',
   },
-});
+}));

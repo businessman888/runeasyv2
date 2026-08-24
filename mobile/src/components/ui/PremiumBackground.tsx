@@ -10,7 +10,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, LayoutChangeEvent } from 'react-native';
 import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
-import { colors } from '../../theme';
+import { colors, useThemeSubscription } from '../../theme';
 
 interface PremiumBackgroundProps {
     /** Glow color — defaults to the design-system brand cyan. */
@@ -18,6 +18,7 @@ interface PremiumBackgroundProps {
 }
 
 export function PremiumBackground({ glow = colors.primary }: PremiumBackgroundProps) {
+    useThemeSubscription();
     const [size, setSize] = useState({ w: 0, h: 0 });
 
     const onLayout = (e: LayoutChangeEvent) => {

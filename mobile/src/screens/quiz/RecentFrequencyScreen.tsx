@@ -4,6 +4,7 @@ import { QuizHeader, Hl } from '../../components/onboarding/QuizHeader';
 import { SelectableOption } from '../../components/onboarding/SelectableOption';
 import { QUIZ } from './_tokens';
 import { RECENT_FREQUENCY_ICONS } from './_icons';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
 // Captura recência + hábito de uma vez: "não corri" sinaliza que a distância
 // recente é histórica (o motor de volume da Fase B desconta), e a frequência é
@@ -22,6 +23,7 @@ interface RecentFrequencyScreenProps {
 }
 
 export function RecentFrequencyScreen({ value, onChange }: RecentFrequencyScreenProps) {
+    useThemeSubscription();
     const [selected, setSelected] = useState<string | null>(value ?? null);
 
     useEffect(() => {
@@ -58,11 +60,11 @@ export function RecentFrequencyScreen({ value, onChange }: RecentFrequencyScreen
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     options: {
         gap: QUIZ.gapOptions,
         marginBottom: 24,
     },
-});
+}));
 
 export default RecentFrequencyScreen;

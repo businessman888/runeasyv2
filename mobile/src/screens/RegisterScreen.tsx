@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import { colors, typography, fonts } from '../theme';
+import { colors, typography, fonts, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useAuthStore } from '../stores';
 import { supabase } from '../services/supabase';
@@ -64,6 +64,7 @@ export function RegisterScreen({
 }: {
     navigation: { navigate: (screen: string) => void; goBack: () => void };
 }) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
     const { login } = useAuthStore();
 
@@ -155,7 +156,7 @@ export function RegisterScreen({
             style={styles.container}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+            <StatusBar barStyle={getThemeStatusBarStyle()} translucent backgroundColor="transparent" />
 
             <ScrollView
                 contentContainerStyle={[
@@ -311,7 +312,7 @@ export function RegisterScreen({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: semanticColors.canvas,
@@ -435,4 +436,4 @@ const styles = StyleSheet.create({
         fontFamily: fonts.semibold,
         fontWeight: '600',
     },
-});
+}));

@@ -9,7 +9,7 @@ import {
     ScrollView,
     Platform,
 } from 'react-native';
-import { typography, spacing, borderRadius } from '../theme';
+import { typography, spacing, borderRadius, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 
@@ -40,6 +40,7 @@ export function QuizLayout({
     nextDisabled = false,
     isLoading = false,
 }: QuizLayoutProps) {
+    useThemeSubscription();
     const progress = currentStep / totalSteps;
     // Tablet: centraliza a coluna de leitura (quiz não estica a tela inteira).
     const { isTablet } = useBreakpoint();
@@ -48,7 +49,7 @@ export function QuizLayout({
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor={semanticColors.canvas} />
+            <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
 
             {/* Header with Progress */}
             <View style={styles.header}>
@@ -113,6 +114,7 @@ interface OptionCardProps {
 }
 
 export function OptionCard({ icon, label, description, isSelected, onPress }: OptionCardProps) {
+    useThemeSubscription();
     return (
         <TouchableOpacity
             style={[styles.optionCard, isSelected && styles.optionCardSelected]}
@@ -145,6 +147,7 @@ interface NumberSelectorProps {
 }
 
 export function NumberSelector({ min, max, value, onChange, unit }: NumberSelectorProps) {
+    useThemeSubscription();
     const numbers = Array.from({ length: max - min + 1 }, (_, i) => min + i);
 
     return (
@@ -175,7 +178,7 @@ export function NumberSelector({ min, max, value, onChange, unit }: NumberSelect
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: semanticColors.canvas,
@@ -389,4 +392,4 @@ const styles = StyleSheet.create({
     numberButtonTextSelected: {
         color: semanticColors.textOnAccent,
     },
-});
+}));

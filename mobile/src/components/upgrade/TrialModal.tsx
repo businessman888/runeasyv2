@@ -12,13 +12,13 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, fonts, shadows } from '../../theme';
+import { colors, fonts, shadows, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { useProFeature } from '../../hooks/useProFeature';
 
 // Figma node 1275:1495 (modalInitiateTrial) — premium bottom sheet.
-const GRADIENT = [semanticColors.surface1, semanticColors.surface2] as const;
-const DARK_TEXT = semanticColors.textOnAccent;
+
+
 const FALLBACK_HEIGHT = 420;
 
 interface TrialModalProps {
@@ -32,6 +32,7 @@ interface TrialModalProps {
  * button. The CTA opens the Superwall paywall (same flow as the upgrade cards).
  */
 export function TrialModal({ visible, onClose }: TrialModalProps) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
     const { presentPaywall } = useProFeature();
 
@@ -115,7 +116,7 @@ export function TrialModal({ visible, onClose }: TrialModalProps) {
                     style={[styles.sheetWrap, { transform: [{ translateY }] }]}
                 >
                     <LinearGradient
-                        colors={GRADIENT}
+                        colors={([semanticColors.surface1, semanticColors.surface2] as const)}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 0, y: 1 }}
                         style={[styles.sheet, { paddingBottom: insets.bottom + 24 }]}
@@ -155,7 +156,7 @@ export function TrialModal({ visible, onClose }: TrialModalProps) {
 
 export default TrialModal;
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     root: {
         flex: 1,
         justifyContent: 'flex-end',
@@ -220,6 +221,6 @@ const styles = StyleSheet.create({
     ctaText: {
         fontFamily: fonts.semibold,
         fontSize: 16,
-        color: DARK_TEXT,
+        color: semanticColors.textOnAccent,
     },
-});
+}));

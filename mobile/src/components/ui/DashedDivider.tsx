@@ -10,6 +10,8 @@
 import React, { useState } from 'react';
 import { View, LayoutChangeEvent, ViewStyle } from 'react-native';
 import Svg, { Line } from 'react-native-svg';
+import { semanticColors } from "../../theme/semanticColors";
+import { useThemeSubscription } from '../../theme';
 
 interface DashedDividerProps {
     color?: string;
@@ -20,11 +22,12 @@ interface DashedDividerProps {
 }
 
 export function DashedDivider({
-    color = 'rgba(235, 235, 245, 0.1)',
+    color = semanticColors.borderSubtle,
     dash = [4, 4],
     thickness = 1,
     style,
 }: DashedDividerProps) {
+    useThemeSubscription();
     const [width, setWidth] = useState(0);
 
     const onLayout = (e: LayoutChangeEvent) => {

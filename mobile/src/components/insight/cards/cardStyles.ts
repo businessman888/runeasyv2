@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native';
-import { colors, typography, spacing, borderRadius, fonts } from '../../../theme';
+import { colors, typography, spacing, borderRadius, fonts, createThemeStyles } from '../../../theme';
 import { semanticColors } from '../../../theme/semanticColors';
 
 /**
@@ -14,7 +14,7 @@ import { semanticColors } from '../../../theme/semanticColors';
  * folha ancorada embaixo). Estender é consistência; reinventar tela a tela é o
  * oposto de premium.
  */
-export const cardStyles = StyleSheet.create({
+export const cardStyles = createThemeStyles(() => ({
     body: { gap: spacing.base },
 
     headText: { flex: 1 },
@@ -86,4 +86,4 @@ export const cardStyles = StyleSheet.create({
         fontSize: typography.fontSizes.lg,
         color: semanticColors.textOnAccent,
     },
-});
+}));

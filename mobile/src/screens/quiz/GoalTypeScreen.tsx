@@ -4,6 +4,7 @@ import { QuizHeader, Hl } from '../../components/onboarding/QuizHeader';
 import { SelectableOption } from '../../components/onboarding/SelectableOption';
 import { QUIZ } from './_tokens';
 import { GOAL_TYPE_ICONS } from './_icons';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
 type GoalType = 'distance' | 'race';
 
@@ -32,6 +33,7 @@ interface GoalTypeScreenProps {
 }
 
 export function GoalTypeScreen({ value, onChange }: GoalTypeScreenProps) {
+    useThemeSubscription();
     const [selected, setSelected] = useState<GoalType | null>(value ?? null);
 
     useEffect(() => {
@@ -66,10 +68,10 @@ export function GoalTypeScreen({ value, onChange }: GoalTypeScreenProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     options: {
         gap: QUIZ.gapOptions,
     },
-});
+}));
 
 export default GoalTypeScreen;

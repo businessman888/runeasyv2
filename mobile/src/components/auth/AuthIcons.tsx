@@ -1,6 +1,6 @@
 import React from 'react';
 import Svg, { Path } from 'react-native-svg';
-import { colors } from '../../theme';
+import { colors, useThemeSubscription } from '../../theme';
 
 /**
  * Shared SVG atoms for the auth card. GoogleIcon + EyeIcon were lifted verbatim
@@ -33,7 +33,10 @@ export const GoogleIcon = React.memo(() => (
 GoogleIcon.displayName = 'GoogleIcon';
 
 // Eye / eye-off for the password visibility toggle.
-export const EyeIcon = React.memo(({ visible }: { visible: boolean }) => (
+export const EyeIcon = React.memo(({ visible }: { visible: boolean }) => {
+    useThemeSubscription();
+
+    return (
     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
         <Path
             d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"
@@ -53,11 +56,15 @@ export const EyeIcon = React.memo(({ visible }: { visible: boolean }) => (
             <Path d="M4 4l16 16" stroke={colors.textSecondary} strokeWidth={1.6} strokeLinecap="round" />
         )}
     </Svg>
-));
+    );
+});
 EyeIcon.displayName = 'EyeIcon';
 
 // Leading chevron for the "back to previous state" control.
-export const BackIcon = React.memo(({ color = colors.textSecondary }: { color?: string }) => (
+export const BackIcon = React.memo(({ color = colors.textSecondary }: { color?: string }) => {
+    useThemeSubscription();
+
+    return (
     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
         <Path
             d="M15 18l-6-6 6-6"
@@ -67,11 +74,15 @@ export const BackIcon = React.memo(({ color = colors.textSecondary }: { color?: 
             strokeLinejoin="round"
         />
     </Svg>
-));
+    );
+});
 BackIcon.displayName = 'BackIcon';
 
 // Trailing chevron / mail glyph for the "Continuar com e-mail" row.
-export const MailIcon = React.memo(({ color = colors.text }: { color?: string }) => (
+export const MailIcon = React.memo(({ color = colors.text }: { color?: string }) => {
+    useThemeSubscription();
+
+    return (
     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
         <Path
             d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"
@@ -88,5 +99,6 @@ export const MailIcon = React.memo(({ color = colors.text }: { color?: string })
             strokeLinejoin="round"
         />
     </Svg>
-));
+    );
+});
 MailIcon.displayName = 'MailIcon';

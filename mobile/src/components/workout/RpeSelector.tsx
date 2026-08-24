@@ -7,7 +7,7 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, fonts } from '../../theme';
+import { colors, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
 /**
@@ -60,6 +60,7 @@ export const RpeSelector = memo(function RpeSelector({
     onSelect,
     onSkip,
 }: RpeSelectorProps) {
+    useThemeSubscription();
     const [saving, setSaving] = useState<number | null>(null);
     const [saved, setSaved] = useState<number | null>(value ?? null);
     const [failed, setFailed] = useState(false);
@@ -196,6 +197,7 @@ const RpeDot = memo(function RpeDot({
     busy,
     onPress,
 }: RpeDotProps) {
+    useThemeSubscription();
     const tone = toneFor(value);
     return (
         <Pressable
@@ -221,7 +223,7 @@ const RpeDot = memo(function RpeDot({
     );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     card: {
         backgroundColor: semanticColors.surface1,
         borderRadius: 20,
@@ -328,4 +330,4 @@ const styles = StyleSheet.create({
         fontSize: 12,
         marginTop: 2,
     },
-});
+}));

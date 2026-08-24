@@ -8,17 +8,19 @@ import {
     NativeScrollEvent,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { fonts } from '../theme';
+import { fonts, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 
-// Design System
-const DS = {
+const getLocalThemePalette1 = () => ({
     bg: semanticColors.canvas,
     card: semanticColors.surface2,
     cyan: semanticColors.accent,
     text: semanticColors.textPrimary,
     textSecondary: semanticColors.textSecondary,
-};
+});
+
+// Design System
+
 
 const ITEM_HEIGHT = 50;
 const VISIBLE_ITEMS = 5;
@@ -35,6 +37,7 @@ interface WheelColumnProps {
 
 // Individual wheel column with FlatList + snapToInterval
 function WheelColumn({ data, selectedValue, onValueChange, label }: WheelColumnProps) {
+    useThemeSubscription();
     const flatListRef = useRef<FlatList>(null);
     const lastReportedValue = useRef<number>(selectedValue);
     // Track the centered index via scroll offset for per-item styling
@@ -131,7 +134,7 @@ function WheelColumn({ data, selectedValue, onValueChange, label }: WheelColumnP
                 <Text style={[
                     styles.itemText,
                     {
-                        color: isActive ? DS.cyan : semanticColors.textTertiary,
+                        color: isActive ? getLocalThemePalette1().cyan : semanticColors.textTertiary,
                         fontSize: isActive ? 22 : 18,
                         fontFamily: isActive ? fonts.bold : fonts.regular,
                         opacity,
@@ -209,6 +212,7 @@ export function DateWheelPicker({
     onMonthChange,
     onYearChange,
 }: DateWheelPickerProps) {
+    useThemeSubscription();
     const currentYear = new Date().getFullYear();
 
     // Generate data arrays
@@ -259,7 +263,7 @@ export function DateWheelPicker({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flexDirection: 'row',
         justifyContent: 'center',
@@ -273,14 +277,14 @@ const styles = StyleSheet.create({
     columnLabel: {
         fontFamily: fonts.semibold,
         fontSize: 12,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         marginBottom: 8,
         letterSpacing: 1,
     },
     wheelContainer: {
         height: PICKER_HEIGHT,
         width: '100%',
-        backgroundColor: DS.card,
+        backgroundColor: getLocalThemePalette1().card,
         borderRadius: 16,
         overflow: 'hidden',
         position: 'relative',
@@ -294,7 +298,7 @@ const styles = StyleSheet.create({
         backgroundColor: semanticColors.accentSubtle,
         borderRadius: 12,
         borderWidth: 2,
-        borderColor: DS.cyan,
+        borderColor: getLocalThemePalette1().cyan,
         zIndex: 1,
     },
     itemContainer: {
@@ -306,6 +310,6 @@ const styles = StyleSheet.create({
         fontFamily: fonts.regular,
         fontSize: 18,
     },
-});
+}));
 
 export default DateWheelPicker;

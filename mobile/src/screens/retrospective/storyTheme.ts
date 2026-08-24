@@ -1,4 +1,4 @@
-import { colors, fonts } from '../../theme';
+import { colors, createThemeObject, fonts } from '../../theme';
 
 /**
  * Identidade visual dos stories da retrospectiva.
@@ -60,7 +60,8 @@ function gradient(
  * Frios (ciano → azul → roxo) do 1 ao 5, âmbar no clímax (6), e volta ao ciano
  * da marca no CTA (7) — o arco fecha onde começou.
  */
-export const STORY_GRADIENTS: readonly StoryGradient[] = [
+function createStoryGradients(): readonly StoryGradient[] {
+  return [
   // 1. Abertura — ciano da marca
   gradient('ciano', colors.primary, '#0B3A4A', '#071E28', 'aurora'),
   // 2. Volume — ciano profundo
@@ -76,8 +77,15 @@ export const STORY_GRADIENTS: readonly StoryGradient[] = [
   gradient('ambar', colors.accent, '#5C3A05', '#2E1D02', 'aurora'),
   // 7. CTA — volta ao ciano da marca
   gradient('ciano', colors.primary, '#0B3A4A', '#071E28', 'calm'),
-] as const;
+  ] as const;
+}
 
+const darkStoryGradients = createStoryGradients();
+export const STORY_GRADIENTS = createThemeObject(
+  darkStoryGradients,
+  () => createStoryGradients(),
+
+);
 /** Gradiente do card `index` (0-based), com wrap defensivo. */
 export function gradientForCard(index: number): StoryGradient {
   return STORY_GRADIENTS[index % STORY_GRADIENTS.length];

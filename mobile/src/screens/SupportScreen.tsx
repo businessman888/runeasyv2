@@ -7,13 +7,14 @@ import {
     Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { spacing } from '../theme';
+import { spacing, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { ScreenContainer } from '../components/ScreenContainer';
 
 const SUPPORT_EMAIL = 'contato@oyto.com.br';
 
 export function SupportScreen({ navigation }: any) {
+    useThemeSubscription();
     const handleEmailPress = () => {
         Linking.openURL(`mailto:${SUPPORT_EMAIL}`);
     };
@@ -77,7 +78,7 @@ export function SupportScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -187,4 +188,4 @@ const styles = StyleSheet.create({
         lineHeight: 18,
         paddingHorizontal: spacing.md,
     },
-});
+}));

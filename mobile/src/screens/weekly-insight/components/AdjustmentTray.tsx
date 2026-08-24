@@ -8,7 +8,7 @@ import {
     Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius, fonts } from '../../../theme';
+import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../../theme';
 import { semanticColors } from '../../../theme/semanticColors';
 import {
     ADJUSTMENT_COPY,
@@ -77,6 +77,7 @@ export const AdjustmentTray = memo(function AdjustmentTray({
     onConflict,
     onOpenWeekRelief,
 }: AdjustmentTrayProps) {
+    useThemeSubscription();
     const [justApplied, setJustApplied] = useState(false);
     const copy = ADJUSTMENT_COPY[adjustment.code];
     // Pelo CÓDIGO, não pela classe: insights gerados antes da 6.3 têm
@@ -257,7 +258,7 @@ export const AdjustmentTray = memo(function AdjustmentTray({
     );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     card: {
         backgroundColor: colors.card,
         borderRadius: borderRadius['2xl'],
@@ -343,4 +344,4 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.xs,
         color: colors.textMuted,
     },
-});
+}));

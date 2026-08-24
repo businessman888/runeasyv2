@@ -4,6 +4,7 @@ import Svg, { Defs, RadialGradient, Stop, Path, Circle, G } from 'react-native-s
 import { Ionicons } from '@expo/vector-icons';
 import { PATENTS, PatentDef } from '../../constants/patents';
 import { semanticColors } from '../../theme/semanticColors';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
 interface PatentProps {
     /** Patent id (e.g. 'patent-4') OR patent definition. */
@@ -20,6 +21,7 @@ interface PatentProps {
  * referenced in Figma node 1094:1333.
  */
 export function Patent({ id, patent: patentProp, size = 64, locked = false, glow = true }: PatentProps) {
+    useThemeSubscription();
     const patent = patentProp ?? PATENTS.find(p => p.id === id) ?? PATENTS[0];
     const [c0, c50, c75, c100] = patent.gradient;
 
@@ -114,7 +116,7 @@ export function Patent({ id, patent: patentProp, size = 64, locked = false, glow
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         alignItems: 'center',
         justifyContent: 'center',
@@ -131,4 +133,4 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-});
+}));

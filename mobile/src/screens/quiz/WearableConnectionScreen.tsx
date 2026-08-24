@@ -9,8 +9,15 @@ import {
     type WearableProvider,
 } from '../../config/wearables.config';
 import type { RootStackParamList } from '../../navigation/navigationRef';
-import { fonts } from '../../theme';
+import { fonts, useThemeSubscription, createThemeStyles } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
+
+const getLocalThemePalette1 = () => ({
+    bg: semanticColors.canvas,
+    cyan: semanticColors.accent,
+    text: semanticColors.textPrimary,
+    textSecondary: semanticColors.textSecondary,
+});
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -19,12 +26,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 // is still on screen fails silently on iOS — this was the onboarding bug.
 const PICKER_DISMISS_MS = 350;
 
-const DS = {
-    bg: semanticColors.canvas,
-    cyan: semanticColors.accent,
-    text: semanticColors.textPrimary,
-    textSecondary: semanticColors.textSecondary,
-};
+
 
 interface WearableConnectionScreenProps {
     value?: string | null;
@@ -42,6 +44,7 @@ export function WearableConnectionScreen({
     openModal,
     onModalClose,
 }: WearableConnectionScreenProps) {
+    useThemeSubscription();
     const navigation = useNavigation<Nav>();
     const [pickerVisible, setPickerVisible] = useState(false);
     const pickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -114,21 +117,21 @@ export function WearableConnectionScreen({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     titleContainer: {
         marginBottom: 16,
     },
     title: {
         fontFamily: fonts.bold,
         fontSize: 24,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         lineHeight: 36,
         marginBottom: 12,
     },
     subtitle: {
         fontFamily: fonts.regular,
         fontSize: 15,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         lineHeight: 22.5,
     },
     illustrationContainer: {
@@ -139,6 +142,6 @@ const styles = StyleSheet.create({
         width: 242,
         height: 371,
     },
-});
+}));
 
 export default WearableConnectionScreen;

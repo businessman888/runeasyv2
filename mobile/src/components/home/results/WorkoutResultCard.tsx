@@ -7,7 +7,7 @@ import {
   View,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { colors, fonts } from "../../../theme";
+import { colors, fonts, createThemeStyles, useThemeSubscription } from "../../../theme";
 import { semanticColors } from "../../../theme/semanticColors";
 import type { LatestActivityData } from "../../../stores/feedbackStore";
 import { ResultMetric } from "./ResultMetric";
@@ -59,6 +59,7 @@ export const WorkoutResultCard = memo(function WorkoutResultCard({
   isActive,
   onPress,
 }: WorkoutResultCardProps) {
+  useThemeSubscription();
   const activity = data.activity;
   const isTreadmill = activity?.environment === "treadmill";
   const route = activity?.route_preview ?? [];
@@ -200,7 +201,7 @@ export const WorkoutResultCard = memo(function WorkoutResultCard({
   );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   card: {
     height: RESULT_CARD_HEIGHT,
     borderRadius: 22,
@@ -309,4 +310,4 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-});
+}));

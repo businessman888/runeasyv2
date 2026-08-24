@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors } from '../../theme';
+import { colors, createThemeStyles, useThemeSubscription, getThemeBlurTint, getThemeGlassSheenColors } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
 /**
@@ -31,13 +31,6 @@ import { semanticColors } from '../../theme/semanticColors';
 const ANDROID_BLUR_METHOD: 'dimezisBlurView' | undefined =
     Platform.OS === 'android' ? 'dimezisBlurView' : undefined;
 
-// Top-light → bottom-shade sheen that sells the frosted-glass depth (mirrors
-// the tab bar / teaser sheen so every glass surface reads as one material).
-const SHEEN_COLORS = [
-    'rgba(255, 255, 255, 0.06)',
-    'rgba(255, 255, 255, 0)',
-    'rgba(0, 0, 0, 0.12)',
-] as const;
 const SHEEN_LOCATIONS = [0, 0.5, 1] as const;
 
 export interface GlassSurfaceProps {
@@ -70,6 +63,7 @@ export const GlassSurface = memo(function GlassSurface({
     veilColor = colors.tabBarGlassFill,
     style,
 }: GlassSurfaceProps) {
+    useThemeSubscription();
     return (
         <View
             style={[
@@ -83,7 +77,7 @@ export const GlassSurface = memo(function GlassSurface({
                 <>
                     <BlurView
                         intensity={intensity}
-                        tint="dark"
+                        tint={getThemeBlurTint()}
                         experimentalBlurMethod={ANDROID_BLUR_METHOD}
                         pointerEvents="none"
                         style={StyleSheet.absoluteFill}
@@ -93,7 +87,7 @@ export const GlassSurface = memo(function GlassSurface({
                         style={[StyleSheet.absoluteFill, { backgroundColor: veilColor }]}
                     />
                     <LinearGradient
-                        colors={SHEEN_COLORS}
+                        colors={getThemeGlassSheenColors()}
                         locations={SHEEN_LOCATIONS}
                         pointerEvents="none"
                         style={StyleSheet.absoluteFill}
@@ -105,7 +99,7 @@ export const GlassSurface = memo(function GlassSurface({
     );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         overflow: 'hidden',
         position: 'relative',
@@ -114,6 +108,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: semanticColors.borderSubtle,
     },
-});
+}));
 
 export default GlassSurface;

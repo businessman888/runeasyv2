@@ -1,10 +1,11 @@
 import React from "react";
 import { StyleSheet, View } from "react-native";
 import { Skeleton } from "../../Skeleton";
-import { colors } from "../../../theme";
+import { colors, createThemeStyles, useThemeSubscription } from "../../../theme";
 import { RESULT_CARD_HEIGHT } from "./WorkoutResultCard";
 
 export function ResultCardsSkeleton() {
+  useThemeSubscription();
   return (
     <View
       style={styles.card}
@@ -25,7 +26,7 @@ export function ResultCardsSkeleton() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   card: {
     height: RESULT_CARD_HEIGHT,
     borderRadius: 22,
@@ -35,4 +36,4 @@ const styles = StyleSheet.create({
   content: { padding: 18 },
   metrics: { flexDirection: "row", justifyContent: "space-between" },
   button: { alignSelf: "center", marginTop: 20, borderRadius: 999 },
-});
+}));

@@ -2,10 +2,11 @@ import React, { memo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, typography, spacing, borderRadius, fonts } from '../../../theme';
+import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../../theme';
 import { SectionHeader } from './SectionHeader';
 import { useEnterAnimation } from '../hooks/useEnterAnimation';
 import { formatKm } from '../format';
+import { semanticColors } from "../../../theme/semanticColors";
 
 /**
  * PRESCRITO × EXECUTADO — uma barra sobre o trilho do prescrito.
@@ -42,6 +43,7 @@ export const VolumeComparison = memo(function VolumeComparison({
     executionRatio,
     index = 3,
 }: VolumeComparisonProps) {
+    useThemeSubscription();
     const progress = useEnterAnimation(index);
 
     const ratio = plannedKm > 0 ? Math.min(completedKm / plannedKm, 1) : 0;
@@ -116,7 +118,7 @@ export const VolumeComparison = memo(function VolumeComparison({
     );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     section: { gap: spacing.md },
     card: {
         backgroundColor: colors.card,
@@ -149,7 +151,7 @@ const styles = StyleSheet.create({
     track: {
         height: 12,
         borderRadius: 6,
-        backgroundColor: 'rgba(255,255,255,0.06)',
+        backgroundColor: semanticColors.fillSubtle,
         overflow: 'hidden',
     },
     fillWrap: { height: '100%', borderRadius: 6, overflow: 'hidden' },
@@ -191,4 +193,4 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.xs,
         color: colors.textLight,
     },
-});
+}));

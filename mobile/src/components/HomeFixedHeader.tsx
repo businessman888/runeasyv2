@@ -7,7 +7,7 @@ import {
     Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, typography } from '../theme';
+import { colors, typography, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { Skeleton, SkeletonCircle } from './Skeleton';
 import { AppIcon } from './ui/AppIcon';
@@ -55,6 +55,7 @@ export function HomeFixedHeader({
     onPressProfile,
     onPressNotifications,
 }: HomeFixedHeaderProps) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
 
     const weekData = useMemo(() => {
@@ -275,7 +276,7 @@ function renderDayIcon(day: WeekDay): React.ReactNode {
     }
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         backgroundColor: semanticColors.surface1,
         borderBottomLeftRadius: 20,
@@ -407,4 +408,4 @@ const styles = StyleSheet.create({
         fontWeight: typography.fontWeights.semibold,
         color: semanticColors.textPrimary,
     },
-});
+}));

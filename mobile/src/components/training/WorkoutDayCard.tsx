@@ -1,7 +1,7 @@
 import React, { memo, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { paceValueToSecondsPerKm, formatPaceLabel } from '../../utils/pace';
 import {
@@ -49,6 +49,7 @@ const formatKm = (km: number | null | undefined): string => {
 };
 
 function WorkoutDayCardInner({ workout: w, onPress }: WorkoutDayCardProps) {
+    useThemeSubscription();
     const handlePress = useCallback(() => onPress(w), [onPress, w]);
 
     const distanceLabel = formatKm(w.distance_km);
@@ -158,7 +159,7 @@ function WorkoutDayCardInner({ workout: w, onPress }: WorkoutDayCardProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     workoutDetailCard: {
         marginBottom: spacing.lg,
         borderRadius: 24,
@@ -271,6 +272,6 @@ const styles = StyleSheet.create({
         fontWeight: typography.fontWeights.semibold,
         color: semanticColors.textPrimary,
     },
-});
+}));
 
 export const WorkoutDayCard = memo(WorkoutDayCardInner);

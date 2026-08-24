@@ -26,7 +26,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 
 import { ScreenContainer } from '../ScreenContainer';
-import { colors, fonts, spacing } from '../../theme';
+import { colors, fonts, spacing, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { WEARABLES, type WearableProvider } from '../../config/wearables.config';
 import {
@@ -56,6 +56,7 @@ export interface DeviceConnectBodyProps {
 }
 
 export function DeviceConnectBody({ provider, onClose, onConnected, onReadMore }: DeviceConnectBodyProps) {
+    useThemeSubscription();
     const config = WEARABLES[provider];
     const { status, isConnected, lastSyncedAt, isBusy, connect, disconnect } =
         useWearableConnection(provider);
@@ -183,7 +184,7 @@ export function DeviceConnectBody({ provider, onClose, onConnected, onReadMore }
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     topBar: {
         flexDirection: 'row',
         justifyContent: 'flex-end',
@@ -302,6 +303,6 @@ const styles = StyleSheet.create({
     buttonTextDisconnect: {
         color: DANGER,
     },
-});
+}));
 
 export default DeviceConnectBody;

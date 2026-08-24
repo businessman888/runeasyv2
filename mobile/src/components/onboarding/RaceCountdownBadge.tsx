@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { formatRaceDateLong, weeksUntilRace } from '../../utils/raceFormat';
-import { fonts } from '../../theme';
+import { fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
 const GOLD = '#FFB800';
@@ -14,6 +14,7 @@ interface RaceCountdownBadgeProps {
 }
 
 export function RaceCountdownBadge({ raceName, raceDate, raceDistance }: RaceCountdownBadgeProps) {
+    useThemeSubscription();
     const weeks = weeksUntilRace(raceDate);
 
     return (
@@ -41,7 +42,7 @@ export function RaceCountdownBadge({ raceName, raceDate, raceDistance }: RaceCou
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     card: {
         backgroundColor: 'rgba(255,184,0,0.1)',
         borderWidth: 1,
@@ -64,6 +65,6 @@ const styles = StyleSheet.create({
         color: semanticColors.textSecondary,
         flex: 1,
     },
-});
+}));
 
 export default RaceCountdownBadge;

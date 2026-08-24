@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QUIZ } from '../../screens/quiz/_tokens';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
 interface ValueInputSheetProps {
     visible: boolean;
@@ -42,6 +43,7 @@ export function ValueInputSheet({
     initialValue,
     placeholder,
 }: ValueInputSheetProps) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
     const [text, setText] = useState(initialValue ? String(initialValue) : '');
 
@@ -126,7 +128,7 @@ export function ValueInputSheet({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     flex: { flex: 1 },
     overlay: {
         flex: 1,
@@ -199,6 +201,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: QUIZ.color.textOnAccent,
     },
-});
+}));
 
 export default ValueInputSheet;

@@ -11,11 +11,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, borderRadius } from '../../theme';
+import { colors, spacing, borderRadius, createThemeStyles, useThemeSubscription } from '../../theme';
 import { WeeklyInsightCardBody } from './cards/WeeklyInsightCardBody';
 import { MesoInsightCardBody } from './cards/MesoInsightCardBody';
 import type { WeeklyInsight } from '../../types/weeklyInsight.types';
 import type { MesoInsight } from '../../types/mesoInsight.types';
+import { semanticColors } from "../../theme/semanticColors";
 
 /**
  * CARROSSEL DE INSIGHTS — a folha de entrada quando há mais de um resumo novo.
@@ -73,6 +74,7 @@ export const InsightCarousel = memo(function InsightCarousel({
     onOpenWeekly,
     onOpenMeso,
 }: InsightCarouselProps) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
     const { width } = useWindowDimensions();
     const [index, setIndex] = useState(0);
@@ -181,10 +183,10 @@ export const InsightCarousel = memo(function InsightCarousel({
     );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     backdrop: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.6)',
+        backgroundColor: semanticColors.scrim,
     },
     sheet: {
         position: 'absolute',
@@ -202,7 +204,7 @@ const styles = StyleSheet.create({
         width: 36,
         height: 4,
         borderRadius: 2,
-        backgroundColor: 'rgba(255,255,255,0.18)',
+        backgroundColor: semanticColors.fillStrong,
         marginBottom: spacing.xs,
     },
     // Absoluto: as páginas rolam por baixo dele, então o X fica no mesmo lugar
@@ -215,7 +217,7 @@ const styles = StyleSheet.create({
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: 'rgba(255,255,255,0.06)',
+        backgroundColor: semanticColors.fillSubtle,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -233,7 +235,7 @@ const styles = StyleSheet.create({
         width: 6,
         height: 6,
         borderRadius: 3,
-        backgroundColor: 'rgba(255,255,255,0.25)',
+        backgroundColor: semanticColors.fillStrong,
     },
     dotActive: { backgroundColor: colors.primary, width: 18 },
-});
+}));

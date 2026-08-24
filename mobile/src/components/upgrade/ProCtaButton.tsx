@@ -1,12 +1,12 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, borderRadius, spacing, fonts, shadows } from '../../theme';
+import { colors, borderRadius, spacing, fonts, shadows, useThemeSubscription, createThemeStyles } from '../../theme';
 
-const CYAN = colors.primary;
+
 // Dark ink that reads on the solid-cyan pill (same color as the "Recomendado"
 // badge text over cyan).
-const CTA_INK = colors.backgroundLight;
+
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -29,9 +29,10 @@ export interface ProCtaButtonProps {
  * surrounding card/overlay owns the Pressable, so this stays a View.
  */
 function ProCtaButtonImpl({ label, icon, compact, style }: ProCtaButtonProps) {
+  useThemeSubscription();
   return (
     <View style={[styles.cta, compact && styles.ctaCompact, style]}>
-      {icon && <Ionicons name={icon} size={18} color={CTA_INK} style={styles.ctaIcon} />}
+      {icon && <Ionicons name={icon} size={18} color={colors.backgroundLight} style={styles.ctaIcon} />}
       <Text style={styles.ctaText}>{label}</Text>
     </View>
   );
@@ -39,14 +40,14 @@ function ProCtaButtonImpl({ label, icon, compact, style }: ProCtaButtonProps) {
 
 export const ProCtaButton = memo(ProCtaButtonImpl);
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   cta: {
     minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: CYAN,
+    backgroundColor: colors.primary,
     borderRadius: borderRadius.full,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
@@ -60,10 +61,10 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
   ctaText: {
-    color: CTA_INK,
+    color: colors.backgroundLight,
     fontFamily: fonts.semibold,
     fontSize: 16,
   },
-});
+}));
 
 export default ProCtaButton;

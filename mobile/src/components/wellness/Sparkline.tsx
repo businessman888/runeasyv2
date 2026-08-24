@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
-import { colors } from '../../theme';
+import { colors, useThemeSubscription } from '../../theme';
 
 interface SparklineProps {
     data: number[];
@@ -21,6 +21,7 @@ export function Sparkline({
     color = colors.primary,
     fill = true,
 }: SparklineProps) {
+    useThemeSubscription();
     const { strokePath, areaPath } = useMemo(() => {
         if (!data || data.length < 2) {
             return { strokePath: '', areaPath: '' };

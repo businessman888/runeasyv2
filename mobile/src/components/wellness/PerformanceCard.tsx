@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet, type DimensionValue } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { colors, typography, spacing, borderRadius, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import type { IconTone } from '../../theme/iconography';
 import { AppIcon } from '../ui/AppIcon';
@@ -38,6 +38,7 @@ export const PerformanceCard = memo(function PerformanceCard({
     accentColor = colors.primary,
     widthPercent,
 }: PerformanceCardProps) {
+    useThemeSubscription();
     let deltaColor: string = colors.textMuted;
     let deltaArrow: 'arrow-up' | 'arrow-down' | null = null;
     let deltaText = '';
@@ -79,7 +80,7 @@ export const PerformanceCard = memo(function PerformanceCard({
     );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     card: {
         width: '48%',
         backgroundColor: semanticColors.surface2,
@@ -134,4 +135,4 @@ const styles = StyleSheet.create({
         opacity: 0.85,
         alignItems: 'flex-start',
     },
-});
+}));

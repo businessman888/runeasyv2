@@ -21,7 +21,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, typography, spacing } from '../theme';
+import { colors, typography, spacing, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { PHASE_LABELS, getZoneColor } from '../theme/zoneColors';
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -58,6 +58,7 @@ function buildDayLabel(dateStr?: string | null): string {
 }
 
 function StatItem({ label, value }: { label: string; value: string }) {
+    useThemeSubscription();
     return (
         <View style={styles.statItem}>
             <Text style={styles.statLabel} numberOfLines={1}>
@@ -76,6 +77,7 @@ function StatItem({ label, value }: { label: string; value: string }) {
 }
 
 export function WorkoutDetailScreen({ route, navigation }: any) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
     const { startRun } = useStartWorkoutFlow();
     const fetchWorkoutDetails = useTrainingStore((s) => s.fetchWorkoutDetails);
@@ -384,7 +386,7 @@ export function WorkoutDetailScreen({ route, navigation }: any) {
 
 export default WorkoutDetailScreen;
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -626,4 +628,4 @@ const styles = StyleSheet.create({
         fontWeight: typography.fontWeights.semibold as any,
         color: semanticColors.accent,
     },
-});
+}));

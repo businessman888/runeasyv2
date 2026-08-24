@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius } from '../theme';
+import { colors, typography, spacing, borderRadius, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useGamificationStore } from '../stores';
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -45,6 +45,7 @@ interface BadgeDetailModalProps {
 }
 
 function BadgeDetailModal({ badge, onClose }: BadgeDetailModalProps) {
+    useThemeSubscription();
     if (!badge) return null;
 
     const statLabel = BADGE_STAT_LABELS[badge.slug] ?? badge.description;
@@ -104,6 +105,7 @@ function BadgeDetailModal({ badge, onClose }: BadgeDetailModalProps) {
 }
 
 export function BadgesScreen({ navigation }: any) {
+    useThemeSubscription();
     const { badges, stats, fetchBadges, fetchStats, isLoading } = useGamificationStore();
     const [selectedBadge, setSelectedBadge] = useState<BadgeItem | null>(null);
 
@@ -246,7 +248,7 @@ export function BadgesScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     scrollView: {
         flex: 1,
     },
@@ -455,4 +457,4 @@ const styles = StyleSheet.create({
     },
 
     bottomPad: { height: 120 },
-});
+}));

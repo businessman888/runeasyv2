@@ -24,7 +24,7 @@ import { captureRef } from 'react-native-view-shot';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, fonts } from '../../../theme';
+import { colors, spacing, fonts, createThemeStyles, useThemeSubscription } from '../../../theme';
 import { semanticColors } from '../../../theme/semanticColors';
 import { StoryProgressBar } from '../../retrospective/StoryProgressBar';
 import { AnimatedStoryBackground } from '../../retrospective/AnimatedStoryBackground';
@@ -82,6 +82,7 @@ export const MesoStoryDeck = memo(function MesoStoryDeck({
     onOpenDetails,
     active,
 }: MesoStoryDeckProps) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
     const isFocused = useIsFocused();
     const { height } = useWindowDimensions();
@@ -293,6 +294,7 @@ const CardFor = memo(function CardFor({
     model: MesoStoryModel;
     next: NextBlock;
 }) {
+    useThemeSubscription();
     switch (index) {
         case 0:
             return <MesoCardOpening model={model} />;
@@ -325,7 +327,7 @@ function gradientIndexFor(index: number, climax: MesoStoryModel['climax']): numb
     }
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     root: { flex: 1, backgroundColor: colors.background },
 
     stage: { flex: 1 },
@@ -361,7 +363,7 @@ const styles = StyleSheet.create({
         marginTop: 2,
         fontFamily: fonts.medium,
         fontSize: 11,
-        color: 'rgba(235,235,245,0.58)',
+        color: semanticColors.textSecondary,
     },
     headerActions: {
         flexDirection: 'row',
@@ -400,4 +402,4 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: colors.proGlassBorder,
     },
-});
+}));

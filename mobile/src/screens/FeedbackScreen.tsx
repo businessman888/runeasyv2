@@ -8,7 +8,7 @@ import {
     TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius, shadows } from '../theme';
+import { colors, typography, spacing, borderRadius, shadows, createThemeStyles, useThemeSubscription } from '../theme';
 import { useFeedbackStore, Feedback } from '../stores/feedbackStore';
 import { FeedbackSkeleton } from '../components/skeletons/ScreenSkeletons';
 import { SharingModal } from './sharing/SharingModal';
@@ -19,6 +19,7 @@ interface Props {
 }
 
 export function FeedbackScreen({ route, navigation }: Props) {
+    useThemeSubscription();
     const { feedbackId } = route.params || {};
     const { currentFeedback, fetchFeedback, rateFeedback, isLoading } = useFeedbackStore();
     const [selectedRating, setSelectedRating] = React.useState<number | null>(null);
@@ -217,6 +218,7 @@ function MetricCard({
     executed: string;
     diff: number;
 }) {
+    useThemeSubscription();
     const isPositive = diff >= 0;
     const diffColor = Math.abs(diff) <= 5 ? colors.success :
         Math.abs(diff) <= 15 ? colors.warning : colors.error;
@@ -243,7 +245,7 @@ function MetricCard({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -457,4 +459,4 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.md,
         fontWeight: typography.fontWeights.bold,
     },
-});
+}));

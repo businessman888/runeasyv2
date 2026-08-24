@@ -7,8 +7,9 @@ import Animated, {
     withDelay,
     withSpring,
 } from 'react-native-reanimated';
-import { colors, fonts } from '../../theme';
+import { colors, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import type { PeriodBreakdownItem } from '../../stores/statsStore';
+import { semanticColors } from "../../theme/semanticColors";
 
 /**
  * Lightweight animated bar chart for the Calendar stats card (no chart lib —
@@ -55,6 +56,7 @@ interface BarProps {
 }
 
 const Bar = memo(function Bar({ value, niceMax, index, color }: BarProps) {
+    useThemeSubscription();
     const reduced = useReducedMotion();
     const progress = useSharedValue(0);
     const heightPct = niceMax > 0 ? Math.min(value / niceMax, 1) : 0;
@@ -85,6 +87,7 @@ interface StatsBarChartProps {
 }
 
 export const StatsBarChart = memo(function StatsBarChart({ data, animKey }: StatsBarChartProps) {
+    useThemeSubscription();
     const max = data.reduce((m, d) => Math.max(m, d.distance_km), 0);
     const { niceMax, lines } = niceScale(max);
 
@@ -125,7 +128,7 @@ export const StatsBarChart = memo(function StatsBarChart({ data, animKey }: Stat
     );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         marginTop: 8,
     },
@@ -159,7 +162,7 @@ const styles = StyleSheet.create({
         height: 16,
         fontFamily: fonts.semibold,
         fontSize: 10,
-        color: 'rgba(235, 235, 245, 0.6)',
+        color: semanticColors.textSecondary,
     },
     gutter: {
         width: 46,
@@ -175,6 +178,6 @@ const styles = StyleSheet.create({
         fontSize: 10,
         color: colors.textLight,
     },
-});
+}));
 
 export default StatsBarChart;

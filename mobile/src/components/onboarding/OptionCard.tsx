@@ -9,8 +9,9 @@ import Animated, {
     Easing,
 } from 'react-native-reanimated';
 import { semanticColors } from '../../theme/semanticColors';
+import { useThemeSubscription, createThemeStyles } from '../../theme';
 
-const FORCED_CYAN = semanticColors.accent;
+
 
 interface OptionCardProps {
     selected?: boolean;
@@ -34,6 +35,7 @@ export function OptionCard({
     accessibilityLabel,
     pulseOnSelect = true,
 }: OptionCardProps) {
+    useThemeSubscription();
     const scale = useSharedValue(1);
 
     useEffect(() => {
@@ -83,10 +85,10 @@ export function OptionCard({
 // doesn't respect borderRadius on many devices (Samsung One UI in particular),
 // so we rely on the existing border + cyan-tinted background for the selected
 // signal there.
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     selectedShadow: Platform.select({
         ios: {
-            shadowColor: FORCED_CYAN,
+            shadowColor: semanticColors.accent,
             shadowOffset: { width: 0, height: 0 },
             shadowOpacity: 0.4,
             shadowRadius: 12,
@@ -96,6 +98,6 @@ const styles = StyleSheet.create({
     pressed: {
         opacity: 0.95,
     },
-});
+}));
 
 export default OptionCard;

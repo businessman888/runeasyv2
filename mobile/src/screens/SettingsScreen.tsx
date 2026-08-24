@@ -10,7 +10,7 @@ import {
     Linking,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { colors, spacing, fonts, borderRadius } from '../theme';
+import { colors, spacing, fonts, borderRadius, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useAuthStore, useTrialModalStore, getDisplayName, getAvatarUrl } from '../stores';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
@@ -35,6 +35,7 @@ function getInitials(name: string): string {
 }
 
 export function SettingsScreen({ navigation }: any) {
+    useThemeSubscription();
     const { user, logout } = useAuthStore();
     const coachEnabled = useCoachStore((s) => s.enabled);
 
@@ -274,7 +275,7 @@ export function SettingsScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     screen: {
         backgroundColor: semanticColors.canvas,
     },
@@ -469,4 +470,4 @@ const styles = StyleSheet.create({
     spacer: {
         height: 100,
     },
-});
+}));

@@ -13,7 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, borderRadius, fonts } from '../../theme';
+import { colors, typography, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import type { Race } from '../../types/races.types';
 import { formatRaceDateLong, raceLevelLabel } from '../../utils/raceFormat';
@@ -35,6 +35,7 @@ const TERRAIN_LABELS: Record<string, string> = {
 };
 
 export function RaceDetailSheet({ race, visible, onClose, onConfirm }: RaceDetailSheetProps) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
     const [distanceSheetOpen, setDistanceSheetOpen] = useState(false);
 
@@ -150,6 +151,7 @@ export function RaceDetailSheet({ race, visible, onClose, onConfirm }: RaceDetai
 }
 
 function InfoRow({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) {
+    useThemeSubscription();
     return (
         <View style={styles.infoRow}>
             <Ionicons name={icon} size={18} color={colors.textSecondary} />
@@ -158,7 +160,7 @@ function InfoRow({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: s
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: semanticColors.scrim },
     sheet: {
         position: 'absolute',
@@ -243,6 +245,6 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSizes.xl,
         color: semanticColors.textOnAccent,
     },
-});
+}));
 
 export default RaceDetailSheet;

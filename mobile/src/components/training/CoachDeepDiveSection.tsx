@@ -12,7 +12,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing } from '../../theme';
+import { colors, typography, spacing, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { useWorkoutBriefing } from '../../hooks/useWorkoutBriefing';
 import { useTypingReveal } from '../../hooks/useTypingReveal';
@@ -27,6 +27,7 @@ const LOADING_MESSAGES = [
 ];
 
 export function CoachDeepDiveSection({ workoutId }: { workoutId: string | undefined }) {
+    useThemeSubscription();
     const { phase, briefing, generate, onRevealComplete } = useWorkoutBriefing(workoutId);
     const { isFree, openUpgrade } = useProFeature();
 
@@ -132,7 +133,7 @@ export function CoachDeepDiveSection({ workoutId }: { workoutId: string | undefi
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     card: {
         backgroundColor: semanticColors.borderSubtle,
         borderRadius: 15,
@@ -211,4 +212,4 @@ const styles = StyleSheet.create({
         color: semanticColors.textTertiary,
         fontWeight: typography.fontWeights.medium as any,
     },
-});
+}));

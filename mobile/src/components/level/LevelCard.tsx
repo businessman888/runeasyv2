@@ -2,7 +2,7 @@ import React, { ReactNode } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
+import { colors, typography, spacing, borderRadius, shadows, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { LevelProgressBar } from './LevelProgressBar';
 
@@ -25,6 +25,7 @@ interface LevelCardProps {
 }
 
 export function LevelCard({ stats, patentSlot, patentName, variant = 'home' }: LevelCardProps) {
+    useThemeSubscription();
     const level = stats?.current_level ?? 1;
     const totalPoints = stats?.total_points ?? 0;
     const pointsToNext = stats?.points_to_next_level ?? 1000;
@@ -93,7 +94,7 @@ export function LevelCard({ stats, patentSlot, patentName, variant = 'home' }: L
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     card: {
         borderRadius: borderRadius['2xl'],
         padding: spacing.lg,
@@ -201,4 +202,4 @@ const styles = StyleSheet.create({
         color: colors.completed,
         fontWeight: typography.fontWeights.semibold,
     },
-});
+}));

@@ -14,6 +14,7 @@ import Animated, {
 
 import type { StoryGradient } from './storyTheme';
 import { semanticColors } from '../../theme/semanticColors';
+import { useThemeSubscription, createThemeStyles } from '../../theme';
 
 interface AnimatedStoryBackgroundProps {
   gradient: StoryGradient;
@@ -32,6 +33,7 @@ export const AnimatedStoryBackground = memo(function AnimatedStoryBackground({
   gradient,
   active,
 }: AnimatedStoryBackgroundProps) {
+  useThemeSubscription();
   const { width, height } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
   const phase = useSharedValue(0.32);
@@ -212,7 +214,7 @@ function alpha(hex: string, opacity: number): string {
   return `rgba(${red},${green},${blue},${opacity})`;
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   orb: {
     position: 'absolute',
     overflow: 'hidden',
@@ -253,4 +255,4 @@ const styles = StyleSheet.create({
     width: '26%',
     height: '26%',
   },
-});
+}));

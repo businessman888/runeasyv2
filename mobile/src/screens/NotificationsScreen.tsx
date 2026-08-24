@@ -9,7 +9,7 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, typography, spacing } from '../theme';
+import { colors, typography, spacing, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useNotificationStore, AppNotification, NotificationType } from '../stores/notificationStore';
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -17,26 +17,32 @@ import { useBreakpoint } from '../hooks/useBreakpoint';
 
 // Icon components using @expo/vector-icons
 function BackIcon({ size = 24, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <Ionicons name="chevron-back" size={size} color={color} />;
 }
 
 function BrainFlashIcon({ size = 24, color = semanticColors.accent }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <MaterialCommunityIcons name="brain" size={size} color={color} />;
 }
 
 function SyncIcon({ size = 24, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <Ionicons name="sync-outline" size={size} color={color} />;
 }
 
 function TrophyIcon({ size = 24, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <Ionicons name="trophy-outline" size={size} color={color} />;
 }
 
 function RunnerIcon({ size = 24, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <MaterialCommunityIcons name="run" size={size} color={color} />;
 }
 
 function BellOffIcon({ size = 64, color = semanticColors.textTertiary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <Ionicons name="notifications-off-outline" size={size} color={color} />;
 }
 
@@ -104,6 +110,7 @@ const NotificationCard = memo(function NotificationCard({
     notification: DisplayNotification;
     onPress: (n: DisplayNotification) => void;
 }) {
+    useThemeSubscription();
     return (
         <TouchableOpacity
             style={[
@@ -137,6 +144,7 @@ const NotificationCard = memo(function NotificationCard({
 });
 
 export function NotificationsScreen({ navigation }: any) {
+    useThemeSubscription();
     // Tablet: lista em 2 colunas (FlatList numColumns). Phone: 1 coluna (idêntico).
     const { isTablet } = useBreakpoint();
     const [activeFilter, setActiveFilter] = React.useState<FilterType>('all');
@@ -283,7 +291,7 @@ export function NotificationsScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     // Header
     header: {
         flexDirection: 'row',
@@ -441,4 +449,4 @@ const styles = StyleSheet.create({
     bottomSpacer: {
         height: 120,
     },
-});
+}));

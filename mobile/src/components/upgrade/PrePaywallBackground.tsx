@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { View, StyleSheet } from 'react-native';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
-import { colors } from '../../theme';
+import { colors, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
 /**
@@ -13,6 +13,7 @@ import { semanticColors } from '../../theme/semanticColors';
  * Non-interactive; drop it as the first (back-most) absolute layer of the screen.
  */
 function PrePaywallBackgroundImpl() {
+  useThemeSubscription();
   return (
     <View
       pointerEvents="none"
@@ -34,10 +35,10 @@ function PrePaywallBackgroundImpl() {
 
 export const PrePaywallBackground = memo(PrePaywallBackgroundImpl);
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   base: {
     backgroundColor: semanticColors.canvas,
   },
-});
+}));
 
 export default PrePaywallBackground;

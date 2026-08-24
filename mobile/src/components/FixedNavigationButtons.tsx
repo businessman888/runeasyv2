@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, Dimensions } from 'react-native';
-import { fonts } from '../theme';
+import { fonts, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -8,13 +8,13 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // ============================================
 // SEMANTIC COLOR ALIASES
 // ============================================
-const FORCED_BG_DARK = semanticColors.textOnAccent;
-const FORCED_BACK_BG = semanticColors.surface2;
-const FORCED_CYAN = semanticColors.accent;
-const FORCED_CYAN_MUTED = semanticColors.accentSubtle;
-const FORCED_TEXT = semanticColors.textPrimary;
-const FORCED_TEXT_SECONDARY = semanticColors.textSecondary;
-const FORCED_GLASS_STROKE = semanticColors.borderSubtle;
+
+
+
+
+
+
+
 
 type Variant = 'default' | 'yesNo';
 
@@ -45,6 +45,7 @@ export const FixedNavigationButtons: React.FC<FixedNavigationButtonsProps> = ({
     yesLabel = 'Sim',
     noLabel = 'Não',
 }) => {
+    useThemeSubscription();
     if (variant === 'yesNo') {
         const buttonWidth = (SCREEN_WIDTH - 48) / 2 - 6;
 
@@ -106,7 +107,7 @@ export const FixedNavigationButtons: React.FC<FixedNavigationButtonsProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flexDirection: 'row',
         justifyContent: 'center',
@@ -117,7 +118,7 @@ const styles = StyleSheet.create({
     },
     backButton: {
         height: 55,
-        backgroundColor: FORCED_BACK_BG,
+        backgroundColor: semanticColors.surface2,
         borderRadius: 40,
         justifyContent: 'center',
         alignItems: 'center',
@@ -125,11 +126,11 @@ const styles = StyleSheet.create({
     backText: {
         fontFamily: fonts.medium,
         fontSize: 18,
-        color: FORCED_TEXT_SECONDARY,
+        color: semanticColors.textSecondary,
     },
     continueButton: {
         height: 55,
-        backgroundColor: FORCED_CYAN,
+        backgroundColor: semanticColors.accent,
         borderRadius: 40,
         justifyContent: 'center',
         alignItems: 'center',
@@ -147,31 +148,31 @@ const styles = StyleSheet.create({
     continueText: {
         fontFamily: fonts.medium,
         fontSize: 18,
-        color: FORCED_BG_DARK,
+        color: semanticColors.textOnAccent,
     },
     continueTextDisabled: {
-        color: FORCED_TEXT_SECONDARY,
+        color: semanticColors.textSecondary,
     },
     // yesNo variant — neutral by default, cyan only while pressed.
     choiceButton: {
         height: 52,
-        backgroundColor: FORCED_BACK_BG,
+        backgroundColor: semanticColors.surface2,
         borderRadius: 26,
         borderWidth: 1,
-        borderColor: FORCED_GLASS_STROKE,
+        borderColor: semanticColors.borderSubtle,
         justifyContent: 'center',
         alignItems: 'center',
     },
     choiceButtonPressed: {
-        backgroundColor: FORCED_CYAN_MUTED,
-        borderColor: FORCED_CYAN,
+        backgroundColor: semanticColors.accentSubtle,
+        borderColor: semanticColors.accent,
     },
     choiceText: {
         fontFamily: fonts.medium,
         fontSize: 18,
-        color: FORCED_TEXT_SECONDARY,
+        color: semanticColors.textSecondary,
     },
     choiceTextPressed: {
-        color: FORCED_TEXT,
+        color: semanticColors.textPrimary,
     },
-});
+}));

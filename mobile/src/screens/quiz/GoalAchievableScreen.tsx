@@ -3,16 +3,19 @@ import { View, Text, StyleSheet, AccessibilityInfo } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { getGoalAchievableCopy } from '../../utils/onboardingCopyMatrix';
-import { fonts } from '../../theme';
+import { fonts, useThemeSubscription, createThemeStyles } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 
-const DS = {
+const getLocalThemePalette1 = () => ({
     text: semanticColors.textPrimary,
     textSecondary: semanticColors.textSecondary,
     cyan: semanticColors.accent,
-};
+});
+
+
 
 export function GoalAchievableScreen() {
+    useThemeSubscription();
     const { data } = useOnboardingStore();
     const [reduceMotion, setReduceMotion] = useState(false);
 
@@ -58,7 +61,7 @@ export function GoalAchievableScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: {
         flex: 1,
         alignItems: 'center',
@@ -70,21 +73,21 @@ const styles = StyleSheet.create({
     mainText: {
         fontFamily: fonts.medium,
         fontSize: 20,
-        color: DS.text,
+        color: getLocalThemePalette1().text,
         lineHeight: 30,
         textAlign: 'center',
     },
     highlight: {
         fontFamily: fonts.semibold,
-        color: DS.cyan,
+        color: getLocalThemePalette1().cyan,
     },
     secondaryText: {
         fontFamily: fonts.regular,
         fontSize: 15,
-        color: DS.textSecondary,
+        color: getLocalThemePalette1().textSecondary,
         lineHeight: 22.5,
         textAlign: 'center',
     },
-});
+}));
 
 export default GoalAchievableScreen;

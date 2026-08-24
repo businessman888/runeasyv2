@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, SafeAreaView } from 'react-native';
 import { Skeleton, SkeletonCircle } from '../Skeleton';
-import { colors, spacing } from '../../theme';
+import { colors, spacing, createThemeStyles, useThemeSubscription } from '../../theme';
 
 /**
  * Premium, layout-aware skeletons per screen. Each one mirrors the real screen's
@@ -12,6 +12,7 @@ import { colors, spacing } from '../../theme';
 
 /** A single list row: avatar + two text lines + trailing value (ranking / history). */
 function RowSkeleton({ showAvatar = true }: { showAvatar?: boolean }) {
+    useThemeSubscription();
     return (
         <View style={styles.row}>
             {showAvatar && <SkeletonCircle size={44} style={{ marginRight: spacing.md }} />}
@@ -26,6 +27,7 @@ function RowSkeleton({ showAvatar = true }: { showAvatar?: boolean }) {
 
 /** Ranking: podium (3 columns) + list rows. Rendered in place of the spinner. */
 export function RankingSkeleton() {
+    useThemeSubscription();
     return (
         <View style={{ paddingHorizontal: spacing.lg }}>
             <View style={styles.podium}>
@@ -45,6 +47,7 @@ export function RankingSkeleton() {
 }
 
 function PodiumCol({ height }: { height: number }) {
+    useThemeSubscription();
     return (
         <View style={styles.podiumCol}>
             <SkeletonCircle size={56} />
@@ -56,6 +59,7 @@ function PodiumCol({ height }: { height: number }) {
 
 /** Training history: grouped list rows. Rendered in place of "Carregando treinos...". */
 export function WorkoutHistorySkeleton() {
+    useThemeSubscription();
     return (
         <View style={{ gap: spacing.md, marginTop: spacing.sm }}>
             {Array.from({ length: 5 }).map((_, i) => (
@@ -69,6 +73,7 @@ export function WorkoutHistorySkeleton() {
 
 /** Badges: grid of badge tiles. Rendered while badges load. */
 export function BadgesGridSkeleton() {
+    useThemeSubscription();
     return (
         <View style={{ marginTop: spacing.lg }}>
             <Skeleton width={140} height={16} borderRadius={4} style={{ marginBottom: spacing.md }} />
@@ -86,6 +91,7 @@ export function BadgesGridSkeleton() {
 
 /** Calendar body: stats bar + a stack of workout cards. */
 export function CalendarBodySkeleton() {
+    useThemeSubscription();
     return (
         <View style={{ marginTop: spacing.lg, gap: spacing.md }}>
             <Skeleton width="100%" height={64} borderRadius={16} />
@@ -98,6 +104,7 @@ export function CalendarBodySkeleton() {
 
 /** Coach analysis: title + paragraph lines + a couple of metric chips. */
 export function CoachAnalysisSkeleton() {
+    useThemeSubscription();
     return (
         <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.xl, gap: spacing.md }}>
             <Skeleton width="100%" height={120} borderRadius={20} />
@@ -115,6 +122,7 @@ export function CoachAnalysisSkeleton() {
 
 /** Home: workout card placeholder (used until the main workout resolves). */
 export function WorkoutCardSkeleton() {
+    useThemeSubscription();
     return (
         <View style={{ gap: spacing.md }}>
             <Skeleton width="100%" height={180} borderRadius={20} />
@@ -125,6 +133,7 @@ export function WorkoutCardSkeleton() {
 
 /** Feedback: full-page hero + sections. Replaces the full-screen spinner. */
 export function FeedbackSkeleton() {
+    useThemeSubscription();
     return (
         <SafeAreaView style={styles.page}>
             <View style={{ padding: spacing.lg, gap: spacing.lg }}>
@@ -146,7 +155,7 @@ export function FeedbackSkeleton() {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     page: {
         flex: 1,
         backgroundColor: colors.background,
@@ -183,4 +192,4 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: spacing.lg,
     },
-});
+}));

@@ -28,14 +28,15 @@ import { useStartWorkoutFlow } from '../../hooks/useStartWorkoutFlow';
 import type { PlanWorkout } from '../../types/plan-overview.types';
 import { getPhaseStyle } from './phaseTokens';
 import { semanticColors } from '../../theme/semanticColors';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
 // ─── Figma tokens ────────────────────────────────────────────────────────────
-const BG = semanticColors.canvas;
-const TEXT_PRIMARY = semanticColors.textPrimary;
-const TEXT_TITLE = semanticColors.textPrimary;
-const TEXT_SECONDARY = semanticColors.textSecondary;
-const PROGRESS_TRACK = semanticColors.borderSubtle;
-const CYAN = semanticColors.accent;
+
+
+
+
+
+
 
 const MONTH_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -77,6 +78,7 @@ type WeekDetailRouteParams = {
 };
 
 export function WeekDetailScreen() {
+    useThemeSubscription();
     const navigation = useNavigation<any>();
     const route = useRoute<RouteProp<WeekDetailRouteParams, 'WeekDetail'>>();
     const { weekNumber } = route.params;
@@ -221,10 +223,12 @@ export function WeekDetailScreen() {
 }
 
 function ItemSeparator() {
+    useThemeSubscription();
     return <View style={{ height: 14 }} />;
 }
 
 function Header({ onBack, subtitle }: { onBack: () => void; subtitle: string }) {
+    useThemeSubscription();
     return (
         <View style={styles.header}>
             <Pressable
@@ -234,7 +238,7 @@ function Header({ onBack, subtitle }: { onBack: () => void; subtitle: string }) 
                 accessibilityLabel="Voltar"
                 hitSlop={12}
             >
-                <Ionicons name="chevron-back" size={24} color={CYAN} />
+                <Ionicons name="chevron-back" size={24} color={semanticColors.accent} />
             </Pressable>
             <View style={styles.headerCenter}>
                 <Text style={styles.headerTitle}>Seu Plano</Text>
@@ -262,6 +266,7 @@ function WeekSummaryCard({
     totalWorkouts,
     completedWorkouts,
 }: WeekSummaryCardProps) {
+    useThemeSubscription();
     const phaseStyle = getPhaseStyle(phase);
 
     const progressWidth = useSharedValue(0);
@@ -337,9 +342,9 @@ function WeekSummaryCard({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     screen: {
-        backgroundColor: BG,
+        backgroundColor: semanticColors.canvas,
     },
     header: {
         flexDirection: 'row',
@@ -361,12 +366,12 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 17,
         fontWeight: '600',
-        color: TEXT_TITLE,
+        color: semanticColors.textPrimary,
     },
     headerSubtitle: {
         fontSize: 12,
         fontWeight: '500',
-        color: TEXT_SECONDARY,
+        color: semanticColors.textSecondary,
     },
     centered: {
         flex: 1,
@@ -376,7 +381,7 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     centeredText: {
-        color: TEXT_TITLE,
+        color: semanticColors.textPrimary,
         fontSize: 14,
     },
     listContent: {
@@ -403,12 +408,12 @@ const styles = StyleSheet.create({
     summaryWeek: {
         fontSize: 22,
         fontWeight: '800',
-        color: TEXT_PRIMARY,
+        color: semanticColors.textPrimary,
     },
     summaryTotal: {
         fontSize: 12,
         fontWeight: '500',
-        color: TEXT_SECONDARY,
+        color: semanticColors.textSecondary,
         marginTop: 4,
     },
     phasePill: {
@@ -431,7 +436,7 @@ const styles = StyleSheet.create({
     },
     progressTrack: {
         height: 7,
-        backgroundColor: PROGRESS_TRACK,
+        backgroundColor: semanticColors.borderSubtle,
         borderRadius: 999,
         overflow: 'hidden',
     },
@@ -447,7 +452,7 @@ const styles = StyleSheet.create({
     percentLabel: {
         fontSize: 12,
         fontWeight: '600',
-        color: TEXT_SECONDARY,
+        color: semanticColors.textSecondary,
     },
     currentChip: {
         flexDirection: 'row',
@@ -466,12 +471,12 @@ const styles = StyleSheet.create({
         gap: 10,
     },
     emptyText: {
-        color: TEXT_TITLE,
+        color: semanticColors.textPrimary,
         fontSize: 15,
         fontWeight: '600',
     },
     emptySubtext: {
-        color: TEXT_SECONDARY,
+        color: semanticColors.textSecondary,
         fontSize: 13,
     },
-});
+}));

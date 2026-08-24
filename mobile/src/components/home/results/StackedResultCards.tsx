@@ -11,6 +11,7 @@ import {
 import type { LatestActivityData } from "../../../stores/feedbackStore";
 import { RESULT_CARD_HEIGHT } from "./WorkoutResultCard";
 import { semanticColors } from "../../../theme/semanticColors";
+import { createThemeStyles, useThemeSubscription } from '../../../theme';
 
 interface StackedResultCardsProps {
   results: LatestActivityData[];
@@ -32,6 +33,7 @@ export const StackedResultCards = memo(function StackedResultCards({
   results,
   renderCard,
 }: StackedResultCardsProps) {
+  useThemeSubscription();
   const [viewportWidth, setViewportWidth] = useState(0);
   const [activeIndex, setActiveIndex] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -142,7 +144,7 @@ export const StackedResultCards = memo(function StackedResultCards({
   );
 });
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
   deck: {
     height: RESULT_CARD_HEIGHT + 10,
     paddingRight: 8,
@@ -189,4 +191,4 @@ const styles = StyleSheet.create({
     backgroundColor: semanticColors.textTertiary,
   },
   dotActive: { width: 10, backgroundColor: semanticColors.accent },
-});
+}));

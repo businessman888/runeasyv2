@@ -8,24 +8,28 @@ import {
     Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing } from '../theme';
+import { colors, typography, spacing, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { ScreenContainer } from '../components/ScreenContainer';
 
 // Icon components using @expo/vector-icons
 function BackIcon({ size = 24, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <Ionicons name="chevron-back" size={size} color={color} />;
 }
 
 function ChevronDownIcon({ size = 20, color = semanticColors.accent }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <Ionicons name="chevron-down" size={size} color={color} />;
 }
 
 function ChatIcon({ size = 20, color = semanticColors.textOnAccent }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <Ionicons name="chatbubbles-outline" size={size} color={color} />;
 }
 
 function ExternalLinkIcon({ size = 18, color = semanticColors.textTertiary }: { size?: number; color?: string }) {
+    useThemeSubscription();
     return <Ionicons name="open-outline" size={size} color={color} />;
 }
 
@@ -54,6 +58,7 @@ const faqs: FAQ[] = [
 ];
 
 export function HelpScreen({ navigation }: any) {
+    useThemeSubscription();
     const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
 
     const toggleFaq = (id: string) => {
@@ -190,7 +195,7 @@ export function HelpScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -349,4 +354,4 @@ const styles = StyleSheet.create({
     bottomSpacer: {
         height: 120,
     },
-});
+}));

@@ -31,6 +31,7 @@ import { QUIZ } from '../../screens/quiz/_tokens';
 import { SelectableOption } from './SelectableOption';
 import { getGoalAchievableCopy } from '../../utils/onboardingCopyMatrix';
 import type { ViabilityCheck } from '../../stores/onboardingStore';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
 type Mode = 'forced' | 'informational';
 
@@ -73,6 +74,7 @@ export function FeasibilityModal({
     onAcknowledge,
     onClose,
 }: FeasibilityModalProps) {
+    useThemeSubscription();
     const insets = useSafeAreaInsets();
 
     const [localGoal, setLocalGoal] = useState(goal);
@@ -255,7 +257,7 @@ export function FeasibilityModal({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     overlay: {
         flex: 1,
         backgroundColor: QUIZ.color.scrim,
@@ -373,6 +375,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: QUIZ.color.textOnAccent,
     },
-});
+}));
 
 export default FeasibilityModal;

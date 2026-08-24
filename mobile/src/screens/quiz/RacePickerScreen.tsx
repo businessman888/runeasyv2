@@ -12,7 +12,7 @@ import {
     Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, borderRadius, fonts } from '../../theme';
+import { colors, typography, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useRaces } from '../../hooks/useRaces';
@@ -48,6 +48,7 @@ interface RacePickerScreenProps {
 }
 
 export function RacePickerScreen({ onAdvance }: RacePickerScreenProps) {
+    useThemeSubscription();
     const updateData = useOnboardingStore((s) => s.updateData);
 
     const [search, setSearch] = useState('');
@@ -229,6 +230,7 @@ export function RacePickerScreen({ onAdvance }: RacePickerScreenProps) {
 }
 
 function FilterPill({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+    useThemeSubscription();
     return (
         <TouchableOpacity
             style={[styles.pill, active && styles.pillActive]}
@@ -262,6 +264,7 @@ function OptionSheet({
     onSelect: (index: number) => void;
     onClose: () => void;
 }) {
+    useThemeSubscription();
     return (
         <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
             <Pressable style={styles.backdrop} onPress={onClose} />
@@ -282,7 +285,7 @@ function OptionSheet({
     );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemeStyles(() => ({
     container: { flex: 1 },
     searchBox: {
         flexDirection: 'row',
@@ -365,6 +368,6 @@ const styles = StyleSheet.create({
     },
     optionRow: { paddingHorizontal: 20, paddingVertical: 14 },
     optionText: { fontSize: typography.fontSizes.lg, color: colors.textLight },
-});
+}));
 
 export default RacePickerScreen;
