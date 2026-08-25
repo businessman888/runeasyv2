@@ -13,13 +13,21 @@ import {
     PanResponder,
     Alert,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { AppIcon } from '../components/ui/AppIcon';
 import { useResponsiveTheme } from '../theme/responsive';
 import { ZONE_COLORS, ZONE_LABELS, PHASE_LABELS, getZoneColor } from '../theme/zoneColors';
-import { useTrainingStore, useWorkoutScopeStore, useTrialModalStore, ScheduleDay } from '../stores';
+import {
+    getAvatarUrl,
+    getDisplayName,
+    useAuthStore,
+    useGamificationStore,
+    useTrainingStore,
+    useWorkoutScopeStore,
+    useTrialModalStore,
+    ScheduleDay,
+} from '../stores';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
 import type { TrainingZone, WorkoutPhase } from '../stores/trainingStore';
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -29,8 +37,8 @@ import { GlassTeaseOverlay } from '../components/upgrade/GlassTeaseOverlay';
 import { ProTeaseBadge } from '../components/upgrade/ProTeaseBadge';
 import { PlanGeneratingOverlay } from '../components/loading/PlanGeneratingOverlay';
 import { usePlanGenerationGate } from '../hooks/usePlanGenerationGate';
-import { SegmentedTabs } from '../components/ui/SegmentedTabs';
 import { AgendaCalendar, type CalendarViewMode } from '../components/calendar/AgendaCalendar';
+import { CalendarFixedHeader } from '../components/calendar/CalendarFixedHeader';
 import { StatsPeriodCard } from '../components/calendar/StatsPeriodCard';
 import type { CalendarDayStatus } from '../components/calendar/DayIndicator';
 import { startOfDay, toLocalDateStr } from '../components/calendar/useCalendarGrid';
@@ -57,22 +65,6 @@ const MOCK_DAY_WORKOUT: DayWorkout = {
     instructions_json: [{ pace_min: 5.0 }],
 };
 
-
-// Semantic icon adapters backed by the modular Ionicons package.
-function BackIcon({ size = 24, color = semanticColors.accent }: { size?: number; color?: string }) {
-    useThemeSubscription();
-    return <AppIcon name="chevronBack" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="accent" variant="filled" />;
-}
-
-function BellIcon({ size = 24, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
-    useThemeSubscription();
-    return <AppIcon name="notification" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="primary" variant="filled" />;
-}
-
-function GoalsIcon({ size = 24, color = semanticColors.textPrimary }: { size?: number; color?: string }) {
-    useThemeSubscription();
-    return <AppIcon name="flag" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="primary" />;
-}
 
 function BoltIcon({ size = 16, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
     useThemeSubscription();
@@ -171,6 +163,8 @@ const SCOPE_TABS: { key: 'plan' | 'activity'; label: string }[] = [
 
 export function CalendarScreen({ navigation }: any) {
     useThemeSubscription();
+    const user = useAuthStore((state) => state.user);
+    const { stats: gamificationStats, fetchStats } = useGamificationStore();
     const { workouts: rawWorkouts, fetchWorkouts, fetchUpcomingWorkouts, plan, fetchPlan, generationStatus, checkPlanStatus, schedule: rawSchedule, fetchSchedule, isLoading: isTrainingLoading } = useTrainingStore();
     const { isProUser } = useProFeature();
     const { scope, setScope } = useWorkoutScopeStore();
@@ -263,7 +257,8 @@ export function CalendarScreen({ navigation }: any) {
             fetchWorkouts(start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
             fetchUpcomingWorkouts();
             fetchPlan();
-        }, [currentMonth])
+            fetchStats();
+        }, [currentMonth, fetchPlan, fetchSchedule, fetchStats, fetchUpcomingWorkouts, fetchWorkouts])
     );
 
     // One-time (per app open) "Iniciar Teste Grátis" promo — Free only, and only
@@ -552,53 +547,41 @@ export function CalendarScreen({ navigation }: any) {
 
     const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
         'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-    const insets = useSafeAreaInsets();
 
     // Responsividade: phone (isTablet=false) usa o caminho original. Tablet
     // landscape divide o grid (esquerda) e o detalhe do dia (direita).
     const r = useResponsiveTheme();
     const masterDetail = r.isTablet && r.isLandscape;
+    const userName = getDisplayName(user) || 'Corredor';
+    const profilePic = getAvatarUrl(user);
+    const currentStreak = gamificationStats?.current_streak ?? 0;
+    const handleOpenGoals = useCallback(() => {
+        navigation.navigate('PlanGoals');
+    }, [navigation]);
+    const handleOpenProfile = useCallback(() => {
+        navigation.navigate('Settings');
+    }, [navigation]);
 
     return (
-        <ScreenContainer>
+        <ScreenContainer style={styles.screenContainer}>
+            <CalendarFixedHeader
+                tabs={SCOPE_TABS}
+                activeScope={scope}
+                onScopeChange={setScope}
+                profilePic={profilePic}
+                userName={userName}
+                isTablet={r.isTablet}
+                onPressGoals={handleOpenGoals}
+                onPressProfile={handleOpenProfile}
+                currentStreak={currentStreak}
+            />
+
             <ScrollView
                 style={styles.scrollView}
                 contentContainerStyle={r.isTablet ? styles.tabletScrollContent : undefined}
                 showsVerticalScrollIndicator={false}
             >
                 <View style={r.isTablet ? styles.tabletInner : undefined}>
-                {/* Header */}
-                <View style={styles.header}>
-                    <TouchableOpacity
-                        style={styles.backButton}
-                        onPress={() => navigation.goBack()}
-                        accessibilityRole="button"
-                        accessibilityLabel="Voltar"
-                    >
-                        <BackIcon size={24} color={semanticColors.accent} />
-                    </TouchableOpacity>
-                    <View style={styles.headerCenter}>
-                        <Text style={styles.headerSubtitle}>Agenda</Text>
-                        <Text style={styles.headerTitle}>Calendário</Text>
-                    </View>
-                    <TouchableOpacity
-                        style={styles.notificationButton}
-                        onPress={() => navigation.navigate('PlanGoals')}
-                        accessibilityRole="button"
-                        accessibilityLabel="Abrir metas do plano"
-                    >
-                        <GoalsIcon size={24} color={semanticColors.textPrimary} />
-                    </TouchableOpacity>
-                </View>
-
-                {/* ── Treinos | Atividades — acima do card de stats ─────────────── */}
-                <SegmentedTabs
-                    tabs={SCOPE_TABS}
-                    activeKey={scope}
-                    onChange={setScope}
-                    style={styles.scopeTabs}
-                />
-
                 <Text style={styles.sectionTitle}>Estatísticas</Text>
                 {/* Stats card — Distância/Tempo/Freq + gráfico, escopado por período
                     e pela aba ativa (reage a scope via useWorkoutScopeStore). */}
@@ -864,6 +847,9 @@ export function CalendarScreen({ navigation }: any) {
 }
 
 const styles = createThemeStyles(() => ({
+    screenContainer: {
+        paddingTop: 0,
+    },
     container: {
         flex: 1,
         backgroundColor: semanticColors.canvas,
@@ -890,44 +876,6 @@ const styles = createThemeStyles(() => ({
     },
     mdRight: {
         flex: 1,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: spacing.lg,
-        paddingTop: spacing.lg,
-        paddingBottom: spacing.md,
-    },
-    backButton: {
-        width: 44,
-        height: 44,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    headerCenter: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    headerSubtitle: {
-        fontSize: typography.fontSizes.xs,
-        color: semanticColors.textSecondary,
-        letterSpacing: 1,
-    },
-    headerTitle: {
-        fontSize: typography.fontSizes.lg,
-        fontFamily: fonts.bold,
-        color: semanticColors.textPrimary,
-    },
-    notificationButton: {
-        width: 44,
-        height: 44,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    scopeTabs: {
-        marginHorizontal: spacing.lg,
-        marginTop: spacing.md,
     },
     // Section title above each section ("Estatísticas", "Calendário") — mirrors
     // the Home screen's section headers (15px semibold, light).
