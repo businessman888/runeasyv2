@@ -4,9 +4,9 @@ import {
     View,
     Text,
     StyleSheet,
-    ScrollView,
     TouchableOpacity,
 } from 'react-native';
+import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import * as Storage from '../utils/storage';
 import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
@@ -109,6 +109,12 @@ function BedIcon({ size = 24, color = semanticColors.textSecondary }: { size?: n
 
 export function HomeScreen({ navigation }: any) {
     useThemeSubscription();
+    const fabScrollY = useSharedValue(0);
+    const handleHomeScroll = useAnimatedScrollHandler({
+        onScroll: (event) => {
+            fabScrollY.value = Math.max(0, event.contentOffset.y);
+        },
+    });
     const { user } = useAuthStore();
     // Responsividade tablet: layout aditivo. Phone (isTablet=false) renderiza o
     // caminho original idêntico — sem wrappers extras nem mudança de ordem.
@@ -960,9 +966,11 @@ export function HomeScreen({ navigation }: any) {
                 onPressNotifications={() => navigation.navigate('Notifications')}
             />
 
-            <ScrollView
+            <Animated.ScrollView
                 style={styles.scrollView}
                 contentContainerStyle={styles.content}
+                onScroll={handleHomeScroll}
+                scrollEventThrottle={16}
                 showsVerticalScrollIndicator={false}
             >
                 {/* Phone: ordem plana original (idêntico). Tablet: coluna de leitura
@@ -989,12 +997,13 @@ export function HomeScreen({ navigation }: any) {
                         {mainBlock}
                     </>
                 )}
-            </ScrollView>
+            </Animated.ScrollView>
 
 
             <HomeFab
                 onPressFreeRun={handleStartFreeRun}
                 onPressManual={handleOpenManualConfig}
+                scrollY={fabScrollY}
             />
 
             {/* Plan Generation Overlay — top layer (below only the floating tab bar) */}
