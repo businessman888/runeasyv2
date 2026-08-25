@@ -100,6 +100,7 @@ export const iconography = {
   help: { outline: 'help-circle-outline', filled: 'help-circle' },
   warning: { outline: 'warning-outline', filled: 'warning' },
   check: { outline: 'checkmark-circle-outline', filled: 'checkmark-circle' },
+  selected: { outline: 'checkmark', filled: 'checkmark' },
   close: { outline: 'close-outline', filled: 'close' },
   add: { outline: 'add-outline', filled: 'add' },
   backspace: { outline: 'backspace-outline', filled: 'backspace' },

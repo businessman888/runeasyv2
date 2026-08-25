@@ -1,9 +1,9 @@
-import React from 'react';
-import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown, FadeOut, ReduceMotion } from 'react-native-reanimated';
 
 import { ScreenContainer } from '../components/ScreenContainer';
 import { AppIcon } from '../components/ui/AppIcon';
-import { AppPressable } from '../components/ui/AppPressable';
 import {
   borderRadius,
   fonts,
@@ -15,92 +15,150 @@ import {
   useThemedStyles,
 } from '../theme';
 import type { AppIconName } from '../theme/iconography';
+import { triggerHaptic } from '../utils/haptics';
+
+interface AppearanceNavigation {
+  goBack: () => void;
+}
+
+interface AppearanceScreenProps {
+  navigation: AppearanceNavigation;
+}
 
 interface ThemeOption {
   value: ThemePreference;
   label: string;
-  description: string;
   icon: AppIconName;
 }
 
 const THEME_OPTIONS: readonly ThemeOption[] = [
-  { value: 'light', label: 'Claro', description: 'Visual leve para ambientes iluminados.', icon: 'lightMode' },
-  { value: 'dark', label: 'Escuro', description: 'Conforto visual com fundos profundos.', icon: 'darkMode' },
-  { value: 'system', label: 'Sistema', description: 'Acompanha automaticamente o tema do aparelho.', icon: 'systemTheme' },
+  { value: 'light', label: 'Claro', icon: 'lightMode' },
+  { value: 'dark', label: 'Escuro', icon: 'darkMode' },
+  { value: 'system', label: 'Sistema', icon: 'systemTheme' },
 ];
 
-export function AppearanceScreen({ navigation }: any) {
+const MENU_ENTER = FadeInDown.duration(160).reduceMotion(ReduceMotion.System);
+const MENU_EXIT = FadeOut.duration(120).reduceMotion(ReduceMotion.System);
+
+export function AppearanceScreen({ navigation }: AppearanceScreenProps) {
   const { theme, preference, setPreference } = useAppTheme();
   const styles = useThemedStyles(createStyles);
+  const [isOpen, setIsOpen] = useState(false);
+
+  const selectedOption = useMemo(
+    () => THEME_OPTIONS.find((option) => option.value === preference) ?? THEME_OPTIONS[1],
+    [preference],
+  );
+
+  const toggleSelect = useCallback(() => {
+    void triggerHaptic('selection');
+    setIsOpen((open) => !open);
+  }, []);
+
+  const selectTheme = useCallback(
+    (value: ThemePreference) => {
+      setPreference(value);
+      setIsOpen(false);
+      void triggerHaptic('selection');
+    },
+    [setPreference],
+  );
 
   return (
     <ScreenContainer centered style={styles.screen}>
       <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={theme.colors.canvas} />
 
       <View style={styles.header}>
-        <AppPressable
-          style={styles.headerButton}
-          interactionScale="icon"
+        <Pressable
+          style={({ pressed }) => [styles.headerButton, pressed && styles.controlPressed]}
           onPress={() => navigation.goBack()}
+          accessibilityRole="button"
           accessibilityLabel="Voltar"
+          hitSlop={8}
         >
           <AppIcon name="chevronBack" size={24} tone="primary" />
-        </AppPressable>
+        </Pressable>
         <Text style={styles.headerTitle}>Aparência</Text>
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        <View style={styles.intro}>
-          <Text style={styles.title}>Escolha seu tema</Text>
-          <Text style={styles.description}>
-            A alteração é aplicada imediatamente e fica salva neste dispositivo.
-          </Text>
+      <View style={styles.content}>
+        <Text style={styles.fieldLabel}>Tema do aplicativo</Text>
+
+        <View style={styles.selectContainer}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.selectTrigger,
+              isOpen && styles.selectTriggerOpen,
+              pressed && styles.controlPressed,
+            ]}
+            onPress={toggleSelect}
+            accessibilityRole="button"
+            accessibilityLabel={'Tema do aplicativo, ' + selectedOption.label}
+            accessibilityHint="Toque para abrir as opções de tema"
+            accessibilityState={{ expanded: isOpen }}
+          >
+            <View style={styles.selectedValue}>
+              <AppIcon name={selectedOption.icon} size={20} tone="secondary" />
+              <Text style={styles.selectedLabel}>{selectedOption.label}</Text>
+            </View>
+            <AppIcon
+              name={isOpen ? 'chevronUp' : 'chevronDown'}
+              size={20}
+              tone="secondary"
+            />
+          </Pressable>
+
+          {isOpen ? (
+            <Animated.View
+              entering={MENU_ENTER}
+              exiting={MENU_EXIT}
+              style={styles.selectMenu}
+              accessibilityRole="menu"
+            >
+              {THEME_OPTIONS.map((option) => {
+                const isSelected = option.value === preference;
+
+                return (
+                  <Pressable
+                    key={option.value}
+                    style={({ pressed }) => [
+                      styles.option,
+                      isSelected && styles.optionSelected,
+                      pressed && styles.optionPressed,
+                    ]}
+                    onPress={() => selectTheme(option.value)}
+                    accessibilityRole="menuitem"
+                    accessibilityLabel={'Usar tema ' + option.label.toLowerCase()}
+                    accessibilityState={{ selected: isSelected }}
+                  >
+                    <View style={styles.optionValue}>
+                      <AppIcon name={option.icon} size={20} tone="secondary" />
+                      <Text style={styles.optionLabel}>{option.label}</Text>
+                    </View>
+                    {isSelected ? (
+                      <AppIcon name="selected" size={20} tone="accent" variant="filled" />
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </Animated.View>
+          ) : null}
         </View>
 
-        <View style={styles.optionList}>
-          {THEME_OPTIONS.map((option) => {
-            const isSelected = preference === option.value;
-            return (
-              <AppPressable
-                key={option.value}
-                style={[styles.option, isSelected && styles.optionSelected]}
-                interactionScale="card"
-                hapticFeedback="selection"
-                onPress={() => setPreference(option.value)}
-                accessibilityRole="radio"
-                accessibilityLabel={option.label + '. ' + option.description}
-                accessibilityState={{ checked: isSelected, selected: isSelected }}
-              >
-                <View style={[styles.iconContainer, isSelected && styles.iconContainerSelected]}>
-                  <AppIcon
-                    name={option.icon}
-                    size={24}
-                    tone={isSelected ? 'accent' : 'secondary'}
-                    variant={isSelected ? 'filled' : 'outline'}
-                  />
-                </View>
-                <View style={styles.optionText}>
-                  <Text style={styles.optionLabel}>{option.label}</Text>
-                  <Text style={styles.optionDescription}>{option.description}</Text>
-                </View>
-                {isSelected ? (
-                  <AppIcon name="check" size={24} tone="accent" variant="filled" />
-                ) : (
-                  <View style={styles.unselectedIndicator} />
-                )}
-              </AppPressable>
-            );
-          })}
-        </View>
-      </ScrollView>
+        <Text style={styles.helperText}>
+          A alteração é aplicada imediatamente e fica salva neste dispositivo.
+        </Text>
+      </View>
     </ScreenContainer>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    screen: { backgroundColor: colors.canvas },
+    screen: {
+      backgroundColor: colors.canvas,
+    },
     header: {
       minHeight: 56,
       flexDirection: 'row',
@@ -121,71 +179,98 @@ function createStyles(colors: ThemeColors) {
       fontSize: 18,
       textAlign: 'center',
     },
-    headerSpacer: { width: 44, height: 44 },
+    headerSpacer: {
+      width: 44,
+      height: 44,
+    },
     content: {
       paddingHorizontal: spacing.lg,
-      paddingTop: spacing.lg,
-      paddingBottom: spacing['3xl'],
+      paddingTop: spacing.xl,
     },
-    intro: { marginBottom: spacing.xl },
-    title: {
+    fieldLabel: {
       color: colors.textPrimary,
-      fontFamily: fonts.bold,
-      fontSize: 24,
-      lineHeight: 30,
+      fontFamily: fonts.medium,
+      fontSize: 14,
       marginBottom: spacing.sm,
     },
-    description: {
-      color: colors.textSecondary,
-      fontFamily: fonts.regular,
-      fontSize: 14,
-      lineHeight: 21,
-      maxWidth: 360,
+    selectContainer: {
+      position: 'relative',
+      zIndex: 20,
     },
-    optionList: { gap: spacing.md },
-    option: {
-      minHeight: 84,
+    selectTrigger: {
+      minHeight: 52,
+      paddingHorizontal: spacing.md,
       flexDirection: 'row',
       alignItems: 'center',
-      padding: spacing.base,
+      justifyContent: 'space-between',
       backgroundColor: colors.surface2,
       borderWidth: 1,
       borderColor: colors.borderSubtle,
-      borderRadius: borderRadius.xl,
+      borderRadius: borderRadius.lg,
     },
-    optionSelected: {
-      backgroundColor: colors.accentSubtle,
+    selectTriggerOpen: {
       borderColor: colors.borderStrong,
     },
-    iconContainer: {
-      width: 44,
-      height: 44,
-      borderRadius: borderRadius.lg,
+    selectedValue: {
+      flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.surface3,
+      gap: spacing.sm,
     },
-    iconContainerSelected: { backgroundColor: colors.surface1 },
-    optionText: { flex: 1, marginHorizontal: spacing.md },
+    selectedLabel: {
+      color: colors.textPrimary,
+      fontFamily: fonts.medium,
+      fontSize: 15,
+    },
+    selectMenu: {
+      position: 'absolute',
+      top: 60,
+      left: 0,
+      right: 0,
+      padding: spacing.xs,
+      backgroundColor: colors.surface1,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      borderRadius: borderRadius.lg,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.22,
+      shadowRadius: 24,
+      elevation: 12,
+      zIndex: 30,
+    },
+    option: {
+      minHeight: 48,
+      paddingHorizontal: spacing.sm,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderRadius: borderRadius.md,
+    },
+    optionSelected: {
+      backgroundColor: colors.fillSubtle,
+    },
+    optionPressed: {
+      backgroundColor: colors.fillMuted,
+    },
+    optionValue: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
     optionLabel: {
       color: colors.textPrimary,
-      fontFamily: fonts.semibold,
-      fontSize: 16,
-      lineHeight: 22,
+      fontFamily: fonts.medium,
+      fontSize: 15,
     },
-    optionDescription: {
+    helperText: {
       color: colors.textSecondary,
       fontFamily: fonts.regular,
       fontSize: 13,
-      lineHeight: 18,
-      marginTop: 2,
+      lineHeight: 19,
+      marginTop: spacing.md,
     },
-    unselectedIndicator: {
-      width: 22,
-      height: 22,
-      borderRadius: 11,
-      borderWidth: 2,
-      borderColor: colors.borderStrong,
+    controlPressed: {
+      opacity: 0.72,
     },
   });
 }
