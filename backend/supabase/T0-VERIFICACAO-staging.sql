@@ -1,130 +1,196 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- Troca de Dias T.0 — o que rodar no SQL Editor de STAGING
+-- Troca de Dias T.0 — VALIDAÇÃO EM STAGING
 --
--- Este arquivo NÃO é uma migration (o prefixo `_` o mantém fora da ordem
--- alfabética que o carregador de testes segue). É o roteiro manual.
+-- Não é migration (fica fora de `migrations/` porque o carregador dos testes
+-- de integração executa todo `.sql` daquela pasta).
+--
+-- ── ORDEM ──────────────────────────────────────────────────────────────────
+--   1. migrations/20260826_add_swap_days_kind.sql
+--   2. migrations/20260826_validate_new_scheduled_date.sql
+--   3. BLOCO 1 daqui  (leitura pura)
+--   4. BLOCO 2 daqui  (funcional, dentro de transação revertida)
+--
+-- A primeira migration emite NOTICE dizendo qual constraint derrubou — vale
+-- olhar. Se ela levantar EXCEPTION reclamando de mais de um CHECK sobre
+-- `kind`, PARE: uma régua antiga escapou e `swap_days` seria rejeitado em
+-- silêncio.
+--
+-- ⚠️ Só STAGING. A T.0 não vai para produção até a T.1 estar validada.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 
--- ───────────────────────────────────────────────────────────────────────────
--- PASSO 0 — ANTES de aplicar qualquer coisa: fotografar o estado
--- ───────────────────────────────────────────────────────────────────────────
+-- ═══════════════════════════════════════════════════════════════════════════
+-- BLOCO 1 — estrutural. Leitura pura, não escreve nada.
+-- Devolve uma tabela: todo `veredito` tem que ser ✅.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+WITH fn AS (
+  SELECT pg_get_functiondef(
+           'public.apply_plan_adaptation(uuid,uuid,date,text,text,text,jsonb,boolean,jsonb,jsonb,jsonb)'::regprocedure
+         ) AS src
+),
+checks AS (
+  SELECT 1 AS ord,
+         'régua de `kind` é ÚNICA' AS verifica,
+         (SELECT count(*)::text FROM pg_constraint
+           WHERE conrelid = 'public.plan_adaptations'::regclass
+             AND contype = 'c'
+             AND pg_get_constraintdef(oid) LIKE '%kind%') AS obtido,
+         '1' AS esperado
+
+  UNION ALL SELECT 2,
+         '`swap_days` aceito pelo CHECK',
+         (SELECT (pg_get_constraintdef(oid) LIKE '%swap_days%')::text
+            FROM pg_constraint
+           WHERE conrelid = 'public.plan_adaptations'::regclass
+             AND conname = 'plan_adaptations_kind_check'),
+         'true'
+
+  UNION ALL SELECT 3,
+         'guarda RE422 no corpo da função',
+         (SELECT (src LIKE '%RE422%')::text FROM fn),
+         'true'
+
+  UNION ALL SELECT 4,
+         'reason `new_date_in_past` presente',
+         (SELECT (src LIKE '%new_date_in_past%')::text FROM fn),
+         'true'
+
+  -- Se a assinatura tivesse mudado, `CREATE OR REPLACE` criaria uma SEGUNDA
+  -- função em vez de substituir — e o PostgREST poderia chamar a antiga.
+  UNION ALL SELECT 5,
+         'apply_plan_adaptation SEM sobrecarga',
+         (SELECT count(*)::text FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+           WHERE n.nspname = 'public' AND p.proname = 'apply_plan_adaptation'),
+         '1'
+
+  -- A T.0 é cirúrgica: a re-âncora é função SEPARADA e não foi tocada.
+  UNION ALL SELECT 6,
+         'apply_schedule_shift INTACTA (sem RE422)',
+         (SELECT (pg_get_functiondef(
+                    'public.apply_schedule_shift(uuid,uuid,uuid[],integer,date,text,text,uuid,jsonb)'::regprocedure
+                  ) NOT LIKE '%RE422%')::text),
+         'true'
+
+  UNION ALL SELECT 7,
+         'service_role executa',
+         has_function_privilege('service_role',
+           'public.apply_plan_adaptation(uuid,uuid,date,text,text,text,jsonb,boolean,jsonb,jsonb,jsonb)',
+           'EXECUTE')::text,
+         'true'
+)
+SELECT verifica,
+       esperado,
+       obtido,
+       CASE WHEN obtido IS NOT DISTINCT FROM esperado THEN '✅' ELSE '❌ FALHOU' END AS veredito
+  FROM checks
+ ORDER BY ord;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- BLOCO 1b — DIAGNÓSTICO. Não faz parte da T.0 e não a bloqueia.
 --
--- (a) O `schema_producao.sql` do repo está DESATUALIZADO — não contém
---     `plan_adaptations`, `plan_vdot_history` nem `plan_week_insights`. Nada
---     nele serve de prova sobre constraints atuais.
+-- Achado da varredura: `anon` e `authenticated` têm EXECUTE nas quatro funções
+-- da fundação, apesar do `REVOKE … FROM public` da 20260815 — o Supabase
+-- concede por DEFAULT PRIVILEGES, e revogar de `PUBLIC` não remove grant
+-- explícito. Hoje é inofensivo (funções SECURITY INVOKER + RLS ligada sem
+-- políticas em `workouts`/`training_plans` = nega tudo), mas vira porta aberta
+-- no dia em que alguém adicionar a primeira política de leitura.
 --
--- (b) A pergunta do `UNIQUE (plan_id, scheduled_date)` NÃO afeta a T.0. Ela
---     decide o desenho da T.1: se a constraint existir, um remapeamento que
---     colocasse dois treinos no mesmo dia estouraria no banco, e a validação
---     de destino da T.1 tem que impedir a colisão ANTES de chegar lá.
+-- Corrigido por `migrations/20260826_revoke_foundation_fns_from_data_api.sql`,
+-- que é DECISÃO À PARTE. Sem ela: `alcancavel_por` mostra anon/authenticated.
+-- Com ela: `(ninguém)`.
+-- ═══════════════════════════════════════════════════════════════════════════
 
--- Índices e constraints de `workouts` — procure por UNIQUE em
--- (plan_id, scheduled_date):
-SELECT indexname, indexdef
-  FROM pg_indexes
- WHERE schemaname = 'public' AND tablename = 'workouts'
- ORDER BY indexname;
-
-SELECT conname, contype, pg_get_constraintdef(oid) AS def
-  FROM pg_constraint
- WHERE conrelid = 'public.workouts'::regclass
- ORDER BY contype, conname;
-
--- O nome REAL do CHECK de `kind` antes da migration. A migration derruba por
--- DEFINIÇÃO e não por nome justamente porque este nome não é garantido — mas
--- vale registrar qual era:
-SELECT conname, pg_get_constraintdef(oid) AS def
-  FROM pg_constraint
- WHERE conrelid = 'public.plan_adaptations'::regclass
-   AND contype = 'c';
+SELECT split_part(fn, '(', 1) AS funcao,
+       coalesce(
+         nullif(concat_ws(', ',
+           CASE WHEN has_function_privilege('anon', fn, 'EXECUTE')
+                THEN 'anon' END,
+           CASE WHEN has_function_privilege('authenticated', fn, 'EXECUTE')
+                THEN 'authenticated' END), ''),
+         '(ninguém) ✅') AS alcancavel_por
+  FROM unnest(ARRAY[
+    'public.apply_plan_adaptation(uuid,uuid,date,text,text,text,jsonb,boolean,jsonb,jsonb,jsonb)',
+    'public.apply_schedule_shift(uuid,uuid,uuid[],integer,date,text,text,uuid,jsonb)',
+    'public.plan_editable_workouts(uuid,date)',
+    'public.plan_state_digest(uuid,date)'
+  ]) AS fn;
 
 
--- ───────────────────────────────────────────────────────────────────────────
--- PASSO 1 — Aplicar as migrations, NESTA ORDEM
--- ───────────────────────────────────────────────────────────────────────────
+-- ═══════════════════════════════════════════════════════════════════════════
+-- BLOCO 2 — funcional. A prova de que a guarda REALMENTE recusa.
 --
---   1. 20260826_add_swap_days_kind.sql
---   2. 20260826_validate_new_scheduled_date.sql
+-- Rode o bloco INTEIRO de uma vez (BEGIN … ROLLBACK). Ele escolhe sozinho um
+-- treino futuro/pendente real, tenta movê-lo para ONTEM, e desfaz tudo.
 --
--- A ordem importa pouco (são independentes), mas manter a alfabética evita
--- divergência entre staging e o que o carregador de testes faz.
+-- ── POR QUE O ROLLBACK, se a guarda deveria impedir a escrita ───────────────
 --
--- A primeira emite `NOTICE` dizendo qual constraint derrubou — vale olhar a
--- aba de mensagens. Se ela levantar EXCEPTION reclamando de mais de um CHECK
--- sobre `kind`, PARE: significa que uma constraint antiga escapou do filtro e
--- `swap_days` seria rejeitado em silêncio.
+-- Justamente porque é isso que está sendo testado. Se a migration não tiver
+-- pegado, esta chamada MOVE um treino de verdade para o passado — o dano que a
+-- T.0 existe para impedir. O ROLLBACK garante que o teste não cause aquilo que
+-- ele está verificando.
+-- ═══════════════════════════════════════════════════════════════════════════
 
+BEGIN;
 
--- ───────────────────────────────────────────────────────────────────────────
--- PASSO 2 — Verificar que pegou
--- ───────────────────────────────────────────────────────────────────────────
+WITH alvo AS (
+  SELECT w.id, w.plan_id, w.user_id, w.scheduled_date AS data_antes,
+         (now() AT TIME ZONE 'America/Sao_Paulo')::date AS hoje
+    FROM public.workouts w
+    JOIN public.training_plans p ON p.id = w.plan_id
+   WHERE p.status = 'active'
+     AND p.generation_status = 'complete'
+     AND w.status = 'pending'
+     AND w.scheduled_date > (now() AT TIME ZONE 'America/Sao_Paulo')::date
+     AND coalesce(w.is_race_day, false) = false
+   ORDER BY w.scheduled_date
+   LIMIT 1
+),
+chamada AS (
+  SELECT a.*,
+         public.apply_plan_adaptation(
+           p_user_id         => a.user_id,
+           p_plan_id         => a.plan_id,
+           p_today           => a.hoje,
+           p_expected_digest => public.plan_state_digest(a.plan_id, a.hoje),
+           p_idempotency_key => 't0-prova-' || gen_random_uuid()::text,
+           p_kind            => 'swap_days',
+           p_patch           => jsonb_build_array(jsonb_build_object(
+                                  'workout_id', a.id,
+                                  'expected',   jsonb_build_object('status', 'pending'),
+                                  'set',        jsonb_build_object(
+                                                  'scheduled_date',
+                                                  (a.hoje - 1)::text)))
+         ) AS res
+    FROM alvo a
+)
+SELECT c.data_antes                                    AS estava_em,
+       (c.hoje - 1)                                    AS tentou_mover_para,
+       c.res->>'applied'                               AS applied,
+       c.res->>'reason'                                AS reason,
+       coalesce(c.res->>'current_digest', '(ausente)') AS current_digest,
+       (SELECT w.scheduled_date FROM public.workouts w WHERE w.id = c.id) AS data_agora,
+       CASE
+         WHEN c.res->>'reason' = 'new_date_in_past'
+          AND c.res->>'current_digest' IS NULL
+          AND (SELECT w.scheduled_date FROM public.workouts w WHERE w.id = c.id)
+              = c.data_antes
+         THEN '✅ guarda recusou e não escreveu'
+         ELSE '❌ FALHOU — ver detalhe: ' || c.res::text
+       END AS veredito
+  FROM chamada c;
 
--- (a) A régua de `kind`: tem que ser UMA só, com os cinco valores.
-SELECT conname,
-       pg_get_constraintdef(oid) AS def,
-       count(*) OVER () AS quantas_reguas
-  FROM pg_constraint
- WHERE conrelid = 'public.plan_adaptations'::regclass
-   AND contype = 'c'
-   AND pg_get_constraintdef(oid) LIKE '%kind%';
--- ESPERADO: 1 linha · quantas_reguas = 1 · def contendo 'swap_days'
+ROLLBACK;
 
--- (b) A guarda está no corpo da função?
-SELECT pg_get_functiondef(
-         'public.apply_plan_adaptation(uuid,uuid,date,text,text,text,jsonb,boolean,jsonb,jsonb,jsonb)'::regprocedure
-       ) LIKE '%RE422%' AS guarda_ativa,
-       pg_get_functiondef(
-         'public.apply_plan_adaptation(uuid,uuid,date,text,text,text,jsonb,boolean,jsonb,jsonb,jsonb)'::regprocedure
-       ) LIKE '%new_date_in_past%' AS reason_presente;
--- ESPERADO: t · t
-
--- (c) Não nasceu uma SOBRECARGA por engano. `CREATE OR REPLACE` com assinatura
---     idêntica substitui; com assinatura diferente CRIA UMA SEGUNDA função, e
---     aí o PostgREST poderia chamar a antiga.
-SELECT count(*) AS quantas_funcoes
-  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
- WHERE n.nspname = 'public' AND p.proname = 'apply_plan_adaptation';
--- ESPERADO: 1
-
--- (d) Os grants server-only continuam de pé.
-SELECT has_function_privilege(
-         'service_role',
-         'public.apply_plan_adaptation(uuid,uuid,date,text,text,text,jsonb,boolean,jsonb,jsonb,jsonb)',
-         'EXECUTE') AS service_role_executa,
-       has_function_privilege(
-         'anon',
-         'public.apply_plan_adaptation(uuid,uuid,date,text,text,text,jsonb,boolean,jsonb,jsonb,jsonb)',
-         'EXECUTE') AS anon_executa;
--- ESPERADO: t · f
-
-
--- ───────────────────────────────────────────────────────────────────────────
--- PASSO 3 — Prova funcional em staging (opcional, mas é o teste de verdade)
--- ───────────────────────────────────────────────────────────────────────────
+-- ── COMO LER O BLOCO 2 ─────────────────────────────────────────────────────
 --
--- Contra um plano ATIVO de um usuário de teste. Troque os literais e rode.
--- É uma chamada de FUNÇÃO com data no passado: ela deve RECUSAR sem escrever.
+--   applied            = false
+--   reason             = new_date_in_past
+--   current_digest     = (ausente)      ← a recusa NÃO é retentável, por desenho
+--   data_agora         = estava_em      ← nada foi escrito
 --
---   SELECT public.apply_plan_adaptation(
---     p_user_id         => '<uuid do usuário de teste>',
---     p_plan_id         => '<uuid do plano ativo>',
---     p_today           => '<hoje em São Paulo, YYYY-MM-DD>',
---     p_expected_digest => public.plan_state_digest('<plano>', '<hoje>'),
---     p_idempotency_key => 't0-prova-' || gen_random_uuid()::text,
---     p_kind            => 'swap_days',
---     p_patch           => jsonb_build_array(jsonb_build_object(
---                            'workout_id', '<uuid de um treino FUTURO pending>',
---                            'expected',   jsonb_build_object('status','pending'),
---                            'set',        jsonb_build_object('scheduled_date','<ONTEM>')))
---   );
---
--- ESPERADO:
---   {"applied": false, "reason": "new_date_in_past", "detail": "new_date_in_past:… -> …"}
---   SEM `current_digest` — a recusa não é retentável.
---
--- E o treino continua na data original: confira com
---   SELECT scheduled_date FROM public.workouts WHERE id = '<uuid>';
---
--- ⚠️ Nenhum dos passos acima em PRODUÇÃO. A T.0 é staging-only até a T.1
--- estar pronta e validada.
+-- Zero linhas no BLOCO 2 significa que staging não tem nenhum treino futuro
+-- pendente em plano ativo — não é falha, só não há o que testar. Nesse caso o
+-- BLOCO 1 já basta para fechar a T.0.
