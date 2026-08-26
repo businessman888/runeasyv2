@@ -2,7 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { SupabaseService } from '../../database';
 import { toSaoPauloDateStr } from './wellness/helpers/streak.helper';
-import { isEditableWorkout, isPlanEditable } from './helpers/plan-window.helper';
+import {
+  isEditableWorkout,
+  isEditableTargetDate,
+  isPlanEditable,
+} from './helpers/plan-window.helper';
 
 /**
  * A FUNDAÇÃO DA FASE 6 — a única porta de escrita para editar um plano ativo.
@@ -35,7 +39,9 @@ export type AdaptationKind =
   | 'reduzir_frequencia'
   | 'reduzir_volume'
   | 'schedule_shift'
-  | 'reprice';
+  | 'reprice'
+  /** Troca de Dias: remapeia `scheduled_date` para outros dias da semana. */
+  | 'swap_days';
 
 export type AdaptationSource =
   | 'weekly_insight'
@@ -48,6 +54,18 @@ export type AdaptationFailure =
   | 'plan_generating'
   | 'revision_conflict'
   | 'row_conflict'
+  /**
+   * O patch moveria um treino para HOJE ou para o PASSADO.
+   *
+   * ⚠️ NÃO é retentável, ao contrário de `revision_conflict` e `row_conflict`:
+   * vem sem `currentDigest` de propósito, porque recalcular a preview não muda
+   * nada — a data continuaria no passado. Quem chama trata como branch próprio,
+   * nunca como retry.
+   *
+   * Com a camada de cálculo correta isto é IMPOSSÍVEL em uso normal. Por isso é
+   * logado em ERROR: se aparecer, é defeito na camada de cima, não uso normal.
+   */
+  | 'new_date_in_past'
   | 'empty_patch'
   | 'nothing_to_shift'
   | 'rpc_error';
@@ -227,6 +245,33 @@ export class PlanAdaptationService {
     vdotHistory?: Record<string, unknown> | null;
   }): Promise<AdaptationResult> {
     const today = params.todayStr ?? this.todayStr();
+
+    // ── A FRONTEIRA DO DESTINO, antes do round-trip ──────────────────────────
+    //
+    // Espelho do `RE422` de `apply_plan_adaptation`. A guarda de verdade é a do
+    // SQL — esta existe para recusar sem ir ao banco e para dizer QUAL treino,
+    // mesmo papel de `assertPlanEditable`.
+    //
+    // Inalcançável para F3/6.2/6.3: nenhuma delas põe `scheduled_date` no `set`,
+    // e `isEditableTargetDate(undefined)` é sempre `editable`.
+    const pastTarget = params.patch.find(
+      (p) =>
+        !isEditableTargetDate(p.set.scheduled_date, { todayStr: today })
+          .editable,
+    );
+    if (pastTarget) {
+      // ERROR e não WARN: os dois modos da Troca de Dias evitam o passado por
+      // construção e por filtragem. Chegar aqui significa que a camada de
+      // cálculo deixou passar — é defeito, não uso normal.
+      this.logger.error(
+        `[Adaptation] ${params.kind} no plano ${params.planId} RECUSADO: ` +
+          `treino ${pastTarget.workout_id} seria movido para ` +
+          `${pastTarget.set.scheduled_date} (hoje é ${today}). ` +
+          'A camada de cálculo deveria ter impedido isto.',
+      );
+      return { applied: false, reason: 'new_date_in_past' };
+    }
+
     const idempotencyKey = this.buildIdempotencyKey(
       params.planId,
       params.expectedDigest,
@@ -419,9 +464,19 @@ export class PlanAdaptationService {
       );
       return;
     }
-    this.logger.warn(
+
+    const msg =
       `[Adaptation] ${kind} no plano ${planId} NÃO aplicado: ${result.reason}` +
-        (result.detail ? ` (${result.detail})` : ''),
-    );
+      (result.detail ? ` (${result.detail})` : '');
+
+    // `new_date_in_past` é a única recusa que denuncia DEFEITO em vez de estado.
+    // As outras são normais: o plano mudou, alguém concluiu um treino, a
+    // fronteira andou. Esta só acontece se a camada de cálculo deixou passar uma
+    // data no passado — e aí ficar em WARN esconderia o bug no meio do ruído.
+    if (result.reason === 'new_date_in_past') {
+      this.logger.error(msg);
+      return;
+    }
+    this.logger.warn(msg);
   }
 }

@@ -397,6 +397,446 @@ describe('apply_plan_adaptation — a fronteira no WHERE', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+describe('apply_plan_adaptation — a fronteira da data DESTINO', () => {
+  // ── Troca de Dias T.0 ──────────────────────────────────────────────────────
+  //
+  // O `WHERE` valida a linha ANTIGA — ele garante que o treino ESTAVA no futuro.
+  // Estes testes cobrem a outra ponta: para onde ele VAI. A reauditoria mediu
+  // que 17,2% dos remapeamentos jogariam um pendente para hoje/passado, e
+  // `getScheduleWithStatus` o carimbaria `missed` depois.
+
+  /** Patch de remapeamento puro: só a data muda. É a operação da Troca de Dias. */
+  const movePatch = (workoutId: string, to: string): PatchItem[] => [
+    {
+      workout_id: workoutId,
+      expected: { status: 'pending' },
+      set: { scheduled_date: to },
+    },
+  ];
+
+  it('aceita mover para o FUTURO — o caminho feliz da Troca de Dias', async () => {
+    const p = await seedPlan();
+    const alvo = p.byOffset[3];
+
+    const r = await applyAdaptation({
+      userId: p.userId,
+      planId: p.planId,
+      today: TODAY,
+      digest: await stateDigest(p.planId, TODAY),
+      idempotencyKey: 'k-move-futuro',
+      kind: 'swap_days',
+      patch: movePatch(alvo, addDays(TODAY, 6)),
+    });
+
+    expect(r.applied).toBe(true);
+    expect((await readWorkout(alvo)).scheduled_date).toBe(addDays(TODAY, 6));
+
+    // O histórico registra o antes/depois da data — é o que responde
+    // "por que meu treino de quinta virou sábado?".
+    const { rows } = await getPool().query<{
+      kind: string;
+      changes: Array<{
+        before: { scheduled_date: string };
+        after: { scheduled_date: string };
+      }>;
+    }>(`SELECT kind, changes FROM public.plan_adaptations WHERE plan_id = $1`, [
+      p.planId,
+    ]);
+    expect(rows[0].kind).toBe('swap_days');
+    expect(rows[0].changes[0].before.scheduled_date).toBe(addDays(TODAY, 3));
+    expect(rows[0].changes[0].after.scheduled_date).toBe(addDays(TODAY, 6));
+  });
+
+  it('aceita mover para AMANHÃ — o primeiro destino válido', async () => {
+    const p = await seedPlan();
+    const alvo = p.byOffset[3];
+
+    const r = await applyAdaptation({
+      userId: p.userId,
+      planId: p.planId,
+      today: TODAY,
+      digest: await stateDigest(p.planId, TODAY),
+      idempotencyKey: 'k-move-amanha',
+      kind: 'swap_days',
+      patch: movePatch(alvo, addDays(TODAY, 1)),
+    });
+
+    expect(r.applied).toBe(true);
+    expect((await readWorkout(alvo)).scheduled_date).toBe(addDays(TODAY, 1));
+  });
+
+  it.each([
+    ['HOJE', 0],
+    ['ontem', -1],
+    ['o passado distante', -30],
+  ])('recusa mover para %s, sem escrever nada', async (_label, offset) => {
+    // ⚠️ O digest está CERTO e o `expected.status` está CERTO. Se a guarda não
+    // existisse, este patch seria aceito: o treino de origem está no futuro e é
+    // pendente, que é tudo que o `WHERE` sabe conferir.
+    const p = await seedPlan();
+    const alvo = p.byOffset[3];
+    const dataOriginal = (await readWorkout(alvo)).scheduled_date;
+
+    const r = await applyAdaptation({
+      userId: p.userId,
+      planId: p.planId,
+      today: TODAY,
+      digest: await stateDigest(p.planId, TODAY),
+      idempotencyKey: `k-passado-${offset}`,
+      kind: 'swap_days',
+      patch: movePatch(alvo, addDays(TODAY, offset)),
+    });
+
+    expect(r.applied).toBe(false);
+    expect(r.reason).toBe('new_date_in_past');
+
+    // NÃO é conflito: sem digest, porque recalcular a preview não conserta uma
+    // data no passado. É a diferença entre "tente de novo" e "isto está errado".
+    expect(r.current_digest).toBeUndefined();
+
+    expect((await readWorkout(alvo)).scheduled_date).toBe(dataOriginal);
+    expect(await countAdaptations(p.planId)).toBe(0);
+  });
+
+  it('recusa mesmo quando o patch também traz volume e segmentos', async () => {
+    // A guarda não pode depender de o patch ser "só data": a Troca de Dias
+    // manda datas, mas nada impede um patch misto no futuro.
+    const p = await seedPlan();
+    const alvo = p.byOffset[3];
+
+    const r = await applyAdaptation({
+      userId: p.userId,
+      planId: p.planId,
+      today: TODAY,
+      digest: await stateDigest(p.planId, TODAY),
+      idempotencyKey: 'k-misto-passado',
+      patch: [
+        {
+          workout_id: alvo,
+          expected: {
+            status: 'pending',
+            instructions_md5: await instructionsMd5(alvo),
+          },
+          set: {
+            scheduled_date: addDays(TODAY, -2),
+            distance_km: 4,
+            instructions_json: segments(300, 320),
+          },
+        },
+      ],
+    });
+
+    expect(r.reason).toBe('new_date_in_past');
+    expect(Number((await readWorkout(alvo)).distance_km)).toBe(6); // intacto
+  });
+
+  it('tudo ou nada: um destino no passado desfaz os itens válidos', async () => {
+    // "Remapeou 2 de 3" deixaria o calendário com um buraco silencioso — a
+    // mesma razão pela qual a 6.3 não aceita "aliviou 3 de 4".
+    const p = await seedPlan();
+    const ok = p.byOffset[3];
+    const ruim = p.byOffset[5];
+    const dataOk = (await readWorkout(ok)).scheduled_date;
+
+    const r = await applyAdaptation({
+      userId: p.userId,
+      planId: p.planId,
+      today: TODAY,
+      digest: await stateDigest(p.planId, TODAY),
+      idempotencyKey: 'k-move-parcial',
+      kind: 'swap_days',
+      patch: [
+        ...movePatch(ok, addDays(TODAY, 8)),
+        ...movePatch(ruim, addDays(TODAY, -1)),
+      ],
+    });
+
+    expect(r.applied).toBe(false);
+    expect(r.reason).toBe('new_date_in_past');
+    expect((await readWorkout(ok)).scheduled_date).toBe(dataOk); // NEM o válido
+    expect(await countAdaptations(p.planId)).toBe(0);
+  });
+
+  it('a guarda roda ANTES do CAS — a ordem importa para o diagnóstico', async () => {
+    // Com md5 desatualizado E data no passado, quem responde é a guarda da data.
+    // Se o CAS respondesse primeiro, o corredor receberia `row_conflict`
+    // (retentável) para um problema que retry nenhum resolve.
+    const p = await seedPlan();
+    const alvo = p.byOffset[3];
+    const md5Antigo = await instructionsMd5(alvo);
+
+    await getPool().query(
+      `UPDATE public.workouts SET instructions_json = $2 WHERE id = $1`,
+      [alvo, JSON.stringify(segments(280, 300))],
+    );
+
+    const r = await applyAdaptation({
+      userId: p.userId,
+      planId: p.planId,
+      today: TODAY,
+      digest: await stateDigest(p.planId, TODAY),
+      idempotencyKey: 'k-ordem',
+      patch: [
+        {
+          workout_id: alvo,
+          expected: { status: 'pending', instructions_md5: md5Antigo },
+          set: {
+            scheduled_date: addDays(TODAY, -1),
+            instructions_json: segments(),
+          },
+        },
+      ],
+    });
+
+    expect(r.reason).toBe('new_date_in_past');
+  });
+
+  it('a fronteira do DESTINO é a MESMA que o helper do TypeScript aplica', async () => {
+    // ── TESTE DE PARIDADE ────────────────────────────────────────────────────
+    //
+    // Mesmo molde do teste de paridade de `isEditableWorkout`, uma ponta
+    // adiante: agora a regra comparada é a da data DESTINO. Duas cópias da
+    // mesma regra é como a mina 2 nasceu — a diferença é que elas são
+    // comparadas.
+    //
+    // Só datas BEM FORMADAS: uma data malformada estoura no cast do SQL
+    // (`invalid_datetime_format`, que propaga como erro de programação) e
+    // volta estruturada no TS. A divergência é documentada na migration.
+    const { isEditableTargetDate } = require('../../src/modules/training/helpers/plan-window.helper') as {
+      isEditableTargetDate: (
+        d: string | null | undefined,
+        ctx: { todayStr: string },
+      ) => { editable: boolean; reason?: string };
+    };
+
+    const offsets = [-30, -3, -2, -1, 0, 1, 2, 3, 30];
+    const divergencias: string[] = [];
+
+    for (const offset of offsets) {
+      const destino = addDays(TODAY, offset);
+
+      // Plano novo a cada iteração: o teste anterior pode ter aplicado, e um
+      // estado sujo faria o SQL recusar por outro motivo que não a data.
+      const p = await seedPlan();
+
+      const tsAceita = isEditableTargetDate(destino, {
+        todayStr: TODAY,
+      }).editable;
+
+      const r = await applyAdaptation({
+        userId: p.userId,
+        planId: p.planId,
+        today: TODAY,
+        digest: await stateDigest(p.planId, TODAY),
+        idempotencyKey: `k-paridade-${offset}`,
+        kind: 'swap_days',
+        patch: movePatch(p.byOffset[3], destino),
+      });
+
+      // O SQL "aceita a data" quando a recusa NÃO foi por causa dela.
+      const sqlAceita = r.reason !== 'new_date_in_past';
+
+      if (tsAceita !== sqlAceita) {
+        divergencias.push(
+          `offset ${offset} (${destino}): TS=${tsAceita} SQL=${sqlAceita} (reason=${r.reason})`,
+        );
+      }
+    }
+
+    expect(divergencias).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+describe('T.0 — NO-OP para F3, 6.2 e 6.3', () => {
+  // ── A PROVA CENTRAL DESTA SUB-FASE ─────────────────────────────────────────
+  //
+  // A guarda nova é condicionada a `v_set ? 'scheduled_date'`. Nenhuma das três
+  // features em produção põe essa chave — logo a guarda é inalcançável para
+  // elas. Estes testes rodam os formatos EXATOS de patch que elas montam,
+  // contra a função JÁ COM a guarda, e provam que nada mudou.
+
+  it('6.2 — aliviar UM treino segue aplicando', async () => {
+    const p = await seedPlan();
+    const alvo = p.byOffset[3];
+
+    const r = await applyAdaptation({
+      userId: p.userId,
+      planId: p.planId,
+      today: TODAY,
+      digest: await stateDigest(p.planId, TODAY),
+      idempotencyKey: 'k-noop-62',
+      kind: 'reduzir_volume',
+      patch: [
+        {
+          workout_id: alvo,
+          expected: {
+            status: 'pending',
+            instructions_md5: await instructionsMd5(alvo),
+          },
+          set: { distance_km: 4.8, instructions_json: segments() },
+        },
+      ],
+    });
+
+    expect(r.applied).toBe(true);
+    expect(Number((await readWorkout(alvo)).distance_km)).toBe(4.8);
+    // A data NÃO foi tocada — o `coalesce` mantém a original quando a chave
+    // está ausente, exatamente como antes da T.0.
+    expect((await readWorkout(alvo)).scheduled_date).toBe(addDays(TODAY, 3));
+  });
+
+  it('6.3 — aliviar a SEMANA (multi-item) segue aplicando', async () => {
+    const p = await seedPlan();
+    const a = p.byOffset[5];
+    const b = p.byOffset[7];
+
+    const r = await applyAdaptation({
+      userId: p.userId,
+      planId: p.planId,
+      today: TODAY,
+      digest: await stateDigest(p.planId, TODAY),
+      idempotencyKey: 'k-noop-63',
+      kind: 'reduzir_volume',
+      patch: [
+        {
+          workout_id: a,
+          expected: {
+            status: 'pending',
+            instructions_md5: await instructionsMd5(a),
+          },
+          set: { distance_km: 5, instructions_json: segments() },
+        },
+        {
+          workout_id: b,
+          expected: {
+            status: 'pending',
+            instructions_md5: await instructionsMd5(b),
+          },
+          set: { distance_km: 7, instructions_json: segments() },
+        },
+      ],
+    });
+
+    expect(r.applied).toBe(true);
+    expect(r.affected).toEqual({ workouts: 2, briefings: 0 });
+    expect((await readWorkout(a)).scheduled_date).toBe(addDays(TODAY, 5));
+    expect((await readWorkout(b)).scheduled_date).toBe(addDays(TODAY, 7));
+  });
+
+  it('F3 — reprecificação segue aplicando, com plano e histórico', async () => {
+    const p = await seedPlan({ vdotCurrent: 40 });
+    const alvo = p.byOffset[3];
+
+    const r = await applyAdaptation({
+      userId: p.userId,
+      planId: p.planId,
+      today: TODAY,
+      digest: await stateDigest(p.planId, TODAY),
+      idempotencyKey: 'k-noop-f3',
+      kind: 'reprice',
+      patch: [
+        {
+          workout_id: alvo,
+          expected: {
+            status: 'pending',
+            instructions_md5: await instructionsMd5(alvo),
+          },
+          set: { instructions_json: segments(300, 320) },
+        },
+      ],
+      planPatch: { vdot_current: 41 },
+      vdotHistory: {
+        vdot_before: 40,
+        vdot_after: 41,
+        source: 'reestimate',
+        reason: 'evidência suficiente',
+        evidence: { workout_ids: ['q1'] },
+      },
+    });
+
+    expect(r.applied).toBe(true);
+    expect((await readWorkout(alvo)).scheduled_date).toBe(addDays(TODAY, 3));
+
+    const { rows } = await getPool().query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM public.plan_vdot_history WHERE plan_id = $1`,
+      [p.planId],
+    );
+    expect(rows[0].n).toBe(1);
+  });
+
+  it('reduzir frequência (só status) segue aplicando', async () => {
+    const p = await seedPlan();
+    const alvo = p.byOffset[3];
+
+    const r = await applyAdaptation({
+      userId: p.userId,
+      planId: p.planId,
+      today: TODAY,
+      digest: await stateDigest(p.planId, TODAY),
+      idempotencyKey: 'k-noop-freq',
+      kind: 'reduzir_frequencia',
+      patch: [
+        {
+          workout_id: alvo,
+          expected: { status: 'pending' },
+          set: { status: 'skipped' },
+        },
+      ],
+    });
+
+    expect(r.applied).toBe(true);
+    expect((await readWorkout(alvo)).status).toBe('skipped');
+    expect((await readWorkout(alvo)).scheduled_date).toBe(addDays(TODAY, 3));
+  });
+
+  it('o CHECK de `kind` aceita os cinco, e SÓ os cinco', async () => {
+    const { rows } = await getPool().query<{ n: number; def: string }>(
+      `SELECT count(*)::int AS n, min(pg_get_constraintdef(oid)) AS def
+         FROM pg_constraint
+        WHERE conrelid = 'public.plan_adaptations'::regclass
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) LIKE '%kind%'`,
+    );
+
+    // Exatamente UMA régua: se a migration tivesse errado o nome da constraint
+    // antiga, sobrariam duas e `swap_days` seria rejeitado em silêncio.
+    expect(rows[0].n).toBe(1);
+    for (const k of [
+      'reduzir_frequencia',
+      'reduzir_volume',
+      'schedule_shift',
+      'reprice',
+      'swap_days',
+    ]) {
+      expect(rows[0].def).toContain(k);
+    }
+
+    // Um plano de verdade: sem ele o INSERT afetaria zero linhas e o CHECK
+    // nunca rodaria — o teste passaria sem provar nada.
+    const p = await seedPlan();
+
+    const insert = (kind: string, key: string) =>
+      getPool().query(
+        `INSERT INTO public.plan_adaptations
+           (user_id, plan_id, source, kind, digest_before, digest_after,
+            applied_today, workout_ids, changes, idempotency_key)
+         VALUES ($1, $2, 'manual', $3, 'a', 'b', $4,
+                 ARRAY[]::uuid[], '[]'::jsonb, $5)`,
+        [p.userId, p.planId, kind, TODAY, key],
+      );
+
+    // `swap_days` passa — é o que a migration veio adicionar.
+    await expect(insert('swap_days', 'k-swap-ok')).resolves.toBeDefined();
+
+    // E a régua continua fechada para o resto.
+    await expect(insert('kind_inventado', 'k-invalido')).rejects.toThrow(
+      /plan_adaptations_kind_check/,
+    );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 describe('apply_plan_adaptation — concorrência otimista', () => {
   it('rejeita quando o digest envelheceu, sem escrever nada', async () => {
     const p = await seedPlan();

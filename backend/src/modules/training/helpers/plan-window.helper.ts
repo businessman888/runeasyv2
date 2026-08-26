@@ -223,6 +223,71 @@ export function isEditableWorkout(
   return { editable: true };
 }
 
+export type TargetDateBlockReason = 'new_date_today_or_past';
+
+export interface TargetDateCheck {
+  editable: boolean;
+  reason?: TargetDateBlockReason;
+}
+
+/**
+ * A data DESTINO de um remapeamento respeita a fronteira?
+ *
+ * ── POR QUE É SEPARADA DE `isEditableWorkout` ─────────────────────────────────
+ *
+ * São duas perguntas diferentes, e juntá-las numa função só apagaria a
+ * distinção:
+ *
+ *   isEditableWorkout      "esta LINHA pode ser tocada?"   → origem
+ *   isEditableTargetDate   "esta DATA pode receber?"       → destino
+ *
+ * Um remapeamento precisa das duas. Toda feature da Fase 6 até aqui precisou só
+ * da primeira, porque nenhuma delas move data: a 6.2 e a 6.3 escrevem volume, e
+ * a Fase 3 escreve pace. A Troca de Dias é a primeira a mover, e é ela que torna
+ * a segunda pergunta necessária.
+ *
+ * O SQL trata as duas separadas pelo mesmo motivo: a origem vive no `WHERE` do
+ * UPDATE (avaliado contra a linha antiga), o destino num `IF` antes dele.
+ *
+ * ── ESTA NÃO É A GUARDA ───────────────────────────────────────────────────────
+ *
+ * A guarda de verdade é o `RAISE … RE422` de `apply_plan_adaptation`. Esta
+ * função existe para o backend poder recusar ANTES do round-trip e dizer por
+ * quê — mesmo papel de `assertPlanEditable`. Há teste de paridade entre as duas
+ * em `test/integration/plan-adaptation.int-spec.ts`: duas cópias da mesma regra
+ * é como a mina 2 nasceu, e a diferença é que agora elas são comparadas.
+ *
+ * ── `null` É VÁLIDO, E ISSO É O CONTRATO ──────────────────────────────────────
+ *
+ * Ausência de data nova significa "este patch não move nada" — o caso da F3, da
+ * 6.2 e da 6.3. A função devolve `editable: true` e o SQL faz o mesmo (o `IF`
+ * é condicionado a `v_set ? 'scheduled_date'`). É esse no-op que garante que a
+ * T.0 não mexeu em nenhuma feature que já roda em produção.
+ *
+ * @param newDateStr `YYYY-MM-DD` de destino, ou `null`/`undefined` quando o
+ *                   patch não toca `scheduled_date`.
+ */
+export function isEditableTargetDate(
+  newDateStr: string | null | undefined,
+  ctx: { todayStr: string },
+): TargetDateCheck {
+  // Sem data nova, não há destino a validar.
+  if (newDateStr === null || newDateStr === undefined) {
+    return { editable: true };
+  }
+  // Comparação lexicográfica de `YYYY-MM-DD`, como no resto do módulo: a ordem
+  // alfabética já é a cronológica, e converter para `Date` reintroduziria o fuso
+  // de quem executa (UTC no Railway).
+  //
+  // `editableFrom` é a MESMA função que `isEditableWorkout` usa — origem e
+  // destino passam pela régua idêntica, que é o que torna a paridade com o SQL
+  // (`<= p_today` é a negação exata de `> p_today`) verificável.
+  if (newDateStr < editableFrom(ctx.todayStr)) {
+    return { editable: false, reason: 'new_date_today_or_past' };
+  }
+  return { editable: true };
+}
+
 export type PlanBlockReason =
   | 'not_active'
   | 'generating'

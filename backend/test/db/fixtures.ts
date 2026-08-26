@@ -199,8 +199,33 @@ export async function instructionsMd5(workoutId: string): Promise<string> {
   return rows[0].md5;
 }
 
-export async function readWorkout(workoutId: string) {
-  const { rows } = await getPool().query(
+/**
+ * Uma linha de `workouts` como os testes a leem.
+ *
+ * Tipada desde a T.0 da Troca de Dias: os testes de remapeamento comparam
+ * `scheduled_date` com `addDays(TODAY, n)`, e sem o tipo cada acesso é `any` —
+ * um erro de digitação no nome do campo passaria como `undefined` e a asserção
+ * comparia `undefined` com `undefined` em silêncio.
+ *
+ * `scheduled_date` chega com `::text` de propósito: o driver converteria `date`
+ * para `Date` do JavaScript na TZ do processo, e a comparação com uma string
+ * passaria a depender do relógio da máquina — a classe de bug que a fronteira
+ * existe para impedir.
+ *
+ * `distance_km` é `double precision` no banco mas o driver o entrega como string
+ * em alguns caminhos; daí a união, e daí os testes usarem `Number(...)`.
+ */
+export interface WorkoutRow {
+  id: string;
+  status: string;
+  scheduled_date: string;
+  distance_km: number | string | null;
+  instructions_json: unknown;
+  plan_id: string | null;
+}
+
+export async function readWorkout(workoutId: string): Promise<WorkoutRow> {
+  const { rows } = await getPool().query<WorkoutRow>(
     `SELECT id, status, scheduled_date::text AS scheduled_date, distance_km,
             instructions_json, plan_id
        FROM public.workouts WHERE id = $1`,
