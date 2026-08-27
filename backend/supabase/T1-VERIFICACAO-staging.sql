@@ -129,84 +129,109 @@ SELECT verifica,
 -- ═══════════════════════════════════════════════════════════════════════════
 -- BLOCO 2 — funcional. A Mina 4 fechada, provada e desfeita.
 --
--- Rode o bloco INTEIRO de uma vez (BEGIN … ROLLBACK). Ele escolhe sozinho um
--- treino futuro/pendente real, remapeia a data E grava dias novos, mostra o
--- antes/depois das DUAS cópias, e desfaz tudo.
+-- Rode o bloco INTEIRO de uma vez, do `BEGIN;` ao `ROLLBACK;`. Ele escolhe
+-- sozinho um treino futuro/pendente real, remapeia a data E grava dias novos,
+-- mostra o antes/depois das DUAS cópias, e desfaz tudo.
 --
--- O ROLLBACK é o que permite testar a escrita real de `user_onboarding` sem
--- mexer nos dias de ninguém.
+-- ── POR QUE TRÊS STATEMENTS, E NÃO UM CTE ────────────────────────────────────
+--
+-- A versão anterior deste bloco chamava a função e lia o resultado no MESMO
+-- statement, dentro de um CTE. Ela reportava `❌ FALHOU` mesmo com a função
+-- funcionando — e o motivo não era a função.
+--
+-- Num único statement, TODOS os subselects enxergam o mesmo snapshot: o de
+-- ANTES da execução. As escritas de uma função volátil chamada no meio do
+-- statement não ficam visíveis para os irmãos dela. A leitura "depois" vinha
+-- literalmente do estado anterior — sempre igual ao "antes", tivesse a função
+-- escrito ou não.
+--
+-- Isso torna o teste inútil nas DUAS direções: ele não confirmaria uma escrita
+-- que aconteceu, nem detectaria uma que não aconteceu.
+--
+-- A correção é separar em statements: a temp table captura o ANTES, a chamada
+-- vai sozinha, e a leitura acontece num terceiro statement — que abre snapshot
+-- novo e enxerga o que a função gravou. Tudo dentro da mesma transação, que é
+-- revertida no fim.
+--
+-- ⚠️ Mesma armadilha no BLOCO 2 da T.0 (`T0-VERIFICACAO-staging.sql`): lá o
+-- resultado esperado era "nada mudou", que é o que o snapshot velho mostra de
+-- qualquer jeito. A conclusão da T.0 continua válida — quem provou foi o campo
+-- `reason = new_date_in_past`, que vem do RETORNO da função e não de leitura —
+-- mas a linha `data_agora` daquele bloco não era evidência de nada.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
 
-WITH alvo AS (
-  SELECT w.id, w.plan_id, w.user_id,
-         w.scheduled_date AS data_antes,
-         (now() AT TIME ZONE 'America/Sao_Paulo')::date AS hoje
-    FROM public.workouts w
-    JOIN public.training_plans p ON p.id = w.plan_id
-   WHERE p.status = 'active'
-     AND p.generation_status = 'complete'
-     AND w.status = 'pending'
-     AND w.scheduled_date > (now() AT TIME ZONE 'America/Sao_Paulo')::date
-     AND coalesce(w.is_race_day, false) = false
-   ORDER BY w.scheduled_date
-   LIMIT 1
-),
-antes AS (
-  SELECT a.*,
-         o.available_days                  AS dias_coluna_antes,
-         o.responses_json->'available_days' AS dias_json_antes
-    FROM alvo a
-    LEFT JOIN public.user_onboarding o ON o.user_id = a.user_id
-),
-chamada AS (
-  SELECT b.*,
-         public.apply_plan_adaptation(
-           p_user_id          => b.user_id,
-           p_plan_id          => b.plan_id,
-           p_today            => b.hoje,
-           p_expected_digest  => public.plan_state_digest(b.plan_id, b.hoje),
-           p_idempotency_key  => 't1-prova-' || gen_random_uuid()::text,
-           p_kind             => 'swap_days',
-           p_patch            => jsonb_build_array(jsonb_build_object(
-                                   'workout_id', b.id,
-                                   'expected',   jsonb_build_object('status', 'pending'),
-                                   'set',        jsonb_build_object(
-                                                   'scheduled_date',
-                                                   (b.data_antes + 1)::text))),
-           p_invalidate_briefings => false,
-           p_onboarding_patch => jsonb_build_object(
-                                   'available_days', '[2,4,6]'::jsonb)
-         ) AS res
-    FROM antes b
-)
-SELECT c.res->>'applied'                    AS applied,
-       c.res->'affected'->>'workouts'       AS treinos_movidos,
-       c.res->'affected'->>'briefings'      AS briefings_apagados,
-       c.res->'affected'->>'onboarding'     AS linhas_onboarding,
-       c.data_antes                         AS data_antes,
-       (SELECT w.scheduled_date FROM public.workouts w WHERE w.id = c.id) AS data_depois,
-       c.dias_coluna_antes::text            AS dias_coluna_antes,
-       (SELECT o.available_days::text FROM public.user_onboarding o
-         WHERE o.user_id = c.user_id)       AS dias_coluna_depois,
-       c.dias_json_antes::text              AS dias_json_antes,
-       (SELECT (o.responses_json->'available_days')::text FROM public.user_onboarding o
-         WHERE o.user_id = c.user_id)       AS dias_json_depois,
+-- ── 1. O alvo e o estado ANTES ──────────────────────────────────────────────
+CREATE TEMP TABLE t1_prova ON COMMIT DROP AS
+SELECT w.id                              AS workout_id,
+       w.plan_id,
+       w.user_id,
+       w.scheduled_date                  AS data_antes,
+       (now() AT TIME ZONE 'America/Sao_Paulo')::date AS hoje,
+       o.available_days                  AS dias_coluna_antes,
+       o.responses_json->'available_days' AS dias_json_antes,
+       (o.user_id IS NOT NULL)           AS tem_onboarding,
+       NULL::jsonb                       AS res
+  FROM public.workouts w
+  JOIN public.training_plans p ON p.id = w.plan_id
+  LEFT JOIN public.user_onboarding o ON o.user_id = w.user_id
+ WHERE p.status = 'active'
+   AND p.generation_status = 'complete'
+   AND w.status = 'pending'
+   AND w.scheduled_date > (now() AT TIME ZONE 'America/Sao_Paulo')::date
+   AND coalesce(w.is_race_day, false) = false
+ ORDER BY w.scheduled_date
+ LIMIT 1;
+
+-- ── 2. A chamada, em statement PRÓPRIO ──────────────────────────────────────
+UPDATE t1_prova t
+   SET res = public.apply_plan_adaptation(
+         p_user_id          => t.user_id,
+         p_plan_id          => t.plan_id,
+         p_today            => t.hoje,
+         p_expected_digest  => public.plan_state_digest(t.plan_id, t.hoje),
+         p_idempotency_key  => 't1-prova-' || gen_random_uuid()::text,
+         p_kind             => 'swap_days',
+         p_patch            => jsonb_build_array(jsonb_build_object(
+                                 'workout_id', t.workout_id,
+                                 'expected',   jsonb_build_object('status', 'pending'),
+                                 'set',        jsonb_build_object(
+                                                 'scheduled_date',
+                                                 (t.data_antes + 1)::text))),
+         p_invalidate_briefings => false,
+         p_onboarding_patch => jsonb_build_object(
+                                 'available_days', '[2,4,6]'::jsonb));
+
+-- ── 3. A leitura e o veredito, em statement PRÓPRIO ─────────────────────────
+SELECT t.res->>'applied'                AS applied,
+       t.res->'affected'->>'workouts'   AS treinos_movidos,
+       t.res->'affected'->>'briefings'  AS briefings_apagados,
+       t.res->'affected'->>'onboarding' AS linhas_onboarding,
+       t.data_antes,
+       w.scheduled_date                 AS data_depois,
+       t.dias_coluna_antes::text        AS dias_coluna_antes,
+       o.available_days::text           AS dias_coluna_depois,
+       t.dias_json_antes::text          AS dias_json_antes,
+       (o.responses_json->'available_days')::text AS dias_json_depois,
        CASE
-         WHEN c.res->>'applied' = 'true'
-          AND (SELECT w.scheduled_date FROM public.workouts w WHERE w.id = c.id)
-              = c.data_antes + 1
-          AND (SELECT o.available_days::text FROM public.user_onboarding o
-                WHERE o.user_id = c.user_id) = '[2, 4, 6]'
-          AND coalesce(
-                (SELECT (o.responses_json->'available_days')::text
-                   FROM public.user_onboarding o WHERE o.user_id = c.user_id),
-                '[2, 4, 6]') = '[2, 4, 6]'
-         THEN '✅ data remapeada E as duas cópias dos dias gravadas'
-         ELSE '❌ FALHOU — ver detalhe: ' || c.res::text
+         WHEN t.res->>'applied' <> 'true'
+           THEN '❌ a função recusou: ' || t.res::text
+         WHEN w.scheduled_date <> t.data_antes + 1
+           THEN '❌ a data NÃO foi remapeada'
+         WHEN t.tem_onboarding AND o.available_days::text <> '[2, 4, 6]'
+           THEN '❌ a COLUNA available_days não foi gravada'
+         WHEN t.tem_onboarding
+              AND t.dias_json_antes IS NOT NULL
+              AND (o.responses_json->'available_days')::text <> '[2, 4, 6]'
+           THEN '❌ `responses_json` não foi gravado — a cópia que TEM precedência'
+         WHEN NOT t.tem_onboarding
+           THEN '✅ data remapeada (usuário de teste sem linha de onboarding)'
+         ELSE '✅ data remapeada E as duas cópias dos dias gravadas'
        END AS veredito
-  FROM chamada c;
+  FROM t1_prova t
+  JOIN public.workouts w ON w.id = t.workout_id
+  LEFT JOIN public.user_onboarding o ON o.user_id = t.user_id;
 
 ROLLBACK;
 
@@ -214,18 +239,16 @@ ROLLBACK;
 --
 --   applied            = true
 --   treinos_movidos    = 1
---   briefings_apagados = 0          ← o briefing SOBREVIVE (só a data mudou)
---   linhas_onboarding  = 1          ← a Mina 4 fechada; 0 se o usuário de teste
---                                     não tiver linha em `user_onboarding`
+--   briefings_apagados = 0              ← o briefing SOBREVIVE (só a data mudou)
+--   linhas_onboarding  = 1
 --   data_depois        = data_antes + 1
 --   dias_coluna_depois = [2, 4, 6]
---   dias_json_depois   = [2, 4, 6]  ← a cópia que TEM PRECEDÊNCIA na leitura;
---                                     se ela não mudar, a troca seria desfeita
---                                     sozinha no próximo plano gerado
+--   dias_json_depois   = [2, 4, 6]      ← a cópia com PRECEDÊNCIA na leitura;
+--                                         se ela não mudar, a troca seria
+--                                         desfeita sozinha no próximo plano
 --
--- `linhas_onboarding = 0` com o resto ✅ não é falha da T.1: significa que o
--- plano de teste pertence a um usuário sem linha de onboarding. Nesse caso
--- `dias_*_antes` vêm nulos e o veredito ainda passa pelo `coalesce`.
+-- O `veredito` diz exatamente QUAL das quatro condições falhou, em vez de um
+-- "❌" genérico — foi o que faltou na primeira versão deste bloco.
 --
 -- Zero linhas = staging não tem treino futuro pendente em plano ativo. O
 -- BLOCO 1 sozinho já fecha a parte estrutural.

@@ -184,12 +184,28 @@ SELECT c.data_antes                                    AS estava_em,
 
 ROLLBACK;
 
+-- ⚠️ RESSALVA DESCOBERTA NA T.1 ────────────────────────────────────────────
+--
+-- `data_agora` neste bloco NÃO é evidência de nada, e não deve ser lida como
+-- tal. A chamada e a leitura acontecem no MESMO statement, e num único
+-- statement todos os subselects enxergam o snapshot de ANTES: as escritas de
+-- uma função volátil chamada no meio não ficam visíveis para os irmãos dela.
+-- `data_agora` viria igual a `estava_em` TIVESSE a função escrito ou não.
+--
+-- A conclusão da T.0 continua de pé — quem provou a guarda foi
+-- `reason = new_date_in_past`, que vem do RETORNO da função e não de leitura,
+-- somado ao controle negativo local (a função de 20260815 GRAVOU no passado, a
+-- de 20260826 recusou). Mas a linha de leitura era decorativa.
+--
+-- O BLOCO 2 da T.1 (`T1-VERIFICACAO-staging.sql`) usa temp table + statements
+-- separados justamente para não repetir isto.
+--
 -- ── COMO LER O BLOCO 2 ─────────────────────────────────────────────────────
 --
 --   applied            = false
---   reason             = new_date_in_past
+--   reason             = new_date_in_past          ← a evidência de verdade
 --   current_digest     = (ausente)      ← a recusa NÃO é retentável, por desenho
---   data_agora         = estava_em      ← nada foi escrito
+--   data_agora         = estava_em      ← ver a ressalva acima
 --
 -- Zero linhas no BLOCO 2 significa que staging não tem nenhum treino futuro
 -- pendente em plano ativo — não é falha, só não há o que testar. Nesse caso o
