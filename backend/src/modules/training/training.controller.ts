@@ -37,6 +37,8 @@ import { SetWorkoutRpeDto } from './dto/set-workout-rpe.dto';
 import { ApplyReliefDto } from './dto/apply-relief.dto';
 import { ApplyWeekReliefDto } from './dto/apply-week-relief.dto';
 import { VolumeReliefService } from './volume-relief.service';
+import { DaySwapService } from './day-swap.service';
+import { ApplyDaySwapDto, DaySwapPreviewDto } from './dto/day-swap.dto';
 
 interface CreatePlanDto {
   // Biometrics (New)
@@ -118,6 +120,7 @@ export class TrainingController {
     private readonly gamificationService: GamificationService,
     private readonly trainingAIService: TrainingAIService,
     private readonly volumeReliefService: VolumeReliefService,
+    private readonly daySwapService: DaySwapService,
   ) {}
 
   /**
@@ -1018,6 +1021,79 @@ export class TrainingController {
       dto.expected_digest,
       dto.insight_id ?? null,
     );
+  }
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // Troca de Dias — Fase T.1
+  // ═════════════════════════════════════════════════════════════════════════
+
+  /**
+   * O CONTEXTO da conversa: quais dias o corredor treina hoje, quantos são, e
+   * os insumos dos dois modos.
+   *
+   * Os dias vêm do CALENDÁRIO materializado, nunca de `days_per_week` — esse
+   * campo é a intenção do onboarding e diverge da realidade (há plano em
+   * produção que declara 3 dias e tem um treino por semana).
+   */
+  @Get('plan/day-swap-context')
+  @UseGuards(ProGuard)
+  async getDaySwapContext(@User('id') userId: string) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+    return this.daySwapService.getContext(userId);
+  }
+
+  /**
+   * A PREVIEW: as datas novas, o veredito de espaçamento e o digest.
+   *
+   * `POST` e não `GET` — ao contrário da 6.3, aqui quem escolhe é o corredor, e
+   * a escolha vai no corpo.
+   *
+   * O veredito de espaçamento NUNCA bloqueia: se o arranjo novo cola dois
+   * treinos pesados, ele volta `apertado` com quais são, e quem decide é quem
+   * vai correr (a mesma postura do feasibility da Fase 5).
+   */
+  @Post('plan/day-swap-preview')
+  @UseGuards(ProGuard)
+  async previewDaySwap(
+    @User('id') userId: string,
+    @Body() dto: DaySwapPreviewDto,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+    return this.daySwapService.preview(userId, {
+      mode: dto.mode,
+      newDays: dto.new_days,
+      workoutId: dto.workout_id,
+      targetDate: dto.target_date,
+    });
+  }
+
+  /**
+   * APLICA a troca: UM patch multi-item, atômico.
+   *
+   * Se qualquer treino tiver mudado desde a preview, a primitiva desfaz o bloco
+   * inteiro — "trocou 4 de 6" não é um estado possível. Conflito é RESULTADO
+   * com a preview recalculada no corpo, e a resposta é **sempre 200**.
+   *
+   * No Modo 1 a mesma transação grava os dias novos em `user_onboarding` — sem
+   * isso a próxima geração de plano reverteria a troca em silêncio (Mina 4).
+   */
+  @Post('plan/day-swap')
+  @UseGuards(ProGuard)
+  async applyDaySwap(@User('id') userId: string, @Body() dto: ApplyDaySwapDto) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+    return this.daySwapService.apply(userId, {
+      mode: dto.mode,
+      expectedDigest: dto.expected_digest,
+      newDays: dto.new_days,
+      workoutId: dto.workout_id,
+      targetDate: dto.target_date,
+    });
   }
 
   /**

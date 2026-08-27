@@ -63,3 +63,35 @@ export const PROTECTED_FROM_VOLUME_CUT: ReadonlySet<string> = new Set([
 export function cedesVolume(type: string | null | undefined): boolean {
   return !PROTECTED_FROM_VOLUME_CUT.has(type ?? '');
 }
+
+/**
+ * O que PESA na perna — a régua de espaçamento da Troca de Dias (T.1).
+ *
+ * ── POR QUE UM TERCEIRO CONJUNTO ─────────────────────────────────────────────
+ *
+ * Porque é uma TERCEIRA pergunta, e nenhum dos dois de cima a responde:
+ *
+ *   QUALITY_TYPES             "quem recebe a distância do slot de qualidade
+ *                              quando o plano é GERADO?"
+ *   PROTECTED_FROM_VOLUME_CUT "quem é intocável quando a semana é ALIVIADA?"
+ *   HEAVY_TYPES               "o que NÃO deveria cair dois dias seguidos?"
+ *
+ * O `long_run` é a diferença que explica a necessidade. Ele está fora dos dois
+ * primeiros de propósito — é volume e não intensidade, e é a maior base de corte
+ * que a 6.3 tem. Mas para a perna do corredor ele é o treino mais pesado da
+ * semana, e um longão colado numa sessão de qualidade é exatamente o arranjo que
+ * a régua existe para sinalizar.
+ *
+ * `race_simulation` entra pelo mesmo motivo pelo qual já é protegido no corte:
+ * é o ensaio da prova, e ensaio de prova não se faz na ressaca de um tiro.
+ *
+ * Declarar este conjunto localmente no helper da Troca de Dias teria sido o
+ * caminho curto — e seria a mina 2 de novo, uma terceira cópia da classificação
+ * de tipos precisando concordar com as outras duas por disciplina. Ele mora aqui
+ * pelo mesmo motivo que os outros dois.
+ */
+export const HEAVY_TYPES: ReadonlySet<string> = new Set([
+  ...QUALITY_TYPES,
+  'long_run',
+  'race_simulation',
+]);

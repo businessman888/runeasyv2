@@ -12,6 +12,7 @@ import { MesoInsightService } from './meso-insight.service';
 import { PaceGoalService } from './pace-goal.service';
 import { PlanAdaptationService } from './plan-adaptation.service';
 import { VolumeReliefService } from './volume-relief.service';
+import { DaySwapService } from './day-swap.service';
 import { WellnessController } from './wellness/wellness.controller';
 import { WellnessService } from './wellness/wellness.service';
 import { NotificationModule } from '../notifications';
@@ -61,6 +62,7 @@ import { FeedbackModule } from '../feedback/feedback.module';
     PaceGoalService,
     PlanAdaptationService,
     VolumeReliefService,
+    DaySwapService,
   ],
   exports: [
     TrainingService,

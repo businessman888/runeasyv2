@@ -125,7 +125,12 @@ export interface AdaptationResult {
   digestAfter?: string;
   /** Presente no conflito: o estado real, para recalcular a preview. */
   currentDigest?: string;
-  affected?: { workouts: number; briefings: number };
+  affected?: {
+    workouts: number;
+    briefings: number;
+    /** Linhas de `user_onboarding` atualizadas (só a Troca de Dias pede). */
+    onboarding?: number;
+  };
   /** Só no shift de agenda. */
   shifted?: number;
   reclaimed?: number;
@@ -243,6 +248,16 @@ export class PlanAdaptationService {
     planPatch?: Record<string, unknown> | null;
     /** Só a Fase 3 usa: a linha de `plan_vdot_history`, na mesma transação. */
     vdotHistory?: Record<string, unknown> | null;
+    /**
+     * Só a Troca de Dias usa: whitelist `{ available_days }`.
+     *
+     * Fecha a Mina 4 — os dias escolhidos moram em `user_onboarding` (coluna E
+     * `responses_json`, que tem precedência na leitura), e é de lá que a GERAÇÃO
+     * lê. Remapear as datas sem atualizar isso faz a troca ser desfeita em
+     * silêncio no próximo plano. Vai na MESMA transação do remapeamento pelo
+     * mesmo motivo que o histórico do VDOT vai na da reprecificação.
+     */
+    onboardingPatch?: Record<string, unknown> | null;
   }): Promise<AdaptationResult> {
     const today = params.todayStr ?? this.todayStr();
 
@@ -293,6 +308,7 @@ export class PlanAdaptationService {
         p_meta: this.serializeMeta(params.meta),
         p_plan_patch: params.planPatch ?? null,
         p_vdot_history: params.vdotHistory ?? null,
+        p_onboarding_patch: params.onboardingPatch ?? null,
       });
 
     if (error) {
@@ -426,7 +442,7 @@ export class PlanAdaptationService {
   private mapResult(data: unknown): AdaptationResult {
     const row = (data ?? {}) as Record<string, unknown>;
     const affected = row.affected as
-      | { workouts?: number; briefings?: number }
+      | { workouts?: number; briefings?: number; onboarding?: number }
       | undefined;
 
     return {
@@ -440,6 +456,11 @@ export class PlanAdaptationService {
         ? {
             workouts: Number(affected.workouts ?? 0),
             briefings: Number(affected.briefings ?? 0),
+            // Ausente no replay (a linha de histórico não guarda este contador)
+            // e nas features que não pedem escrita de onboarding.
+            ...(affected.onboarding !== undefined
+              ? { onboarding: Number(affected.onboarding) }
+              : {}),
           }
         : undefined,
       shifted: row.shifted !== undefined ? Number(row.shifted) : undefined,

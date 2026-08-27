@@ -16,7 +16,7 @@ export interface ApplyResult {
   digest_after?: string;
   current_digest?: string;
   detail?: string;
-  affected?: { workouts: number; briefings: number };
+  affected?: { workouts: number; briefings: number; onboarding?: number };
   shifted?: number;
   reclaimed?: number;
   delta_days?: number;
@@ -40,7 +40,8 @@ const APPLY_SQL = `
     p_invalidate_briefings => $8::boolean,
     p_meta                 => $9::jsonb,
     p_plan_patch           => $10::jsonb,
-    p_vdot_history         => $11::jsonb
+    p_vdot_history         => $11::jsonb,
+    p_onboarding_patch     => $12::jsonb
   ) AS result
 `;
 
@@ -56,6 +57,8 @@ export interface ApplyArgs {
   meta?: Record<string, unknown>;
   planPatch?: Record<string, unknown> | null;
   vdotHistory?: Record<string, unknown> | null;
+  /** Troca de Dias T.1 — whitelist `{ available_days }`. */
+  onboardingPatch?: Record<string, unknown> | null;
 }
 
 function applyParams(a: ApplyArgs): unknown[] {
@@ -71,6 +74,7 @@ function applyParams(a: ApplyArgs): unknown[] {
     JSON.stringify(a.meta ?? { source: 'manual' }),
     a.planPatch ? JSON.stringify(a.planPatch) : null,
     a.vdotHistory ? JSON.stringify(a.vdotHistory) : null,
+    a.onboardingPatch ? JSON.stringify(a.onboardingPatch) : null,
   ];
 }
 
