@@ -2,6 +2,10 @@ import { BASE_API_URL } from '../config/api.config';
 import { authedFetch } from './apiClient';
 import * as Storage from '../utils/storage';
 import type {
+    DaySwapApplyResult,
+    DaySwapChoice,
+    DaySwapContextResult,
+    DaySwapPreviewResult,
     ReliefApplyResult,
     ReliefLevel,
     ReliefPreviewResult,
@@ -164,4 +168,109 @@ export async function applyWeekRelief(
 
     const text = await res.text().catch(() => '');
     throw new Error(`Falha ao aliviar a semana (${res.status}): ${text}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Troca de Dias — Fase T.2
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * O CONTEXTO da conversa: dias atuais, quantidade, e os insumos dos dois modos.
+ *
+ * `available: false` é estado NORMAL da tela, não erro: sem plano ativo, sem
+ * próxima semana, plano ainda gerando. O bot conta o motivo com as palavras do
+ * backend em vez de inventar as próprias.
+ */
+export async function getDaySwapContext(): Promise<DaySwapContextResult> {
+    const headers = await getHeaders();
+    const res = await authedFetch(
+        `${BASE_API_URL}/training/plan/day-swap-context`,
+        { headers },
+    );
+
+    if (res.status === 403) {
+        return {
+            available: false,
+            reason: 'not_pro',
+            message: 'Trocar seus dias de treino faz parte do RunEasy Pro.',
+        };
+    }
+
+    const body = await decisionBody<DaySwapContextResult>(res);
+    if (body && typeof body.available === 'boolean') return body;
+
+    const text = await res.text().catch(() => '');
+    throw new Error(`Falha ao carregar seus dias (${res.status}): ${text}`);
+}
+
+/**
+ * A PREVIEW: as datas novas, o veredito de espaçamento e o digest.
+ *
+ * `POST` e não `GET` — ao contrário da 6.3, aqui quem escolhe é o corredor, e a
+ * escolha vai no corpo.
+ */
+export async function getDaySwapPreview(
+    choice: DaySwapChoice,
+): Promise<DaySwapPreviewResult> {
+    const headers = await getHeaders();
+    const res = await authedFetch(
+        `${BASE_API_URL}/training/plan/day-swap-preview`,
+        {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(toBody(choice)),
+        },
+    );
+
+    if (res.status === 403) {
+        return {
+            available: false,
+            reason: 'not_pro',
+            message: 'Trocar seus dias de treino faz parte do RunEasy Pro.',
+        };
+    }
+
+    const body = await decisionBody<DaySwapPreviewResult>(res);
+    if (body && typeof body.available === 'boolean') return body;
+
+    const text = await res.text().catch(() => '');
+    throw new Error(`Falha ao simular a troca (${res.status}): ${text}`);
+}
+
+/**
+ * O APPLY. `expectedDigest` é o da preview que o corredor VIU — nunca um
+ * recém-buscado, ou a concorrência otimista deixa de existir.
+ *
+ * Em conflito, a resposta já traz a preview recalculada em `preview`: o bot
+ * mostra a situação nova e pede reconfirmação, em vez de repetir às cegas.
+ */
+export async function applyDaySwap(
+    choice: DaySwapChoice,
+    expectedDigest: string,
+): Promise<DaySwapApplyResult> {
+    const headers = await getHeaders();
+    const res = await authedFetch(`${BASE_API_URL}/training/plan/day-swap`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+            ...toBody(choice),
+            expected_digest: expectedDigest,
+        }),
+    });
+
+    const body = await decisionBody<DaySwapApplyResult>(res);
+    if (body && typeof body.applied === 'boolean') return body;
+
+    const text = await res.text().catch(() => '');
+    throw new Error(`Falha ao trocar os dias (${res.status}): ${text}`);
+}
+
+/** camelCase do app → snake_case do DTO. Um lugar só, para os dois endpoints. */
+function toBody(choice: DaySwapChoice): Record<string, unknown> {
+    return {
+        mode: choice.mode,
+        ...(choice.newDays ? { new_days: choice.newDays } : {}),
+        ...(choice.workoutId ? { workout_id: choice.workoutId } : {}),
+        ...(choice.targetDate ? { target_date: choice.targetDate } : {}),
+    };
 }

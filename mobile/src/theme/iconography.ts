@@ -69,6 +69,8 @@ export const iconography = {
   trophy: { outline: 'trophy-outline', filled: 'trophy' },
   medal: { outline: 'medal-outline', filled: 'medal' },
   flag: { outline: 'flag-outline', filled: 'flag' },
+  /** Troca de Dias: o corredor troca em quais dias da semana treina. */
+  swapDays: { outline: 'swap-horizontal-outline', filled: 'swap-horizontal' },
   lock: { outline: 'lock-closed-outline', filled: 'lock-closed' },
   unlock: { outline: 'lock-open-outline', filled: 'lock-open' },
   heartRate: { outline: 'heart-outline', filled: 'heart' },
@@ -80,6 +82,8 @@ export const iconography = {
   readiness: { outline: 'battery-half-outline', filled: 'battery-half' },
   adjustment: { outline: 'options-outline', filled: 'options' },
   wearable: { outline: 'watch-outline', filled: 'watch' },
+  /** "de → para": a seta que liga um estado ao outro. */
+  arrowForward: { outline: 'arrow-forward-outline', filled: 'arrow-forward' },
   trendUp: { outline: 'arrow-up-outline', filled: 'arrow-up' },
   trendDown: { outline: 'arrow-down-outline', filled: 'arrow-down' },
   mood: { outline: 'happy-outline', filled: 'happy' },

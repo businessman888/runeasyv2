@@ -42,6 +42,7 @@ import {
     RetrospectiveScreen,
     WeeklyInsightScreen,
     MesoInsightScreen,
+    DaySwapChatScreen,
     CustomizeGoalScreen,
     ManualWorkoutConfigScreen,
     RunningScreen,
@@ -431,6 +432,17 @@ export function AppNavigator() {
                             options={{
                                 headerShown: false,
                                 presentation: 'card',
+                            }}
+                        />
+                        {/* Troca de Dias (T.2). `modal` porque é uma conversa
+                            com começo e fim: entra por cima, resolve, sai — e
+                            o corredor volta para o calendário de onde saiu. */}
+                        <Stack.Screen
+                            name="DaySwapChat"
+                            component={DaySwapChatScreen}
+                            options={{
+                                headerShown: false,
+                                presentation: 'modal',
                             }}
                         />
                         <Stack.Screen

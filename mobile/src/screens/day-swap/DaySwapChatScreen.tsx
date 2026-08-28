@@ -1,0 +1,271 @@
+import React, { useCallback, useEffect, useRef } from 'react';
+import {
+    ActivityIndicator,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+
+import { ScreenContainer } from '../../components/ScreenContainer';
+import { AppIcon } from '../../components/ui/AppIcon';
+import {
+    fonts,
+    spacing,
+    typography,
+    useThemedStyles,
+    type ThemeColors,
+} from '../../theme';
+import { useDaySwapChat } from '../../hooks/useDaySwapChat';
+import { ChatBubble } from './ChatBubble';
+import {
+    ConfirmButtons,
+    DatePicker,
+    DayPicker,
+    ModeButtons,
+    RestartButton,
+    SwapSummary,
+    WorkoutPicker,
+} from './DaySwapWidgets';
+
+/**
+ * TROCAR DIAS DE TREINO — a conversa (Fase T.2).
+ *
+ * ── UMA CONVERSA, NÃO UM FORMULÁRIO ──────────────────────────────────────────
+ *
+ * A mesma feature caberia num formulário com dois selects e um botão. A conversa
+ * existe porque trocar os dias tem CONSEQUÊNCIA — mexe em semanas de treino — e
+ * um formulário não tem onde explicar isso sem virar um muro de texto de ajuda.
+ * No chat, cada explicação chega no momento em que importa: o aviso de "vale da
+ * próxima semana" aparece quando o corredor escolhe o modo, não antes.
+ *
+ * ── O BOT É UMA MÁQUINA DE ESTADOS ───────────────────────────────────────────
+ *
+ * Nenhuma IA envolvida. As falas são fixas e vivem em `useDaySwapChat`; esta
+ * tela só renderiza mensagens e dispara ações. O efeito de digitação (o mesmo do
+ * briefing do treinador) é textura, não geração.
+ */
+
+export function DaySwapChatScreen() {
+    const navigation = useNavigation();
+    const styles = useThemedStyles(createStyles);
+    const scrollRef = useRef<ScrollView>(null);
+
+    const { state, messages, context, preview, error, actions } = useDaySwapChat();
+
+    // A conversa cresce para baixo: sem isto, a mensagem nova nasce fora da tela
+    // e o corredor precisa rolar para descobrir que o bot respondeu.
+    useEffect(() => {
+        const t = setTimeout(
+            () => scrollRef.current?.scrollToEnd({ animated: true }),
+            80,
+        );
+        return () => clearTimeout(t);
+    }, [messages]);
+
+    const handleClose = useCallback(() => navigation.goBack(), [navigation]);
+
+    const lastId = messages[messages.length - 1]?.id;
+    const busy = state === 'applying';
+
+    return (
+        <ScreenContainer style={styles.screen}>
+            <View style={styles.header}>
+                <Pressable
+                    onPress={handleClose}
+                    style={styles.headerButton}
+                    accessibilityRole="button"
+                    accessibilityLabel="Fechar"
+                >
+                    <AppIcon name="close" size={24} tone="primary" />
+                </Pressable>
+
+                <Text style={styles.headerTitle} maxFontSizeMultiplier={1.2}>
+                    Trocar dias de treino
+                </Text>
+
+                <Pressable
+                    onPress={() => void actions.start()}
+                    style={styles.headerButton}
+                    accessibilityRole="button"
+                    accessibilityLabel="Recomeçar a conversa"
+                >
+                    <AppIcon name="refresh" size={20} tone="secondary" />
+                </Pressable>
+            </View>
+
+            {state === 'loading' && messages.length === 0 ? (
+                <View style={styles.centered}>
+                    <ActivityIndicator />
+                </View>
+            ) : (
+                <ScrollView
+                    ref={scrollRef}
+                    style={styles.scroll}
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {messages.map((m) => (
+                        <ChatBubble
+                            key={m.id}
+                            from={m.from}
+                            text={m.text}
+                            // Só a ÚLTIMA do bot digita. Sem esta condição, todo
+                            // re-render redigitaria a conversa inteira.
+                            typing={m.from === 'bot' && m.id === lastId}
+                        >
+                            {m.widget ? renderWidget(m.widget) : null}
+                        </ChatBubble>
+                    ))}
+
+                    {(state === 'previewing' || state === 'applying') && (
+                        <View style={styles.thinking}>
+                            <ActivityIndicator size="small" />
+                        </View>
+                    )}
+
+                    {!!error && (
+                        <Text style={styles.error} maxFontSizeMultiplier={1.3}>
+                            {error}
+                        </Text>
+                    )}
+                </ScrollView>
+            )}
+        </ScreenContainer>
+    );
+
+    function renderWidget(widget: string) {
+        switch (widget) {
+            case 'modeButtons': {
+                // O motivo vem do CONTEXTO, não de uma tentativa frustrada: o
+                // corredor vê por que um modo não serve antes de tocar nele.
+                const semana = context?.currentWeek;
+                return (
+                    <ModeButtons
+                        onChoose={actions.chooseMode}
+                        structuralBlockedReason={
+                            context?.nextWeek
+                                ? undefined
+                                : 'Seu plano não tem uma próxima semana'
+                        }
+                        singleBlockedReason={
+                            !semana?.workouts?.length
+                                ? 'Não há mais treinos nesta semana'
+                                : !semana.freeDates?.length
+                                  ? 'Não sobrou dia livre nesta semana'
+                                  : undefined
+                        }
+                    />
+                );
+            }
+
+            case 'dayPicker':
+                if (!context?.currentDays || !context.dayCount) return null;
+                return (
+                    <DayPicker
+                        currentDays={context.currentDays}
+                        dayCount={context.dayCount}
+                        onConfirm={actions.chooseDays}
+                    />
+                );
+
+            case 'workoutPicker':
+                if (!context?.currentWeek?.workouts?.length) return null;
+                return (
+                    <WorkoutPicker
+                        workouts={context.currentWeek.workouts}
+                        onChoose={actions.chooseWorkout}
+                    />
+                );
+
+            case 'datePicker':
+                if (!context?.currentWeek?.freeDates?.length) return null;
+                return (
+                    <DatePicker
+                        dates={context.currentWeek.freeDates}
+                        onChoose={actions.chooseDate}
+                    />
+                );
+
+            case 'summary':
+                if (!preview?.available) return null;
+                return <SwapSummary preview={preview} />;
+
+            case 'confirmButtons':
+                return (
+                    <ConfirmButtons
+                        onConfirm={() => void actions.confirm()}
+                        onCancel={actions.cancel}
+                        busy={busy}
+                    />
+                );
+
+            case 'restart':
+                // Depois do sucesso o caminho natural é sair e ver a agenda; nos
+                // outros fins terminais, recomeçar é o que faz sentido.
+                return state === 'success' ? (
+                    <RestartButton onPress={handleClose} label="Ver minha agenda" />
+                ) : (
+                    <RestartButton onPress={() => void actions.start()} />
+                );
+
+            default:
+                return null;
+        }
+    }
+}
+
+function createStyles(colors: ThemeColors) {
+    return StyleSheet.create({
+        screen: {
+            backgroundColor: colors.canvas,
+        },
+        header: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: spacing.sm,
+            paddingBottom: spacing.sm,
+        },
+        headerButton: {
+            width: 44,
+            height: 44,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        headerTitle: {
+            flex: 1,
+            textAlign: 'center',
+            fontSize: typography.fontSizes.base,
+            fontFamily: fonts.semibold,
+            color: colors.textPrimary,
+        },
+        scroll: {
+            flex: 1,
+        },
+        scrollContent: {
+            paddingHorizontal: spacing.base,
+            paddingBottom: spacing['3xl'],
+        },
+        centered: {
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        thinking: {
+            alignSelf: 'flex-start',
+            paddingVertical: spacing.sm,
+            paddingHorizontal: spacing.base,
+        },
+        error: {
+            marginTop: spacing.sm,
+            fontSize: typography.fontSizes.sm,
+            fontFamily: fonts.regular,
+            color: colors.textSecondary,
+        },
+    });
+}
+
+export default DaySwapChatScreen;

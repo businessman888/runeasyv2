@@ -1,4 +1,4 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo, useMemo, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LottieView from 'lottie-react-native';
@@ -7,9 +7,18 @@ import { useReducedMotion } from 'react-native-reanimated';
 import { borderRadius, fonts, spacing, typography, type ThemeColors, useThemedStyles } from '../../theme';
 import type { WorkoutScope } from '../../stores/workoutScopeStore';
 import { AppIcon } from '../ui/AppIcon';
+import { HeaderMenu, type HeaderMenuItem } from '../ui/HeaderMenu';
 import { SegmentedTabs, type SegmentedTab } from '../ui/SegmentedTabs';
 
 const STREAK_ANIMATION = require('../../assets/animate/streak.json');
+
+/**
+ * Onde o card do menu abre, medido do fim da safe area.
+ *
+ * O `topRow` tem `minHeight: 60` + `paddingTop: spacing.sm`; ancorar logo abaixo
+ * dele faz o menu sair "de dentro" do botão em vez de flutuar solto.
+ */
+const MENU_TOP_OFFSET = 60;
 
 interface CalendarFixedHeaderProps {
     tabs: SegmentedTab<WorkoutScope>[];
@@ -20,6 +29,12 @@ interface CalendarFixedHeaderProps {
     isTablet: boolean;
     onPressGoals: () => void;
     onPressProfile: () => void;
+    /**
+     * Troca de Dias (T.2). Ausente = a opção não entra no menu — é assim que a
+     * entrada some para quem não tem plano ativo, sem a tela precisar saber
+     * disso.
+     */
+    onPressDaySwap?: () => void;
     currentStreak: number;
 }
 
@@ -32,11 +47,38 @@ function CalendarFixedHeaderInner({
     isTablet,
     onPressGoals,
     onPressProfile,
+    onPressDaySwap,
     currentStreak,
 }: CalendarFixedHeaderProps) {
     const insets = useSafeAreaInsets();
     const styles = useThemedStyles(createStyles);
     const reduceMotion = useReducedMotion();
+    const [menuOpen, setMenuOpen] = useState(false);
+
+    // As ações de PLANO, agrupadas atrás de um gesto só. Cada uma sozinha no
+    // header disputaria espaço com o badge de streak (que vai até 60% da
+    // largura) e começaria a truncá-lo em telas pequenas.
+    const menuItems = useMemo<HeaderMenuItem[]>(() => {
+        const items: HeaderMenuItem[] = [
+            {
+                key: 'goals',
+                label: 'Metas',
+                icon: 'flag',
+                hint: 'Seu objetivo e o progresso do plano',
+                onPress: onPressGoals,
+            },
+        ];
+        if (onPressDaySwap) {
+            items.push({
+                key: 'day-swap',
+                label: 'Trocar dias de treino',
+                icon: 'swapDays',
+                hint: 'Mudar em quais dias você treina',
+                onPress: onPressDaySwap,
+            });
+        }
+        return items;
+    }, [onPressGoals, onPressDaySwap]);
     const streakValue = Math.max(0, currentStreak);
     const hasActiveStreak = streakValue > 0;
     const streakLabel = `${streakValue} dias de treino`;
@@ -108,12 +150,13 @@ function CalendarFixedHeaderInner({
 
                     <TouchableOpacity
                         style={styles.actionButton}
-                        onPress={onPressGoals}
+                        onPress={() => setMenuOpen(true)}
                         activeOpacity={0.7}
                         accessibilityRole="button"
-                        accessibilityLabel="Abrir metas"
+                        accessibilityLabel="Mais opções do plano"
+                        accessibilityHint="Abre metas e troca de dias de treino"
                     >
-                        <AppIcon name="flag" size={24} tone="primary" />
+                        <AppIcon name="more" size={24} tone="primary" />
                     </TouchableOpacity>
                 </View>
 
@@ -124,6 +167,13 @@ function CalendarFixedHeaderInner({
                     style={styles.scopeTabs}
                 />
             </View>
+
+            <HeaderMenu
+                visible={menuOpen}
+                onClose={() => setMenuOpen(false)}
+                items={menuItems}
+                topOffset={MENU_TOP_OFFSET}
+            />
         </View>
     );
 }

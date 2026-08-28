@@ -27,6 +27,7 @@ export * from './DeviceReadMoreScreen';
 export * from './RetrospectiveScreen';
 export * from './weekly-insight/WeeklyInsightScreen';
 export * from './meso-insight/MesoInsightScreen';
+export * from './day-swap/DaySwapChatScreen';
 export * from './CustomizeGoalScreen';
 export * from './ManualWorkoutConfigScreen';
 export * from './PrePaywallScreen';

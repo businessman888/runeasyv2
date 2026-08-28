@@ -561,6 +561,10 @@ export function CalendarScreen({ navigation }: any) {
     const handleOpenProfile = useCallback(() => {
         navigation.navigate('Settings');
     }, [navigation]);
+    // Sem plano ativo não há dia para trocar — a opção nem entra no menu.
+    const handleOpenDaySwap = useCallback(() => {
+        navigation.navigate('DaySwapChat');
+    }, [navigation]);
 
     return (
         <ScreenContainer style={styles.screenContainer}>
@@ -573,6 +577,7 @@ export function CalendarScreen({ navigation }: any) {
                 isTablet={r.isTablet}
                 onPressGoals={handleOpenGoals}
                 onPressProfile={handleOpenProfile}
+                onPressDaySwap={plan ? handleOpenDaySwap : undefined}
                 currentStreak={currentStreak}
             />
 
