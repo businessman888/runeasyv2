@@ -21,8 +21,8 @@ import type {
  *
  * É uma máquina de estados com falas fixas. Nenhuma chamada de LLM, nenhuma
  * geração, nenhum ramo imprevisível — o fluxo inteiro cabe no diagrama abaixo e
- * é o mesmo toda vez. O efeito de digitação da tela é textura de conversa, não
- * streaming de nada.
+ * é o mesmo toda vez. O indicador da tela comunica apenas que o próximo turno
+ * está sendo apresentado; não existe streaming de texto.
  *
  *   loading ─→ unavailable
  *           └→ greeting → askMode ─→ mode1_pickDays ─────────┐
@@ -72,6 +72,8 @@ export interface ChatMessage {
     id: string;
     from: 'bot' | 'user';
     text: string;
+    /** Serializa respostas do bot que chegam juntas, sem loaders paralelos. */
+    presentationOrder?: number;
     /** Só a última mensagem do bot carrega widget. */
     widget?: ChatWidget;
 }
@@ -94,19 +96,17 @@ const DAY_FULL = [
  */
 const SAY = {
     greeting: (dias: Weekday[]) =>
-        `Oi! Hoje você treina ${listarDias(dias)}.`,
-    askMode: 'O que você quer fazer?',
+        `Seu plano está organizado para ${listarDias(dias)}.`,
+    askMode: 'O que você quer ajustar?',
     mode1Intro: (n: number) =>
-        `Beleza. Escolha os ${n} dias novos — a troca vale a partir da próxima semana, então esta aqui fica como está.`,
-    mode2Intro: 'Qual treino desta semana você quer mover?',
+        `Escolha ${n} dias. A mudança começa na próxima semana; esta semana continua igual.`,
+    mode2Intro: 'Qual treino você quer mover?',
     mode2Date: (titulo: string) =>
-        `Para quando você quer mover ${titulo}? Só apareço com dias que ainda não passaram e que estão livres.`,
-    previewing: 'Deixa eu ver como fica...',
-    previewOk: 'Prontinho, olha como fica:',
+        `Escolha o novo dia para ${titulo}. Mostro apenas dias futuros e livres.`,
+    previewOk: 'Confira como sua agenda vai ficar:',
     previewTight:
-        'Fica assim — mas repara que dois treinos pesados ficam em dias seguidos. Dá para treinar assim; é só saber que a perna vai sentir.',
-    confirm: 'Pode confirmar?',
-    applying: 'Trocando...',
+        'O plano cabe nesses dias, mas dois treinos pesados ficam seguidos. Você pode confirmar mesmo assim.',
+    confirm: 'Confirma essa mudança?',
     successStructural: (dias: Weekday[]) =>
         `Feito! A partir da próxima semana você treina ${listarDias(dias)}. Já atualizei sua agenda.`,
     successSingle: 'Feito! Já movi o treino e atualizei sua agenda.',
@@ -180,11 +180,13 @@ export function useDaySwapChat() {
                     id: nextId(),
                     from: 'bot',
                     text: SAY.greeting(ctx.currentDays),
+                    presentationOrder: 0,
                 },
                 {
                     id: nextId(),
                     from: 'bot',
                     text: SAY.askMode,
+                    presentationOrder: 1,
                     widget: 'modeButtons',
                 },
             ]);
@@ -208,7 +210,7 @@ export function useDaySwapChat() {
             if (!context?.available) return;
 
             if (mode === 'structural') {
-                push('user', 'Trocar meus dias de vez');
+                push('user', 'Mudar os dias do plano');
                 setState('mode1_pickDays');
                 push(
                     'bot',
@@ -218,7 +220,7 @@ export function useDaySwapChat() {
                 return;
             }
 
-            push('user', 'Mexer num treino desta semana');
+            push('user', 'Mover um treino desta semana');
 
             // Sem treino futuro ou sem dia livre, o Modo 2 não tem o que
             // oferecer — e dizer isso é melhor que abrir um select vazio.
@@ -256,7 +258,6 @@ export function useDaySwapChat() {
     const runPreview = useCallback(
         async (c: DaySwapChoice) => {
             setState('previewing');
-            push('bot', SAY.previewing);
 
             try {
                 const p = await getDaySwapPreview(c);
@@ -278,6 +279,7 @@ export function useDaySwapChat() {
                     {
                         id: nextId(),
                         from: 'bot',
+                        presentationOrder: 0,
                         text:
                             p.spacing?.verdict === 'apertado'
                                 ? SAY.previewTight
@@ -287,6 +289,7 @@ export function useDaySwapChat() {
                     {
                         id: nextId(),
                         from: 'bot',
+                        presentationOrder: 1,
                         text: SAY.confirm,
                         widget: 'confirmButtons',
                     },
@@ -348,7 +351,7 @@ export function useDaySwapChat() {
     const confirm = useCallback(async () => {
         if (!choice || !preview?.digest) return;
 
-        push('user', 'Confirmar');
+        push('user', 'Confirmar mudança');
         setState('applying');
 
         try {
@@ -401,12 +404,14 @@ export function useDaySwapChat() {
                     {
                         id: nextId(),
                         from: 'bot',
+                        presentationOrder: 0,
                         text: SAY.conflict,
                         widget: 'summary',
                     },
                     {
                         id: nextId(),
                         from: 'bot',
+                        presentationOrder: 1,
                         text: SAY.confirm,
                         widget: 'confirmButtons',
                     },
@@ -428,7 +433,7 @@ export function useDaySwapChat() {
     }, [choice, preview, invalidatePlanCaches, push]);
 
     const cancel = useCallback(() => {
-        push('user', 'Cancelar');
+        push('user', 'Manter agenda atual');
         setState('cancelled');
         push('bot', SAY.cancelled, 'restart');
     }, [push]);

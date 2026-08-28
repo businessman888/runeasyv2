@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useRef } from 'react';
 import {
-    ActivityIndicator,
+    type NativeScrollEvent,
+    type NativeSyntheticEvent,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -19,6 +20,7 @@ import {
     type ThemeColors,
 } from '../../theme';
 import { useDaySwapChat } from '../../hooks/useDaySwapChat';
+import { useMotionPreferences } from '../../hooks/useMotionPreferences';
 import { ChatBubble } from './ChatBubble';
 import {
     ConfirmButtons,
@@ -44,31 +46,55 @@ import {
  * ── O BOT É UMA MÁQUINA DE ESTADOS ───────────────────────────────────────────
  *
  * Nenhuma IA envolvida. As falas são fixas e vivem em `useDaySwapChat`; esta
- * tela só renderiza mensagens e dispara ações. O efeito de digitação (o mesmo do
- * briefing do treinador) é textura, não geração.
+ * tela só renderiza mensagens e dispara ações. O indicador de resposta é uma
+ * microinteração visual; o texto sempre chega completo e previsível.
  */
 
 export function DaySwapChatScreen() {
     const navigation = useNavigation();
     const styles = useThemedStyles(createStyles);
     const scrollRef = useRef<ScrollView>(null);
+    const nearBottomRef = useRef(true);
+    const { reduceMotion } = useMotionPreferences();
 
     const { state, messages, context, preview, error, actions } = useDaySwapChat();
 
-    // A conversa cresce para baixo: sem isto, a mensagem nova nasce fora da tela
-    // e o corredor precisa rolar para descobrir que o bot respondeu.
-    useEffect(() => {
-        const t = setTimeout(
-            () => scrollRef.current?.scrollToEnd({ animated: true }),
-            80,
-        );
-        return () => clearTimeout(t);
-    }, [messages]);
+    const handleScroll = useCallback(
+        (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+            const { contentOffset, contentSize, layoutMeasurement } =
+                event.nativeEvent;
+            const distanceFromBottom =
+                contentSize.height -
+                (contentOffset.y + layoutMeasurement.height);
+            nearBottomRef.current = distanceFromBottom < 96;
+        },
+        [],
+    );
+
+    // O painel de ações só monta depois do fade da fala. Rolamos após o layout
+    // final, mas nunca arrancamos o usuário de um trecho antigo que ele relê.
+    const handleContentSizeChange = useCallback(() => {
+        if (!nearBottomRef.current) return;
+        requestAnimationFrame(() => {
+            scrollRef.current?.scrollToEnd({ animated: !reduceMotion });
+        });
+    }, [reduceMotion]);
 
     const handleClose = useCallback(() => navigation.goBack(), [navigation]);
 
-    const lastId = messages[messages.length - 1]?.id;
     const busy = state === 'applying';
+    const restartDisabled =
+        state === 'loading' || state === 'previewing' || state === 'applying';
+    const pendingLabel =
+        state === 'applying'
+            ? 'Atualizando sua agenda'
+            : state === 'previewing'
+              ? 'Conferindo sua agenda'
+              : 'Carregando seus dias de treino';
+    const showPending =
+        (state === 'loading' && messages.length === 0) ||
+        state === 'previewing' ||
+        state === 'applying';
 
     return (
         <ScreenContainer style={styles.screen}>
@@ -88,51 +114,59 @@ export function DaySwapChatScreen() {
 
                 <Pressable
                     onPress={() => void actions.start()}
-                    style={styles.headerButton}
+                    disabled={restartDisabled}
+                    style={[
+                        styles.headerButton,
+                        restartDisabled && styles.headerButtonDisabled,
+                    ]}
                     accessibilityRole="button"
                     accessibilityLabel="Recomeçar a conversa"
+                    accessibilityState={{ disabled: restartDisabled }}
                 >
                     <AppIcon name="refresh" size={20} tone="secondary" />
                 </Pressable>
             </View>
 
-            {state === 'loading' && messages.length === 0 ? (
-                <View style={styles.centered}>
-                    <ActivityIndicator />
-                </View>
-            ) : (
-                <ScrollView
-                    ref={scrollRef}
-                    style={styles.scroll}
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
-                >
-                    {messages.map((m) => (
-                        <ChatBubble
-                            key={m.id}
-                            from={m.from}
-                            text={m.text}
-                            // Só a ÚLTIMA do bot digita. Sem esta condição, todo
-                            // re-render redigitaria a conversa inteira.
-                            typing={m.from === 'bot' && m.id === lastId}
-                        >
-                            {m.widget ? renderWidget(m.widget) : null}
-                        </ChatBubble>
-                    ))}
+            <ScrollView
+                ref={scrollRef}
+                style={styles.scroll}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                onScroll={handleScroll}
+                onContentSizeChange={handleContentSizeChange}
+                scrollEventThrottle={16}
+            >
+                {messages.map((m) => (
+                    <ChatBubble
+                        key={m.id}
+                        from={m.from}
+                        text={m.text}
+                        animate={m.from === 'bot'}
+                        presentationOrder={m.presentationOrder}
+                    >
+                        {m.widget ? renderWidget(m.widget) : null}
+                    </ChatBubble>
+                ))}
 
-                    {(state === 'previewing' || state === 'applying') && (
-                        <View style={styles.thinking}>
-                            <ActivityIndicator size="small" />
-                        </View>
-                    )}
+                {showPending && (
+                    <ChatBubble
+                        key={`pending-${state}`}
+                        from="bot"
+                        text={pendingLabel}
+                        pending
+                    />
+                )}
 
-                    {!!error && (
-                        <Text style={styles.error} maxFontSizeMultiplier={1.3}>
-                            {error}
-                        </Text>
-                    )}
-                </ScrollView>
-            )}
+                {!!error && (
+                    <Text
+                        style={styles.error}
+                        accessibilityRole="alert"
+                        maxFontSizeMultiplier={1.3}
+                    >
+                        {error}
+                    </Text>
+                )}
+            </ScrollView>
         </ScreenContainer>
     );
 
@@ -235,6 +269,9 @@ function createStyles(colors: ThemeColors) {
             alignItems: 'center',
             justifyContent: 'center',
         },
+        headerButtonDisabled: {
+            opacity: 0.45,
+        },
         headerTitle: {
             flex: 1,
             textAlign: 'center',
@@ -247,17 +284,8 @@ function createStyles(colors: ThemeColors) {
         },
         scrollContent: {
             paddingHorizontal: spacing.base,
+            paddingTop: spacing.sm,
             paddingBottom: spacing['3xl'],
-        },
-        centered: {
-            flex: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-        },
-        thinking: {
-            alignSelf: 'flex-start',
-            paddingVertical: spacing.sm,
-            paddingHorizontal: spacing.base,
         },
         error: {
             marginTop: spacing.sm,
