@@ -143,6 +143,9 @@ export function DaySwapChatScreen() {
                         text={m.text}
                         animate={m.from === 'bot'}
                         presentationOrder={m.presentationOrder}
+                        // O resumo é o que o bot está DIZENDO — vai dentro da
+                        // bolha. Os painéis de escolha continuam fora.
+                        inside={m.widget === 'summary'}
                     >
                         {m.widget ? renderWidget(m.widget) : null}
                     </ChatBubble>

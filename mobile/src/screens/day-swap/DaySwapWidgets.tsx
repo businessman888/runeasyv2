@@ -1,5 +1,12 @@
-import React, { memo, useCallback, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+    FadeIn,
+    FadeOut,
+    useAnimatedStyle,
+    useSharedValue,
+    withTiming,
+} from 'react-native-reanimated';
 
 import {
     borderRadius,
@@ -9,6 +16,8 @@ import {
     useThemedStyles,
     type ThemeColors,
 } from '../../theme';
+import { motionDuration, motionEasing } from '../../theme/motion';
+import { useMotionPreferences } from '../../hooks/useMotionPreferences';
 import { AppIcon } from '../../components/ui/AppIcon';
 import { formatarData, labelDoTipo, weekdayOf } from '../../hooks/useDaySwapChat';
 import type {
@@ -20,8 +29,6 @@ import type {
 } from '../../types/planAdaptation.types';
 import { SpacingBadge } from './SpacingBadge';
 
-/** D S T Q Q S S — a inicial, como o corredor lê num calendário. */
-const DAY_INITIAL = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'] as const;
 const DAY_SHORT = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'] as const;
 const DAY_FULL = [
     'domingo',
@@ -88,11 +95,22 @@ export const ModeButtons = memo(function ModeButtons({
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Sete chips, com a QUANTIDADE TRAVADA.
+ * Um SELETOR DE MENU, com a quantidade travada.
  *
- * Atingido o alvo, os não selecionados ficam `disabled` — o v1 troca QUAIS dias,
- * nunca QUANTOS. Mudar a quantidade seria quase regenerar o plano, e está fora
- * do escopo. Travar na UI é mais gentil que deixar escolher e recusar depois.
+ * ── POR QUE MENU E NÃO SETE CHIPS SOLTOS ─────────────────────────────────────
+ *
+ * Sete chips lado a lado cabem, mas obrigam o corredor a decodificar
+ * "D S T Q Q S S" — duas iniciais repetidas, sem rótulo. Num campo fechado que
+ * abre a lista, cada dia aparece pelo nome inteiro, e o que já foi escolhido
+ * fica visível no próprio campo, como resposta em construção. A escolha vira
+ * uma frase que ele lê antes de mandar, não sete quadradinhos para conferir.
+ *
+ * ── A QUANTIDADE É TRAVADA, NUNCA RECUSADA DEPOIS ────────────────────────────
+ *
+ * Atingido o alvo, os dias restantes ficam `disabled` com o estado anunciado —
+ * o v1 troca QUAIS dias, nunca QUANTOS. Mudar a quantidade seria quase
+ * regenerar o plano, e está fora do escopo. Travar na UI é mais gentil que
+ * deixar escolher e recusar depois do toque.
  */
 export const DayPicker = memo(function DayPicker({
     currentDays,
@@ -104,12 +122,22 @@ export const DayPicker = memo(function DayPicker({
     onConfirm: (dias: Weekday[]) => void;
 }) {
     const styles = useThemedStyles(createStyles);
+    const { reduceMotion } = useMotionPreferences();
     const [selected, setSelected] = useState<Weekday[]>([]);
+    const [open, setOpen] = useState(false);
 
     const atMax = selected.length >= dayCount;
+    const faltam = dayCount - selected.length;
     const igualAoAtual =
         selected.length === currentDays.length &&
         [...selected].sort().join() === [...currentDays].sort().join();
+
+    // Na ordem da semana, não na ordem em que ele tocou: o campo tem que se
+    // parecer com um calendário, não com um histórico de toques.
+    const emOrdem = useMemo(
+        () => [...selected].sort((a, b) => a - b),
+        [selected],
+    );
 
     const toggle = useCallback(
         (d: Weekday) => {
@@ -124,42 +152,154 @@ export const DayPicker = memo(function DayPicker({
         [dayCount],
     );
 
+    const rotation = useSharedValue(0);
+    useEffect(() => {
+        const alvo = open ? 1 : 0;
+        rotation.value = reduceMotion
+            ? alvo
+            : withTiming(alvo, {
+                  duration: motionDuration.fast,
+                  easing: motionEasing.standard,
+              });
+    }, [open, reduceMotion, rotation]);
+
+    const chevronStyle = useAnimatedStyle(() => ({
+        transform: [{ rotate: `${rotation.value * 180}deg` }],
+    }));
+
     return (
         <View>
-            <View style={styles.dayRow}>
-                {ALL_DAYS.map((d) => {
-                    const on = selected.includes(d);
-                    const blocked = !on && atMax;
-                    return (
-                        <Pressable
-                            key={d}
-                            onPress={() => toggle(d)}
-                            disabled={blocked}
-                            style={[
-                                styles.dayChip,
-                                on && styles.dayChipOn,
-                                blocked && styles.dayChipBlocked,
-                            ]}
-                            accessibilityRole="checkbox"
-                            accessibilityState={{
-                                checked: on,
-                                disabled: blocked,
-                            }}
-                            accessibilityLabel={DAY_FULL[d]}
+            <Pressable
+                onPress={() => setOpen((v) => !v)}
+                style={({ pressed }) => [
+                    styles.field,
+                    open && styles.fieldOpen,
+                    pressed && styles.fieldPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Escolher os dias de treino"
+                accessibilityHint={
+                    selected.length === 0
+                        ? `Escolha ${dayCount} dias`
+                        : `${selected.length} de ${dayCount} escolhidos: ${emOrdem.map((d) => DAY_FULL[d]).join(', ')}`
+                }
+                accessibilityState={{ expanded: open }}
+            >
+                <View style={styles.fieldContent}>
+                    {emOrdem.length === 0 ? (
+                        <Text
+                            style={styles.fieldPlaceholder}
+                            maxFontSizeMultiplier={1.3}
                         >
-                            <Text
-                                style={[styles.dayText, on && styles.dayTextOn]}
-                                maxFontSizeMultiplier={1.2}
+                            Escolha {dayCount} dias
+                        </Text>
+                    ) : (
+                        emOrdem.map((d) => (
+                            <Pressable
+                                key={d}
+                                onPress={() => toggle(d)}
+                                style={styles.tag}
+                                hitSlop={6}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Tirar ${DAY_FULL[d]}`}
                             >
-                                {DAY_INITIAL[d]}
-                            </Text>
-                        </Pressable>
-                    );
-                })}
-            </View>
+                                <Text
+                                    style={styles.tagText}
+                                    maxFontSizeMultiplier={1.2}
+                                >
+                                    {DAY_SHORT[d]}
+                                </Text>
+                                <AppIcon name="close" size={16} tone="accent" />
+                            </Pressable>
+                        ))
+                    )}
+                </View>
+
+                <View style={styles.fieldTrailing}>
+                    <Text style={styles.counter} maxFontSizeMultiplier={1.2}>
+                        {selected.length}/{dayCount}
+                    </Text>
+                    <Animated.View style={chevronStyle}>
+                        <AppIcon name="chevronDown" size={20} tone="secondary" />
+                    </Animated.View>
+                </View>
+            </Pressable>
+
+            {open && (
+                <Animated.View
+                    entering={
+                        reduceMotion
+                            ? undefined
+                            : FadeIn.duration(motionDuration.fast).easing(
+                                  motionEasing.enter,
+                              )
+                    }
+                    exiting={
+                        reduceMotion
+                            ? undefined
+                            : FadeOut.duration(motionDuration.instant)
+                    }
+                    style={styles.menu}
+                >
+                    {ALL_DAYS.map((d, i) => {
+                        const on = selected.includes(d);
+                        const blocked = !on && atMax;
+                        return (
+                            <Pressable
+                                key={d}
+                                onPress={() => toggle(d)}
+                                disabled={blocked}
+                                style={({ pressed }) => [
+                                    styles.option,
+                                    i > 0 && styles.optionDivided,
+                                    pressed && styles.optionPressed,
+                                    blocked && styles.optionBlocked,
+                                ]}
+                                accessibilityRole="checkbox"
+                                accessibilityState={{
+                                    checked: on,
+                                    disabled: blocked,
+                                }}
+                                accessibilityLabel={DAY_FULL[d]}
+                            >
+                                <View style={[styles.box, on && styles.boxOn]}>
+                                    {on && (
+                                        <AppIcon
+                                            name="selected"
+                                            size={16}
+                                            tone="onAccent"
+                                        />
+                                    )}
+                                </View>
+                                <Text
+                                    style={[
+                                        styles.optionLabel,
+                                        on && styles.optionLabelOn,
+                                    ]}
+                                    maxFontSizeMultiplier={1.3}
+                                >
+                                    {DAY_FULL[d]}
+                                </Text>
+                                {currentDays.includes(d) && (
+                                    <Text
+                                        style={styles.optionNote}
+                                        maxFontSizeMultiplier={1.2}
+                                    >
+                                        hoje
+                                    </Text>
+                                )}
+                            </Pressable>
+                        );
+                    })}
+                </Animated.View>
+            )}
 
             <Text style={styles.helper} maxFontSizeMultiplier={1.3}>
-                {selected.length}/{dayCount} dias escolhidos
+                {igualAoAtual
+                    ? 'Esses já são os seus dias de hoje.'
+                    : faltam > 0
+                      ? `Faltam ${faltam} ${faltam === 1 ? 'dia' : 'dias'}.`
+                      : 'Prontinho, pode conferir como fica.'}
             </Text>
 
             <PrimaryButton
@@ -167,11 +307,6 @@ export const DayPicker = memo(function DayPicker({
                 disabled={selected.length !== dayCount || igualAoAtual}
                 onPress={() => onConfirm([...selected].sort((a, b) => a - b))}
             />
-            {igualAoAtual && (
-                <Text style={styles.helper} maxFontSizeMultiplier={1.3}>
-                    Esses já são os seus dias de hoje.
-                </Text>
-            )}
         </View>
     );
 });
@@ -526,35 +661,120 @@ function createStyles(colors: ThemeColors) {
             fontFamily: fonts.regular,
             color: colors.textSecondary,
         },
-        dayRow: {
+        // ── O seletor de dias ────────────────────────────────────────────────
+        field: {
+            minHeight: 52,
             flexDirection: 'row',
-            justifyContent: 'space-between',
-            gap: spacing.xs,
-        },
-        dayChip: {
-            flex: 1,
-            height: 44,
             alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: borderRadius.md,
+            gap: spacing.sm,
+            paddingLeft: spacing.md,
+            paddingRight: spacing.md,
+            paddingVertical: spacing.sm,
+            borderRadius: borderRadius.lg,
             backgroundColor: colors.surface3,
             borderWidth: StyleSheet.hairlineWidth,
             borderColor: colors.borderSubtle,
         },
-        dayChipOn: {
+        // Aberto, o campo é a borda de cima da lista: a mesma superfície,
+        // continuada, em vez de dois cartões empilhados.
+        fieldOpen: {
+            borderColor: colors.accent,
+            borderBottomLeftRadius: borderRadius.sm,
+            borderBottomRightRadius: borderRadius.sm,
+        },
+        fieldPressed: {
+            backgroundColor: colors.fillSubtle,
+        },
+        fieldContent: {
+            flex: 1,
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: spacing.xs,
+        },
+        fieldPlaceholder: {
+            fontSize: typography.fontSizes.lg,
+            fontFamily: fonts.regular,
+            color: colors.textTertiary,
+        },
+        fieldTrailing: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.xs,
+        },
+        counter: {
+            fontSize: typography.fontSizes.sm,
+            fontFamily: fonts.medium,
+            color: colors.textSecondary,
+            fontVariant: ['tabular-nums'],
+        },
+        tag: {
+            minHeight: 32,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.xs,
+            paddingLeft: spacing.sm,
+            paddingRight: spacing.xs + 2,
+            borderRadius: borderRadius.md,
+            backgroundColor: colors.accentSubtle,
+        },
+        tagText: {
+            fontSize: typography.fontSizes.base,
+            fontFamily: fonts.medium,
+            color: colors.accent,
+        },
+        menu: {
+            marginTop: spacing.xs,
+            overflow: 'hidden',
+            borderRadius: borderRadius.lg,
+            backgroundColor: colors.surface3,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: colors.borderSubtle,
+        },
+        option: {
+            minHeight: 48,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.md,
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.sm,
+        },
+        optionDivided: {
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: colors.borderSubtle,
+        },
+        optionPressed: {
+            backgroundColor: colors.fillSubtle,
+        },
+        optionBlocked: {
+            opacity: 0.35,
+        },
+        box: {
+            width: 22,
+            height: 22,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: borderRadius.sm + 2,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: colors.borderStrong,
+        },
+        boxOn: {
             backgroundColor: colors.accent,
             borderColor: colors.accent,
         },
-        dayChipBlocked: {
-            opacity: 0.35,
+        optionLabel: {
+            flex: 1,
+            fontSize: typography.fontSizes.lg,
+            fontFamily: fonts.regular,
+            color: colors.textPrimary,
         },
-        dayText: {
+        optionLabelOn: {
+            fontFamily: fonts.medium,
+        },
+        optionNote: {
             fontSize: typography.fontSizes.sm,
-            fontFamily: fonts.semibold,
-            color: colors.textSecondary,
-        },
-        dayTextOn: {
-            color: colors.textOnAccent,
+            fontFamily: fonts.regular,
+            color: colors.textTertiary,
         },
         helper: {
             marginTop: spacing.sm,
@@ -590,12 +810,14 @@ function createStyles(colors: ThemeColors) {
             fontFamily: fonts.semibold,
             color: colors.textPrimary,
         },
+        // Sem cartão: o resumo mora DENTRO da bolha, e superfície sobre
+        // superfície empilha profundidade que não significa nada.
         arrowBox: {
             gap: spacing.xs,
-            marginBottom: spacing.base,
-            padding: spacing.sm,
-            borderRadius: borderRadius.md,
-            backgroundColor: colors.fillSubtle,
+            paddingBottom: spacing.md,
+            marginBottom: spacing.md,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: colors.borderSubtle,
         },
         arrowRow: {
             flexDirection: 'row',

@@ -38,6 +38,13 @@ interface ChatBubbleProps {
     presentationOrder?: number;
     /** Mantém o indicador visível enquanto uma operação assíncrona está ativa. */
     pending?: boolean;
+    /**
+     * CONTEÚDO da fala (um resumo), e não um painel de escolha: entra DENTRO da
+     * bolha, logo abaixo do texto. Controles continuam fora — botão flutuando em
+     * bolha parece mensagem, e o que o bot MOSTRA solto na tela não parece fala
+     * de ninguém.
+     */
+    inside?: boolean;
     /** O painel de escolha aparece abaixo da bolha, só após a mensagem. */
     children?: ReactNode;
 }
@@ -48,6 +55,7 @@ function ChatBubbleInner({
     animate = false,
     presentationOrder = 0,
     pending = false,
+    inside = false,
     children,
 }: ChatBubbleProps) {
     const styles = useThemedStyles(createStyles);
@@ -93,6 +101,7 @@ function ChatBubbleInner({
 
     const showingIndicator = phase === 'typing';
     const hasWidget = isBot && !!children;
+    const insideWidget = hasWidget && inside;
 
     return (
         <Animated.View
@@ -108,6 +117,7 @@ function ChatBubbleInner({
                     style={[
                         styles.bubble,
                         isBot ? styles.bubbleBot : styles.bubbleUser,
+                        insideWidget && !showingIndicator && styles.bubbleWide,
                         showingIndicator && styles.typingBubble,
                     ]}
                     accessible={showingIndicator}
@@ -142,11 +152,17 @@ function ChatBubbleInner({
                             >
                                 {text}
                             </Text>
+
+                            {insideWidget && (
+                                <View style={styles.insideWidget}>
+                                    {children}
+                                </View>
+                            )}
                         </Animated.View>
                     )}
                 </View>
 
-                {!showingIndicator && hasWidget && (
+                {!showingIndicator && hasWidget && !inside && (
                     <Animated.View
                         entering={
                             reduceMotion
@@ -285,6 +301,18 @@ function createStyles(colors: ThemeColors) {
             borderTopLeftRadius: borderRadius.sm,
             borderWidth: StyleSheet.hairlineWidth,
             borderColor: colors.borderSubtle,
+        },
+        // O resumo tem colunas (data, nome, "era"); a 88% de uma tela pequena
+        // elas truncam. Como ele mora DENTRO da bolha, a bolha é que cede.
+        bubbleWide: {
+            maxWidth: '100%',
+            width: '100%',
+        },
+        insideWidget: {
+            marginTop: spacing.md,
+            paddingTop: spacing.md,
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: colors.borderSubtle,
         },
         bubbleUser: {
             maxWidth: '82%',
