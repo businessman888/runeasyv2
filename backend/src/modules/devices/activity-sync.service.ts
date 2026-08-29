@@ -1,4 +1,11 @@
-import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  forwardRef,
+  Inject,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { SupabaseService } from '../../database/supabase.service';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { TrainingService } from '../training/training.service';
@@ -139,11 +146,17 @@ export class ActivitySyncService {
    */
   async processWearableActivity(activity: WearableActivity) {
     // 1. Check if this exact external_id already exists (idempotency)
-    const { data: existing } = await this.supabaseService
+    const { data: existing, error: existingError } = await this.supabaseService
       .from('activities')
       .select('id, external_id')
       .eq('external_id', activity.external_id)
       .single();
+
+    if (existingError && existingError.code !== 'PGRST116') {
+      throw new ServiceUnavailableException(
+        'Falha ao verificar atividade já sincronizada',
+      );
+    }
 
     if (existing) {
       this.logger.log(
@@ -306,7 +319,15 @@ export class ActivitySyncService {
       crossProviderQuery = crossProviderQuery.neq('source', localSource);
     }
 
-    const { data: crossProviderMatches } = await crossProviderQuery;
+    const {
+      data: crossProviderMatches,
+      error: crossProviderError,
+    } = await crossProviderQuery;
+    if (crossProviderError) {
+      throw new ServiceUnavailableException(
+        'Falha ao verificar duplicidade entre dispositivos',
+      );
+    }
 
     if (crossProviderMatches && crossProviderMatches.length > 0) {
       const minDistance =
@@ -336,7 +357,8 @@ export class ActivitySyncService {
         DEDUP_WINDOW_MINUTES * 60 * 1000,
     );
 
-    const { data: overlappingPhone } = await this.supabaseService
+    const { data: overlappingPhone, error: overlappingPhoneError } =
+      await this.supabaseService
       .from('activities')
       .select('id, source, start_date')
       .eq('user_id', userId)
@@ -344,12 +366,10 @@ export class ActivitySyncService {
       .gte('start_date', phoneWindowStart.toISOString())
       .lte('start_date', phoneWindowEnd.toISOString());
 
-    if (overlappingPhone && overlappingPhone.length > 0) {
-      const redundantIds = overlappingPhone.map((a) => a.id);
-      await this.supabaseService
-        .from('activities')
-        .update({ source: 'phone_redundant' })
-        .in('id', redundantIds);
+    if (overlappingPhoneError) {
+      throw new ServiceUnavailableException(
+        'Falha ao reconciliar atividades do telefone',
+      );
     }
 
     // 4. Reconciliation with plan workout (Pro) or fall back to free run.
@@ -377,6 +397,7 @@ export class ActivitySyncService {
           matchedWorkout.id,
           trackingPayload,
         );
+        await this.markPhoneActivitiesRedundant(overlappingPhone ?? []);
         this.logger.log(
           `[${source}] activity ${activity.external_id} → ${matchedWorkout.source} workout ${matchedWorkout.id} completed` +
             (overlappingPhone?.length
@@ -391,11 +412,14 @@ export class ActivitySyncService {
           reconciliation: `${matchedWorkout.source}_match`,
         };
       } catch (err) {
-        // If the plan link fails for any reason, degrade to free-run so the
-        // user still sees the activity. This protects against rare cases like
-        // the workout being deleted between query and update.
+        // Only a confirmed deletion race may change the domain classification.
+        // Transient database/subscription errors must bubble up so the source
+        // can retry; silently converting them created duplicate free runs.
+        if (!(err instanceof NotFoundException)) {
+          throw err;
+        }
         this.logger.warn(
-          `[${source}] completeWorkout failed for workout ${matchedWorkout.id}, falling back to free run: ${(err as Error).message}`,
+          `[${source}] matched workout ${matchedWorkout.id} no longer exists; importing as free run`,
         );
       }
     }
@@ -404,6 +428,7 @@ export class ActivitySyncService {
       userId,
       freePayload,
     );
+    await this.markPhoneActivitiesRedundant(overlappingPhone ?? []);
     this.logger.log(
       `[${source}] activity ${activity.external_id} → free run (workout=${workout?.id}, no plan match)` +
         (overlappingPhone?.length
@@ -440,7 +465,12 @@ export class ActivitySyncService {
       .eq('status', 'pending')
       .eq('scheduled_date', saoPauloDate);
 
-    if (error || !candidates || candidates.length === 0) return null;
+    if (error) {
+      throw new ServiceUnavailableException(
+        'Falha ao buscar treino para reconciliar a atividade',
+      );
+    }
+    if (!candidates || candidates.length === 0) return null;
 
     const executedKm = activity.distance / 1000;
     return selectReconciliationCandidate(
@@ -450,20 +480,36 @@ export class ActivitySyncService {
     );
   }
 
-  /**
-   * Wrap isProUser in a safe call: any failure (e.g., user row not found
-   * during a sync from an orphaned device) degrades gracefully to "free"
-   * — the activity still lands in the user's history, just without the
-   * plan link.
-   */
   private async safeIsProUser(userId: string): Promise<boolean> {
     try {
       return await this.subscriptionService.isProUser(userId);
     } catch (e) {
-      this.logger.warn(
-        `[reconcile] isProUser lookup failed for ${userId}, defaulting to FREE: ${(e as Error).message}`,
+      this.logger.error(
+        `[reconcile] isProUser lookup failed for ${userId}: ${(e as Error).message}`,
       );
-      return false;
+      throw new ServiceUnavailableException(
+        'Não foi possível validar a assinatura para reconciliar a atividade',
+      );
+    }
+  }
+
+  private async markPhoneActivitiesRedundant(
+    activities: Array<{ id: string }>,
+  ): Promise<void> {
+    if (activities.length === 0) return;
+    const { error } = await this.supabaseService
+      .from('activities')
+      .update({ source: 'phone_redundant' })
+      .in(
+        'id',
+        activities.map((activity) => activity.id),
+      );
+    if (error) {
+      // Canonical completion is already durable. A cleanup failure must not
+      // cause the source to resend and duplicate user-visible work.
+      this.logger.warn(
+        `[reconcile] failed to mark phone activities redundant: ${error.message}`,
+      );
     }
   }
 

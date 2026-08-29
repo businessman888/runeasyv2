@@ -5,7 +5,9 @@ import {
   forwardRef,
   NotFoundException,
   BadRequestException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { SupabaseService } from '../../database';
@@ -1124,6 +1126,28 @@ export class TrainingService {
     // (infinite recursion → one INSERT per cycle → millions of orphan rows).
     isAlreadyFreeRun = false,
   ) {
+    // Resolve the canonical workout before making any subscription decision.
+    // A Watch can submit an old applicationContext after the same planned
+    // workout was completed on the phone. The workout identity wins: this is
+    // an idempotent replay, never a new free run.
+    const { data: workout, error: workoutError } = await this.supabaseService
+      .from('workouts')
+      .select('*')
+      .eq('id', workoutId)
+      .eq('user_id', userId)
+      .single();
+
+    if (workoutError || !workout) {
+      throw new NotFoundException('Workout not found');
+    }
+
+    if (workout.status === 'completed') {
+      this.logger.log(
+        `[completeWorkout] workout ${workoutId} already completed — ignoring replay ${payload.external_id ?? 'without-external-id'}`,
+      );
+      return workout;
+    }
+
     // ── Pro gate (defense in depth) ────────────────────────────────────────
     // Free users must never reach this method with a plan workout — Home
     // shows UpgradeProCard, Calendar hides plan rows, and useWatchSync
@@ -1140,18 +1164,26 @@ export class TrainingService {
     // still lands in the user's history (no data loss, no user-visible
     // failure), but no plan workout is marked completed and no AI feedback
     // is enqueued. Matches the rule applied in ActivitySyncService.
-    let isPro = false;
-    try {
-      isPro = await this.subscriptionService.isProUser(userId);
-    } catch (e) {
-      this.logger.warn(
-        `[completeWorkout] isProUser lookup failed for ${userId}, defaulting FREE: ${
-          (e as Error).message
-        }`,
-      );
+    let isPro = true;
+    const requiresPlanEntitlement =
+      workout.source === 'plan' && !isAlreadyFreeRun;
+    if (requiresPlanEntitlement) {
+      try {
+        isPro = await this.subscriptionService.isProUser(userId);
+      } catch (e) {
+        // A transient subscription outage must not silently change the domain
+        // type of a run. Throwing keeps the wearable/offline payload queued for
+        // a safe retry instead of creating a zombie free workout.
+        this.logger.error(
+          `[completeWorkout] isProUser lookup failed for ${userId}: ${(e as Error).message}`,
+        );
+        throw new ServiceUnavailableException(
+          'Não foi possível validar a assinatura. O treino será reenviado.',
+        );
+      }
     }
 
-    if (!isPro && !isAlreadyFreeRun) {
+    if (!isPro && requiresPlanEntitlement) {
       this.logger.log(
         `[completeWorkout] User ${userId} is FREE — degrading workout ${workoutId} to free run (no plan link, no AI feedback)`,
       );
@@ -1171,36 +1203,69 @@ export class TrainingService {
       });
     }
 
-    // Validate workout
-    const { data: workout, error: workoutError } = await this.supabaseService
-      .from('workouts')
-      .select('*')
-      .eq('id', workoutId)
-      .eq('user_id', userId)
-      .single();
+    // Unique lease token per attempt. It is deliberately different from the
+    // durable external identity: a stale contender can only clear/commit the
+    // exact lease it acquired, preventing ABA during lease recovery.
+    const completionProcessingId = randomUUID();
+    const existingClaimStartedAt = workout.completion_processing_started_at
+      ? new Date(workout.completion_processing_started_at).getTime()
+      : 0;
+    const existingClaimIsStale =
+      existingClaimStartedAt > 0 &&
+      Date.now() - existingClaimStartedAt > 15 * 60 * 1000;
 
-    if (workoutError || !workout) {
-      throw new Error('Workout not found');
+    if (workout.completion_processing_id && !existingClaimIsStale) {
+      throw new ServiceUnavailableException(
+        'Este treino já está sendo finalizado. Tente novamente em instantes.',
+      );
     }
-
-    // WatchConnectivity e filas offline oferecem entrega "at least once".
-    // Se esta mesma corrida já concluiu o treino, devolvemos sucesso sem
-    // repetir rota, XP, badges ou enqueue de feedback.
-    if (workout.status === 'completed' && payload.external_id) {
-      const { data: existingActivity } = await this.supabaseService
-        .from('activities')
-        .select('id')
+    if (workout.completion_processing_id && existingClaimIsStale) {
+      await this.supabaseService
+        .from('workouts')
+        .update({
+          completion_processing_id: null,
+          completion_processing_started_at: null,
+        })
+        .eq('id', workoutId)
         .eq('user_id', userId)
-        .eq('external_id', payload.external_id)
-        .maybeSingle();
-      if (existingActivity?.id) {
-        this.logger.log(
-          `[completeWorkout] idempotent hit for ${payload.external_id} — reusing workout ${workoutId}`,
-        );
-        return workout;
-      }
+        .eq('completion_processing_id', workout.completion_processing_id);
     }
 
+    const { data: claimedCompletion, error: claimError } =
+      await this.supabaseService
+        .from('workouts')
+        .update({
+          completion_processing_id: completionProcessingId,
+          completion_processing_started_at: new Date().toISOString(),
+        })
+        .eq('id', workoutId)
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .is('completion_processing_id', null)
+        .select('id')
+        .maybeSingle();
+
+    if (claimError) {
+      throw new ServiceUnavailableException(
+        'Não foi possível reservar a finalização. O treino será reenviado.',
+      );
+    }
+    if (!claimedCompletion) {
+      const { data: latestWorkout } = await this.supabaseService
+        .from('workouts')
+        .select('*')
+        .eq('id', workoutId)
+        .eq('user_id', userId)
+        .single();
+      if (latestWorkout?.status === 'completed') {
+        return latestWorkout;
+      }
+      throw new ServiceUnavailableException(
+        'Este treino já está sendo finalizado. Tente novamente em instantes.',
+      );
+    }
+
+    try {
     // Carregado só quando haverá processamento geoespacial; reentregas e
     // degradações Free retornam antes sem pagar esse custo.
     const turf = await import('@turf/turf');
@@ -1384,6 +1449,15 @@ export class TrainingService {
       }
     }
 
+    if (!activityId) {
+      // Without the canonical activity link the route, summary and feedback
+      // cannot be recovered reliably. Keep the workout pending so the durable
+      // client queue retries against the same completion identity.
+      throw new ServiceUnavailableException(
+        'Não foi possível persistir a atividade. O treino será reenviado.',
+      );
+    }
+
     // 2. Update Workout Status (and link to the new activity row)
     const { error: updateError, data: updatedWorkout } =
       await this.supabaseService
@@ -1400,14 +1474,33 @@ export class TrainingService {
           // espalhar `rpe: undefined` faria o PostgREST zerar um valor já gravado
           // por PATCH numa reentrada (retry da fila offline, re-sync de relógio).
           ...(payload.rpe != null ? { rpe: payload.rpe } : {}),
+          completion_processing_id: null,
+          completion_processing_started_at: null,
         })
         .eq('id', workoutId)
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .eq('completion_processing_id', completionProcessingId)
         .select()
-        .single();
+        .maybeSingle();
 
     if (updateError) {
       this.logger.error('Error updating workout completion', updateError);
       throw updateError;
+    }
+    if (!updatedWorkout) {
+      const { data: latestWorkout } = await this.supabaseService
+        .from('workouts')
+        .select('*')
+        .eq('id', workoutId)
+        .eq('user_id', userId)
+        .single();
+      if (latestWorkout?.status === 'completed') {
+        return latestWorkout;
+      }
+      throw new ServiceUnavailableException(
+        'A reserva de finalização expirou. O treino será reenviado.',
+      );
     }
 
     // 3. Insert Route (PostGIS LINESTRING)
@@ -1548,6 +1641,23 @@ export class TrainingService {
     }
 
     return updatedWorkout;
+    } catch (error) {
+      const { error: releaseError } = await this.supabaseService
+        .from('workouts')
+        .update({
+          completion_processing_id: null,
+          completion_processing_started_at: null,
+        })
+        .eq('id', workoutId)
+        .eq('user_id', userId)
+        .eq('completion_processing_id', completionProcessingId);
+      if (releaseError) {
+        this.logger.error(
+          `[completeWorkout] failed to release completion claim for ${workoutId}: ${releaseError.message}`,
+        );
+      }
+      throw error;
+    }
   }
 
   /**
@@ -1648,25 +1758,113 @@ export class TrainingService {
         ? `free_${userId}_${new Date(payload.started_at).getTime()}`
         : undefined);
 
-    if (effectiveExternalId) {
-      const { data: existingActivity } = await this.supabaseService
+    if (!effectiveExternalId) {
+      throw new BadRequestException(
+        'external_id ou started_at é obrigatório para concluir corrida livre',
+      );
+    }
+
+    // First claim the workout identity itself. Dedupe only through activities
+    // was too late: a failure between the pending workout INSERT and activity
+    // creation left an orphan, and the retry inserted another one.
+    const { data: claimedWorkout, error: claimedWorkoutError } =
+      await this.supabaseService
+      .from('workouts')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('completion_external_id', effectiveExternalId)
+      .maybeSingle();
+    if (claimedWorkoutError) {
+      throw new ServiceUnavailableException(
+        'Não foi possível verificar a corrida pendente. Ela será reenviada.',
+      );
+    }
+    if (claimedWorkout) {
+      return this.completeWorkout(
+        userId,
+        claimedWorkout.id,
+        {
+          route_points: payload.route_points,
+          total_distance_meters: payload.total_distance_meters,
+          duration_seconds: payload.duration_seconds,
+          source: payload.source,
+          external_id: effectiveExternalId,
+          average_heartrate: payload.average_heartrate,
+          max_heartrate: payload.max_heartrate,
+          calories: payload.calories,
+          avg_pace_seconds_per_km: payload.avg_pace_seconds_per_km,
+          started_at: payload.started_at,
+          environment,
+          treadmill_data: payload.treadmill_data,
+          rpe: payload.rpe,
+        },
+        true,
+      );
+    }
+
+    {
+      const { data: existingActivity, error: existingActivityError } =
+        await this.supabaseService
         .from('activities')
         .select('id')
         .eq('user_id', userId)
         .eq('external_id', effectiveExternalId)
         .maybeSingle();
+      if (existingActivityError) {
+        throw new ServiceUnavailableException(
+          'Não foi possível verificar a atividade existente. Ela será reenviada.',
+        );
+      }
       if (existingActivity?.id) {
-        const { data: existingWorkout } = await this.supabaseService
+        const { data: existingWorkout, error: existingWorkoutError } =
+          await this.supabaseService
           .from('workouts')
           .select('*')
           .eq('user_id', userId)
           .eq('activity_id', existingActivity.id)
           .maybeSingle();
+        if (existingWorkoutError) {
+          throw new ServiceUnavailableException(
+            'Não foi possível verificar a corrida existente. Ela será reenviada.',
+          );
+        }
         if (existingWorkout) {
           this.logger.log(
             `[completeFreeWorkout] idempotent hit for ${effectiveExternalId} — reusing workout ${existingWorkout.id}`,
           );
-          return existingWorkout;
+          if (existingWorkout.status === 'completed') {
+            return existingWorkout;
+          }
+          const { error: identityUpdateError } = await this.supabaseService
+            .from('workouts')
+            .update({ completion_external_id: effectiveExternalId })
+            .eq('id', existingWorkout.id)
+            .eq('user_id', userId);
+          if (identityUpdateError) {
+            throw new ServiceUnavailableException(
+              'Não foi possível recuperar a corrida pendente. Ela será reenviada.',
+            );
+          }
+          return this.completeWorkout(
+            userId,
+            existingWorkout.id,
+            {
+              route_points: payload.route_points,
+              total_distance_meters: payload.total_distance_meters,
+              duration_seconds: payload.duration_seconds,
+              source: payload.source,
+              external_id: effectiveExternalId,
+              average_heartrate: payload.average_heartrate,
+              max_heartrate: payload.max_heartrate,
+              calories: payload.calories,
+              avg_pace_seconds_per_km: payload.avg_pace_seconds_per_km,
+              started_at: payload.started_at,
+              environment,
+              treadmill_data: payload.treadmill_data,
+              rpe: payload.rpe,
+            },
+            true,
+          );
         }
       }
     }
@@ -1687,9 +1885,44 @@ export class TrainingService {
         tips: [],
         status: 'pending',
         environment,
+        completion_external_id: effectiveExternalId,
       })
       .select()
       .single();
+
+    if (insertError?.code === '23505') {
+      // Another delivery won the unique claim. Reuse it instead of surfacing a
+      // transient failure or creating a second pending row.
+      const { data: concurrentWorkout, error: lookupError } =
+        await this.supabaseService
+          .from('workouts')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('completion_external_id', effectiveExternalId)
+          .single();
+      if (!lookupError && concurrentWorkout) {
+        return this.completeWorkout(
+          userId,
+          concurrentWorkout.id,
+          {
+            route_points: payload.route_points,
+            total_distance_meters: payload.total_distance_meters,
+            duration_seconds: payload.duration_seconds,
+            source: payload.source,
+            external_id: effectiveExternalId,
+            average_heartrate: payload.average_heartrate,
+            max_heartrate: payload.max_heartrate,
+            calories: payload.calories,
+            avg_pace_seconds_per_km: payload.avg_pace_seconds_per_km,
+            started_at: payload.started_at,
+            environment,
+            treadmill_data: payload.treadmill_data,
+            rpe: payload.rpe,
+          },
+          true,
+        );
+      }
+    }
 
     if (insertError) {
       this.logger.error(

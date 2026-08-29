@@ -393,7 +393,12 @@ export function HomeScreen({ navigation }: any) {
     const todayStr = `${todayDateForActivities.getFullYear()}-${String(todayDateForActivities.getMonth() + 1).padStart(2, '0')}-${String(todayDateForActivities.getDate()).padStart(2, '0')}`;
     const activitySourceRank = (s?: string | null) => (s === 'manual' ? 0 : s === 'free' ? 1 : 2);
     const todayActivities = (rawWorkouts ?? [])
-        .filter((w) => w.scheduled_date === todayStr && (w.source === 'manual' || w.source === 'free'))
+        .filter(
+            (w) =>
+                w.scheduled_date === todayStr &&
+                (w.source === 'manual' ||
+                    (w.source === 'free' && w.status === 'completed')),
+        )
         .sort((a, b) => activitySourceRank(a.source) - activitySourceRank(b.source));
 
     // Refetch feedback when workout status changes to 'completed'
@@ -827,6 +832,7 @@ export function HomeScreen({ navigation }: any) {
                                 workout={mainWorkout as any}
                                 isToday={hasTodayWorkout}
                                 isCompleted={todayData?.status === 'completed' && hasTodayWorkout}
+                                canStart={hasTodayWorkout && todayData?.status === 'pending'}
                                 onStartWorkout={handleStartWorkout}
                                 allBadges={badges}
                             />
@@ -919,6 +925,7 @@ export function HomeScreen({ navigation }: any) {
                                     workout={w as any}
                                     isToday={true}
                                     isCompleted={w.status === 'completed'}
+                                    canStart={w.source === 'manual' && w.status === 'pending'}
                                     onStartWorkout={() => handleActivityCardPress(w)}
                                     allBadges={badges}
                                 />

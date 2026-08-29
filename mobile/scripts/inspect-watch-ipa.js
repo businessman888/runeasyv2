@@ -6,7 +6,7 @@ const plist = require('plist');
 const bplistParser = require('bplist-parser');
 
 const PRESENT = Symbol('present');
-const WATCH_RUNTIME_MARKER = 'RUNEASY_WATCH_PHASE0_V4_20260820';
+const WATCH_RUNTIME_MARKER = 'RUNEASY_WATCH_HEALTH_SYNC_V5_20260829';
 const input = process.argv[2] || process.env.RUNEASY_IPA_PATH;
 
 if (!input) {

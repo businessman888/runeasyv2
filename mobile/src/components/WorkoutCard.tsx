@@ -53,6 +53,8 @@ interface WorkoutCardProps {
   isCompleted: boolean;
   onStartWorkout: () => void;
   allBadges: BadgeData[];
+  /** Explicit domain permission. Free-run records are results, never launchers. */
+  canStart?: boolean;
   /**
    * When provided AND the workout is completed, the stats row renders these
    * actual executed metrics instead of the planned distance/time/pace.
@@ -166,7 +168,15 @@ function formatCardDate(dateStr?: string): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const WorkoutCard = memo(
-  ({ workout, isToday, isCompleted, onStartWorkout, allBadges, executedOverride }: WorkoutCardProps) => {
+  ({
+    workout,
+    isToday,
+    isCompleted,
+    onStartWorkout,
+    allBadges,
+    canStart,
+    executedOverride,
+  }: WorkoutCardProps) => {
     useThemeSubscription();
     const pace = getPaceMinutes(workout);
     const dateLabel = formatCardDate(workout.scheduled_date);
@@ -202,7 +212,8 @@ export const WorkoutCard = memo(
         .filter((b): b is BadgeData => b !== null);
     }, [workout, allBadges]);
 
-    const isButtonEnabled = isToday && !isCompleted;
+    const isButtonEnabled =
+      canStart ?? (isToday && workout.status === 'pending' && !isCompleted);
 
     return (
       <View style={[styles.card, isCompleted ? styles.cardCompleted : styles.cardActive]}>

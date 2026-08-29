@@ -19,6 +19,9 @@ describe('TrainingService', () => {
     getStateDigest: jest.Mock;
     applyScheduleShift: jest.Mock;
   };
+  const mockSubscriptionService = {
+    isProUser: jest.fn(),
+  };
 
   const mockWorkouts = [
     {
@@ -44,6 +47,7 @@ describe('TrainingService', () => {
   };
 
   beforeEach(async () => {
+    mockSubscriptionService.isProUser.mockReset().mockResolvedValue(true);
     mockSupabaseService = {
       from: jest.fn().mockReturnValue({
         select: jest.fn().mockReturnThis(),
@@ -122,7 +126,7 @@ describe('TrainingService', () => {
         // when explicitly testing the Free degradation flow.
         {
           provide: SubscriptionService,
-          useValue: { isProUser: jest.fn().mockResolvedValue(true) },
+          useValue: mockSubscriptionService,
         },
         {
           provide: getQueueToken('feedback-queue'),
@@ -196,17 +200,7 @@ describe('TrainingService', () => {
           .fn()
           .mockResolvedValue({ data: completedWorkout, error: null }),
       };
-      const activityQuery = {
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        maybeSingle: jest
-          .fn()
-          .mockResolvedValue({ data: { id: 'activity-1' }, error: null }),
-      };
-      (mockSupabaseService.from as jest.Mock).mockImplementation(
-        (table: string) =>
-          table === 'workouts' ? workoutQuery : activityQuery,
-      );
+      (mockSupabaseService.from as jest.Mock).mockReturnValue(workoutQuery);
 
       const result = await service.completeWorkout('user-123', 'w-completed', {
         route_points: [],
@@ -218,8 +212,129 @@ describe('TrainingService', () => {
       });
 
       expect(result).toEqual(completedWorkout);
-      expect(activityQuery.maybeSingle).toHaveBeenCalledTimes(1);
-      expect(mockSupabaseService.from).toHaveBeenCalledTimes(2);
+      expect(mockSupabaseService.from).toHaveBeenCalledTimes(1);
+      expect(mockSubscriptionService.isProUser).not.toHaveBeenCalled();
+    });
+
+    it('treats a second physical run for an already completed workout as a replay', async () => {
+      const completedWorkout = {
+        id: 'w-completed',
+        user_id: 'user-123',
+        source: 'plan',
+        status: 'completed',
+        activity_id: 'canonical-activity',
+      };
+      const workoutQuery = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest
+          .fn()
+          .mockResolvedValue({ data: completedWorkout, error: null }),
+      };
+      (mockSupabaseService.from as jest.Mock).mockReturnValue(workoutQuery);
+      mockSubscriptionService.isProUser.mockResolvedValue(false);
+
+      const result = await service.completeWorkout('user-123', 'w-completed', {
+        route_points: [],
+        total_distance_meters: 6060,
+        duration_seconds: 2160,
+        source: 'apple_watch',
+        external_id: 'apple_watch_a-different-run-id',
+        started_at: '2026-08-29T10:00:00.000Z',
+      });
+
+      expect(result).toEqual(completedWorkout);
+      expect(mockSubscriptionService.isProUser).not.toHaveBeenCalled();
+      expect(mockSupabaseService.from).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps a planned run queued when subscription lookup is unavailable', async () => {
+      const pendingWorkout = {
+        id: 'w-pending',
+        user_id: 'user-123',
+        source: 'plan',
+        status: 'pending',
+      };
+      const workoutQuery = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest
+          .fn()
+          .mockResolvedValue({ data: pendingWorkout, error: null }),
+      };
+      (mockSupabaseService.from as jest.Mock).mockReturnValue(workoutQuery);
+      mockSubscriptionService.isProUser.mockRejectedValue(
+        new Error('subscription timeout'),
+      );
+
+      await expect(
+        service.completeWorkout('user-123', 'w-pending', {
+          route_points: [],
+          total_distance_meters: 5000,
+          duration_seconds: 1800,
+          source: 'apple_watch',
+          external_id: 'apple_watch_retry-me',
+          started_at: '2026-08-29T10:00:00.000Z',
+        }),
+      ).rejects.toThrow('O treino será reenviado');
+
+      expect(mockSupabaseService.from).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('completeFreeWorkout identity', () => {
+    it('reuses the claimed free workout on a durable retry', async () => {
+      const claimedWorkout = {
+        id: 'free-workout-1',
+        user_id: 'user-123',
+        source: 'free',
+        status: 'pending',
+        completion_external_id: 'apple_watch_run-42',
+      };
+      const claimQuery = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        maybeSingle: jest
+          .fn()
+          .mockResolvedValue({ data: claimedWorkout, error: null }),
+      };
+      (mockSupabaseService.from as jest.Mock).mockReturnValue(claimQuery);
+      const completeSpy = jest
+        .spyOn(service, 'completeWorkout')
+        .mockResolvedValue({ ...claimedWorkout, status: 'completed' });
+
+      const result = await service.completeFreeWorkout('user-123', {
+        route_points: [],
+        total_distance_meters: 6060,
+        duration_seconds: 2160,
+        source: 'apple_watch',
+        external_id: 'apple_watch_run-42',
+        started_at: '2026-08-29T10:00:00.000Z',
+      });
+
+      expect(completeSpy).toHaveBeenCalledWith(
+        'user-123',
+        'free-workout-1',
+        expect.objectContaining({
+          external_id: 'apple_watch_run-42',
+          source: 'apple_watch',
+        }),
+        true,
+      );
+      expect(result.status).toBe('completed');
+    });
+
+    it('rejects a free run without a stable completion identity', async () => {
+      await expect(
+        service.completeFreeWorkout('user-123', {
+          route_points: [],
+          total_distance_meters: 1000,
+          duration_seconds: 360,
+          source: 'phone',
+        }),
+      ).rejects.toThrow('external_id ou started_at');
+
+      expect(mockSupabaseService.from).not.toHaveBeenCalled();
     });
   });
 

@@ -61,11 +61,32 @@ final class PhoneBridge: NSObject, ObservableObject {
     private let session: WCSession?
     private var accountId: String?
     private var contextExpiryTask: Task<Void, Never>?
+    private var lastAcceptedContextId: String?
+    private var lastAcceptedSentAt: Date?
+    private var completedWorkoutIds: Set<String>
+    private var completedWorkoutOrder: [String]
     private static let supportedSchemaVersion = 2
     private static let contextTTL: TimeInterval = 36 * 60 * 60
     private static let subscriptionTTL: TimeInterval = 24 * 60 * 60
+    private static let contextIdDefaultsKey = "RunEasy.lastAcceptedContextId"
+    private static let contextDateDefaultsKey = "RunEasy.lastAcceptedContextDate"
+    private static let completedWorkoutDefaultsKey = "RunEasy.completedWorkoutIds"
 
     override init() {
+        let defaults = UserDefaults.standard
+        self.lastAcceptedContextId = defaults.string(
+            forKey: Self.contextIdDefaultsKey
+        )
+        let acceptedTimestamp = defaults.double(
+            forKey: Self.contextDateDefaultsKey
+        )
+        self.lastAcceptedSentAt = acceptedTimestamp > 0
+            ? Date(timeIntervalSince1970: acceptedTimestamp)
+            : nil
+        let storedCompletedWorkoutIds =
+            defaults.stringArray(forKey: Self.completedWorkoutDefaultsKey) ?? []
+        self.completedWorkoutIds = Set(storedCompletedWorkoutIds)
+        self.completedWorkoutOrder = storedCompletedWorkoutIds
         if WCSession.isSupported() {
             self.session = WCSession.default
         } else {
@@ -163,6 +184,7 @@ final class PhoneBridge: NSObject, ObservableObject {
             clearUserContext()
             syncState = .signedOut
             lastContextAt = sentAt
+            rememberAcceptedContext(context, sentAt: sentAt)
             return
         }
 
@@ -232,6 +254,7 @@ final class PhoneBridge: NSObject, ObservableObject {
         hasReceivedContext = true
         lastContextAt = sentAt
         syncState = .synced
+        rememberAcceptedContext(context, sentAt: sentAt)
         scheduleExpiry(for: sentAt)
         bridgeLog.info(
             "contexto recebido: pro=\(self.isPro, privacy: .public) workout=\(self.todayWorkout != nil, privacy: .public) atividades=\(self.todayActivities.count, privacy: .public)"
@@ -241,29 +264,44 @@ final class PhoneBridge: NSObject, ObservableObject {
     private func validate(context: [String: Any]) -> Date? {
         guard let schema = context["schema_version"] as? Int,
               schema == Self.supportedSchemaVersion else {
-            invalidateContext(as: .incompatible, reason: "schema incompatível")
+            rejectIncoming(as: .incompatible, reason: "schema incompatível")
+            return nil
+        }
+        guard let contextId = context["context_id"] as? String,
+              !contextId.isEmpty else {
+            rejectIncoming(as: .incompatible, reason: "context_id inválido")
+            return nil
+        }
+        if contextId == lastAcceptedContextId, hasReceivedContext {
+            bridgeLog.info("contexto duplicado ignorado: \(contextId, privacy: .public)")
             return nil
         }
         guard let sentAtRaw = context["sent_at"] as? String,
               let sentAt = parseISO8601(sentAtRaw) else {
-            invalidateContext(as: .incompatible, reason: "sent_at inválido")
+            rejectIncoming(as: .incompatible, reason: "sent_at inválido")
+            return nil
+        }
+        if let lastAcceptedSentAt,
+           sentAt <= lastAcceptedSentAt,
+           hasReceivedContext {
+            bridgeLog.info("contexto fora de ordem ignorado: \(contextId, privacy: .public)")
             return nil
         }
         let age = Date().timeIntervalSince(sentAt)
         guard age >= -300, age <= Self.contextTTL else {
-            invalidateContext(as: .stale, reason: "contexto expirado")
+            rejectIncoming(as: .stale, reason: "contexto expirado")
             return nil
         }
         if context["auth_state"] as? String == "signed_in" {
             guard let verifiedRaw = context["subscription_verified_at"] as? String,
                   let verifiedAt = parseISO8601(verifiedRaw) else {
-                invalidateContext(as: .incompatible, reason: "entitlement sem verificação")
+                rejectIncoming(as: .incompatible, reason: "entitlement sem verificação")
                 return nil
             }
             let subscriptionAge = Date().timeIntervalSince(verifiedAt)
             guard subscriptionAge >= -300,
                   subscriptionAge <= Self.subscriptionTTL else {
-                invalidateContext(as: .stale, reason: "entitlement expirado")
+                rejectIncoming(as: .stale, reason: "entitlement expirado")
                 return nil
             }
         }
@@ -280,6 +318,40 @@ final class PhoneBridge: NSObject, ObservableObject {
         clearUserContext()
         syncState = state
         bridgeLog.error("contexto rejeitado: \(reason, privacy: .public)")
+    }
+
+    /// A corrida planejada já terminou neste relógio, mesmo que o iPhone ainda
+    /// esteja offline. Bloqueamos o card localmente no momento do enqueue para
+    /// impedir uma segunda execução durante a janela de entrega eventual.
+    func markWorkoutCompletionPending(_ workoutId: String?) {
+        guard let workoutId else { return }
+        rememberCompletedWorkout(workoutId)
+        if var workout = todayWorkout, workout.id == workoutId {
+            workout.status = .completed
+            todayWorkout = workout
+        }
+    }
+
+    private func rejectIncoming(as state: WatchSyncState, reason: String) {
+        if !hasReceivedContext {
+            syncState = state
+        }
+        bridgeLog.error("contexto recebido foi ignorado: \(reason, privacy: .public)")
+    }
+
+    private func rememberAcceptedContext(
+        _ context: [String: Any],
+        sentAt: Date
+    ) {
+        guard let contextId = context["context_id"] as? String else { return }
+        lastAcceptedContextId = contextId
+        lastAcceptedSentAt = sentAt
+        let defaults = UserDefaults.standard
+        defaults.set(contextId, forKey: Self.contextIdDefaultsKey)
+        defaults.set(
+            sentAt.timeIntervalSince1970,
+            forKey: Self.contextDateDefaultsKey
+        )
     }
 
     private func clearUserContext() {
@@ -323,11 +395,32 @@ final class PhoneBridge: NSObject, ObservableObject {
         }
         do {
             let data = try JSONSerialization.data(withJSONObject: dict)
-            let workout = try JSONDecoder().decode(PlannedWorkout.self, from: data)
+            var workout = try JSONDecoder().decode(PlannedWorkout.self, from: data)
+            if workout.isCompleted {
+                rememberCompletedWorkout(workout.id)
+            } else if completedWorkoutIds.contains(workout.id) {
+                // Completion is terminal for a workout identity. A delayed
+                // context must never re-enable its start button.
+                workout.status = .completed
+            }
             todayWorkout = workout
         } catch {
             print("[PhoneBridge] falha ao decodificar treino:", error)
         }
+    }
+
+    private func rememberCompletedWorkout(_ workoutId: String) {
+        completedWorkoutIds.insert(workoutId)
+        completedWorkoutOrder.removeAll { $0 == workoutId }
+        completedWorkoutOrder.append(workoutId)
+        // Bound persistent storage while retaining far more history than the
+        // Watch UI can ever expose at once.
+        completedWorkoutOrder = Array(completedWorkoutOrder.suffix(64))
+        completedWorkoutIds = Set(completedWorkoutOrder)
+        UserDefaults.standard.set(
+            completedWorkoutOrder,
+            forKey: Self.completedWorkoutDefaultsKey
+        )
     }
 
     /// Decode genérico com log de erro explícito.

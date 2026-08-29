@@ -1145,6 +1145,9 @@ export class TrainingController {
       return { success: true, workout };
     } catch (error) {
       this.logger.error('Failed to complete free workout', error);
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw new HttpException(
         error.message || 'Failed to complete free workout',
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -1174,6 +1177,9 @@ export class TrainingController {
       return { success: true, workout };
     } catch (error) {
       this.logger.error(`Failed to complete workout ${workoutId}`, error);
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw new HttpException(
         error.message || 'Failed to complete workout',
         HttpStatus.INTERNAL_SERVER_ERROR,

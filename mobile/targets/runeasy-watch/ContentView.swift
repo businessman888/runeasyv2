@@ -177,6 +177,7 @@ struct ContentView: View {
             workoutManager: workoutManager,
             workout: launch.workout,
             onFinish: { run in
+                phoneBridge.markWorkoutCompletionPending(run.workoutId)
                 lastCompletedRun = run
                 if phoneBridge.sendCompletedRun(run) {
                     Task {
@@ -219,6 +220,7 @@ struct ContentView: View {
     private func drainPendingCompletion() async {
         await workoutManager.restorePendingCompletion()
         guard let pendingRun = workoutManager.pendingCompletedRun else { return }
+        phoneBridge.markWorkoutCompletionPending(pendingRun.workoutId)
 
         if activeRun == nil,
            lastCompletedRun == nil,

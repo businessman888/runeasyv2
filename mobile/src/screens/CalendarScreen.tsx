@@ -305,7 +305,12 @@ export function CalendarScreen({ navigation }: any) {
     // Read from rawWorkouts (ungated) so Free users still see their own logged
     // activities; filtering to manual/free also excludes any orphan plan workout.
     const activityWorkouts = React.useMemo(
-        () => rawWorkouts.filter(w => w.source === 'manual' || w.source === 'free'),
+        () =>
+            rawWorkouts.filter(
+                w =>
+                    w.source === 'manual' ||
+                    (w.source === 'free' && w.status === 'completed'),
+            ),
         [rawWorkouts],
     );
 
@@ -453,6 +458,15 @@ export function CalendarScreen({ navigation }: any) {
             return;
         }
 
+        if (source === 'free') {
+            Alert.alert(
+                'Sincronização incompleta',
+                'Esta corrida ainda não terminou de ser salva. Abra o RunEasy com internet para tentarmos novamente.',
+                [{ text: 'OK' }],
+            );
+            return;
+        }
+
         // Pending → preview modal. Start button only for today's plan/manual
         // workouts (free runs aren't started from the calendar).
         //
@@ -477,7 +491,7 @@ export function CalendarScreen({ navigation }: any) {
         // today's pending plan/manual workouts (free runs aren't started here).
         navigation.navigate('WorkoutDetail', {
             workout,
-            showStartButton: isToday && status === 'pending' && source !== 'free',
+            showStartButton: isToday && status === 'pending',
         });
     };
 

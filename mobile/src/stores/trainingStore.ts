@@ -815,9 +815,32 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
                 // Corpo vazio/não-JSON: não é fatal, seguimos sem o workout.
             }
             console.log(`[completeWorkout] Workout ${payload.workoutId} salvo no backend. activity_id=${workout?.activity_id ?? 'n/a'}`);
+            set((state) => {
+                const markCompleted = (day: ScheduleDay | null) => {
+                    if (day?.workout?.id !== payload.workoutId) return day;
+                    return {
+                        ...day,
+                        status: 'completed' as const,
+                        workout: { ...day.workout, status: 'completed' as const },
+                    };
+                };
+                return {
+                    today: markCompleted(state.today),
+                    schedule: state.schedule.map((day) => markCompleted(day) ?? day),
+                    workouts: state.workouts.map((item) =>
+                        item.id === payload.workoutId
+                            ? { ...item, ...(workout ?? {}), status: 'completed' as const }
+                            : item,
+                    ),
+                };
+            });
             removePendingWorkout(payload.workoutId);
             if (isGarminPayload && payload.external_id) markGarminSent(payload.external_id);
-            get().fetchUpcomingWorkouts();
+            // Reconcile every source consumed by Home and useWatchSync before
+            // resolving. Updating only upcomingWorkouts left today/schedule
+            // stale, so the Watch could still start a workout completed on
+            // the phone.
+            await get().invalidatePlanCaches();
             useWellnessStore.getState().reset();
             return { success: true, savedLocally: false, workout };
         } catch (error) {
@@ -888,8 +911,26 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
             if (isGarminPayload && payload.external_id) markGarminSent(payload.external_id);
             const data = await response.json();
             console.log(`[completeFreeRun] Free run salvo no backend. id=${data.workout?.id}`);
+            if (data.workout?.id) {
+                set((state) => {
+                    const existingIndex = state.workouts.findIndex(
+                        (item) => item.id === data.workout.id,
+                    );
+                    if (existingIndex < 0) {
+                        return { workouts: [data.workout, ...state.workouts] };
+                    }
+                    return {
+                        workouts: state.workouts.map((item, index) =>
+                            index === existingIndex ? data.workout : item,
+                        ),
+                    };
+                });
+            }
             removePendingFreeRun(payload.localId);
-            get().fetchUpcomingWorkouts();
+            // Free activities are sourced from workouts in useWatchSync.
+            // Refreshing the full completion surface prevents a completed run
+            // from lingering as a pending card on iPhone/Watch.
+            await get().invalidatePlanCaches();
             useWellnessStore.getState().reset();
             return { success: true, savedLocally: false, workout: data.workout };
         } catch (error) {

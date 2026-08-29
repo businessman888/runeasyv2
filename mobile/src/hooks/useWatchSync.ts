@@ -214,7 +214,8 @@ function buildTodayActivities(workouts: unknown[]): ActivityForWatch[] {
         .filter(
             (w) =>
                 w?.scheduled_date === todayStr &&
-                (w?.source === 'manual' || w?.source === 'free'),
+                (w?.source === 'manual' ||
+                    (w?.source === 'free' && w?.status === 'completed')),
         )
         .sort((a, b) => rank(a?.source) - rank(b?.source))
         .map((w) => {
@@ -293,7 +294,13 @@ export function useWatchSync() {
         if (Platform.OS !== 'ios') return;
         return onWatchRequest((type) => {
             if (type === 'request_refresh') {
-                resendLastContext();
+                // A refresh request must reconcile with the backend. Replaying
+                // lastContext alone can perpetuate a stale pending card.
+                lastSentRef.current = null;
+                void useTrainingStore
+                    .getState()
+                    .invalidatePlanCaches()
+                    .catch(() => resendLastContext());
             } else if (type === 'open_paywall') {
                 console.log('[useWatchSync] Watch pediu o paywall — abrindo no iPhone');
                 openUpgrade();

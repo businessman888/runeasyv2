@@ -80,6 +80,43 @@ function resolveRunId(run: CompletedRunFromWatch): string {
 }
 
 /**
+ * ACK and domain state must travel in the same applicationContext. Otherwise
+ * the ACK can become the newest snapshot while still advertising the planned
+ * workout as pending.
+ */
+function contextWithRunAck(
+    context: WatchContext,
+    run: CompletedRunFromWatch,
+    ack: RunDeliveryAck,
+): WatchContext {
+    const todayWorkout =
+        ack.status === 'server_accepted' &&
+        run.workout_id &&
+        context.todayWorkout?.id === run.workout_id
+            ? { ...context.todayWorkout, status: 'completed' as const }
+            : context.todayWorkout;
+
+    return { ...context, todayWorkout, runAck: ack };
+}
+
+function mergeMonotonicWatchContext(
+    previous: WatchContext | null,
+    next: WatchContext,
+): WatchContext {
+    if (
+        previous?.todayWorkout?.id === next.todayWorkout?.id &&
+        previous.todayWorkout.status === 'completed' &&
+        next.todayWorkout.status !== 'completed'
+    ) {
+        return {
+            ...next,
+            todayWorkout: { ...next.todayWorkout, status: 'completed' },
+        };
+    }
+    return next;
+}
+
+/**
  * Roteia uma corrida recebida do Watch para o trainingStore existente.
  * Reutiliza completeWorkout (treino do plano) ou completeFreeRun (corrida livre).
  * Ambos têm fila offline MMKV — se o backend falhar, a corrida fica pending
@@ -176,9 +213,18 @@ export const useAppleWatchStore = create<AppleWatchState>((set, get) => ({
                         status: result === 'success' ? 'server_accepted' : 'pending_sync',
                         acknowledgedAt: new Date().toISOString(),
                     };
-                    set({ lastRoutingResult: result, lastRunAck: ack });
-                    const ctx = get().lastContext;
-                    if (ctx) sendWatchContext({ ...ctx, runAck: ack });
+                    const currentContext = get().lastContext;
+                    const acknowledgedContext = currentContext
+                        ? contextWithRunAck(currentContext, run, ack)
+                        : null;
+                    set({
+                        lastRoutingResult: result,
+                        lastRunAck: ack,
+                        ...(acknowledgedContext
+                            ? { lastContext: acknowledgedContext }
+                            : {}),
+                    });
+                    if (acknowledgedContext) sendWatchContext(acknowledgedContext);
                     console.log(`[AppleWatchStore] routed → ${result}`);
                 } catch (err) {
                     console.error('[AppleWatchStore] routing error:', err);
@@ -212,7 +258,8 @@ export const useAppleWatchStore = create<AppleWatchState>((set, get) => ({
     },
 
     sendContextToWatch: (ctx) => {
-        const enriched = { ...ctx, runAck: get().lastRunAck };
+        const monotonic = mergeMonotonicWatchContext(get().lastContext, ctx);
+        const enriched = { ...monotonic, runAck: get().lastRunAck };
         set({ lastContext: enriched });
         sendWatchContext(enriched);
     },

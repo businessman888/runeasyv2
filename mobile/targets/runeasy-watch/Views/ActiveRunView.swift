@@ -200,15 +200,96 @@ struct ActiveRunView: View {
     // MARK: - Running
 
     private var runningContent: some View {
+        TabView {
+            primaryMetricsPage
+            healthMetricsPage
+        }
+        .tabViewStyle(.verticalPage)
+    }
+
+    private var primaryMetricsPage: some View {
         VStack(spacing: 6) {
             timerSection
             metricsSection
+            liveHeartRateStrip
             Spacer(minLength: 0)
             controlsSection
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var healthMetricsPage: some View {
+        VStack(spacing: 8) {
+            Text("Saúde ao vivo")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.runEasyText60)
+
+            VStack(spacing: 1) {
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.red)
+                Text(currentHeartRateLabel)
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundColor(.runEasyTextPrimary)
+                    .monospacedDigit()
+                    .privacySensitive()
+                Text(metrics.heartRate == nil ? "Aguardando leitura" : "batimentos por minuto")
+                    .font(.system(size: 9))
+                    .foregroundColor(.runEasyText60)
+            }
+
+            HStack(spacing: 6) {
+                healthMetric(
+                    icon: "heart.text.square.fill",
+                    label: "Máxima",
+                    value: metrics.maxHeartRate > 0 ? "\(metrics.maxHeartRate) bpm" : "— bpm"
+                )
+                healthMetric(
+                    icon: "flame.fill",
+                    label: "Calorias",
+                    value: metrics.calories > 0 ? "\(metrics.calories) kcal" : "— kcal"
+                )
+            }
+
+            Text(metrics.isPaused ? "Treino pausado" : "Gire a coroa para voltar")
+                .font(.system(size: 8))
+                .foregroundColor(metrics.isPaused ? .runEasyWarning : .runEasyText60)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var currentHeartRateLabel: String {
+        guard let heartRate = metrics.heartRate, heartRate > 0 else { return "—" }
+        return "\(heartRate) bpm"
+    }
+
+    private func healthMetric(
+        icon: String,
+        label: String,
+        value: String
+    ) -> some View {
+        VStack(spacing: 2) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.runEasyCyan)
+            Text(label)
+                .font(.system(size: 8))
+                .foregroundColor(.runEasyText60)
+            Text(value)
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundColor(.runEasyTextPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .privacySensitive()
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 5)
+        .background(Color.runEasyCardBg)
+        .cornerRadius(9)
     }
 
     private var timerSection: some View {
@@ -245,6 +326,30 @@ struct ActiveRunView: View {
         let s = metrics.currentPaceSecondsPerKm
         guard s.isFinite, s > 0 else { return "--:--" }
         return "\(MetricFormat.pace(s))/km"
+    }
+
+    private var liveHeartRateStrip: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "heart.fill")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.red)
+            Text("FC")
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundColor(.runEasyText60)
+            Text(currentHeartRateLabel)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundColor(.runEasyTextPrimary)
+                .monospacedDigit()
+                .privacySensitive()
+            Spacer(minLength: 0)
+            Text(metrics.heartRate == nil ? "aguardando" : "ao vivo")
+                .font(.system(size: 8))
+                .foregroundColor(.runEasyText60)
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(Color.runEasyCardBg)
+        .cornerRadius(8)
     }
 
     private func metricBlock(icon: String, label: String, value: String) -> some View {
