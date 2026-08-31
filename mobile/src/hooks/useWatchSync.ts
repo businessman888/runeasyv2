@@ -21,6 +21,7 @@ import { useGamificationStore, type Badge } from '../stores/gamificationStore';
 import { useAppleWatchStore } from '../stores/appleWatchStore';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
 import { useFeedbackStore, type LatestActivityData } from '../stores/feedbackStore';
+import { useCoachStore } from '../stores/coachStore';
 import type {
     TodayWorkoutForWatch,
     WeekStatsForWatch,
@@ -274,6 +275,7 @@ export function useWatchSync() {
     const badges = useGamificationStore((s) => s.badges);
     const latestPlanActivity = useFeedbackStore((s) => s.latestPlanActivity);
     const latestActivityResultData = useFeedbackStore((s) => s.latestActivityResult);
+    const coachEnabled = useCoachStore((s) => s.enabled);
     const sendContextToWatch = useAppleWatchStore((s) => s.sendContextToWatch);
     const resendLastContext = useAppleWatchStore((s) => s.resendLastContext);
     const isPaired = useAppleWatchStore((s) => s.isPaired);
@@ -352,6 +354,12 @@ export function useWatchSync() {
         // avulsa é sempre visível.
         const latestPlanResult = isProUser ? buildRunResult(latestPlanActivity, 'plan') : null;
         const latestActivityResult = buildRunResult(latestActivityResultData, 'activity');
+        const featureFlags = {
+            liveMap: process.env.EXPO_PUBLIC_WATCH_LIVE_MAP_ENABLED === 'true',
+            audioCoach:
+                process.env.EXPO_PUBLIC_WATCH_AUDIO_COACH_ENABLED === 'true'
+                && coachEnabled,
+        };
 
         const ctx = {
             accountId: user?.id ?? null,
@@ -365,6 +373,7 @@ export function useWatchSync() {
             latestPlanResult,
             latestActivityResult,
             subscriptionVerifiedAt,
+            featureFlags,
         };
         const cacheKey = JSON.stringify(ctx);
         if (lastSentRef.current === cacheKey) return;
@@ -384,6 +393,7 @@ export function useWatchSync() {
             activities: todayActivities.length,
             planResult: latestPlanResult ? '✓' : '–',
             activityResult: latestActivityResult ? '✓' : '–',
+            featureFlags,
         });
     }, [
         today,
@@ -397,6 +407,7 @@ export function useWatchSync() {
         subscriptionVerifiedAt,
         latestPlanActivity,
         latestActivityResultData,
+        coachEnabled,
         sendContextToWatch,
     ]);
 }

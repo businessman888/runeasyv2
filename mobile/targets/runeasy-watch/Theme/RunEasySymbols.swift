@@ -1,0 +1,18 @@
+enum RunEasySymbol {
+    static let start = "play.fill"
+    static let pause = "pause.fill"
+    static let finish = "flag.fill"
+    static let run = "figure.run"
+    static let pace = "stopwatch.fill"
+    static let heart = "heart.fill"
+    static let maximumHeartRate = "heart.text.square.fill"
+    static let activeEnergy = "flame.fill"
+    static let map = "map.fill"
+    static let location = "location.fill"
+    static let coachEnabled = "speaker.wave.2.fill"
+    static let coachDisabled = "speaker.slash.fill"
+    static let back = "chevron.backward"
+    static let completed = "checkmark.circle.fill"
+    static let warning = "exclamationmark.triangle.fill"
+    static let sync = "arrow.triangle.2.circlepath"
+}

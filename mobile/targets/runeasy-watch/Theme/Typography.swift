@@ -21,6 +21,7 @@ enum AppFont {
     // Labels (uppercase, small caps)
     static let labelMedium = Font.system(size: 10, weight: .semibold, design: .default)
     static let labelSmall = Font.system(size: 9, weight: .semibold, design: .default)
+    static let labelReadable = Font.system(size: 12, weight: .semibold, design: .default)
 
     // Captions
     static let caption = Font.system(size: 11, weight: .regular, design: .default)

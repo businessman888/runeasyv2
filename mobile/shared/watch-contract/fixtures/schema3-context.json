@@ -1,0 +1,77 @@
+{
+  "schema_version": 3,
+  "context_id": "fixture-schema3-full",
+  "revision": 9,
+  "account_id": "fixture-user",
+  "auth_state": "signed_in",
+  "phone_build": "1.0.9(27)",
+  "type": "today_workout",
+  "payload": {
+    "id": "fixture-workout",
+    "type": "intervalado",
+    "title": "Intervalado",
+    "distanceKm": 5,
+    "targetPace": "5:00",
+    "instructions": "Treino estruturado",
+    "status": "pending"
+  },
+  "user_name": "Atleta",
+  "avatar_url": "",
+  "is_pro": true,
+  "week_stats": {
+    "streak": 2,
+    "workoutsDone": 2,
+    "workoutsTotal": 4,
+    "restDone": 1,
+    "restTotal": 3
+  },
+  "next_workout": {},
+  "today_activities": [],
+  "latest_plan_result": {},
+  "latest_activity_result": {},
+  "run_ack": {},
+  "watch_map_enabled": true,
+  "watch_coach_enabled": true,
+  "feature_flags": {
+    "live_map": true,
+    "audio_coach": true
+  },
+  "policy_versions": {
+    "context": 3,
+    "coach": 1,
+    "execution": 1
+  },
+  "coach_policy": {
+    "version": 1,
+    "audio_owner": "watch",
+    "locale": "pt-BR",
+    "split_interval_meters": 1000,
+    "minimum_cue_gap_seconds": 20,
+    "cue_ttl_seconds": 8,
+    "advanced_cues_enabled": false
+  },
+  "execution_steps": [
+    {
+      "index": 0,
+      "block_index": 0,
+      "kind": "warmup",
+      "metric": "distance",
+      "target": 1000,
+      "pace_min": 360,
+      "pace_max": 390
+    },
+    {
+      "index": 1,
+      "block_index": 1,
+      "kind": "work",
+      "metric": "time",
+      "target": 180000,
+      "pace_min": 280,
+      "pace_max": 300,
+      "rep_index": 1,
+      "rep_total": 4
+    }
+  ],
+  "subscription_verified_at": "2026-08-30T12:00:00.000Z",
+  "sent_at": "2026-08-30T12:00:00.000Z"
+}

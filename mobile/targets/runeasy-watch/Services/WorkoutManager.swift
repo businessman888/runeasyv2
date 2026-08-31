@@ -25,6 +25,7 @@ private let workoutLog = Logger(
 // A sessão NUNCA inicia sozinha. A autorização só é solicitada após o play.
 @MainActor
 final class WorkoutManager: NSObject, ObservableObject {
+    let coachController = WatchCoachController()
 
     // MARK: - Phase
 
@@ -59,6 +60,8 @@ final class WorkoutManager: NSObject, ObservableObject {
     @Published private(set) var hasRecoveredSession: Bool = false
     @Published private(set) var isRecoveryPending: Bool = false
     @Published private(set) var pendingCompletedRun: CompletedRun?
+    @Published private(set) var liveRoutePresentation = LiveRoutePresentation.empty
+    @Published private(set) var liveRouteLocationState: LiveRouteLocationState = .seeking
 
     var isRunning: Bool { phase == .running }
 
@@ -100,6 +103,17 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var wantsLocationUpdates = false
     /// Descarta coordenadas que o Core Location tenha armazenado antes do resume.
     private var locationCutoffDate = Date.distantPast
+    private var liveRouteSegments: [[RoutePoint]] = []
+    private var startsNewLiveRouteSegment = true
+    private var lastLiveRoutePublishAt = Date.distantPast
+    private var liveRouteRevision = 0
+    private var lastLocationAccuracy: Double?
+    private var lastLocationUpdatedAt: Date?
+    private var isCoachEnabledForCurrentWorkout = false
+
+    private static let liveRoutePublishInterval: TimeInterval = 3
+    private static let liveRouteMaximumPoints = 240
+    private static let liveRouteCompactionThreshold = 480
 
     // Tipos lidos/escritos
     private var authorizationShareTypes: Set<HKSampleType> {
@@ -271,7 +285,8 @@ final class WorkoutManager: NSObject, ObservableObject {
         let context = ActiveWorkoutContext(
             runId: nextRunId,
             workoutId: workoutId,
-            startDate: nextStartDate
+            startDate: nextStartDate,
+            coachEnabled: isCoachEnabledForCurrentWorkout
         )
 
         do {
@@ -279,6 +294,8 @@ final class WorkoutManager: NSObject, ObservableObject {
             runId = nextRunId
             startDate = nextStartDate
             routePoints = []
+            resetLiveRoute()
+            resetLiveRouteLocationState()
             phase = .starting
             WatchLaunchDiagnostics.mark("workout.checkpoint-created")
             return true
@@ -328,7 +345,11 @@ final class WorkoutManager: NSObject, ObservableObject {
         hasRecoveredSession = false
         isRecoveryPending = false
         metrics = RunMetrics()
+        coachController.stop()
+        isCoachEnabledForCurrentWorkout = false
         routePoints = []
+        resetLiveRoute()
+        resetLiveRouteLocationState()
         heartRateSamples = []
         sessionState = .notStarted
         permissionError = nil
@@ -381,6 +402,11 @@ final class WorkoutManager: NSObject, ObservableObject {
             wantsLocationUpdates = true
             locationCutoffDate = now
             phase = .running
+            coachController.begin(
+                enabled: isCoachEnabledForCurrentWorkout,
+                distanceMeters: metrics.distanceMeters,
+                elapsedSeconds: metrics.elapsedSeconds
+            )
             startDisplayTimer()
             WatchLaunchDiagnostics.mark("workout.running")
             requestLocationOrStartUpdates()
@@ -452,11 +478,17 @@ final class WorkoutManager: NSObject, ObservableObject {
                     ActiveWorkoutContext(
                         runId: recoveredRunId,
                         workoutId: nil,
-                        startDate: recoveredStartDate
+                        startDate: recoveredStartDate,
+                        coachEnabled: false
                     )
                 )
             }
+            isCoachEnabledForCurrentWorkout = snapshot.context?.coachEnabled ?? false
             routePoints = snapshot.routePoints
+            restoreLiveRoute(from: snapshot.routeSegments)
+            try? await checkpointStore.recordSegmentBoundary(
+                pointIndex: snapshot.routePoints.count
+            )
             routeRecorder.open(
                 routeBuilder: recoveredRouteBuilder,
                 mayContainPreexistingRouteData: true
@@ -466,10 +498,23 @@ final class WorkoutManager: NSObject, ObservableObject {
             metrics.elapsedSeconds = Int(recoveredBuilder.elapsedTime.rounded())
             hydrateMetrics(from: recoveredBuilder)
             metrics.isPaused = recoveredSession.state == .paused
+            if metrics.isPaused {
+                liveRouteLocationState = .paused(
+                    horizontalAccuracy: routePoints.last?.accuracy,
+                    lastUpdatedAt: routePoints.last.map {
+                        Date(timeIntervalSince1970: $0.timestamp / 1000)
+                    }
+                )
+            }
             hasPermission = true
             hasRecoveredSession = true
             isRecoveryPending = false
             phase = .running
+            coachController.begin(
+                enabled: isCoachEnabledForCurrentWorkout,
+                distanceMeters: metrics.distanceMeters,
+                elapsedSeconds: metrics.elapsedSeconds
+            )
             locationCutoffDate = Date()
             wantsLocationUpdates = recoveredSession.state == .running
             startDisplayTimer()
@@ -541,6 +586,8 @@ final class WorkoutManager: NSObject, ObservableObject {
         #if targetEnvironment(simulator)
         metrics.isPaused = true
         sessionState = .paused
+        beginNewLiveRouteSegmentAfterPause()
+        coachController.pause()
         #else
         guard let session else { return }
         session.pause()
@@ -551,14 +598,106 @@ final class WorkoutManager: NSObject, ObservableObject {
         #if targetEnvironment(simulator)
         metrics.isPaused = false
         sessionState = .running
+        if let accuracy = lastLocationAccuracy,
+           let updatedAt = lastLocationUpdatedAt {
+            liveRouteLocationState = .active(
+                horizontalAccuracy: accuracy,
+                lastUpdatedAt: updatedAt
+            )
+        } else {
+            liveRouteLocationState = .seeking
+        }
         #else
         guard let session else { return }
         session.resume()
         #endif
     }
 
+    func configureCoach(enabled: Bool) {
+        guard phase == .idle else { return }
+        isCoachEnabledForCurrentWorkout = enabled
+    }
+
+    private func resetLiveRoute() {
+        liveRouteSegments = []
+        startsNewLiveRouteSegment = true
+        lastLiveRoutePublishAt = .distantPast
+        liveRouteRevision += 1
+        liveRoutePresentation = LiveRoutePresentation(
+            segments: [],
+            revision: liveRouteRevision
+        )
+    }
+
+    private func resetLiveRouteLocationState() {
+        lastLocationAccuracy = nil
+        lastLocationUpdatedAt = nil
+        liveRouteLocationState = .seeking
+    }
+
+    private func restoreLiveRoute(from segments: [[RoutePoint]]) {
+        let restored = LiveRoutePresentation.make(
+            from: segments,
+            revision: liveRouteRevision + 1,
+            maximumPointCount: Self.liveRouteMaximumPoints
+        )
+        liveRouteRevision = restored.revision
+        liveRouteSegments = restored.segments.map(\.points)
+        lastLocationAccuracy = restored.latestPoint?.accuracy
+        lastLocationUpdatedAt = restored.latestPoint.map {
+            Date(timeIntervalSince1970: $0.timestamp / 1000)
+        }
+        startsNewLiveRouteSegment = true
+        lastLiveRoutePublishAt = Date()
+        liveRoutePresentation = restored
+    }
+
+    private func beginNewLiveRouteSegmentAfterPause() {
+        let boundary = routePoints.count
+        startsNewLiveRouteSegment = true
+        liveRouteLocationState = .paused(
+            horizontalAccuracy: lastLocationAccuracy,
+            lastUpdatedAt: lastLocationUpdatedAt
+        )
+        publishLiveRoute(force: true)
+        Task {
+            try? await checkpointStore.recordSegmentBoundary(pointIndex: boundary)
+        }
+    }
+
+    private func appendLiveRoutePoints(_ points: [RoutePoint]) {
+        guard !points.isEmpty else { return }
+        if startsNewLiveRouteSegment || liveRouteSegments.isEmpty {
+            liveRouteSegments.append([])
+            startsNewLiveRouteSegment = false
+        }
+        liveRouteSegments[liveRouteSegments.count - 1].append(contentsOf: points)
+        publishLiveRoute(force: liveRoutePresentation.pointCount < 2)
+    }
+
+    private func publishLiveRoute(force: Bool) {
+        let now = Date()
+        guard force
+            || now.timeIntervalSince(lastLiveRoutePublishAt) >= Self.liveRoutePublishInterval
+        else { return }
+
+        liveRouteRevision += 1
+        let presentation = LiveRoutePresentation.make(
+            from: liveRouteSegments,
+            revision: liveRouteRevision,
+            maximumPointCount: Self.liveRouteMaximumPoints
+        )
+        if liveRouteSegments.reduce(0, { $0 + $1.count })
+            > Self.liveRouteCompactionThreshold {
+            liveRouteSegments = presentation.segments.map(\.points)
+        }
+        liveRoutePresentation = presentation
+        lastLiveRoutePublishAt = now
+    }
+
     /// Finaliza a sessão e retorna o payload pronto pra enviar ao iPhone.
     func endWorkout() async -> CompletedRun {
+        coachController.stop()
         if let finalizedRun {
             return finalizedRun
         }
@@ -773,6 +912,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     private func startLocationUpdatesIfAuthorized() {
         #if !targetEnvironment(simulator)
         guard wantsLocationUpdates else { return }
+        updateLocationAuthorizationState(locationManager)
         let status = locationManager.authorizationStatus
         guard status == .authorizedWhenInUse || status == .authorizedAlways else {
             workoutLog.info("GPS aguardando autorização (status=\(status.rawValue, privacy: .public))")
@@ -781,6 +921,62 @@ final class WorkoutManager: NSObject, ObservableObject {
         locationManager.startUpdatingLocation()
         workoutLog.info("GPS iniciado")
         #endif
+    }
+
+    private func updateLocationAuthorizationState(_ manager: CLLocationManager) {
+        guard CLLocationManager.locationServicesEnabled() else {
+            liveRouteLocationState = .unavailable
+            return
+        }
+
+        switch manager.authorizationStatus {
+        case .notDetermined:
+            liveRouteLocationState = .seeking
+        case .denied, .restricted:
+            liveRouteLocationState = .denied
+        case .authorizedAlways, .authorizedWhenInUse:
+            if metrics.isPaused {
+                liveRouteLocationState = .paused(
+                    horizontalAccuracy: lastLocationAccuracy,
+                    lastUpdatedAt: lastLocationUpdatedAt
+                )
+            } else if manager.accuracyAuthorization == .reducedAccuracy {
+                liveRouteLocationState = .reducedAccuracy(
+                    horizontalAccuracy: lastLocationAccuracy,
+                    lastUpdatedAt: lastLocationUpdatedAt
+                )
+            } else if let accuracy = lastLocationAccuracy,
+                      let updatedAt = lastLocationUpdatedAt {
+                liveRouteLocationState = .active(
+                    horizontalAccuracy: accuracy,
+                    lastUpdatedAt: updatedAt
+                )
+            } else {
+                liveRouteLocationState = .seeking
+            }
+        @unknown default:
+            liveRouteLocationState = .unavailable
+        }
+    }
+
+    private func updateLiveRouteLocation(
+        manager: CLLocationManager,
+        location: CLLocation
+    ) {
+        guard location.horizontalAccuracy >= 0 else { return }
+        lastLocationAccuracy = location.horizontalAccuracy
+        lastLocationUpdatedAt = location.timestamp
+        if manager.accuracyAuthorization == .reducedAccuracy {
+            liveRouteLocationState = .reducedAccuracy(
+                horizontalAccuracy: location.horizontalAccuracy,
+                lastUpdatedAt: location.timestamp
+            )
+        } else {
+            liveRouteLocationState = .active(
+                horizontalAccuracy: location.horizontalAccuracy,
+                lastUpdatedAt: location.timestamp
+            )
+        }
     }
 
     private func updateMetrics(from statistics: HKStatistics?) {
@@ -819,6 +1015,11 @@ final class WorkoutManager: NSObject, ObservableObject {
     private func startSimulatedWorkout() async {
         workoutLog.info("startSimulatedWorkout: spinning mock tick")
         phase = .running
+        coachController.begin(
+            enabled: isCoachEnabledForCurrentWorkout,
+            distanceMeters: metrics.distanceMeters,
+            elapsedSeconds: metrics.elapsedSeconds
+        )
         WatchLaunchDiagnostics.mark("workout.running")
         sessionState = .running
         metrics.isPaused = false
@@ -867,6 +1068,18 @@ final class WorkoutManager: NSObject, ObservableObject {
             accuracy: 5.0
         )
         routePoints.append(point)
+        appendLiveRoutePoints([point])
+        lastLocationAccuracy = point.accuracy
+        lastLocationUpdatedAt = Date(timeIntervalSince1970: point.timestamp / 1000)
+        liveRouteLocationState = .active(
+            horizontalAccuracy: point.accuracy ?? 5,
+            lastUpdatedAt: lastLocationUpdatedAt ?? Date()
+        )
+        coachController.update(
+            distanceMeters: metrics.distanceMeters,
+            elapsedSeconds: metrics.elapsedSeconds,
+            isPaused: metrics.isPaused
+        )
     }
     #endif
 }
@@ -891,10 +1104,13 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
             if toState == .paused {
                 wantsLocationUpdates = false
                 locationManager.stopUpdatingLocation()
+                beginNewLiveRouteSegmentAfterPause()
+                coachController.pause()
                 WatchLaunchDiagnostics.mark("workout.paused")
             } else if toState == .running, phase == .running {
                 locationCutoffDate = date
                 wantsLocationUpdates = true
+                updateLocationAuthorizationState(locationManager)
                 startLocationUpdatesIfAuthorized()
                 WatchLaunchDiagnostics.mark(fromState == .paused ? "workout.resumed" : "workout.session-running")
             } else if toState == .stopped {
@@ -944,6 +1160,11 @@ extension WorkoutManager: HKLiveWorkoutBuilderDelegate {
                 let stats = workoutBuilder.statistics(for: quantityType)
                 updateMetrics(from: stats)
             }
+            coachController.update(
+                distanceMeters: metrics.distanceMeters,
+                elapsedSeconds: metrics.elapsedSeconds,
+                isPaused: metrics.isPaused
+            )
             if let lastSpeed = routePoints.last?.speed, lastSpeed > 0 {
                 metrics.currentPaceSecondsPerKm = 1000.0 / lastSpeed
             } else {
@@ -960,6 +1181,7 @@ extension WorkoutManager: CLLocationManagerDelegate {
         Task { @MainActor in
             // A autorização costuma sair DEPOIS do play. Quando sair, liga o GPS
             // se a sessão já estiver rodando.
+            self.updateLocationAuthorizationState(manager)
             self.startLocationUpdatesIfAuthorized()
         }
     }
@@ -971,10 +1193,23 @@ extension WorkoutManager: CLLocationManagerDelegate {
                   !self.metrics.isPaused,
                   self.wantsLocationUpdates else { return }
 
-            var newestTimestamp = max(
+            let cutoffTimestamp = max(
                 self.locationCutoffDate.timeIntervalSince1970,
                 (self.routePoints.last?.timestamp ?? 0) / 1000.0
             )
+            if let newestLocation = locations
+                .filter({
+                    $0.horizontalAccuracy >= 0
+                        && $0.timestamp.timeIntervalSince1970 >= cutoffTimestamp
+                })
+                .max(by: { $0.timestamp < $1.timestamp }) {
+                self.updateLiveRouteLocation(
+                    manager: manager,
+                    location: newestLocation
+                )
+            }
+
+            var newestTimestamp = cutoffTimestamp
             let filtered = locations
                 .filter {
                     $0.horizontalAccuracy >= 0
@@ -992,12 +1227,27 @@ extension WorkoutManager: CLLocationManagerDelegate {
 
             let points = filtered.map { RoutePoint(from: $0) }
             self.routePoints.append(contentsOf: points)
+            self.appendLiveRoutePoints(points)
             self.routeRecorder.enqueue(locations: filtered, points: points)
         }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         workoutLog.error("GPS erro: \(error.localizedDescription, privacy: .public)")
+        Task { @MainActor in
+            guard let locationError = error as? CLError else {
+                self.liveRouteLocationState = .unavailable
+                return
+            }
+            switch locationError.code {
+            case .denied:
+                self.liveRouteLocationState = .denied
+            case .locationUnknown:
+                self.liveRouteLocationState = .seeking
+            default:
+                self.liveRouteLocationState = .unavailable
+            }
+        }
     }
 }
 

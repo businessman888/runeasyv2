@@ -4,7 +4,7 @@ import WatchKit
 @main
 struct RunEasyWatchApp: App {
     @WKApplicationDelegateAdaptor private var appDelegate: WatchAppDelegate
-    @StateObject private var phoneBridge = PhoneBridge()
+    @StateObject private var phoneBridge = PhoneBridge.shared
 
     init() {
         WatchLaunchDiagnostics.capturePreviousSession()
@@ -14,6 +14,9 @@ struct RunEasyWatchApp: App {
         WindowGroup {
             ContentView(workoutManager: appDelegate.workoutManager)
                 .environmentObject(phoneBridge)
+        }
+        .backgroundTask(.watchConnectivity) {
+            await phoneBridge.drainBackgroundConnectivity()
         }
     }
 }

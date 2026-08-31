@@ -27,11 +27,111 @@ struct RunDeliveryAck: Codable, Equatable {
     let acknowledgedAt: String
 }
 
+struct WatchFeatureFlags: Equatable {
+    var liveMapEnabled = false
+    var audioCoachEnabled = false
+}
+
+struct WatchPolicyVersions: Decodable, Equatable {
+    let context: Int
+    let coach: Int
+    let execution: Int
+}
+
+struct WatchCoachContractPolicy: Decodable, Equatable {
+    let version: Int
+    let audioOwner: WatchCoachAudioOwner
+    let locale: String
+    let splitIntervalMeters: Double
+    let minimumCueGapSeconds: TimeInterval
+    let cueTimeToLiveSeconds: TimeInterval
+    let advancedCuesEnabled: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case version
+        case audioOwner = "audio_owner"
+        case locale
+        case splitIntervalMeters = "split_interval_meters"
+        case minimumCueGapSeconds = "minimum_cue_gap_seconds"
+        case cueTimeToLiveSeconds = "cue_ttl_seconds"
+        case advancedCuesEnabled = "advanced_cues_enabled"
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        version = try values.decode(Int.self, forKey: .version)
+        let rawOwner = try values.decodeIfPresent(String.self, forKey: .audioOwner)
+        // Um valor futuro/desconhecido nunca pode fazer os dois devices falarem.
+        audioOwner = rawOwner.flatMap(WatchCoachAudioOwner.init(rawValue:)) ?? .none
+        locale = try values.decode(String.self, forKey: .locale)
+        splitIntervalMeters = try values.decode(Double.self, forKey: .splitIntervalMeters)
+        minimumCueGapSeconds = try values.decode(
+            TimeInterval.self,
+            forKey: .minimumCueGapSeconds
+        )
+        cueTimeToLiveSeconds = try values.decode(
+            TimeInterval.self,
+            forKey: .cueTimeToLiveSeconds
+        )
+        advancedCuesEnabled = try values.decode(
+            Bool.self,
+            forKey: .advancedCuesEnabled
+        )
+    }
+
+    var runtimePolicy: WatchCoachRuntimePolicy {
+        WatchCoachRuntimePolicy(
+            splitIntervalMeters: splitIntervalMeters,
+            minimumCueGapSeconds: minimumCueGapSeconds,
+            cueTimeToLiveSeconds: cueTimeToLiveSeconds
+        )
+    }
+}
+
+struct WatchExecutionStep: Decodable, Equatable {
+    enum Kind: String, Decodable {
+        case warmup
+        case main
+        case cooldown
+        case work
+        case recovery
+    }
+
+    enum Metric: String, Decodable {
+        case distance
+        case time
+    }
+
+    let index: Int
+    let blockIndex: Int
+    let kind: Kind
+    let metric: Metric
+    let target: Double
+    let paceMin: Double
+    let paceMax: Double
+    let repIndex: Int?
+    let repTotal: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case index
+        case blockIndex = "block_index"
+        case kind
+        case metric
+        case target
+        case paceMin = "pace_min"
+        case paceMax = "pace_max"
+        case repIndex = "rep_index"
+        case repTotal = "rep_total"
+    }
+}
+
 /// Bridge WatchConnectivity entre o Apple Watch e o iPhone.
 /// - iPhone → Watch: `applicationContext` com contexto unificado (user, workout, stats, next)
 /// - Watch → iPhone: `transferUserInfo` com a corrida finalizada (durável, retry automático)
 @MainActor
 final class PhoneBridge: NSObject, ObservableObject {
+
+    static let shared = PhoneBridge()
 
     // MARK: - Published (consumidos pelas Views)
 
@@ -57,6 +157,10 @@ final class PhoneBridge: NSObject, ObservableObject {
     @Published var lastContextAt: Date?
     @Published var syncState: WatchSyncState = .waiting
     @Published var lastRunAck: RunDeliveryAck?
+    @Published var featureFlags = WatchFeatureFlags()
+    @Published var policyVersions: WatchPolicyVersions?
+    @Published var coachPolicy: WatchCoachContractPolicy?
+    @Published var executionSteps: [WatchExecutionStep] = []
 
     private let session: WCSession?
     private var accountId: String?
@@ -65,14 +169,14 @@ final class PhoneBridge: NSObject, ObservableObject {
     private var lastAcceptedSentAt: Date?
     private var completedWorkoutIds: Set<String>
     private var completedWorkoutOrder: [String]
-    private static let supportedSchemaVersion = 2
+    private static let supportedSchemaVersions = 2...3
     private static let contextTTL: TimeInterval = 36 * 60 * 60
     private static let subscriptionTTL: TimeInterval = 24 * 60 * 60
     private static let contextIdDefaultsKey = "RunEasy.lastAcceptedContextId"
     private static let contextDateDefaultsKey = "RunEasy.lastAcceptedContextDate"
     private static let completedWorkoutDefaultsKey = "RunEasy.completedWorkoutIds"
 
-    override init() {
+    private override init() {
         let defaults = UserDefaults.standard
         self.lastAcceptedContextId = defaults.string(
             forKey: Self.contextIdDefaultsKey
@@ -103,6 +207,44 @@ final class PhoneBridge: NSObject, ObservableObject {
         guard let session, session.activationState != .activated else { return }
         session.delegate = self
         session.activate()
+    }
+
+    /// Mantém o wake de WatchConnectivity vivo até a sessão terminar de
+    /// entregar o conteúdo pendente. O modifier SwiftUI conclui a tarefa
+    /// automaticamente quando este método retorna.
+    func drainBackgroundConnectivity() async {
+        bridgeLog.info("iniciando wake de WatchConnectivity")
+        activate()
+        guard let session else { return }
+
+        await withTaskCancellationHandler {
+            while !Task.isCancelled {
+                if session.activationState == .activated,
+                   !session.hasContentPending {
+                    // Garante que o snapshot latest-wins já foi aplicado antes
+                    // de o closure SwiftUI retornar e o sistema suspender o app.
+                    handleReceived(session.receivedApplicationContext)
+                    pendingTransfers = session.outstandingUserInfoTransfers.count
+                    bridgeLog.info("wake de WatchConnectivity concluído")
+                    return
+                }
+
+                do {
+                    try await Task.sleep(nanoseconds: 100_000_000)
+                } catch {
+                    // O sistema controla o orçamento do wake. Cancelamento é o
+                    // único escape seguro quando ainda existe conteúdo pendente.
+                    break
+                }
+            }
+
+            pendingTransfers = session.outstandingUserInfoTransfers.count
+            bridgeLog.info(
+                "wake cancelado; conteúdo pendente=\(session.hasContentPending, privacy: .public)"
+            )
+        } onCancel: {
+            bridgeLog.info("cancelamento solicitado para wake de WatchConnectivity")
+        }
     }
 
     // MARK: - Send (Watch → iPhone)
@@ -250,6 +392,40 @@ final class PhoneBridge: NSObject, ObservableObject {
         } else if context.keys.contains("run_ack") {
             lastRunAck = nil
         }
+        let legacyFlags = context["feature_flags"] as? [String: Any]
+        featureFlags = WatchFeatureFlags(
+            liveMapEnabled: context["watch_map_enabled"] as? Bool
+                ?? legacyFlags?["live_map"] as? Bool
+                ?? false,
+            audioCoachEnabled: context["watch_coach_enabled"] as? Bool
+                ?? legacyFlags?["audio_coach"] as? Bool
+                ?? false
+        )
+        if let versions = context["policy_versions"] as? [String: Any] {
+            policyVersions = decode(
+                WatchPolicyVersions.self,
+                from: versions,
+                label: "policy_versions"
+            )
+        } else {
+            policyVersions = nil
+        }
+        if let policy = context["coach_policy"] as? [String: Any] {
+            coachPolicy = decode(
+                WatchCoachContractPolicy.self,
+                from: policy,
+                label: "coach_policy"
+            )
+        } else {
+            coachPolicy = nil
+        }
+        if let steps = context["execution_steps"] as? [[String: Any]] {
+            executionSteps = steps.compactMap {
+                decode(WatchExecutionStep.self, from: $0, label: "execution_step")
+            }
+        } else {
+            executionSteps = []
+        }
 
         hasReceivedContext = true
         lastContextAt = sentAt
@@ -263,7 +439,7 @@ final class PhoneBridge: NSObject, ObservableObject {
 
     private func validate(context: [String: Any]) -> Date? {
         guard let schema = context["schema_version"] as? Int,
-              schema == Self.supportedSchemaVersion else {
+              Self.supportedSchemaVersions.contains(schema) else {
             rejectIncoming(as: .incompatible, reason: "schema incompatível")
             return nil
         }
@@ -366,6 +542,10 @@ final class PhoneBridge: NSObject, ObservableObject {
         latestPlanResult = nil
         latestActivityResult = nil
         lastRunAck = nil
+        featureFlags = WatchFeatureFlags()
+        policyVersions = nil
+        coachPolicy = nil
+        executionSteps = []
         isPro = true
         hasReceivedContext = false
         accountId = nil
@@ -452,6 +632,7 @@ extension PhoneBridge: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
         Task { @MainActor in
             self.isReachable = session.isReachable
+            self.pendingTransfers = session.outstandingUserInfoTransfers.count
             if activationState == .activated {
                 self.handleReceived(session.receivedApplicationContext)
             }

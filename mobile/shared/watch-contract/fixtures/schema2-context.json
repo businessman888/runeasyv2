@@ -1,0 +1,31 @@
+{
+  "schema_version": 2,
+  "context_id": "fixture-schema2-legacy",
+  "revision": 8,
+  "account_id": "fixture-user",
+  "auth_state": "signed_in",
+  "phone_build": "1.0.8(26)",
+  "type": "today_rest",
+  "payload": {},
+  "user_name": "Atleta",
+  "avatar_url": "",
+  "is_pro": true,
+  "week_stats": {
+    "streak": 1,
+    "workoutsDone": 2,
+    "workoutsTotal": 3,
+    "restDone": 1,
+    "restTotal": 2
+  },
+  "next_workout": {},
+  "today_activities": [],
+  "latest_plan_result": {},
+  "latest_activity_result": {},
+  "run_ack": {},
+  "feature_flags": {
+    "live_map": false,
+    "audio_coach": false
+  },
+  "subscription_verified_at": "2026-08-30T12:00:00.000Z",
+  "sent_at": "2026-08-30T12:00:00.000Z"
+}

@@ -244,5 +244,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView(workoutManager: WorkoutManager())
-        .environmentObject(PhoneBridge())
+        .environmentObject(PhoneBridge.shared)
 }

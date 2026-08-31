@@ -4,6 +4,7 @@
     "strict": false,
     "noImplicitAny": false,
     "strictNullChecks": false,
+    "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {

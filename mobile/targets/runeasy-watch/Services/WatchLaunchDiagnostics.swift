@@ -9,7 +9,7 @@ private let launchDiagnosticsLog = Logger(
 /// Identifica de forma verificável a implementação de tracking contida no IPA.
 /// O inspetor procura este valor no executável watchOS, não apenas no Info.plist.
 enum WatchBuildInfo {
-    static let runtimeMarker = "RUNEASY_WATCH_HEALTH_SYNC_V5_20260829"
+    static let runtimeMarker = "RUNEASY_WATCH_EXPERIENCE_V6_20260830"
 
     static var versionLabel: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"

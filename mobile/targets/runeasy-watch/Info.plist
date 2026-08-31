@@ -39,6 +39,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
+		<string>audio</string>
 	</array>
 	<key>NSHealthShareUsageDescription</key>
 	<string>RunEasy precisa ler dados de saúde no Apple Watch para mostrar frequência cardíaca durante a corrida.</string>

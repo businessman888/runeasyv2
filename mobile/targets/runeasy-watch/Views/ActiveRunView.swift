@@ -17,13 +17,22 @@ import WatchKit
 ///       Rodando → 1 botão cyan (pausar)
 ///       Pausado → 2 botões (resume outline + finish cyan)
 struct ActiveRunView: View {
+    private enum TrackingPage: Hashable {
+        case metrics
+        case map
+        case health
+    }
+
     @ObservedObject var workoutManager: WorkoutManager
+    @EnvironmentObject private var phoneBridge: PhoneBridge
     let workout: PlannedWorkout?
     let onFinish: (CompletedRun) -> Void
     let onCancel: () -> Void
 
     @State private var showStopConfirmation = false
     @State private var controlsArmed = false
+    @State private var coachEnabled = true
+    @State private var selectedTrackingPage: TrackingPage = .metrics
 
     private var metrics: RunMetrics { workoutManager.metrics }
 
@@ -82,8 +91,13 @@ struct ActiveRunView: View {
                     targetsRow(for: workout)
                 }
 
+                if phoneBridge.featureFlags.audioCoachEnabled {
+                    coachPreferenceButton
+                }
+
                 CircleIconButton(
-                    icon: "play.fill",
+                    icon: RunEasySymbol.start,
+                    accessibilityLabel: "Iniciar treino",
                     fillColor: .runEasyCyan,
                     iconColor: .runEasyNavy,
                     size: 56
@@ -100,11 +114,12 @@ struct ActiveRunView: View {
 
                 PressScaleButton(action: onCancel, haptic: .click) {
                     Text("Voltar")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(AppFont.labelReadable)
                         .foregroundColor(.runEasyText60)
-                        .frame(minHeight: 24)
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Voltar para o início")
 
                 if let permissionError = workoutManager.permissionError {
                     Text(permissionError)
@@ -147,6 +162,26 @@ struct ActiveRunView: View {
         .padding(.vertical, 4)
         .background(Color.runEasyCardBg)
         .cornerRadius(8)
+    }
+
+    private var coachPreferenceButton: some View {
+        Button {
+            coachEnabled.toggle()
+            WKInterfaceDevice.current().play(.click)
+        } label: {
+            Label(
+                coachEnabled ? "Coach ligado" : "Coach desligado",
+                systemImage: coachEnabled
+                    ? RunEasySymbol.coachEnabled
+                    : RunEasySymbol.coachDisabled
+            )
+            .font(AppFont.labelReadable)
+            .foregroundStyle(coachEnabled ? Color.runEasyCyan : .secondary)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(Color.runEasyCardBg, in: RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Ativa ou silencia orientações por voz durante a corrida.")
     }
 
     // MARK: - Starting
@@ -200,11 +235,27 @@ struct ActiveRunView: View {
     // MARK: - Running
 
     private var runningContent: some View {
-        TabView {
-            primaryMetricsPage
-            healthMetricsPage
+        ZStack(alignment: .top) {
+            TabView(selection: $selectedTrackingPage) {
+                primaryMetricsPage
+                    .tag(TrackingPage.metrics)
+                if phoneBridge.featureFlags.liveMapEnabled {
+                    LiveRouteMapView(
+                        route: workoutManager.liveRoutePresentation,
+                        locationState: workoutManager.liveRouteLocationState,
+                        isActivePage: selectedTrackingPage == .map
+                    )
+                    .tag(TrackingPage.map)
+                }
+                healthMetricsPage
+                    .tag(TrackingPage.health)
+            }
+            .tabViewStyle(.verticalPage)
+
+            if phoneBridge.featureFlags.audioCoachEnabled {
+                CoachCaptionOverlay(controller: workoutManager.coachController)
+            }
         }
-        .tabViewStyle(.verticalPage)
     }
 
     private var primaryMetricsPage: some View {
@@ -223,11 +274,11 @@ struct ActiveRunView: View {
     private var healthMetricsPage: some View {
         VStack(spacing: 8) {
             Text("Saúde ao vivo")
-                .font(.system(size: 11, weight: .semibold))
+                .font(AppFont.labelReadable)
                 .foregroundColor(.runEasyText60)
 
             VStack(spacing: 1) {
-                Image(systemName: "heart.fill")
+                Image(systemName: RunEasySymbol.heart)
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(.red)
                 Text(currentHeartRateLabel)
@@ -242,13 +293,13 @@ struct ActiveRunView: View {
 
             HStack(spacing: 6) {
                 healthMetric(
-                    icon: "heart.text.square.fill",
+                    icon: RunEasySymbol.maximumHeartRate,
                     label: "Máxima",
                     value: metrics.maxHeartRate > 0 ? "\(metrics.maxHeartRate) bpm" : "— bpm"
                 )
                 healthMetric(
-                    icon: "flame.fill",
-                    label: "Calorias",
+                    icon: RunEasySymbol.activeEnergy,
+                    label: "Calorias ativas",
                     value: metrics.calories > 0 ? "\(metrics.calories) kcal" : "— kcal"
                 )
             }
@@ -310,12 +361,12 @@ struct ActiveRunView: View {
     private var metricsSection: some View {
         HStack(spacing: 4) {
             metricBlock(
-                icon: "figure.run",
+                icon: RunEasySymbol.run,
                 label: "Distância",
                 value: "\(MetricFormat.distance(metrics.distanceMeters)) km"
             )
             metricBlock(
-                icon: "stopwatch.fill",
+                icon: RunEasySymbol.pace,
                 label: "Pace",
                 value: paceLabel
             )
@@ -330,7 +381,7 @@ struct ActiveRunView: View {
 
     private var liveHeartRateStrip: some View {
         HStack(spacing: 5) {
-            Image(systemName: "heart.fill")
+            Image(systemName: RunEasySymbol.heart)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(.red)
             Text("FC")
@@ -391,7 +442,8 @@ struct ActiveRunView: View {
         HStack {
             Spacer()
             CircleIconButton(
-                icon: "pause.fill",
+                icon: RunEasySymbol.pause,
+                accessibilityLabel: "Pausar treino",
                 fillColor: .runEasyCyan,
                 iconColor: .runEasyNavy,
                 size: 44
@@ -407,7 +459,8 @@ struct ActiveRunView: View {
         HStack(spacing: 14) {
             Spacer()
             CircleIconButton(
-                icon: "play.fill",
+                icon: RunEasySymbol.start,
+                accessibilityLabel: "Retomar treino",
                 fillColor: .runEasyCardBg,
                 iconColor: .runEasyCyan,
                 strokeColor: .runEasyCyan,
@@ -417,7 +470,8 @@ struct ActiveRunView: View {
                 togglePause()
             }
             CircleIconButton(
-                icon: "flag.fill",
+                icon: RunEasySymbol.finish,
+                accessibilityLabel: "Finalizar treino",
                 fillColor: .runEasyCyan,
                 iconColor: .runEasyNavy,
                 size: 44
@@ -439,6 +493,9 @@ struct ActiveRunView: View {
         controlsArmed = false
         WatchLaunchDiagnostics.mark("play.tap")
         WKInterfaceDevice.current().play(.start)
+        workoutManager.configureCoach(
+            enabled: phoneBridge.featureFlags.audioCoachEnabled && coachEnabled
+        )
         Task {
             await workoutManager.prepareWorkoutStart(workoutId: workout?.id)
         }
@@ -463,16 +520,38 @@ struct ActiveRunView: View {
     }
 }
 
+private struct CoachCaptionOverlay: View {
+    @ObservedObject var controller: WatchCoachController
+
+    var body: some View {
+        if let caption = controller.caption {
+            Label(caption, systemImage: RunEasySymbol.coachEnabled)
+                .font(AppFont.labelReadable)
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(.ultraThinMaterial, in: Capsule())
+                .padding(.top, 4)
+                .padding(.horizontal, 12)
+                .accessibilityElement(children: .combine)
+        }
+    }
+}
+
 // MARK: - CircleIconButton (componente local)
 
 private struct CircleIconButton: View {
     let icon: String
+    let accessibilityLabel: String
     let fillColor: Color
     let iconColor: Color
     var strokeColor: Color? = nil
     var strokeWidth: CGFloat = 0
     let size: CGFloat
     let action: () -> Void
+    @Environment(\.isLuminanceReduced) private var isLuminanceReduced
 
     var body: some View {
         Button(action: {
@@ -489,17 +568,34 @@ private struct CircleIconButton: View {
                     .foregroundColor(iconColor)
             }
             .frame(width: size, height: size)
-            .neonGlow(color: fillColor == .runEasyCyan ? .runEasyCyan : .clear, radius: 8, opacity: 0.35)
+            .neonGlow(
+                color: fillColor == .runEasyCyan ? .runEasyCyan : .clear,
+                radius: isLuminanceReduced ? 0 : 8,
+                opacity: isLuminanceReduced ? 0 : 0.35
+            )
         }
         .buttonStyle(PressScaleStyleLocal())
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint(
+            accessibilityLabel == "Finalizar treino"
+                ? "Solicita confirmação antes de encerrar."
+                : ""
+        )
     }
 }
 
 private struct PressScaleStyleLocal: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .scaleEffect(
+                reduceMotion ? 1 : (configuration.isPressed ? 0.94 : 1.0)
+            )
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.7),
+                value: configuration.isPressed
+            )
     }
 }
 
@@ -510,6 +606,7 @@ private struct PressScaleStyleLocal: ButtonStyle {
         onFinish: { _ in },
         onCancel: { }
     )
+    .environmentObject(PhoneBridge.shared)
 }
 
 #Preview("Treino livre") {
@@ -519,4 +616,5 @@ private struct PressScaleStyleLocal: ButtonStyle {
         onFinish: { _ in },
         onCancel: { }
     )
+    .environmentObject(PhoneBridge.shared)
 }

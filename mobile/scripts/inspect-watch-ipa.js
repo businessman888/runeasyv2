@@ -6,7 +6,7 @@ const plist = require('plist');
 const bplistParser = require('bplist-parser');
 
 const PRESENT = Symbol('present');
-const WATCH_RUNTIME_MARKER = 'RUNEASY_WATCH_HEALTH_SYNC_V5_20260829';
+const WATCH_RUNTIME_MARKER = 'RUNEASY_WATCH_EXPERIENCE_V6_20260830';
 const input = process.argv[2] || process.env.RUNEASY_IPA_PATH;
 
 if (!input) {
@@ -152,6 +152,12 @@ try {
     Array.isArray(watchInfo.UIBackgroundModes)
       && watchInfo.UIBackgroundModes.includes('location'),
     'location background mode',
+    JSON.stringify(watchInfo.UIBackgroundModes),
+  );
+  failures += expectCondition(
+    Array.isArray(watchInfo.UIBackgroundModes)
+      && watchInfo.UIBackgroundModes.includes('audio'),
+    'audio background mode',
     JSON.stringify(watchInfo.UIBackgroundModes),
   );
   failures += expectValue(watchInfo, 'MinimumOSVersion', '10.0', 'watchOS mínimo');

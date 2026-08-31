@@ -17,6 +17,24 @@ import {
     getIsPaired,
     getIsWatchAppInstalled,
 } from 'react-native-watch-connectivity';
+import {
+    buildWatchContractFields,
+    finalizeWatchApplicationContext,
+    WATCH_CONTEXT_WARN_BYTES,
+    type WatchCoachPolicy,
+    type WatchExecutionStep,
+    type WatchPolicyVersions,
+} from './watchContextContract';
+
+export {
+    WATCH_CONTEXT_SCHEMA_VERSION,
+    WATCH_CONTEXT_SUPPORTED_SCHEMA_VERSIONS,
+} from './watchContextContract';
+export type {
+    WatchCoachPolicy,
+    WatchExecutionStep,
+    WatchPolicyVersions,
+} from './watchContextContract';
 
 // ---------------------------------------------------------------------------
 // Tipos — espelham exatamente CompletedRun.swift (CodingKeys snake_case).
@@ -255,6 +273,17 @@ export interface WatchContext {
     runAck?: RunDeliveryAck | null;
     /** Timestamp da última verificação do entitlement no backend. */
     subscriptionVerifiedAt?: number | null;
+    /** Flags independentes para liberar experiências sem acoplar os fluxos. */
+    featureFlags?: {
+        liveMap: boolean;
+        audioCoach: boolean;
+    };
+    /** Versoes dos contratos enviados; usa os valores correntes quando omitido. */
+    policyVersions?: WatchPolicyVersions;
+    /** Politica do coach estruturado. Ausente enquanto a feature estiver desligada. */
+    coachPolicy?: WatchCoachPolicy;
+    /** Timeline expandida do treino. Ausente mantem somente o coach de splits. */
+    executionSteps?: WatchExecutionStep[];
 }
 
 /**
@@ -263,35 +292,8 @@ export interface WatchContext {
  * simplesmente para de atualizar, sem erro visível. Como o custo de um payload
  * grande é silencioso, avisamos bem antes do teto real.
  */
-const PAYLOAD_WARN_BYTES = 16_000;
-const PAYLOAD_MAX_BYTES = 200_000;
 const MAX_ACTIVITIES = 5;
-export const WATCH_CONTEXT_SCHEMA_VERSION = 2;
 let contextRevision = 0;
-
-function byteLength(json: string): number {
-    // TextEncoder existe no Hermes; fallback conservador para ambientes sem ele.
-    if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(json).length;
-    return json.length * 2;
-}
-
-/** WCSession aceita somente tipos de property list; NSNull invalida o contexto inteiro. */
-function sanitizeForWatch(value: unknown): unknown {
-    if (value == null) return undefined;
-    if (Array.isArray(value)) {
-        return value
-            .map(sanitizeForWatch)
-            .filter((item) => item !== undefined);
-    }
-    if (typeof value === 'object') {
-        return Object.fromEntries(
-            Object.entries(value as Record<string, unknown>)
-                .map(([key, item]) => [key, sanitizeForWatch(item)] as const)
-                .filter(([, item]) => item !== undefined),
-        );
-    }
-    return value;
-}
 
 export function sendWatchContext(ctx: WatchContext): void {
     if (Platform.OS !== 'ios') return;
@@ -302,7 +304,12 @@ export function sendWatchContext(ctx: WatchContext): void {
         const build = Constants.expoConfig?.ios?.buildNumber ?? 'unknown';
         const sentAt = new Date().toISOString();
         const rawPayload = {
-            schema_version: WATCH_CONTEXT_SCHEMA_VERSION,
+            ...buildWatchContractFields({
+                featureFlags: ctx.featureFlags,
+                policyVersions: ctx.policyVersions,
+                coachPolicy: ctx.coachPolicy,
+                executionSteps: ctx.executionSteps,
+            }),
             context_id: `${Date.now()}-${contextRevision}`,
             revision: contextRevision,
             account_id: ctx.accountId ?? '',
@@ -330,27 +337,19 @@ export function sendWatchContext(ctx: WatchContext): void {
                 : '',
             sent_at: sentAt,
         };
-        const payload = sanitizeForWatch(rawPayload) as Record<string, unknown>;
-
-        const size = byteLength(JSON.stringify(payload));
-        if (size > PAYLOAD_MAX_BYTES) {
-            // Melhor mandar o essencial do que perder o contexto inteiro.
+        const finalized = finalizeWatchApplicationContext(rawPayload);
+        if (finalized.wasReduced) {
             console.error(
-                `[AppleWatch] payload de ${size}B excede o limite — enviando versão reduzida`,
+                `[AppleWatch] payload de ${finalized.originalSizeBytes}B excede o limite — enviando versao reduzida`,
             );
-            updateApplicationContext({
-                ...payload,
-                today_activities: [],
-                latest_plan_result: null,
-                latest_activity_result: null,
-            });
-            return;
         }
-        if (__DEV__ && size > PAYLOAD_WARN_BYTES) {
-            console.warn(`[AppleWatch] payload grande: ${size}B (teto 262144B)`);
+        if (__DEV__ && finalized.sizeBytes > WATCH_CONTEXT_WARN_BYTES) {
+            console.warn(
+                `[AppleWatch] payload grande: ${finalized.sizeBytes}B (teto 262144B)`,
+            );
         }
 
-        updateApplicationContext(payload);
+        updateApplicationContext(finalized.payload);
     } catch (e) {
         console.warn('[AppleWatch] sendWatchContext error:', e);
     }
