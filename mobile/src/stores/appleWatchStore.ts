@@ -19,6 +19,10 @@ import {
     type FreeRunPayload,
     type RoutePoint,
 } from './trainingStore';
+import {
+    isWatchContext,
+    mergeMonotonicWatchContext,
+} from '../services/watchContextMerge';
 
 interface AppleWatchState {
     isPaired: boolean;
@@ -106,23 +110,6 @@ function contextWithRunAck(
             : context.todayWorkout;
 
     return { ...context, todayWorkout, runAck: ack };
-}
-
-function mergeMonotonicWatchContext(
-    previous: WatchContext | null,
-    next: WatchContext,
-): WatchContext {
-    if (
-        previous?.todayWorkout?.id === next.todayWorkout?.id &&
-        previous.todayWorkout.status === 'completed' &&
-        next.todayWorkout.status !== 'completed'
-    ) {
-        return {
-            ...next,
-            todayWorkout: { ...next.todayWorkout, status: 'completed' },
-        };
-    }
-    return next;
 }
 
 /**
@@ -289,12 +276,33 @@ export const useAppleWatchStore = create<AppleWatchState>((set, get) => ({
     },
 
     sendContextToWatch: (ctx) => {
-        cancelContextRetry();
-        contextRetryAttempt = 0;
-        const monotonic = mergeMonotonicWatchContext(get().lastContext, ctx);
-        const enriched = { ...monotonic, runAck: get().lastRunAck };
-        set({ lastContext: enriched });
-        sendWatchContext(enriched);
+        try {
+            cancelContextRetry();
+            contextRetryAttempt = 0;
+
+            if (!isWatchContext(ctx)) {
+                console.warn('[AppleWatchStore] sincronização ignorada: contexto ausente ou inválido');
+                return;
+            }
+
+            const previous = get().lastContext;
+            if (previous !== null && !isWatchContext(previous)) {
+                console.warn('[AppleWatchStore] contexto anterior inválido descartado');
+            }
+
+            const monotonic = mergeMonotonicWatchContext(previous, ctx);
+            if (!monotonic) {
+                console.warn('[AppleWatchStore] sincronização ignorada: merge sem contexto válido');
+                return;
+            }
+
+            const enriched = { ...monotonic, runAck: get().lastRunAck };
+            set({ lastContext: enriched });
+            sendWatchContext(enriched);
+        } catch (error) {
+            // Watch é acessório: uma falha de contexto nunca pode derrubar o boot.
+            console.warn('[AppleWatchStore] falha isolada ao montar/enviar contexto:', error);
+        }
     },
 
     resendLastContext: () => {

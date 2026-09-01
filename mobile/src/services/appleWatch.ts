@@ -304,9 +304,13 @@ export interface WatchContext {
 const MAX_ACTIVITIES = 5;
 let contextRevision = 0;
 
-export function sendWatchContext(ctx: WatchContext): void {
+export function sendWatchContext(ctx: WatchContext | null | undefined): void {
     if (Platform.OS !== 'ios') return;
     try {
+        if (!ctx || typeof ctx !== 'object') {
+            console.warn('[AppleWatch] contexto ausente ou inválido — envio ignorado');
+            return;
+        }
         const payloadType = ctx.todayWorkout ? 'today_workout' : 'today_rest';
         contextRevision += 1;
         const version = Constants.expoConfig?.version ?? 'unknown';
