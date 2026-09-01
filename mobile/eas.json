@@ -86,6 +86,13 @@
         "EXPO_PUBLIC_SUPERWALL_API_KEY_IOS": "pk_LxD8KQWFHHDthkJYRhbFe",
         "EXPO_PUBLIC_MAPBOX_STYLE_URL": "mapbox://styles/oytotec/cmmo2ioyj007g01qt69109vfw"
       }
+    },
+    "production:watch-beta": {
+      "extends": "production",
+      "env": {
+        "EXPO_PUBLIC_WATCH_LIVE_MAP_ENABLED": "true",
+        "EXPO_PUBLIC_WATCH_AUDIO_COACH_ENABLED": "true"
+      }
     }
   },
   "submit": {

@@ -5,6 +5,7 @@ import {
     isWatchPaired,
     isWatchAppInstalled,
     onCompletedRun,
+    onApplicationContextError,
     onReachabilityChange,
     onPairedChange,
     sendWatchContext,
@@ -42,6 +43,14 @@ interface AppleWatchState {
 let bootstrapped = false;
 let unsubFns: Array<() => void> = [];
 const processingRunIds = new Set<string>();
+const CONTEXT_RETRY_DELAYS_MS = [500, 1_500, 5_000] as const;
+let contextRetryAttempt = 0;
+let contextRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+function cancelContextRetry() {
+    if (contextRetryTimer) clearTimeout(contextRetryTimer);
+    contextRetryTimer = null;
+}
 
 /**
  * Converte os RoutePoints do Watch (snake_case via JSON do Swift) para a shape
@@ -251,6 +260,28 @@ export const useAppleWatchStore = create<AppleWatchState>((set, get) => ({
         unsubFns.push(
             onPairedChange((paired) => {
                 set({ isPaired: paired });
+                if (paired) get().resendLastContext();
+            })
+        );
+
+        unsubFns.push(
+            onApplicationContextError(() => {
+                const ctx = get().lastContext;
+                if (!ctx || contextRetryAttempt >= CONTEXT_RETRY_DELAYS_MS.length) {
+                    console.warn('[AppleWatchStore] retry de contexto esgotado');
+                    return;
+                }
+                cancelContextRetry();
+                const delay = CONTEXT_RETRY_DELAYS_MS[contextRetryAttempt];
+                contextRetryAttempt += 1;
+                console.warn(
+                    `[AppleWatchStore] retry de contexto ${contextRetryAttempt}/${CONTEXT_RETRY_DELAYS_MS.length} em ${delay}ms`,
+                );
+                contextRetryTimer = setTimeout(() => {
+                    contextRetryTimer = null;
+                    const latest = get().lastContext;
+                    if (latest) sendWatchContext(latest);
+                }, delay);
             })
         );
 
@@ -258,6 +289,8 @@ export const useAppleWatchStore = create<AppleWatchState>((set, get) => ({
     },
 
     sendContextToWatch: (ctx) => {
+        cancelContextRetry();
+        contextRetryAttempt = 0;
         const monotonic = mergeMonotonicWatchContext(get().lastContext, ctx);
         const enriched = { ...monotonic, runAck: get().lastRunAck };
         set({ lastContext: enriched });
@@ -270,6 +303,8 @@ export const useAppleWatchStore = create<AppleWatchState>((set, get) => ({
             console.log('[AppleWatchStore] resend ignorado — nenhum contexto ainda');
             return;
         }
+        cancelContextRetry();
+        contextRetryAttempt = 0;
         console.log('[AppleWatchStore] reenviando contexto a pedido do Watch');
         sendWatchContext({ ...ctx, runAck: get().lastRunAck });
     },
@@ -279,6 +314,8 @@ export const useAppleWatchStore = create<AppleWatchState>((set, get) => ({
 
 // Cleanup helper para hot-reload em dev (não é chamado em produção)
 export function teardownAppleWatchStore() {
+    cancelContextRetry();
+    contextRetryAttempt = 0;
     unsubFns.forEach((fn) => fn());
     unsubFns = [];
     bootstrapped = false;

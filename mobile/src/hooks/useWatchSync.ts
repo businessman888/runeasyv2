@@ -34,6 +34,7 @@ import {
     resolveWorkoutDurationSeconds,
     resolveWorkoutPaceSeconds,
 } from '../utils/workoutPreview';
+import { buildWatchCoachPolicy } from '../services/watchContextContract';
 
 const SUBSCRIPTION_FRESHNESS_MS = 24 * 60 * 60 * 1000;
 
@@ -360,6 +361,7 @@ export function useWatchSync() {
                 process.env.EXPO_PUBLIC_WATCH_AUDIO_COACH_ENABLED === 'true'
                 && coachEnabled,
         };
+        const coachPolicy = buildWatchCoachPolicy(featureFlags.audioCoach);
 
         const ctx = {
             accountId: user?.id ?? null,
@@ -374,6 +376,7 @@ export function useWatchSync() {
             latestActivityResult,
             subscriptionVerifiedAt,
             featureFlags,
+            coachPolicy,
         };
         const cacheKey = JSON.stringify(ctx);
         if (lastSentRef.current === cacheKey) return;
@@ -394,6 +397,7 @@ export function useWatchSync() {
             planResult: latestPlanResult ? '✓' : '–',
             activityResult: latestActivityResult ? '✓' : '–',
             featureFlags,
+            coachAudioOwner: coachPolicy?.audioOwner ?? 'none',
         });
     }, [
         today,

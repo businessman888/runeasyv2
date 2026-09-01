@@ -6,7 +6,8 @@ const plist = require('plist');
 const bplistParser = require('bplist-parser');
 
 const PRESENT = Symbol('present');
-const WATCH_RUNTIME_MARKER = 'RUNEASY_WATCH_EXPERIENCE_V6_20260830';
+const EXPECTED_APP_VERSION = '1.0.9';
+const WATCH_RUNTIME_MARKER = 'RUNEASY_WATCH_109_RC1_V7_20260901';
 const input = process.argv[2] || process.env.RUNEASY_IPA_PATH;
 
 if (!input) {
@@ -134,6 +135,12 @@ try {
 
   let failures = 0;
   failures += expectValue(phoneInfo, 'CFBundleIdentifier', 'com.oytotec.runeasy', 'bundle iPhone');
+  failures += expectValue(
+    phoneInfo,
+    'CFBundleShortVersionString',
+    EXPECTED_APP_VERSION,
+    'versão esperada iPhone',
+  );
   failures += expectValue(watchInfo, 'CFBundleIdentifier', 'com.oytotec.runeasy.watchkitapp', 'bundle Watch');
   failures += expectValue(watchInfo, 'WKApplication', true, 'WKApplication');
   failures += expectValue(

@@ -1,12 +1,12 @@
 import Foundation
 
-enum WatchCoachAudioOwner: String, Equatable {
+enum WatchCoachAudioOwner: String, Codable, Equatable, Sendable {
     case watch
     case phone
     case none
 }
 
-struct WatchCoachRuntimePolicy: Equatable {
+struct WatchCoachRuntimePolicy: Codable, Equatable, Sendable {
     static let standard = WatchCoachRuntimePolicy(
         splitIntervalMeters: 1_000,
         minimumCueGapSeconds: 20,
@@ -26,6 +26,20 @@ struct WatchCoachRuntimePolicy: Equatable {
         self.minimumCueGapSeconds = max(0, minimumCueGapSeconds)
         self.cueTimeToLiveSeconds = max(1, cueTimeToLiveSeconds)
     }
+}
+
+struct WatchCoachSessionConfiguration: Codable, Equatable, Sendable {
+    static let disabled = WatchCoachSessionConfiguration(
+        enabled: false,
+        audioOwner: .none,
+        policy: .standard,
+        isMuted: false
+    )
+
+    var enabled: Bool
+    var audioOwner: WatchCoachAudioOwner
+    var policy: WatchCoachRuntimePolicy
+    var isMuted: Bool
 }
 
 struct WatchCoachCue: Equatable {
@@ -88,11 +102,20 @@ struct WatchCoachEngine {
             return nil
         }
 
-        guard safeDistance >= policy.splitIntervalMeters,
-              now.timeIntervalSince(lastCueAt) >= policy.minimumCueGapSeconds
-        else { return nil }
-
         let completedSplitIndex = Int(safeDistance / policy.splitIntervalMeters)
+        guard safeDistance >= policy.splitIntervalMeters,
+              completedSplitIndex > lastAnnouncedSplitIndex else { return nil }
+
+        // Um limite cruzado durante o cooldown já passou. Consumi-lo aqui
+        // impede recriá-lo depois com TTL novo e falar uma orientação atrasada.
+        guard now.timeIntervalSince(lastCueAt) >= policy.minimumCueGapSeconds else {
+            discardCompletedSplits(
+                distanceMeters: safeDistance,
+                elapsedSeconds: safeElapsed
+            )
+            return nil
+        }
+
         guard completedSplitIndex > lastAnnouncedSplitIndex else { return nil }
 
         let previousSplitIndex = lastAnnouncedSplitIndex

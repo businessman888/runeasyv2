@@ -5,6 +5,7 @@ struct ActiveWorkoutContext: Codable, Sendable {
     let workoutId: String?
     let startDate: Date
     let coachEnabled: Bool?
+    let coachConfiguration: WatchCoachSessionConfiguration?
 }
 
 struct ActiveWorkoutSnapshot: Sendable {
@@ -107,6 +108,7 @@ actor ActiveWorkoutCheckpointStore {
     func savePendingCompletedRun(_ run: CompletedRun) throws {
         try ensureDirectory()
         try writeProtected(encoder.encode(run), to: pendingCompletedURL)
+        try excludeFromBackup(pendingCompletedURL)
     }
 
     func loadPendingCompletedRun() -> CompletedRun? {
@@ -143,6 +145,13 @@ actor ActiveWorkoutCheckpointStore {
             to: url,
             options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
         )
+    }
+
+    private func excludeFromBackup(_ url: URL) throws {
+        var resourceURL = url
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try resourceURL.setResourceValues(values)
     }
 
     private func loadSegmentBoundaries() -> [Int] {

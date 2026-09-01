@@ -31,6 +31,9 @@ const mapView = read(
 const activeRun = read(
   'targets/runeasy-watch/Views/ActiveRunView.swift',
 );
+const routeRecorder = read(
+  'targets/runeasy-watch/Services/WorkoutRouteRecorder.swift',
+);
 
 expect(
   presentation.includes('maximumPointCount: Int = 240')
@@ -46,8 +49,9 @@ expect(
 );
 expect(
   checkpoint.includes('completeFileProtectionUntilFirstUserAuthentication')
+    && checkpoint.includes('try excludeFromBackup(pendingCompletedURL)')
     && checkpoint.includes('isExcludedFromBackup = true'),
-  'journal de localizacao protegido e excluido de backup',
+  'journal e corrida pendente protegidos e excluidos de backup',
 );
 expect(
   workoutManager.includes('restoreLiveRoute(from: snapshot.routeSegments)')
@@ -74,8 +78,23 @@ expect(
 expect(
   activeRun.includes('TabView(selection: $selectedTrackingPage)')
     && activeRun.includes('isActivePage: selectedTrackingPage == .map')
+    && activeRun.includes('scenePhase == .active')
     && mapView.includes('if !isActivePage'),
-  'MapKit nao e montado fora da pagina selecionada',
+  'MapKit nao e montado fora da pagina selecionada ou com cena inativa',
+);
+expect(
+  routeRecorder.includes('sealAndDrain(timeoutSeconds: TimeInterval = 5)')
+    && routeRecorder.includes('resolveWaiter(id: id, timedOut: true)')
+    && workoutManager.includes('saveWorkoutWithDeadline')
+    && workoutManager.includes('finishRouteWithDeadline')
+    && workoutManager.includes('route.finish.timeout'),
+  'drain, salvamento HealthKit e anexo da rota possuem deadlines',
+);
+expect(
+  workoutManager.includes('acceptedLocationAccuracyMeters = 50.0')
+    && workoutManager.includes('locationFreshnessSeconds: TimeInterval = 15')
+    && workoutManager.includes('refreshLocationFreshness()'),
+  'estado GPS usa o mesmo limiar da rota e expira leituras antigas',
 );
 
 if (process.exitCode) {

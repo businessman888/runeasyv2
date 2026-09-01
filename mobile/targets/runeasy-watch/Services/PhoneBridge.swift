@@ -169,6 +169,7 @@ final class PhoneBridge: NSObject, ObservableObject {
     private var lastAcceptedSentAt: Date?
     private var completedWorkoutIds: Set<String>
     private var completedWorkoutOrder: [String]
+    private var activationFailureCount = 0
     private static let supportedSchemaVersions = 2...3
     private static let contextTTL: TimeInterval = 36 * 60 * 60
     private static let subscriptionTTL: TimeInterval = 24 * 60 * 60
@@ -214,6 +215,7 @@ final class PhoneBridge: NSObject, ObservableObject {
     /// automaticamente quando este método retorna.
     func drainBackgroundConnectivity() async {
         bridgeLog.info("iniciando wake de WatchConnectivity")
+        let failureCountAtStart = activationFailureCount
         activate()
         guard let session else { return }
 
@@ -226,6 +228,10 @@ final class PhoneBridge: NSObject, ObservableObject {
                     handleReceived(session.receivedApplicationContext)
                     pendingTransfers = session.outstandingUserInfoTransfers.count
                     bridgeLog.info("wake de WatchConnectivity concluído")
+                    return
+                }
+                if activationFailureCount > failureCountAtStart {
+                    bridgeLog.error("wake encerrado por falha de ativação")
                     return
                 }
 
@@ -392,15 +398,14 @@ final class PhoneBridge: NSObject, ObservableObject {
         } else if context.keys.contains("run_ack") {
             lastRunAck = nil
         }
+        let schemaVersion = context["schema_version"] as? Int ?? 0
         let legacyFlags = context["feature_flags"] as? [String: Any]
-        featureFlags = WatchFeatureFlags(
-            liveMapEnabled: context["watch_map_enabled"] as? Bool
-                ?? legacyFlags?["live_map"] as? Bool
-                ?? false,
-            audioCoachEnabled: context["watch_coach_enabled"] as? Bool
-                ?? legacyFlags?["audio_coach"] as? Bool
-                ?? false
-        )
+        let requestedMap = context["watch_map_enabled"] as? Bool
+            ?? legacyFlags?["live_map"] as? Bool
+            ?? false
+        let requestedCoach = context["watch_coach_enabled"] as? Bool
+            ?? legacyFlags?["audio_coach"] as? Bool
+            ?? false
         if let versions = context["policy_versions"] as? [String: Any] {
             policyVersions = decode(
                 WatchPolicyVersions.self,
@@ -410,20 +415,48 @@ final class PhoneBridge: NSObject, ObservableObject {
         } else {
             policyVersions = nil
         }
+        let decodedCoachPolicy: WatchCoachContractPolicy?
         if let policy = context["coach_policy"] as? [String: Any] {
-            coachPolicy = decode(
+            decodedCoachPolicy = decode(
                 WatchCoachContractPolicy.self,
                 from: policy,
                 label: "coach_policy"
             )
         } else {
-            coachPolicy = nil
+            decodedCoachPolicy = nil
         }
-        if let steps = context["execution_steps"] as? [[String: Any]] {
-            executionSteps = steps.compactMap {
-                decode(WatchExecutionStep.self, from: $0, label: "execution_step")
+
+        if schemaVersion == 3 {
+            let contextPolicyIsCompatible = policyVersions?.context == 3
+            let coachPolicyIsCompatible = policyVersions?.coach == 1
+                && decodedCoachPolicy?.version == 1
+                && decodedCoachPolicy?.audioOwner == .watch
+            let executionPolicyIsCompatible = policyVersions?.execution == 1
+
+            coachPolicy = coachPolicyIsCompatible ? decodedCoachPolicy : nil
+            featureFlags = WatchFeatureFlags(
+                liveMapEnabled: contextPolicyIsCompatible && requestedMap,
+                audioCoachEnabled:
+                    contextPolicyIsCompatible
+                    && coachPolicyIsCompatible
+                    && requestedCoach
+            )
+            if executionPolicyIsCompatible,
+               let steps = context["execution_steps"] as? [[String: Any]] {
+                executionSteps = steps.compactMap {
+                    decode(WatchExecutionStep.self, from: $0, label: "execution_step")
+                }
+            } else {
+                executionSteps = []
             }
         } else {
+            // Schema 2 preserva apenas a capability de mapa já conhecida.
+            // Coach continua off porque não há ownership explícito de áudio.
+            featureFlags = WatchFeatureFlags(
+                liveMapEnabled: requestedMap,
+                audioCoachEnabled: false
+            )
+            coachPolicy = nil
             executionSteps = []
         }
 
@@ -633,11 +666,14 @@ extension PhoneBridge: WCSessionDelegate {
         Task { @MainActor in
             self.isReachable = session.isReachable
             self.pendingTransfers = session.outstandingUserInfoTransfers.count
-            if activationState == .activated {
+            if activationState == .activated, error == nil {
                 self.handleReceived(session.receivedApplicationContext)
             }
-            if let error {
-                self.lastError = "Activation falhou: \(error.localizedDescription)"
+            if activationState != .activated || error != nil {
+                self.activationFailureCount += 1
+                self.lastError = error.map {
+                    "Activation falhou: \($0.localizedDescription)"
+                } ?? "Activation terminou sem ativar a sessão"
             }
         }
     }

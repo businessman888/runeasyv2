@@ -14,8 +14,8 @@ import WatchKit
 ///   - Topo: label "Tempo" + timer grande (cyan quando rodando, amarelo quando pausado)
 ///   - Meio: Distância (esquerda) + Pace (direita) com ícones
 ///   - Base: botões circulares
-///       Rodando → 1 botão cyan (pausar)
-///       Pausado → 2 botões (resume outline + finish cyan)
+///       Rodando → mute opcional + pausar
+///       Pausado → mute opcional + retomar + finalizar
 struct ActiveRunView: View {
     private enum TrackingPage: Hashable {
         case metrics
@@ -25,6 +25,9 @@ struct ActiveRunView: View {
 
     @ObservedObject var workoutManager: WorkoutManager
     @EnvironmentObject private var phoneBridge: PhoneBridge
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.redactionReasons) private var redactionReasons
+    @Environment(\.isLuminanceReduced) private var isLuminanceReduced
     let workout: PlannedWorkout?
     let onFinish: (CompletedRun) -> Void
     let onCancel: () -> Void
@@ -91,7 +94,7 @@ struct ActiveRunView: View {
                     targetsRow(for: workout)
                 }
 
-                if phoneBridge.featureFlags.audioCoachEnabled {
+                if watchOwnsCoachAudio {
                     coachPreferenceButton
                 }
 
@@ -243,7 +246,7 @@ struct ActiveRunView: View {
                     LiveRouteMapView(
                         route: workoutManager.liveRoutePresentation,
                         locationState: workoutManager.liveRouteLocationState,
-                        isActivePage: selectedTrackingPage == .map
+                        isActivePage: selectedTrackingPage == .map && scenePhase == .active
                     )
                     .tag(TrackingPage.map)
                 }
@@ -252,7 +255,9 @@ struct ActiveRunView: View {
             }
             .tabViewStyle(.verticalPage)
 
-            if phoneBridge.featureFlags.audioCoachEnabled {
+            if workoutManager.coachSessionIsAvailable
+                && redactionReasons.isEmpty
+                && !isLuminanceReduced {
                 CoachCaptionOverlay(controller: workoutManager.coachController)
             }
         }
@@ -437,16 +442,19 @@ struct ActiveRunView: View {
         .padding(.bottom, 2)
     }
 
-    /// Rodando — 1 botão central cyan (= pausar)
+    /// Rodando — mute opcional + ação primária de pausa.
     private var runningControls: some View {
-        HStack {
+        HStack(spacing: RunEasySpacing.large) {
             Spacer()
+            if workoutManager.coachSessionIsAvailable {
+                coachMuteButton
+            }
             CircleIconButton(
                 icon: RunEasySymbol.pause,
                 accessibilityLabel: "Pausar treino",
                 fillColor: .runEasyCyan,
                 iconColor: .runEasyNavy,
-                size: 44
+                size: RunEasyControlSize.minimumTouch
             ) {
                 togglePause()
             }
@@ -454,10 +462,12 @@ struct ActiveRunView: View {
         }
     }
 
-    /// Pausado — 2 botões: resume (outline) + finish (cyan filled)
+    /// Pausado — mute opcional + retomar (outline) + finalizar (cyan).
     private var pausedControls: some View {
-        HStack(spacing: 14) {
-            Spacer()
+        HStack(spacing: RunEasySpacing.small) {
+            if workoutManager.coachSessionIsAvailable {
+                coachMuteButton
+            }
             CircleIconButton(
                 icon: RunEasySymbol.start,
                 accessibilityLabel: "Retomar treino",
@@ -465,7 +475,7 @@ struct ActiveRunView: View {
                 iconColor: .runEasyCyan,
                 strokeColor: .runEasyCyan,
                 strokeWidth: 1.5,
-                size: 44
+                size: RunEasyControlSize.minimumTouch
             ) {
                 togglePause()
             }
@@ -474,13 +484,35 @@ struct ActiveRunView: View {
                 accessibilityLabel: "Finalizar treino",
                 fillColor: .runEasyCyan,
                 iconColor: .runEasyNavy,
-                size: 44
+                size: RunEasyControlSize.minimumTouch
             ) {
                 WKInterfaceDevice.current().play(.notification)
                 showStopConfirmation = true
             }
-            Spacer()
         }
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    private var watchOwnsCoachAudio: Bool {
+        phoneBridge.featureFlags.audioCoachEnabled
+            && phoneBridge.coachPolicy?.version == 1
+            && phoneBridge.coachPolicy?.audioOwner == .watch
+    }
+
+    private var coachMuteButton: some View {
+        let muted = workoutManager.coachSessionIsMuted
+        return CircleIconButton(
+            icon: muted ? RunEasySymbol.coachDisabled : RunEasySymbol.coachEnabled,
+            accessibilityLabel: muted ? "Ativar voz do coach" : "Silenciar voz do coach",
+            fillColor: .runEasyCardBg,
+            iconColor: muted ? .runEasyText60 : .runEasyCyan,
+            strokeColor: muted ? .runEasyText60 : .runEasyCyan,
+            strokeWidth: 1,
+            size: RunEasyControlSize.minimumTouch
+        ) {
+            workoutManager.toggleCoachMuted()
+        }
+        .accessibilityHint("Altera apenas as orientações por voz deste treino.")
     }
 
     // MARK: - Actions
@@ -494,7 +526,9 @@ struct ActiveRunView: View {
         WatchLaunchDiagnostics.mark("play.tap")
         WKInterfaceDevice.current().play(.start)
         workoutManager.configureCoach(
-            enabled: phoneBridge.featureFlags.audioCoachEnabled && coachEnabled
+            enabled: watchOwnsCoachAudio && coachEnabled,
+            audioOwner: phoneBridge.coachPolicy?.audioOwner ?? .none,
+            policy: phoneBridge.coachPolicy?.runtimePolicy ?? .standard
         )
         Task {
             await workoutManager.prepareWorkoutStart(workoutId: workout?.id)
@@ -536,6 +570,7 @@ private struct CoachCaptionOverlay: View {
                 .padding(.top, 4)
                 .padding(.horizontal, 12)
                 .accessibilityElement(children: .combine)
+                .privacySensitive()
         }
     }
 }

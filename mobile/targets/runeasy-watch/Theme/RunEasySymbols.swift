@@ -1,7 +1,7 @@
 enum RunEasySymbol {
     static let start = "play.fill"
     static let pause = "pause.fill"
-    static let finish = "flag.fill"
+    static let finish = "stop.fill"
     static let run = "figure.run"
     static let pace = "stopwatch.fill"
     static let heart = "heart.fill"

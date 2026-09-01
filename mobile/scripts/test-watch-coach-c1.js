@@ -9,6 +9,20 @@ const CONTROLLER_SOURCE = path.join(
   "Services",
   "WatchCoachController.swift",
 );
+const MANAGER_SOURCE = path.join(WATCH_TARGET, "Services", "WorkoutManager.swift");
+const VIEW_SOURCE = path.join(WATCH_TARGET, "Views", "ActiveRunView.swift");
+const CHECKPOINT_SOURCE = path.join(
+  WATCH_TARGET,
+  "Services",
+  "ActiveWorkoutCheckpointStore.swift",
+);
+const WATCH_SYNC_SOURCE = path.join(
+  __dirname,
+  "..",
+  "src",
+  "hooks",
+  "useWatchSync.ts",
+);
 
 const STANDARD_POLICY = Object.freeze({
   splitIntervalMeters: 1_000,
@@ -63,10 +77,7 @@ class CoachReferenceEngine {
       return null;
     }
 
-    if (
-      distance < this.policy.splitIntervalMeters ||
-      nowSeconds - this.lastCueAt < this.policy.minimumCueGapSeconds
-    ) {
+    if (distance < this.policy.splitIntervalMeters) {
       finish();
       return null;
     }
@@ -75,6 +86,14 @@ class CoachReferenceEngine {
       distance / this.policy.splitIntervalMeters,
     );
     if (completed <= this.lastAnnouncedSplitIndex) {
+      finish();
+      return null;
+    }
+    if (nowSeconds - this.lastCueAt < this.policy.minimumCueGapSeconds) {
+      const boundary = completed * this.policy.splitIntervalMeters;
+      this.lastAnnouncedSplitIndex = completed;
+      this.lastBoundaryElapsedSeconds =
+        distance > 0 ? (elapsed * boundary) / distance : elapsed;
       finish();
       return null;
     }
@@ -207,11 +226,25 @@ function runBehaviorFixtures() {
     null,
     "respeita o intervalo mínimo de fala",
   );
+  assert.equal(
+    cooldown.evaluate({
+      distanceMeters: 2_050,
+      elapsedSeconds: 615,
+      isPaused: false,
+      nowSeconds: 121,
+    }),
+    null,
+    "não recria depois do cooldown um split que já expirou",
+  );
 }
 
 function runSourceContractChecks() {
   const engine = fs.readFileSync(ENGINE_SOURCE, "utf8");
   const controller = fs.readFileSync(CONTROLLER_SOURCE, "utf8");
+  const manager = fs.readFileSync(MANAGER_SOURCE, "utf8");
+  const view = fs.readFileSync(VIEW_SOURCE, "utf8");
+  const checkpoint = fs.readFileSync(CHECKPOINT_SOURCE, "utf8");
+  const watchSync = fs.readFileSync(WATCH_SYNC_SOURCE, "utf8");
   const requirements = [
     [engine, "WatchCoachRuntimePolicy", "política injetável"],
     [engine, "discardCompletedSplits", "descarte durante pausa"],
@@ -221,6 +254,14 @@ function runSourceContractChecks() {
     [controller, "speechTask?.cancel()", "cancelamento de fala pendente"],
     [controller, "utterance === self.activeUtterance", "callback antigo isolado"],
     [controller, "setMuted(_ muted: Bool)", "mute durante a sessão"],
+    [watchSync, "buildWatchCoachPolicy(featureFlags.audioCoach)", "policy emitida pelo iPhone"],
+    [manager, "audioOwner: coachConfiguration.audioOwner", "ownership repassado ao controller"],
+    [manager, "toggleCoachMuted()", "mute integrado ao manager"],
+    [manager, "coachSessionIsAvailable", "controle de recovery independente do PhoneBridge"],
+    [manager, "coachSessionIsMuted", "estado de mute publicado para a UI"],
+    [checkpoint, "coachConfiguration: WatchCoachSessionConfiguration?", "policy persistida no recovery"],
+    [view, "coachMuteButton", "controle de mute durante o tracking"],
+    [view, ".privacySensitive()", "legenda protegida no Always On"],
   ];
 
   for (const [source, needle, label] of requirements) {
@@ -230,4 +271,4 @@ function runSourceContractChecks() {
 
 runBehaviorFixtures();
 runSourceContractChecks();
-console.log("PASS coach C1: 5 fixtures comportamentais + 8 contratos de fonte.");
+console.log("PASS coach C1: 6 fixtures comportamentais + 16 contratos de integração/fonte.");

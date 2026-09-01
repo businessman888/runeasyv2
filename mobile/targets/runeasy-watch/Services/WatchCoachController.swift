@@ -36,13 +36,14 @@ final class WatchCoachController: NSObject, ObservableObject {
         enabled: Bool,
         audioOwner: WatchCoachAudioOwner = .none,
         policy: WatchCoachRuntimePolicy = .standard,
+        initialMuted: Bool = false,
         distanceMeters: Double,
         elapsedSeconds: Int
     ) {
         cancelOutput()
         isEnabled = enabled
         self.audioOwner = audioOwner
-        isMuted = false
+        isMuted = initialMuted
         engine = WatchCoachEngine(policy: policy)
         engine.restore(
             distanceMeters: distanceMeters,

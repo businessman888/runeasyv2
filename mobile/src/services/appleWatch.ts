@@ -172,12 +172,14 @@ type CompletedRunListener = (run: CompletedRunFromWatch) => void;
 type ReachabilityListener = (reachable: boolean) => void;
 type PairedListener = (paired: boolean) => void;
 type RequestListener = (type: WatchRequestType) => void;
+type ApplicationContextErrorListener = (payload: unknown) => void;
 
 const listeners = {
     completedRun: new Set<CompletedRunListener>(),
     reachability: new Set<ReachabilityListener>(),
     paired: new Set<PairedListener>(),
     request: new Set<RequestListener>(),
+    applicationContextError: new Set<ApplicationContextErrorListener>(),
 };
 
 let initialized = false;
@@ -231,6 +233,13 @@ export function initAppleWatch(): void {
 
     watchEvents.addListener('paired', (paired) => {
         listeners.paired.forEach((cb) => cb(Boolean(paired)));
+    });
+
+    // A lib nativa reporta falhas assíncronas por evento; o try/catch do
+    // updateApplicationContext não recebe esses erros.
+    watchEvents.addListener('application-context-error', (payload) => {
+        console.warn('[AppleWatch] application context rejected:', payload);
+        listeners.applicationContextError.forEach((cb) => cb(payload));
     });
 
     console.log('[AppleWatch] initialized');
@@ -372,6 +381,13 @@ export function onReachabilityChange(cb: ReachabilityListener): () => void {
 export function onPairedChange(cb: PairedListener): () => void {
     listeners.paired.add(cb);
     return () => listeners.paired.delete(cb);
+}
+
+export function onApplicationContextError(
+    cb: ApplicationContextErrorListener,
+): () => void {
+    listeners.applicationContextError.add(cb);
+    return () => listeners.applicationContextError.delete(cb);
 }
 
 /** Assina pedidos vindos do Watch (`request_refresh`, `open_paywall`). */

@@ -41,6 +41,27 @@ export interface WatchCoachPolicy {
     advancedCuesEnabled: boolean;
 }
 
+export const WATCH_COACH_DEFAULT_POLICY = {
+    version: WATCH_CONTEXT_POLICY_VERSIONS.coach,
+    audioOwner: 'watch',
+    locale: 'pt-BR',
+    splitIntervalMeters: 1_000,
+    minimumCueGapSeconds: 20,
+    cueTtlSeconds: 8,
+    advancedCuesEnabled: false,
+} as const satisfies WatchCoachPolicy;
+
+/**
+ * O Watch só recebe ownership do áudio quando a experiência está realmente
+ * habilitada. A ausência da policy mantém o decoder nativo no default seguro
+ * `.none`, impedindo que iPhone e Watch falem ao mesmo tempo.
+ */
+export function buildWatchCoachPolicy(
+    audioCoachEnabled: boolean,
+): WatchCoachPolicy | undefined {
+    return audioCoachEnabled ? { ...WATCH_COACH_DEFAULT_POLICY } : undefined;
+}
+
 export type WatchExecutionStepKind =
     | 'warmup'
     | 'main'
@@ -177,6 +198,17 @@ export function finalizeWatchApplicationContext(
 
     const reducedDraft = { ...payload };
     for (const key of OPTIONAL_HEAVY_FIELDS) delete reducedDraft[key];
+    // Nunca anuncie coach sem a policy que define um único dono do áudio.
+    if (!('coach_policy' in reducedDraft)) {
+        reducedDraft.watch_coach_enabled = false;
+        const legacyFlags = reducedDraft.feature_flags;
+        if (legacyFlags && typeof legacyFlags === 'object' && !Array.isArray(legacyFlags)) {
+            reducedDraft.feature_flags = {
+                ...(legacyFlags as Record<string, unknown>),
+                audio_coach: false,
+            };
+        }
+    }
     const reducedPayload = sanitizeWatchPropertyList(reducedDraft) as Record<string, unknown>;
     const sizeBytes = watchContextByteLength(reducedPayload);
     if (sizeBytes > WATCH_CONTEXT_MAX_BYTES) {

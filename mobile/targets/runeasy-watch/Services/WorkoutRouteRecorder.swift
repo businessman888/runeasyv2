@@ -96,13 +96,20 @@ final class WorkoutRouteRecorder {
         }
     }
 
-    func sealAndDrain() async -> DrainResult {
+    func sealAndDrain(timeoutSeconds: TimeInterval = 5) async -> DrainResult {
         accepting = false
         guard pendingOperationCount > 0 else { return snapshot(timedOut: false) }
 
         return await withCheckedContinuation { continuation in
             let id = UUID()
             waiters[id] = DrainWaiter(continuation: continuation)
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(
+                    nanoseconds: UInt64(max(0.1, timeoutSeconds) * 1_000_000_000)
+                )
+                guard !Task.isCancelled else { return }
+                self?.resolveWaiter(id: id, timedOut: true)
+            }
         }
     }
 

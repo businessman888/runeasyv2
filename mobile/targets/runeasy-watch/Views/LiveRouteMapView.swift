@@ -7,13 +7,14 @@ struct LiveRouteMapView: View {
     let isActivePage: Bool
 
     @Environment(\.isLuminanceReduced) private var isLuminanceReduced
+    @Environment(\.redactionReasons) private var redactionReasons
     @State private var cameraPosition: MapCameraPosition = .automatic
 
     var body: some View {
         Group {
             if !isActivePage {
                 inactiveContent
-            } else if isLuminanceReduced {
+            } else if isLuminanceReduced || !redactionReasons.isEmpty {
                 reducedLuminanceContent
             } else {
                 locationContent
@@ -226,6 +227,23 @@ struct LiveRouteMapView: View {
             .compactMap { $0 }
             .joined(separator: " • ")
     }
+}
+
+#Preview("Mapa ativo") {
+    LiveRouteMapView(
+        route: .empty,
+        locationState: .seeking,
+        isActivePage: true
+    )
+}
+
+#Preview("Mapa Always On") {
+    LiveRouteMapView(
+        route: .empty,
+        locationState: .seeking,
+        isActivePage: true
+    )
+    .redacted(reason: .placeholder)
 }
 
 private extension LiveRouteSegment {

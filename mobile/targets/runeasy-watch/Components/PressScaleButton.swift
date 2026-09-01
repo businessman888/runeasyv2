@@ -32,10 +32,17 @@ struct PressScaleButton<Label: View>: View {
 }
 
 private struct PressScaleStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .scaleEffect(
+                reduceMotion ? 1 : (configuration.isPressed ? 0.96 : 1.0)
+            )
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.7),
+                value: configuration.isPressed
+            )
     }
 }
 
@@ -46,6 +53,7 @@ struct PrimaryActionButton: View {
     let tint: Color
     let foreground: Color
     let action: () -> Void
+    @Environment(\.isLuminanceReduced) private var isLuminanceReduced
 
     init(
         _ title: String,
@@ -63,15 +71,19 @@ struct PrimaryActionButton: View {
 
     var body: some View {
         PressScaleButton(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: RunEasySpacing.small) {
                 if let icon { Image(systemName: icon).font(.system(size: 13, weight: .bold)) }
                 Text(title).font(AppFont.titleMedium)
             }
             .foregroundColor(foreground)
-            .frame(maxWidth: .infinity, minHeight: 36)
+            .frame(maxWidth: .infinity, minHeight: RunEasyControlSize.minimumTouch)
             .background(tint)
-            .cornerRadius(12)
-            .neonGlow(color: tint, radius: 10, opacity: 0.50)
+            .cornerRadius(RunEasyRadius.card)
+            .neonGlow(
+                color: tint,
+                radius: isLuminanceReduced ? 0 : 10,
+                opacity: isLuminanceReduced ? 0 : 0.50
+            )
         }
         .buttonStyle(.plain)
     }

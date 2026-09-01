@@ -62,6 +62,8 @@ final class WorkoutManager: NSObject, ObservableObject {
     @Published private(set) var pendingCompletedRun: CompletedRun?
     @Published private(set) var liveRoutePresentation = LiveRoutePresentation.empty
     @Published private(set) var liveRouteLocationState: LiveRouteLocationState = .seeking
+    @Published private(set) var coachSessionIsAvailable = false
+    @Published private(set) var coachSessionIsMuted = false
 
     var isRunning: Bool { phase == .running }
 
@@ -110,10 +112,15 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var lastLocationAccuracy: Double?
     private var lastLocationUpdatedAt: Date?
     private var isCoachEnabledForCurrentWorkout = false
+    private var coachConfiguration = WatchCoachSessionConfiguration.disabled
 
     private static let liveRoutePublishInterval: TimeInterval = 3
     private static let liveRouteMaximumPoints = 240
     private static let liveRouteCompactionThreshold = 480
+    private static let acceptedLocationAccuracyMeters = 50.0
+    private static let locationFreshnessSeconds: TimeInterval = 15
+    private static let healthKitSaveTimeoutSeconds: TimeInterval = 12
+    private static let routeFinishTimeoutSeconds: TimeInterval = 8
 
     // Tipos lidos/escritos
     private var authorizationShareTypes: Set<HKSampleType> {
@@ -286,7 +293,8 @@ final class WorkoutManager: NSObject, ObservableObject {
             runId: nextRunId,
             workoutId: workoutId,
             startDate: nextStartDate,
-            coachEnabled: isCoachEnabledForCurrentWorkout
+            coachEnabled: isCoachEnabledForCurrentWorkout,
+            coachConfiguration: coachConfiguration
         )
 
         do {
@@ -347,6 +355,9 @@ final class WorkoutManager: NSObject, ObservableObject {
         metrics = RunMetrics()
         coachController.stop()
         isCoachEnabledForCurrentWorkout = false
+        coachConfiguration = .disabled
+        coachSessionIsAvailable = false
+        coachSessionIsMuted = false
         routePoints = []
         resetLiveRoute()
         resetLiveRouteLocationState()
@@ -404,6 +415,9 @@ final class WorkoutManager: NSObject, ObservableObject {
             phase = .running
             coachController.begin(
                 enabled: isCoachEnabledForCurrentWorkout,
+                audioOwner: coachConfiguration.audioOwner,
+                policy: coachConfiguration.policy,
+                initialMuted: coachConfiguration.isMuted,
                 distanceMeters: metrics.distanceMeters,
                 elapsedSeconds: metrics.elapsedSeconds
             )
@@ -479,11 +493,22 @@ final class WorkoutManager: NSObject, ObservableObject {
                         runId: recoveredRunId,
                         workoutId: nil,
                         startDate: recoveredStartDate,
-                        coachEnabled: false
+                        coachEnabled: false,
+                        coachConfiguration: .disabled
                     )
                 )
             }
-            isCoachEnabledForCurrentWorkout = snapshot.context?.coachEnabled ?? false
+            coachConfiguration = snapshot.context?.coachConfiguration
+                ?? WatchCoachSessionConfiguration(
+                    enabled: snapshot.context?.coachEnabled ?? false,
+                    audioOwner: .none,
+                    policy: .standard,
+                    isMuted: false
+                )
+            isCoachEnabledForCurrentWorkout = coachConfiguration.enabled
+            coachSessionIsAvailable = coachConfiguration.enabled
+                && coachConfiguration.audioOwner == .watch
+            coachSessionIsMuted = coachConfiguration.isMuted
             routePoints = snapshot.routePoints
             restoreLiveRoute(from: snapshot.routeSegments)
             try? await checkpointStore.recordSegmentBoundary(
@@ -512,6 +537,9 @@ final class WorkoutManager: NSObject, ObservableObject {
             phase = .running
             coachController.begin(
                 enabled: isCoachEnabledForCurrentWorkout,
+                audioOwner: coachConfiguration.audioOwner,
+                policy: coachConfiguration.policy,
+                initialMuted: coachConfiguration.isMuted,
                 distanceMeters: metrics.distanceMeters,
                 elapsedSeconds: metrics.elapsedSeconds
             )
@@ -578,6 +606,7 @@ final class WorkoutManager: NSObject, ObservableObject {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard let self, let builder = self.builder else { continue }
                 self.metrics.elapsedSeconds = Int(builder.elapsedTime.rounded())
+                self.refreshLocationFreshness()
             }
         }
     }
@@ -613,9 +642,44 @@ final class WorkoutManager: NSObject, ObservableObject {
         #endif
     }
 
-    func configureCoach(enabled: Bool) {
+    func configureCoach(
+        enabled: Bool,
+        audioOwner: WatchCoachAudioOwner,
+        policy: WatchCoachRuntimePolicy
+    ) {
         guard phase == .idle else { return }
-        isCoachEnabledForCurrentWorkout = enabled
+        coachConfiguration = WatchCoachSessionConfiguration(
+            enabled: enabled,
+            audioOwner: enabled ? audioOwner : .none,
+            policy: policy,
+            isMuted: false
+        )
+        isCoachEnabledForCurrentWorkout = coachConfiguration.enabled
+        coachSessionIsAvailable = coachConfiguration.enabled
+            && coachConfiguration.audioOwner == .watch
+        coachSessionIsMuted = false
+    }
+
+    func toggleCoachMuted() {
+        guard phase == .running, coachConfiguration.enabled else { return }
+        coachController.toggleMuted()
+        coachConfiguration.isMuted = coachController.isMuted
+        coachSessionIsMuted = coachConfiguration.isMuted
+        persistCoachConfiguration()
+    }
+
+    private func persistCoachConfiguration() {
+        guard let runId, let startDate else { return }
+        let context = ActiveWorkoutContext(
+            runId: runId,
+            workoutId: workoutId,
+            startDate: startDate,
+            coachEnabled: coachConfiguration.enabled,
+            coachConfiguration: coachConfiguration
+        )
+        Task {
+            try? await checkpointStore.updateContextPreservingRoute(context)
+        }
     }
 
     private func resetLiveRoute() {
@@ -741,6 +805,11 @@ final class WorkoutManager: NSObject, ObservableObject {
         locationManager.stopUpdatingLocation()
         WatchLaunchDiagnostics.mark("route.drain.begin")
         let routeDrain = await routeRecorder.sealAndDrain()
+        if routeDrain.timedOut {
+            // Impede que a fila que excedeu o orçamento concorra com o
+            // fechamento do builder. O journal bruto já preserva o que entrou.
+            routeRecorder.invalidate()
+        }
         WatchLaunchDiagnostics.mark(routeDrain.timedOut ? "route.drain.timeout" : "route.drain.completed")
         workoutLog.info(
             "route drain accepted=\(routeDrain.acceptedPointCount, privacy: .public) inserted=\(routeDrain.insertedPointCount, privacy: .public) rejected=\(routeDrain.rejectedPointCount, privacy: .public) timeout=\(routeDrain.timedOut, privacy: .public)"
@@ -767,12 +836,10 @@ final class WorkoutManager: NSObject, ObservableObject {
                 throw WorkoutFinalizationError.stopNotConfirmed
             }
 
-            WatchLaunchDiagnostics.mark("builder.end-collection")
-            try await builder.endCollection(at: stopResult.date)
-            WatchLaunchDiagnostics.mark("builder.finish-workout")
-            guard let savedWorkout = try await builder.finishWorkout() else {
-                throw WorkoutFinalizationError.workoutNotSaved
-            }
+            let savedWorkout = try await saveWorkoutWithDeadline(
+                builder,
+                at: stopResult.date
+            )
             healthKitSaved = true
 
             if !routeDrain.hasRouteData {
@@ -783,9 +850,13 @@ final class WorkoutManager: NSObject, ObservableObject {
                 if let routeBuilder {
                     do {
                         WatchLaunchDiagnostics.mark("route.finish.begin")
-                        _ = try await routeBuilder.finishRoute(with: savedWorkout, metadata: [
-                            "com.oytotec.runeasy.run_id": runId ?? "unknown"
-                        ])
+                        try await finishRouteWithDeadline(
+                            routeBuilder,
+                            workout: savedWorkout,
+                            metadata: [
+                                "com.oytotec.runeasy.run_id": runId ?? "unknown"
+                            ]
+                        )
                         routeSaved = routeDrain.isComplete
                         if !routeDrain.isComplete {
                             completionWarning = "Treino salvo com rota GPS parcial."
@@ -923,6 +994,72 @@ final class WorkoutManager: NSObject, ObservableObject {
         #endif
     }
 
+    private func saveWorkoutWithDeadline(
+        _ builder: HKLiveWorkoutBuilder,
+        at date: Date
+    ) async throws -> HKWorkout {
+        let gate = WorkoutSaveDeadlineGate()
+        return try await withCheckedThrowingContinuation { continuation in
+            gate.install(continuation)
+            Task { @MainActor in
+                do {
+                    WatchLaunchDiagnostics.mark("builder.end-collection")
+                    try await builder.endCollection(at: date)
+                    WatchLaunchDiagnostics.mark("builder.finish-workout")
+                    guard let workout = try await builder.finishWorkout() else {
+                        throw WorkoutFinalizationError.workoutNotSaved
+                    }
+                    _ = gate.resolve(.success(workout))
+                } catch {
+                    _ = gate.resolve(.failure(error))
+                }
+            }
+            Task { @MainActor in
+                try? await Task.sleep(
+                    nanoseconds: UInt64(
+                        Self.healthKitSaveTimeoutSeconds * 1_000_000_000
+                    )
+                )
+                if gate.resolve(.failure(WorkoutFinalizationError.healthKitSaveTimeout)) {
+                    WatchLaunchDiagnostics.mark("builder.finish-timeout")
+                }
+            }
+        }
+    }
+
+    private func finishRouteWithDeadline(
+        _ routeBuilder: HKWorkoutRouteBuilder,
+        workout: HKWorkout,
+        metadata: [String: Any]
+    ) async throws {
+        let gate = RouteFinishDeadlineGate()
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, Error>) in
+            gate.install(continuation)
+            Task { @MainActor in
+                do {
+                    _ = try await routeBuilder.finishRoute(
+                        with: workout,
+                        metadata: metadata
+                    )
+                    _ = gate.resolve(.success(()))
+                } catch {
+                    _ = gate.resolve(.failure(error))
+                }
+            }
+            Task { @MainActor in
+                try? await Task.sleep(
+                    nanoseconds: UInt64(
+                        Self.routeFinishTimeoutSeconds * 1_000_000_000
+                    )
+                )
+                if gate.resolve(.failure(WorkoutFinalizationError.routeFinishTimeout)) {
+                    WatchLaunchDiagnostics.mark("route.finish.timeout")
+                }
+            }
+        }
+    }
+
     private func updateLocationAuthorizationState(_ manager: CLLocationManager) {
         guard CLLocationManager.locationServicesEnabled() else {
             liveRouteLocationState = .unavailable
@@ -947,10 +1084,12 @@ final class WorkoutManager: NSObject, ObservableObject {
                 )
             } else if let accuracy = lastLocationAccuracy,
                       let updatedAt = lastLocationUpdatedAt {
-                liveRouteLocationState = .active(
-                    horizontalAccuracy: accuracy,
-                    lastUpdatedAt: updatedAt
-                )
+                liveRouteLocationState = accuracy <= Self.acceptedLocationAccuracyMeters
+                    ? .active(horizontalAccuracy: accuracy, lastUpdatedAt: updatedAt)
+                    : .reducedAccuracy(
+                        horizontalAccuracy: accuracy,
+                        lastUpdatedAt: updatedAt
+                    )
             } else {
                 liveRouteLocationState = .seeking
             }
@@ -966,7 +1105,8 @@ final class WorkoutManager: NSObject, ObservableObject {
         guard location.horizontalAccuracy >= 0 else { return }
         lastLocationAccuracy = location.horizontalAccuracy
         lastLocationUpdatedAt = location.timestamp
-        if manager.accuracyAuthorization == .reducedAccuracy {
+        if manager.accuracyAuthorization == .reducedAccuracy
+            || location.horizontalAccuracy > Self.acceptedLocationAccuracyMeters {
             liveRouteLocationState = .reducedAccuracy(
                 horizontalAccuracy: location.horizontalAccuracy,
                 lastUpdatedAt: location.timestamp
@@ -976,6 +1116,17 @@ final class WorkoutManager: NSObject, ObservableObject {
                 horizontalAccuracy: location.horizontalAccuracy,
                 lastUpdatedAt: location.timestamp
             )
+        }
+    }
+
+    private func refreshLocationFreshness(now: Date = Date()) {
+        guard phase == .running, !metrics.isPaused, wantsLocationUpdates else { return }
+        guard let lastLocationUpdatedAt else {
+            liveRouteLocationState = .seeking
+            return
+        }
+        if now.timeIntervalSince(lastLocationUpdatedAt) > Self.locationFreshnessSeconds {
+            liveRouteLocationState = .seeking
         }
     }
 
@@ -1017,6 +1168,9 @@ final class WorkoutManager: NSObject, ObservableObject {
         phase = .running
         coachController.begin(
             enabled: isCoachEnabledForCurrentWorkout,
+            audioOwner: coachConfiguration.audioOwner,
+            policy: coachConfiguration.policy,
+            initialMuted: coachConfiguration.isMuted,
             distanceMeters: metrics.distanceMeters,
             elapsedSeconds: metrics.elapsedSeconds
         )
@@ -1213,7 +1367,7 @@ extension WorkoutManager: CLLocationManagerDelegate {
             let filtered = locations
                 .filter {
                     $0.horizontalAccuracy >= 0
-                        && $0.horizontalAccuracy <= 50
+                        && $0.horizontalAccuracy <= Self.acceptedLocationAccuracyMeters
                         && $0.timestamp.timeIntervalSince1970 >= newestTimestamp
                 }
                 .sorted { $0.timestamp < $1.timestamp }
@@ -1256,6 +1410,8 @@ private enum WorkoutFinalizationError: LocalizedError {
     case missingBuilder
     case stopNotConfirmed
     case workoutNotSaved
+    case healthKitSaveTimeout
+    case routeFinishTimeout
 
     var errorDescription: String? {
         switch self {
@@ -1263,7 +1419,43 @@ private enum WorkoutFinalizationError: LocalizedError {
         case .missingBuilder: return "Workout builder indisponível"
         case .stopNotConfirmed: return "HealthKit não confirmou a interrupção da sessão"
         case .workoutNotSaved: return "HealthKit não retornou o workout salvo"
+        case .healthKitSaveTimeout: return "HealthKit excedeu o tempo para salvar o workout"
+        case .routeFinishTimeout: return "HealthKit excedeu o tempo para anexar a rota"
         }
+    }
+}
+
+@MainActor
+private final class WorkoutSaveDeadlineGate {
+    private var continuation: CheckedContinuation<HKWorkout, Error>?
+
+    func install(_ continuation: CheckedContinuation<HKWorkout, Error>) {
+        self.continuation = continuation
+    }
+
+    @discardableResult
+    func resolve(_ result: Result<HKWorkout, Error>) -> Bool {
+        guard let continuation else { return false }
+        self.continuation = nil
+        continuation.resume(with: result)
+        return true
+    }
+}
+
+@MainActor
+private final class RouteFinishDeadlineGate {
+    private var continuation: CheckedContinuation<Void, Error>?
+
+    func install(_ continuation: CheckedContinuation<Void, Error>) {
+        self.continuation = continuation
+    }
+
+    @discardableResult
+    func resolve(_ result: Result<Void, Error>) -> Bool {
+        guard let continuation else { return false }
+        self.continuation = nil
+        continuation.resume(with: result)
+        return true
     }
 }
 

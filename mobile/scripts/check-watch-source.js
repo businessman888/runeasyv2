@@ -24,12 +24,20 @@ function expect(condition, message) {
 }
 
 const targetConfig = require(path.join(watchRoot, 'expo-target.config.js'));
+const appConfig = read('app.config.js');
+const easConfig = JSON.parse(read('eas.json'));
 const info = plist.parse(read('targets/runeasy-watch/Info.plist'));
 const diagnostics = read('targets/runeasy-watch/Services/WatchLaunchDiagnostics.swift');
 const inspector = read('scripts/inspect-watch-ipa.js');
 const watchApp = read('targets/runeasy-watch/RunEasyWatchApp.swift');
 const bridge = read('targets/runeasy-watch/Services/PhoneBridge.swift');
 const activeRun = read('targets/runeasy-watch/Views/ActiveRunView.swift');
+const mapView = read('targets/runeasy-watch/Views/LiveRouteMapView.swift');
+const pressScale = read('targets/runeasy-watch/Components/PressScaleButton.swift');
+const layout = read('targets/runeasy-watch/Theme/RunEasyLayout.swift');
+const symbols = read('targets/runeasy-watch/Theme/RunEasySymbols.swift');
+const appleWatchService = read('src/services/appleWatch.ts');
+const appleWatchStore = read('src/stores/appleWatchStore.ts');
 const watchSync = read('src/hooks/useWatchSync.ts');
 const watchContract = read('src/services/watchContextContract.ts');
 const schema2Fixture = JSON.parse(read('shared/watch-contract/fixtures/schema2-context.json'));
@@ -38,6 +46,22 @@ const schema3Fixture = JSON.parse(read('shared/watch-contract/fixtures/schema3-c
 const marker = diagnostics.match(/runtimeMarker\s*=\s*"([^"]+)"/)?.[1];
 
 expect(targetConfig.deploymentTarget === '10.0', 'deployment target watchOS 10');
+expect(
+  appConfig.includes('version: "1.0.9"')
+    && inspector.includes("EXPECTED_APP_VERSION = '1.0.9'"),
+  'versão 1.0.9 alinhada ao inspetor',
+);
+expect(
+  easConfig.build?.['production:watch-beta']?.env
+    ?.EXPO_PUBLIC_WATCH_LIVE_MAP_ENABLED === 'true'
+    && easConfig.build?.['production:watch-beta']?.env
+      ?.EXPO_PUBLIC_WATCH_AUDIO_COACH_ENABLED === 'true'
+    && !easConfig.build?.production?.env
+      ?.EXPO_PUBLIC_WATCH_LIVE_MAP_ENABLED
+    && !easConfig.build?.production?.env
+      ?.EXPO_PUBLIC_WATCH_AUDIO_COACH_ENABLED,
+  'perfil watch beta ativa features sem alterar production padrão',
+);
 expect(targetConfig.frameworks.includes('MapKit'), 'MapKit configurado no target');
 expect(targetConfig.frameworks.includes('AVFAudio'), 'AVFAudio configurado no target');
 expect(info.UIBackgroundModes?.includes('location'), 'background location declarado');
@@ -55,6 +79,17 @@ expect(
 expect(
   bridge.includes('supportedSchemaVersions = 2...3'),
   'decoder aceita schemas 2 e 3',
+);
+expect(
+  bridge.includes('activationState != .activated || error != nil')
+    && bridge.includes('activationFailureCount'),
+  'wake encerra também quando ativação termina sem estado válido',
+);
+expect(
+  bridge.includes('contextPolicyIsCompatible')
+    && bridge.includes('coachPolicyIsCompatible')
+    && bridge.includes('executionPolicyIsCompatible'),
+  'receiver valida versões antes de habilitar capabilities',
 );
 expect(
   watchContract.includes('WATCH_CONTEXT_SCHEMA_VERSION = 3')
@@ -84,8 +119,35 @@ expect(
 );
 expect(
   watchSync.includes('EXPO_PUBLIC_WATCH_LIVE_MAP_ENABLED')
-    && watchSync.includes('EXPO_PUBLIC_WATCH_AUDIO_COACH_ENABLED'),
+    && watchSync.includes('EXPO_PUBLIC_WATCH_AUDIO_COACH_ENABLED')
+    && watchSync.includes('buildWatchCoachPolicy(featureFlags.audioCoach)'),
   'rollout mobile explicitamente opt-in',
+);
+expect(
+  appleWatchService.includes("'application-context-error'")
+    && appleWatchStore.includes('CONTEXT_RETRY_DELAYS_MS')
+    && appleWatchStore.includes('onApplicationContextError'),
+  'falha assíncrona de applicationContext possui retry limitado',
+);
+expect(
+  activeRun.includes('@Environment(\\.scenePhase)')
+    && activeRun.includes('@Environment(\\.redactionReasons)')
+    && activeRun.includes('.privacySensitive()')
+    && mapView.includes('@Environment(\\.isLuminanceReduced)')
+    && mapView.includes('@Environment(\\.redactionReasons)'),
+  'tracking cobre scene phase, Always On e privacidade',
+);
+expect(
+  pressScale.includes('accessibilityReduceMotion')
+    && pressScale.includes('RunEasyControlSize.minimumTouch')
+    && layout.includes('minimumTouch: CGFloat = 44'),
+  'controles compartilhados respeitam Reduce Motion e toque de 44 pt',
+);
+expect(
+  symbols.includes('static let finish = "stop.fill"')
+    && symbols.includes('speaker.wave.2.fill')
+    && symbols.includes('speaker.slash.fill'),
+  'ações críticas usam catálogo semântico de SF Symbols',
 );
 
 if (process.exitCode) {

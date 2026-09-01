@@ -9,6 +9,7 @@ import {
     WATCH_CONTEXT_SCHEMA_VERSION,
     WATCH_CONTEXT_SUPPORTED_SCHEMA_VERSIONS,
     WatchContextPayloadTooLargeError,
+    buildWatchCoachPolicy,
     buildWatchContractFields,
     finalizeWatchApplicationContext,
     sanitizeWatchPropertyList,
@@ -33,6 +34,19 @@ test('schema 3 mantem mapa e coach desligados por padrao', () => {
     assert.deepEqual(finalized.payload.policy_versions, WATCH_CONTEXT_POLICY_VERSIONS);
     assert.equal('coach_policy' in finalized.payload, false);
     assert.equal('execution_steps' in finalized.payload, false);
+});
+
+test('ownership do audio só pertence ao Watch quando o coach está habilitado', () => {
+    assert.equal(buildWatchCoachPolicy(false), undefined);
+    assert.deepEqual(buildWatchCoachPolicy(true), {
+        version: 1,
+        audioOwner: 'watch',
+        locale: 'pt-BR',
+        splitIntervalMeters: 1_000,
+        minimumCueGapSeconds: 20,
+        cueTtlSeconds: 8,
+        advancedCuesEnabled: false,
+    });
 });
 
 test('campos opcionais sao convertidos para snake_case sem perder unidades', () => {
@@ -110,6 +124,31 @@ test('payload grande remove campos opcionais e permanece abaixo do limite intern
     assert.ok(finalized.originalSizeBytes > WATCH_CONTEXT_MAX_BYTES);
     assert.ok(finalized.sizeBytes <= WATCH_CONTEXT_MAX_BYTES);
     assert.equal('execution_steps' in finalized.payload, false);
+});
+
+test('redução nunca mantém coach ligado sem a policy de ownership', () => {
+    const finalized = finalizeWatchApplicationContext({
+        ...buildWatchContractFields({
+            featureFlags: { liveMap: true, audioCoach: true },
+            coachPolicy: buildWatchCoachPolicy(true),
+            executionSteps: Array.from({ length: 8_000 }, (_, index) => ({
+                index,
+                blockIndex: index,
+                kind: 'work' as const,
+                metric: 'distance' as const,
+                target: 400,
+                paceMin: 280,
+                paceMax: 300,
+            })),
+        }),
+        context_id: 'test-coach-reduction',
+    });
+    const flags = finalized.payload.feature_flags as Record<string, unknown>;
+
+    assert.equal(finalized.wasReduced, true);
+    assert.equal(finalized.payload.watch_coach_enabled, false);
+    assert.equal(flags.audio_coach, false);
+    assert.equal('coach_policy' in finalized.payload, false);
 });
 
 test('payload essencial acima do limite falha antes de chamar WatchConnectivity', () => {
