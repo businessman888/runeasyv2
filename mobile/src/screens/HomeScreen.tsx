@@ -60,6 +60,33 @@ const SCOPE_TABS: { key: 'plan' | 'activity'; label: string }[] = [
 
 // Decorative skeleton shown to Free users behind the glass teaser — looks like
 // a real generated workout to instigate "what's my plan?". Never interactive.
+/**
+ * Fetch window for the Home screen.
+ *
+ * Starts at the EARLIER of (first of the month, Sunday of the current week).
+ * The header's week strip always renders Sunday→Saturday, so on a week that
+ * straddles a month boundary a first-of-the-month start left the leading days
+ * outside the fetched range — they arrived with no plan data at all and the
+ * cells rendered as if the user had no history.
+ */
+function homeScheduleRange(now: Date = new Date()): { startStr: string; endStr: string } {
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const start = startOfWeek < startOfMonth ? startOfWeek : startOfMonth;
+
+    const end = new Date(now);
+    end.setMonth(end.getMonth() + 1);
+
+    return {
+        startStr: start.toISOString().split('T')[0],
+        endStr: end.toISOString().split('T')[0],
+    };
+}
+
 const MOCK_TEASE_WORKOUT: WorkoutData = {
     id: 'tease-mock',
     type: 'intervals',
@@ -162,13 +189,7 @@ export function HomeScreen({ navigation }: any) {
 
     const { isGenerating, isFailed, retry } = usePlanGenerationGate({
         onComplete: () => {
-            const now = new Date();
-            const startStr = new Date(now.getFullYear(), now.getMonth(), 1)
-                .toISOString()
-                .split('T')[0];
-            const endDate = new Date(now);
-            endDate.setMonth(endDate.getMonth() + 1);
-            const endStr = endDate.toISOString().split('T')[0];
+            const { startStr, endStr } = homeScheduleRange();
             void Promise.all([
                 fetchUpcomingWorkouts(),
                 fetchSchedule(startStr, endStr),
@@ -279,13 +300,7 @@ export function HomeScreen({ navigation }: any) {
                 clearScheduleData();
                 setIsInitialLoading(true);
 
-                // Use dynamic dates: start of current month for calendar history, end 1 month ahead
-                const now = new Date();
-                const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-                const startStr = startOfMonth.toISOString().split('T')[0];
-                const endDate = new Date(now);
-                endDate.setMonth(endDate.getMonth() + 1);
-                const endStr = endDate.toISOString().split('T')[0];
+                const { startStr, endStr } = homeScheduleRange();
 
                 await Promise.all([
                     fetchStats(),

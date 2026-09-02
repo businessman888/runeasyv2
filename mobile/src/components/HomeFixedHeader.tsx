@@ -175,7 +175,9 @@ export function HomeFixedHeader({
                             <Text style={styles.statTextWhite}>{currentStreak}</Text>
                         </View>
                         <View style={styles.statItem}>
-                            <AppIcon name="energy" size={16} tone="secondary" variant="filled" />
+                            {/* Rest counter — the moon is the app-wide mark for a
+                                rest day, so the bolt has no business here. */}
+                            <AppIcon name="sleep" size={16} tone="recovery" variant="filled" />
                             <Text style={styles.statTextLight}>
                                 {counters.restDone}/{counters.restTotal}
                             </Text>
@@ -214,42 +216,46 @@ export function HomeFixedHeader({
                 for Pro only; Free sees just the weekday + number. */}
             <View style={styles.weekRow}>
                 {weekData.map((day) => {
+                    // Only the current day carries color; the rest of the week
+                    // stays on the neutral text tones so the strip reads clean
+                    // and today is unmistakable. Rest is purple, training cyan —
+                    // the same rule the calendar grid uses. Free has no plan, so
+                    // the recovery purple can never leak out there.
                     const isCurrentDay = day.isToday;
-                    // Free has no plan → always mark the current day in cyan (never
-                    // leak the plan's recovery color).
-                    const borderColor = isProUser && day.type === 'recovery' ? colors.recovery : colors.primary;
+                    const dayColor = isProUser && day.type === 'recovery'
+                        ? colors.recovery
+                        : colors.primary;
 
                     return (
-                        <View
-                            key={day.date}
-                            style={[
-                                styles.dayColumn,
-                                isCurrentDay && {
-                                    borderBottomWidth: 2,
-                                    borderBottomColor: borderColor,
-                                },
-                            ]}
-                        >
-                            <Text style={styles.dayLabel}>{day.label}</Text>
+                        <View key={day.date} style={styles.dayColumn}>
+                            <Text style={[styles.dayLabel, isCurrentDay && { color: dayColor }]}>
+                                {day.label}
+                            </Text>
+
                             <View style={styles.dayIconContainer}>
                                 {/* Loading: dot skeleton. Pro: real plan icon.
                                     Free: a clean lock where the plan icon would be. */}
                                 {isLoading ? (
                                     <SkeletonCircle size={14} />
                                 ) : isProUser ? (
-                                    renderDayIcon(day)
+                                    renderDayIcon(day, isCurrentDay)
                                 ) : (
                                     <AppIcon name="lock" size={16} tone="tertiary" variant="outline" />
                                 )}
                             </View>
-                            <Text
-                                style={[
-                                    styles.dayNumber,
-                                    isCurrentDay && { color: colors.primary },
-                                ]}
-                            >
+
+                            <Text style={[styles.dayNumber, isCurrentDay && { color: dayColor }]}>
                                 {day.dayNumber}
                             </Text>
+
+                            {/* Today marker — a short rule, narrower than the
+                                column so it reads as a mark and not as a divider. */}
+                            {isCurrentDay && (
+                                <View
+                                    style={[styles.todayBar, { backgroundColor: dayColor }]}
+                                    pointerEvents="none"
+                                />
+                            )}
                         </View>
                     );
                 })}
@@ -258,7 +264,18 @@ export function HomeFixedHeader({
     );
 }
 
-function renderDayIcon(day: WeekDay): React.ReactNode {
+/**
+ * Same icon vocabulary as the calendar grid (`components/calendar/DayIndicator`):
+ * the moon marks a rest day, the runner a training day.
+ *
+ * Only the current day takes the state color; every other day uses the neutral
+ * tones. The glyph still tells rest from training on its own, so meaning never
+ * depends on color.
+ *
+ * Completed and missed keep their own outcome colors on any day — those say
+ * whether the workout actually happened, which the day-type color cannot.
+ */
+function renderDayIcon(day: WeekDay, isCurrentDay: boolean): React.ReactNode {
     const size = 16;
 
     switch (day.status) {
@@ -268,11 +285,28 @@ function renderDayIcon(day: WeekDay): React.ReactNode {
             return <AppIcon name="close" size={size} tone="danger" variant="filled" />;
         case 'recovery':
         case 'pending_recovery':
-            return <AppIcon name="energy" size={size} tone="secondary" variant="outline" />;
+            return (
+                <AppIcon
+                    name="sleep"
+                    size={size}
+                    tone={isCurrentDay ? 'recovery' : 'secondary'}
+                    variant="filled"
+                />
+            );
         case 'pending_workout':
-            return <AppIcon name="running" size={size} tone="primary" variant="outline" />;
+            return (
+                <AppIcon
+                    name="running"
+                    size={size}
+                    tone={isCurrentDay ? 'accent' : 'primary'}
+                    variant="outline"
+                />
+            );
         default:
-            return <AppIcon name="energy" size={size} tone="tertiary" variant="outline" />;
+            // No plan entry for this day (e.g. before the plan started). A muted
+            // dot keeps the row even instead of leaving a hole, without claiming
+            // it was a rest or a training day.
+            return <View style={styles.dayEmptyDot} />;
     }
 }
 
@@ -387,6 +421,17 @@ const styles = createThemeStyles(() => ({
         justifyContent: 'center',
         gap: 3,
         paddingBottom: 4,
+        position: 'relative',
+    },
+    // Today marker. Absolutely positioned rather than a `borderBottom` on the
+    // column so its length is set independently of the column width — a border
+    // would always run the full width and read as a divider.
+    todayBar: {
+        position: 'absolute',
+        bottom: 0,
+        height: 2,
+        width: 22,
+        borderRadius: 1,
     },
     dayLabel: {
         fontSize: 10,
@@ -398,6 +443,12 @@ const styles = createThemeStyles(() => ({
         height: 16,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    dayEmptyDot: {
+        width: 4,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: semanticColors.fillStrong,
     },
     dayNumber: {
         fontSize: 13,
