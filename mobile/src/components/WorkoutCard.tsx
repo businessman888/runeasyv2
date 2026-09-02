@@ -12,7 +12,7 @@ import {
   formatDurationLabel,
   isTimeBasedWorkout,
 } from '../utils/workoutTransform';
-import { createThemeStyles, useThemeSubscription } from '../theme';
+import { elevation, createThemeStyles, useThemeSubscription } from '../theme';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -320,15 +320,7 @@ const styles = createThemeStyles(() => ({
   card: {
     backgroundColor: semanticColors.surface2,
     borderRadius: 20,
-    ...Platform.select({
-      ios: {
-        shadowColor: semanticColors.canvas,
-        shadowOffset: { width: 2, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-      },
-      android: { elevation: 3 },
-    }),
+    ...elevation.sm,
   },
   cardActive: {
     borderWidth: 1,
@@ -450,15 +442,7 @@ const styles = createThemeStyles(() => ({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    ...Platform.select({
-      ios: {
-        shadowColor: semanticColors.canvas,
-        shadowOffset: { width: 2, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-      },
-      android: { elevation: 2 },
-    }),
+    ...elevation.sm,
   },
   startBtnDisabled: {
     backgroundColor: semanticColors.glass,

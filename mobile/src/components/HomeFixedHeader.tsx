@@ -7,7 +7,7 @@ import {
     Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, typography, createThemeStyles, useThemeSubscription } from '../theme';
+import { colors, typography, elevation, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { Skeleton, SkeletonCircle } from './Skeleton';
 import { AppIcon } from './ui/AppIcon';
@@ -283,11 +283,7 @@ const styles = createThemeStyles(() => ({
         borderBottomRightRadius: 20,
         paddingHorizontal: 10,
         gap: 13,
-        shadowColor: semanticColors.canvas,
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 4,
+        ...elevation.md,
         zIndex: 10,
     },
 

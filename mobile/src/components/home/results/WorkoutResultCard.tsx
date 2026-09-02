@@ -7,7 +7,7 @@ import {
   View,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { colors, fonts, createThemeStyles, useThemeSubscription } from "../../../theme";
+import { colors, fonts, elevation, createThemeStyles, useThemeSubscription } from "../../../theme";
 import { semanticColors } from "../../../theme/semanticColors";
 import type { LatestActivityData } from "../../../stores/feedbackStore";
 import { ResultMetric } from "./ResultMetric";
@@ -209,11 +209,7 @@ const styles = createThemeStyles(() => ({
     backgroundColor: semanticColors.surface1,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: semanticColors.borderSubtle,
-    shadowColor: semanticColors.canvas,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    elevation: 8,
+    ...elevation.md,
   },
   mapRegion: { height: 156, backgroundColor: semanticColors.surface1 },
   content: {
@@ -228,7 +224,9 @@ const styles = createThemeStyles(() => ({
     paddingHorizontal: 18,
     paddingTop: 16,
     paddingBottom: 14,
-    shadowColor: semanticColors.canvas,
+    // Upward shadow — the footer lifts off the card above it, so the direction
+    // is deliberate and this keeps its own geometry instead of an elevation step.
+    shadowColor: semanticColors.shadow,
     shadowOffset: { width: 0, height: -5 },
     shadowOpacity: 0.18,
     shadowRadius: 12,
@@ -292,11 +290,7 @@ const styles = createThemeStyles(() => ({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    shadowColor: semanticColors.canvas,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
+    ...elevation.sm,
   },
   ctaDisabled: {
     backgroundColor: semanticColors.surface3,

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, createThemeStyles, useThemeSubscription } from '../theme';
+import { colors, typography, spacing, elevation, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { ScheduleDay } from '../stores/trainingStore';
 
@@ -214,11 +214,7 @@ const styles = createThemeStyles(() => ({
         borderRadius: 25,
         paddingVertical: 16,
         gap: 16,
-        shadowColor: semanticColors.canvas,
-        shadowOffset: { width: 2, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 4,
+        ...elevation.md,
     },
 
     // Section 1

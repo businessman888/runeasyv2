@@ -1,9 +1,9 @@
 import React, { ReactNode } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius, shadows, createThemeStyles, useThemeSubscription } from '../../theme';
+import { colors, typography, spacing, borderRadius, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
+import { AuroraCard } from '../ui/AuroraCard';
 import { LevelProgressBar } from './LevelProgressBar';
 
 export interface LevelCardStats {
@@ -33,21 +33,10 @@ export function LevelCard({ stats, patentSlot, patentName, variant = 'home' }: L
     const streak = stats?.current_streak ?? 0;
 
     return (
-        <LinearGradient
-            colors={[semanticColors.surface1, semanticColors.surface2, semanticColors.surface3]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.card}
-        >
-            {/* Keep the original overlay geometry, using the neutral palette. */}
-            <LinearGradient
-                colors={[semanticColors.glass, semanticColors.transparent]}
-                start={{ x: 1, y: 0 }}
-                end={{ x: 0.2, y: 1 }}
-                style={StyleSheet.absoluteFill}
-                pointerEvents="none"
-            />
-
+        // Brand-cyan Aurora surface. The Level card always reads `accent`: it
+        // communicates level/XP, not the day's state — the rest-day purple
+        // belongs to the recovery card and the screen backdrop.
+        <AuroraCard tone="accent" style={styles.card}>
             <View style={styles.topRow}>
                 <View style={styles.eliteChip}>
                     <Ionicons name="flash" size={12} color={semanticColors.accent} />
@@ -90,20 +79,15 @@ export function LevelCard({ stats, patentSlot, patentName, variant = 'home' }: L
                     <Text style={styles.streakText}>Combo: {streak} dias</Text>
                 </View>
             ) : null}
-        </LinearGradient>
+        </AuroraCard>
     );
 }
 
 const styles = createThemeStyles(() => ({
+    // Radius, border and elevation come from AuroraCard.
     card: {
-        borderRadius: borderRadius['2xl'],
         padding: spacing.lg,
         gap: spacing.md,
-        borderWidth: 1,
-        borderColor: semanticColors.borderSubtle,
-        overflow: 'hidden',
-        ...shadows.neon,
-        shadowColor: semanticColors.canvas,
     },
     topRow: {
         flexDirection: 'row',

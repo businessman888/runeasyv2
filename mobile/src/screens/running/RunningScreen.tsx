@@ -37,7 +37,7 @@ import { resetCoachRun, stopCoach, enqueue as enqueueCoach } from '../../service
 import { buildMotivFinish } from '../../services/coach/coachMessages';
 import { LinearGradient } from 'expo-linear-gradient';
 import { semanticColors } from '../../theme/semanticColors';
-import { useMapThemePalette, createThemeStyles, useThemeSubscription } from '../../theme';
+import { useMapThemePalette, elevation, createThemeStyles, useThemeSubscription } from '../../theme';
 
 const getLocalThemePalette1 = () => ({
   // Backgrounds
@@ -893,19 +893,11 @@ const styles = createThemeStyles(() => ({
     borderColor: semanticColors.borderSubtle,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: semanticColors.canvas,
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
+    ...elevation.sm,
   },
   mapCircleBtnActive: {
     borderColor: semanticColors.accent,
-    shadowColor: semanticColors.canvas,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 6,
+    ...elevation.md,
   },
 
   // ── Bottom panel
@@ -945,11 +937,7 @@ const styles = createThemeStyles(() => ({
     marginBottom: 8,
     borderRadius: 15,
     overflow: 'hidden',
-    shadowColor: semanticColors.canvas,
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
+    ...elevation.sm,
   },
   statusBanner: {
     height: 37,
@@ -1034,7 +1022,8 @@ const styles = createThemeStyles(() => ({
     paddingTop: 17,
     paddingBottom: 16, // overridden inline with insets.bottom + 16
     gap: 10,
-    shadowColor: semanticColors.canvas,
+    // Upward shadow — the control bar lifts off the map below it.
+    shadowColor: semanticColors.shadow,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
@@ -1086,11 +1075,7 @@ const styles = createThemeStyles(() => ({
     backgroundColor: semanticColors.surface2,
     borderWidth: 1,
     borderColor: semanticColors.borderSubtle,
-    shadowColor: semanticColors.canvas,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
-    elevation: 10,
+    ...elevation.lg,
   },
   finishingSpinnerWrap: {
     width: 72,

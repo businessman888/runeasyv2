@@ -1,22 +1,28 @@
 import type { ThemeColors } from './contracts';
 
 /**
- * Accessible light palette for development validation.
+ * Accessible light palette.
  *
  * The cyan accent is intentionally darker than the brand cyan so interactive
  * text and controls retain AA contrast on light surfaces.
+ *
+ * Depth convention: in light mode elevation is carried by SHADOW, not by tint —
+ * `surface1` is already the brightest plane and cannot go higher, so nested
+ * surfaces recede slightly instead. That only works if the canvas sits clearly
+ * below white: `canvas` is a cool grey a full step down from `#FFFFFF`, which is
+ * what makes a card read as floating. See `theme/elevation.ts` for the shadows.
  */
 export const lightColors = {
-  canvas: '#F6F7F8',
+  canvas: '#EBEEF2',
   surface1: '#FFFFFF',
-  surface2: '#F1F3F5',
-  surface3: '#E8EBEF',
+  surface2: '#F6F8FA',
+  surface3: '#E9ECF1',
   glass: 'rgba(255,255,255,0.78)',
   fillSubtle: 'rgba(17,19,24,0.04)',
   fillMuted: 'rgba(17,19,24,0.08)',
   fillStrong: 'rgba(17,19,24,0.14)',
-  borderSubtle: 'rgba(17,19,24,0.08)',
-  borderStrong: 'rgba(17,19,24,0.14)',
+  borderSubtle: 'rgba(17,19,24,0.07)',
+  borderStrong: 'rgba(17,19,24,0.12)',
   textPrimary: '#111318',
   textOnMedia: '#FFFFFF',
   textOnMediaMuted: 'rgba(255,255,255,0.72)',

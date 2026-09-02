@@ -21,7 +21,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, typography, spacing, createThemeStyles, useThemeSubscription } from '../theme';
+import { colors, typography, spacing, elevation, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { PHASE_LABELS, getZoneColor } from '../theme/zoneColors';
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -635,11 +635,7 @@ const styles = createThemeStyles(() => ({
         paddingVertical: spacing.md,
         paddingHorizontal: spacing.xl,
         borderRadius: 28,
-        shadowColor: semanticColors.canvas,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 6,
-        elevation: 3,
+        ...elevation.sm,
     },
     startText: {
         fontSize: typography.fontSizes.lg,

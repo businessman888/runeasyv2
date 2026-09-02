@@ -6,18 +6,21 @@ import {
 
 import { darkColors } from './semanticColors';
 import { lightColors } from './lightColors';
+import { createElevation } from './elevation';
 import type { AppTheme, ResolvedThemeName } from './contracts';
 
 export const darkTheme = {
   name: 'dark',
   isDark: true,
   colors: darkColors,
+  elevation: createElevation(darkColors, true),
 } as const satisfies AppTheme;
 
 export const lightTheme = {
   name: 'light',
   isDark: false,
   colors: lightColors,
+  elevation: createElevation(lightColors, false),
 } as const satisfies AppTheme;
 
 export const themeRegistry: Record<ResolvedThemeName, AppTheme> = {

@@ -1,6 +1,6 @@
 import React, { memo, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { fonts, spacing, createThemeStyles, useThemeSubscription } from '../../theme';
+import { fonts, spacing, elevation, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { AppIcon } from '../ui/AppIcon';
 import { useWorkoutScopeStore } from '../../stores';
@@ -199,11 +199,7 @@ const styles = createThemeStyles(() => ({
         paddingVertical: 4,
         minWidth: 120,
         // Subtle elevation so the menu reads above the card.
-        shadowColor: semanticColors.canvas,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-        elevation: 8,
+        ...elevation.md,
     },
     menuItem: {
         borderWidth: 1,

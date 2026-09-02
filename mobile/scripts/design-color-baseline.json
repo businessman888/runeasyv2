@@ -397,7 +397,6 @@
     "#6366f1": 1,
     "#9333ea": 1,
     "#ea580c": 1,
-    "rgba(0,212,255,0.3)": 1,
     "rgba(0,212,255,0.6)": 1
   },
   "screens/TrainingHistoryScreen.tsx": {

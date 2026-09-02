@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { TabBarIcon } from './TabBarIcon';
 import { AppPressable } from './ui/AppPressable';
-import { fonts, createThemeStyles, useThemeSubscription, getThemeBlurTint } from '../theme';
+import { fonts, elevation, createThemeStyles, useThemeSubscription, getThemeBlurTint } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { useAuthStore, getAvatarUrl, getDisplayName } from '../stores';
@@ -225,11 +225,7 @@ const styles = createThemeStyles(() => ({
         maxWidth: 360,
         alignSelf: 'center',
         borderRadius: PILL_RADIUS,
-        shadowColor: semanticColors.canvas,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.18,
-        shadowRadius: 10,
-        elevation: 6,
+        ...elevation.md,
     },
     // Tablet portrait: pill mais larga (ícones com mais respiro). Phone usa o
     // maxWidth: 360 acima.

@@ -13,7 +13,7 @@ import {
     PanResponder,
     Alert,
 } from 'react-native';
-import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../theme';
+import { colors, typography, spacing, borderRadius, fonts, elevation, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { AppIcon } from '../components/ui/AppIcon';
 import { useResponsiveTheme } from '../theme/responsive';
@@ -43,6 +43,8 @@ import { StatsPeriodCard } from '../components/calendar/StatsPeriodCard';
 import type { CalendarDayStatus } from '../components/calendar/DayIndicator';
 import { startOfDay, toLocalDateStr } from '../components/calendar/useCalendarGrid';
 import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
+import { AuroraCard } from '../components/ui/AuroraCard';
+import { MoonAnimation } from '../components/ui/MoonAnimation';
 import { WorkoutDayCard, type DayWorkout } from '../components/training/WorkoutDayCard';
 import { useProFeature } from '../hooks/useProFeature';
 import { useStartWorkoutFlow } from '../hooks/useStartWorkoutFlow';
@@ -69,11 +71,6 @@ const MOCK_DAY_WORKOUT: DayWorkout = {
 function BoltIcon({ size = 16, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
     useThemeSubscription();
     return <AppIcon name="energy" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" variant="filled" />;
-}
-
-function MoonIcon({ size = 48, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
-    useThemeSubscription();
-    return <AppIcon name="sleep" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" variant="filled" />;
 }
 
 function TimerIcon({ size = 20, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
@@ -642,7 +639,7 @@ export function CalendarScreen({ navigation }: any) {
                         }
                     >
                         <AgendaCalendar
-                            disableGlass
+                            transparentSurface
                             viewMode={viewMode}
                             onViewModeChange={setViewMode}
                             selectedDay={selectedDay}
@@ -714,9 +711,13 @@ export function CalendarScreen({ navigation }: any) {
                                 <WorkoutDayCard workout={MOCK_DAY_WORKOUT} onPress={() => {}} />
                             </GlassTeaseOverlay>
                         ) : isSelectedPlanRecovery ? (
-                            <View key={`recovery-${getSelectedDateStr()}`} style={styles.recoveryCard}>
+                            <AuroraCard
+                                key={`recovery-${getSelectedDateStr()}`}
+                                tone="recovery"
+                                style={styles.recoveryCard}
+                            >
                                 <View style={styles.recoveryCardHeader}>
-                                    <MoonIcon size={48} color={semanticColors.textSecondary} />
+                                    <MoonAnimation size={48} accessibilityLabel={null} />
                                     <View style={styles.recoveryCardInfo}>
                                         <Text style={styles.recoveryTitle}>Dia de Recuperação</Text>
                                         <Text style={styles.recoverySubtitle}>
@@ -738,7 +739,7 @@ export function CalendarScreen({ navigation }: any) {
                                         <Text style={styles.recoveryTipText}>Alongamento leve</Text>
                                     </View>
                                 </View>
-                            </View>
+                            </AuroraCard>
                         ) : planSelectedWorkouts.length > 0 ? (
                             planSelectedWorkouts.map((w) => (
                                 <WorkoutDayCard
@@ -1154,7 +1155,9 @@ const styles = createThemeStyles(() => ({
         borderTopRightRadius: 24,
         overflow: 'hidden',
         height: Dimensions.get('window').height * 0.85,
-        shadowColor: semanticColors.canvas,
+        // Upward shadow — a bottom sheet lifts off the screen below it, so the
+        // direction is deliberate and stays hand-tuned.
+        shadowColor: semanticColors.shadow,
         shadowOffset: { width: 0, height: -4 },
         shadowOpacity: 0.3,
         shadowRadius: 10,
@@ -1409,11 +1412,7 @@ const styles = createThemeStyles(() => ({
         paddingVertical: spacing.md,
         paddingHorizontal: spacing.xl,
         borderRadius: 20,
-        shadowColor: semanticColors.canvas,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 6,
-        elevation: 3,
+        ...elevation.sm,
     },
     startWorkoutText: {
         fontSize: typography.fontSizes.base,
@@ -1421,13 +1420,10 @@ const styles = createThemeStyles(() => ({
         color: semanticColors.textOnAccent,
     },
 
-    // Recovery Card Styles
+    // Recovery Card Styles — surface, radius, border and elevation come from
+    // AuroraCard (tone="recovery").
     recoveryCard: {
-        backgroundColor: semanticColors.surface1,
-        borderRadius: 16,
         padding: spacing.lg,
-        borderWidth: 1,
-        borderColor: semanticColors.borderSubtle,
     },
     recoveryCardHeader: {
         flexDirection: 'row',
@@ -1453,11 +1449,15 @@ const styles = createThemeStyles(() => ({
         flexWrap: 'wrap',
         gap: spacing.md,
     },
+    // Translucent chips, like the Level card's Elite chip — a solid `surface2`
+    // fill would disappear into the Aurora base ramp.
     recoveryTipItem: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.xs,
-        backgroundColor: semanticColors.surface2,
+        backgroundColor: semanticColors.glass,
+        borderWidth: 1,
+        borderColor: semanticColors.borderSubtle,
         paddingVertical: spacing.xs,
         paddingHorizontal: spacing.sm,
         borderRadius: 12,

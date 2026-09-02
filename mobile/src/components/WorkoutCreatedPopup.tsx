@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { semanticColors } from '../theme/semanticColors';
-import { createThemeStyles, useThemeSubscription } from '../theme';
+import { elevation, createThemeStyles, useThemeSubscription } from '../theme';
 
 const checkAnimation = require('../assets/animate/animationCheck.json');
 
@@ -91,11 +91,7 @@ const styles = createThemeStyles(() => ({
         paddingBottom: 17,
         paddingHorizontal: 15,
         alignItems: 'center',
-        shadowColor: semanticColors.canvas,
-        shadowOffset: { width: 2, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 6,
+        ...elevation.md,
     },
     title: {
         fontFamily: 'Poppins',
@@ -133,11 +129,7 @@ const styles = createThemeStyles(() => ({
         borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: semanticColors.canvas,
-        shadowOffset: { width: 2, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 4,
+        ...elevation.sm,
     },
     okText: {
         fontFamily: 'Poppins',

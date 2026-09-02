@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -12,7 +12,7 @@ import Animated, {
     withSpring,
     withTiming,
 } from 'react-native-reanimated';
-import { borderRadius, colors, fonts, spacing, createThemeStyles, useThemeSubscription } from '../../theme';
+import { borderRadius, colors, fonts, spacing, elevation, createThemeStyles, useThemeSubscription } from '../../theme';
 import { GlassSurface } from '../ui/GlassSurface';
 import { semanticColors } from '../../theme/semanticColors';
 
@@ -150,18 +150,7 @@ const styles = createThemeStyles(() => ({
     outer: {
         width: '100%',
     },
-    shadow: Platform.select({
-        ios: {
-            shadowColor: semanticColors.canvas,
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.14,
-            shadowRadius: 22,
-        },
-        android: {
-            elevation: 3,
-        },
-        default: {},
-    }) as ViewStyle,
+    shadow: { ...elevation.md } as ViewStyle,
     surface: {
         minHeight: 160,
         borderColor: semanticColors.borderSubtle,

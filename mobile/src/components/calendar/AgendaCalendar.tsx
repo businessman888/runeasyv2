@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect, useMemo } from 'react';
-import { View, Text, Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { View, Text, Pressable, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
     Easing,
     useAnimatedStyle,
@@ -7,8 +7,7 @@ import Animated, {
     useSharedValue,
     withTiming,
 } from 'react-native-reanimated';
-import { colors, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
-import { GlassSurface } from '../ui/GlassSurface';
+import { colors, fonts, elevation, createThemeStyles, useThemeSubscription } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { AppIcon } from '../ui/AppIcon';
 import { CalendarDay, CELL_HEIGHT } from './CalendarDay';
@@ -51,8 +50,12 @@ interface AgendaCalendarProps {
     /** Return to today (current period + select today). */
     onToday: () => void;
     getStatus: (dateStr: string) => CalendarDayStatus | null;
-    /** Skip the live glass blur (Free tease already provides an outer blur). */
-    disableGlass?: boolean;
+    /**
+     * Drop the card's own surface so it can sit inside another one — the Free
+     * tease wraps this in a `GlassTeaseOverlay` that already paints and blurs
+     * the backdrop.
+     */
+    transparentSurface?: boolean;
     style?: StyleProp<ViewStyle>;
 }
 
@@ -65,7 +68,7 @@ function AgendaCalendarInner({
     onNavigate,
     onToday,
     getStatus,
-    disableGlass = false,
+    transparentSurface = false,
     style,
 }: AgendaCalendarProps) {
     useThemeSubscription();
@@ -119,7 +122,7 @@ function AgendaCalendarInner({
     );
 
     return (
-        <GlassSurface radius={30} disableBlur={disableGlass} bordered={false} style={[styles.card, style]}>
+        <View style={[styles.card, !transparentSurface && styles.cardSurface, style]}>
             {/* Navigation row */}
             <View style={styles.navRow}>
                 <View style={styles.navLeft}>
@@ -223,7 +226,7 @@ function AgendaCalendarInner({
                     </View>
                 </View>
             )}
-        </GlassSurface>
+        </View>
     );
 }
 
@@ -233,6 +236,19 @@ const styles = createThemeStyles(() => ({
     card: {
         paddingHorizontal: 12,
         paddingVertical: 16,
+        borderRadius: 30,
+        // No `overflow: 'hidden'` here on purpose: the animated grid clips
+        // itself, and clipping this view would also clip its shadow on iOS.
+    },
+    // Solid surface, matching every other card on the screen. This used to be a
+    // frosted GlassSurface — the only blurred element on a screen where nothing
+    // else floats, which is what made it read as a stray material. Dropping the
+    // live blur also gives the scroll back a frame budget.
+    cardSurface: {
+        backgroundColor: semanticColors.surface1,
+        borderWidth: 1,
+        borderColor: semanticColors.borderSubtle,
+        ...elevation.md,
     },
     navRow: {
         flexDirection: 'row',

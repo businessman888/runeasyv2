@@ -29,7 +29,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useRunEnvironmentStore } from '../stores/runEnvironmentStore';
 import { navigate } from '../navigation/navigationRef';
-import { fonts, createThemeStyles, useThemeSubscription } from '../theme';
+import { fonts, elevation, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 
 const getLocalThemePalette1 = () => ({
@@ -242,11 +242,7 @@ const styles = createThemeStyles(() => ({
     paddingTop: getLocalThemePalette1().modalPadTop,
     paddingBottom: getLocalThemePalette1().modalPadBottom,
     paddingHorizontal: getLocalThemePalette1().modalPadH,
-    shadowColor: semanticColors.canvas,
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.45,
-    shadowRadius: 32,
-    elevation: 16,
+    ...elevation.lg,
   },
   title: {
     color: getLocalThemePalette1().titleColor,

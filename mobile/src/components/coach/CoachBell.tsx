@@ -20,7 +20,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, FadeIn } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { semanticColors } from '../../theme/semanticColors';
-import { createThemeStyles, useThemeSubscription } from '../../theme';
+import { elevation, createThemeStyles, useThemeSubscription } from '../../theme';
 
 const getLocalThemePalette1 = () => ({
   dark: semanticColors.textOnAccent,
@@ -123,11 +123,7 @@ const styles = createThemeStyles(() => ({
   bellOn: {
     backgroundColor: getLocalThemePalette1().cyan,
     borderColor: getLocalThemePalette1().cyan,
-    shadowColor: semanticColors.canvas,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.18,
-    shadowRadius: 4,
-    elevation: 2,
+    ...elevation.sm,
   },
   dot: {
     position: 'absolute',
@@ -154,11 +150,7 @@ const styles = createThemeStyles(() => ({
     borderColor: semanticColors.borderSubtle,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    shadowColor: semanticColors.canvas,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 8,
+    ...elevation.md,
     zIndex: 30,
   },
   balloonSender: {

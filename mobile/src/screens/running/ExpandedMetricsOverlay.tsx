@@ -407,7 +407,8 @@ const styles = createThemeStyles(() => ({
     backgroundColor: getLocalThemePalette1().cardSurface,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
-    shadowColor: semanticColors.canvas,
+    // Upward shadow — the sheet lifts off the screen below it.
+    shadowColor: semanticColors.shadow,
     shadowOffset: { width: 0, height: -8 },
     shadowOpacity: 0.35,
     shadowRadius: 18,

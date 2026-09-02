@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import * as Storage from '../utils/storage';
-import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../theme';
+import { colors, typography, spacing, borderRadius, fonts, elevation, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { AppIcon } from '../components/ui/AppIcon';
 import { useResponsiveTheme } from '../theme/responsive';
@@ -20,6 +20,8 @@ import { useStartWorkoutFlow } from '../hooks/useStartWorkoutFlow';
 import { usePlanGenerationGate } from '../hooks/usePlanGenerationGate';
 import { SegmentedTabs } from '../components/ui/SegmentedTabs';
 import { FriendlyEmptyCard } from '../components/ui/FriendlyEmptyCard';
+import { AuroraCard } from '../components/ui/AuroraCard';
+import { MoonAnimation } from '../components/ui/MoonAnimation';
 import { CircularProgress } from '../components/CircularProgress';
 import { WorkoutCardSkeleton } from '../components/skeletons/ScreenSkeletons';
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -95,11 +97,6 @@ function ShoeIcon({ size = 24, color = semanticColors.textOnAccent }: { size?: n
 function LockIcon({ size = 24, color = semanticColors.textTertiary }: { size?: number; color?: string }) {
     useThemeSubscription();
     return <AppIcon name="lock" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone={color === semanticColors.textTertiary ? 'tertiary' : 'primary'} variant="filled" />;
-}
-
-function MoonIcon({ size = 32, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
-    useThemeSubscription();
-    return <AppIcon name="sleep" size={size as 16 | 20 | 24 | 28 | 32 | 48} tone="secondary" variant="filled" />;
 }
 
 function BedIcon({ size = 24, color = semanticColors.textSecondary }: { size?: number; color?: string }) {
@@ -740,13 +737,15 @@ export function HomeScreen({ navigation }: any) {
 
                 {/* Recovery Card - Pro only (Free has no plan, sees UpgradeProCard below) */}
                 {isProUser && isRecoveryDay && (
-                    <View style={styles.recoveryCard}>
+                    <AuroraCard tone="recovery" style={styles.recoveryCard}>
                         <View style={styles.recoveryHeader}>
                             <View style={styles.recoveryBadge}>
                                 <BedIcon size={16} color={semanticColors.textSecondary} />
                                 <Text style={styles.recoveryBadgeText}>Dia de Descanso</Text>
                             </View>
-                            <MoonIcon size={32} color={semanticColors.textSecondary} />
+                            {/* The badge beside it already names the state, so the
+                                animation stays decorative for screen readers. */}
+                            <MoonAnimation size={32} accessibilityLabel={null} />
                         </View>
 
                         <Text style={styles.recoveryTitle}>Recuperação Ativa</Text>
@@ -796,7 +795,7 @@ export function HomeScreen({ navigation }: any) {
                                 </Text>
                             </View>
                         )}
-                    </View>
+                    </AuroraCard>
                 )}
 
                 {/* Free users see a blurred mock workout (teaser) with a glass
@@ -1006,7 +1005,6 @@ export function HomeScreen({ navigation }: any) {
                 )}
             </Animated.ScrollView>
 
-
             <HomeFab
                 onPressFreeRun={handleStartFreeRun}
                 onPressManual={handleOpenManualConfig}
@@ -1074,25 +1072,26 @@ const styles = createThemeStyles(() => ({
         gap: spacing.lg,
     },
 
-    // Recovery Card
+    // Recovery Card — surface, radius, border and elevation come from AuroraCard
+    // (tone="recovery").
     recoveryCard: {
-        backgroundColor: semanticColors.surface1,
-        borderRadius: borderRadius['2xl'],
         padding: spacing.lg,
         gap: spacing.md,
-        borderWidth: 1,
-        borderColor: semanticColors.borderSubtle,
     },
     recoveryHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
     },
+    // Translucent chip, like the Level card's Elite chip — a solid `surface2`
+    // fill would disappear into the Aurora base ramp.
     recoveryBadge: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.sm,
-        backgroundColor: semanticColors.surface2,
+        backgroundColor: semanticColors.glass,
+        borderWidth: 1,
+        borderColor: semanticColors.borderSubtle,
         paddingHorizontal: spacing.md,
         paddingVertical: spacing.xs,
         borderRadius: borderRadius.full,
@@ -1150,13 +1149,14 @@ const styles = createThemeStyles(() => ({
     },
     recoveryProgressBar: {
         height: 8,
-        backgroundColor: semanticColors.surface3,
+        backgroundColor: semanticColors.fillSubtle,
         borderRadius: 4,
         overflow: 'hidden',
     },
+    // Carries the rest-day hue, matching the card's Aurora tone.
     recoveryProgressFill: {
         height: '100%',
-        backgroundColor: semanticColors.textSecondary,
+        backgroundColor: semanticColors.recovery,
         borderRadius: 4,
     },
     recoveryProgressText: {
@@ -1564,11 +1564,7 @@ const styles = createThemeStyles(() => ({
         paddingVertical: 16,
         paddingHorizontal: spacing.xl,
         borderRadius: 32,
-        shadowColor: semanticColors.canvas,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-        elevation: 6,
+        ...elevation.md,
     },
 
 }));

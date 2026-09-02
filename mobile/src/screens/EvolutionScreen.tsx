@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { colors, typography, spacing, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../theme';
+import { colors, typography, spacing, elevation, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useReadinessStore, ReadinessAnswers } from '../stores/readinessStore';
 
@@ -814,11 +814,7 @@ const styles = createThemeStyles(() => ({
         backgroundColor: colors.primary,
         paddingVertical: 16,
         borderRadius: 32,
-        elevation: 2,
-        shadowColor: semanticColors.canvas,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
+        ...elevation.sm,
     },
     continueButtonDisabled: {
         backgroundColor: semanticColors.glass,

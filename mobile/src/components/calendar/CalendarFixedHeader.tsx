@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LottieView from 'lottie-react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 
-import { borderRadius, fonts, spacing, typography, type ThemeColors, useThemedStyles } from '../../theme';
+import { borderRadius, elevation, fonts, spacing, typography, type ThemeColors, useThemedStyles } from '../../theme';
 import type { WorkoutScope } from '../../stores/workoutScopeStore';
 import { AppIcon } from '../ui/AppIcon';
 import { HeaderMenu, type HeaderMenuItem } from '../ui/HeaderMenu';
@@ -185,11 +185,7 @@ function createStyles(colors: ThemeColors) {
             backgroundColor: colors.surface1,
             borderBottomLeftRadius: 20,
             borderBottomRightRadius: 20,
-            shadowColor: colors.canvas,
-            shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.25,
-            shadowRadius: 4,
-            elevation: 4,
+            ...elevation.md,
             zIndex: 10,
         },
         inner: {

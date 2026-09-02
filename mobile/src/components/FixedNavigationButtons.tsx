@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, Dimensions } from 'react-native';
-import { fonts, createThemeStyles, useThemeSubscription } from '../theme';
+import { fonts, elevation, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -134,11 +134,7 @@ const styles = createThemeStyles(() => ({
         borderRadius: 40,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: semanticColors.canvas,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.6,
-        shadowRadius: 12,
-        elevation: 8,
+        ...elevation.md,
     },
     continueButtonDisabled: {
         backgroundColor: semanticColors.surface3,

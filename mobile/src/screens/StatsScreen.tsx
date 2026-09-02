@@ -8,7 +8,7 @@ import {
     TouchableOpacity,
     Platform,
 } from 'react-native';
-import { colors, typography, spacing, borderRadius, shadows, createThemeStyles, useThemeSubscription } from '../theme';
+import { colors, typography, spacing, borderRadius, shadows, elevation, createThemeStyles, useThemeSubscription } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { useStatsStore, useFeedbackStore, useGamificationStore } from '../stores';
 
@@ -663,20 +663,7 @@ const styles = createThemeStyles(() => ({
         borderRadius: borderRadius.xl,
         justifyContent: 'center',
         alignItems: 'center',
-        ...Platform.select({
-            ios: {
-                shadowColor: semanticColors.canvas,
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.2,
-                shadowRadius: 6,
-            },
-            android: {
-                elevation: 6,
-            },
-            web: {
-                boxShadow: '0 4px 16px rgba(0, 212, 255, 0.3)',
-            },
-        }),
+        ...elevation.md,
     },
     doneButtonText: {
         fontSize: typography.fontSizes.base,

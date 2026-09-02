@@ -1,6 +1,7 @@
-import { semanticColors } from './semanticColors';
-import type { ThemeColors } from './contracts';
+import { semanticColors, darkColors } from './semanticColors';
+import type { ThemeColors, ThemeElevation } from './contracts';
 import { createThemeObject } from './themeRuntime';
+import { createElevation } from './elevation';
 
 export * from './contracts';
 export * from './lightColors';
@@ -10,6 +11,21 @@ export * from './themes';
 export * from './ThemeProvider';
 export * from './useThemedStyles';
 export * from './themeRuntime';
+export * from './elevation';
+export * from './withAlpha';
+export * from './gradients';
+
+/**
+ * Depth scale that follows the active appearance.
+ *
+ * Spread it into a style — `...elevation.md` — instead of hand-writing shadow
+ * properties. Mirrors the `semanticColors` proxy so module-scope
+ * `createThemeStyles` sheets pick up a theme change too.
+ */
+export const elevation = createThemeObject<ThemeElevation>(
+    createElevation(darkColors, true),
+    (theme) => theme.elevation,
+);
 
 // Design System Colors - Dark Theme (Figma design)
 const darkLegacyColors = {
@@ -184,43 +200,20 @@ export const borderRadius = {
     full: 9999,
 };
 
-// Shadows with neon glow effects
+/**
+ * @deprecated Use the theme-aware `elevation` scale instead (`...elevation.md`).
+ *
+ * These are now thin aliases over `elevation` so existing call sites keep
+ * working while they migrate. The old `neon` names described a dark-only idiom
+ * (glow the near-black canvas) that produced an invisible near-white shadow in
+ * light mode.
+ */
 export const shadows = {
-    sm: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    md: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    lg: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.1,
-        shadowRadius: 20,
-        elevation: 8,
-    },
-    neon: {
-        shadowColor: semanticColors.canvas,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.18,
-        shadowRadius: 10,
-        elevation: 5,
-    },
-    neonStrong: {
-        shadowColor: semanticColors.canvas,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.24,
-        shadowRadius: 16,
-        elevation: 7,
-    },
+    get sm() { return elevation.sm; },
+    get md() { return elevation.md; },
+    get lg() { return elevation.lg; },
+    get neon() { return elevation.md; },
+    get neonStrong() { return elevation.lg; },
 };
 
 // Map visualization palette — premium map/tracking overlays (Stat Maps, GPS

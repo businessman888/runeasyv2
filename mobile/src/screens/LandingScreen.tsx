@@ -24,7 +24,7 @@ import Animated, {
     withSpring,
     withTiming,
 } from 'react-native-reanimated';
-import { borderRadius, colors, fonts, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../theme';
+import { borderRadius, colors, fonts, elevation, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../theme';
 import { semanticColors } from '../theme/semanticColors';
 import { StoryProgressBars } from '../components/landing/StoryProgressBars';
 import { PrePaywallBackground } from '../components/upgrade/PrePaywallBackground';
@@ -614,11 +614,7 @@ const styles = createThemeStyles(() => ({
         backgroundColor: colors.glassLight,
         borderWidth: 1,
         borderColor: colors.proGlassBorderCyan,
-        shadowColor: semanticColors.canvas,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.28,
-        shadowRadius: 12,
-        elevation: 4,
+        ...elevation.md,
     },
     getStartedButton: {
         width: '100%',
