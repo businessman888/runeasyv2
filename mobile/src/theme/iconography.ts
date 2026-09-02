@@ -99,6 +99,9 @@ export const iconography = {
   appearance: { outline: 'contrast-outline', filled: 'contrast' },
   lightMode: { outline: 'sunny-outline', filled: 'sunny' },
   darkMode: { outline: 'moon-outline', filled: 'moon' },
+  // Nebulosa — the navy appearance. A planet reads as "deep space" without
+  // colliding with the moon already spoken for by the dark mode option.
+  nebulaMode: { outline: 'planet-outline', filled: 'planet' },
   systemTheme: { outline: 'phone-portrait-outline', filled: 'phone-portrait' },
   info: { outline: 'information-circle-outline', filled: 'information-circle' },
   help: { outline: 'help-circle-outline', filled: 'help-circle' },

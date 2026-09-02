@@ -56,10 +56,6 @@
   "components/landing/StoryProgressBars.tsx": {
     "rgba(255,255,255,0.25)": 1
   },
-  "components/level/LevelProgressBar.tsx": {
-    "#3b82f6": 1,
-    "#9747ff": 1
-  },
   "components/loading/RippleLoader.tsx": {
     "rgba(0,212,255,${(0.7-index*0.075)": 1,
     "rgba(0,212,255,0.04)": 1
@@ -419,16 +415,11 @@
     "rgba(245,158,11,0.32)": 1
   },
   "screens/weekly-insight/components/CoachCallout.tsx": {
-    "rgba(0,212,255,0.03)": 1,
-    "rgba(0,212,255,0.13)": 1,
     "rgba(0,212,255,0.14)": 1,
     "rgba(0,212,255,0.22)": 1
   },
   "screens/weekly-insight/components/IntensityCard.tsx": {
     "rgba(255,196,0,0.12)": 1
-  },
-  "screens/weekly-insight/components/VolumeComparison.tsx": {
-    "rgba(0,212,255,0.75)": 1
   },
   "screens/weekly-insight/components/ZonesRadar.tsx": {
     "rgba(0,212,255,0.22)": 2

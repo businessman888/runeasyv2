@@ -1,7 +1,21 @@
-import type { ColorSchemeName } from 'react-native';
+export type ThemePreference = 'system' | 'dark' | 'light' | 'nebula';
 
-export type ThemePreference = 'system' | 'dark' | 'light';
-export type ResolvedThemeName = Exclude<ColorSchemeName, null | undefined>;
+/**
+ * Themes the app can resolve to.
+ *
+ * Deliberately NOT derived from React Native's `ColorSchemeName`: that type is
+ * closed over `'light' | 'dark'`, which is the OS-level appearance, not the set
+ * of palettes this app ships. `nebula` is an app-only appearance that reports
+ * itself as dark to the OS.
+ */
+export type ResolvedThemeName = 'light' | 'dark' | 'nebula';
+
+/**
+ * Mapbox Standard basemap light preset. Declared on the theme rather than
+ * derived from `isDark`, because two dark themes can want different basemaps —
+ * `nebula` uses the blue `dusk` preset while `dark` uses `night`.
+ */
+export type MapLightPreset = 'dawn' | 'day' | 'dusk' | 'night';
 
 export interface ThemeColors {
   readonly canvas: string;
@@ -69,7 +83,9 @@ export interface ThemeElevation {
 
 export interface AppTheme {
   readonly name: ResolvedThemeName;
+  /** Whether the OS should treat this as a dark appearance (status bar, blur, shadows). */
   readonly isDark: boolean;
   readonly colors: ThemeColors;
   readonly elevation: ThemeElevation;
+  readonly mapLightPreset: MapLightPreset;
 }

@@ -45,6 +45,7 @@ const THEME_OPTIONS: {
 }[] = [
   { value: 'dark', label: 'Escuro', description: 'Tema atual aprovado e padrão do app' },
   { value: 'light', label: 'Claro', description: 'Preview incremental da paleta light' },
+  { value: 'nebula', label: 'Nebulosa', description: 'Paleta navy original, com mapa azul' },
   { value: 'system', label: 'Sistema', description: 'Segue a aparência configurada no aparelho' },
 ];
 

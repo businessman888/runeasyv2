@@ -5,6 +5,7 @@ import { createElevation } from './elevation';
 
 export * from './contracts';
 export * from './lightColors';
+export * from './nebulaColors';
 export * from './mapTheme';
 export * from './semanticColors';
 export * from './themes';

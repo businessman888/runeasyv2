@@ -34,8 +34,13 @@ interface ThemeOption {
 const THEME_OPTIONS: readonly ThemeOption[] = [
   { value: 'light', label: 'Claro', icon: 'lightMode' },
   { value: 'dark', label: 'Escuro', icon: 'darkMode' },
+  { value: 'nebula', label: 'Nebulosa', icon: 'nebulaMode' },
   { value: 'system', label: 'Sistema', icon: 'systemTheme' },
 ];
+
+/** Fallback when the stored preference has no option — the app's default theme. */
+const DEFAULT_OPTION =
+  THEME_OPTIONS.find((option) => option.value === 'dark') ?? THEME_OPTIONS[0];
 
 const MENU_ENTER = FadeInDown.duration(160).reduceMotion(ReduceMotion.System);
 const MENU_EXIT = FadeOut.duration(120).reduceMotion(ReduceMotion.System);
@@ -46,7 +51,7 @@ export function AppearanceScreen({ navigation }: AppearanceScreenProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const selectedOption = useMemo(
-    () => THEME_OPTIONS.find((option) => option.value === preference) ?? THEME_OPTIONS[1],
+    () => THEME_OPTIONS.find((option) => option.value === preference) ?? DEFAULT_OPTION,
     [preference],
   );
 

@@ -25,6 +25,7 @@ import { WEARABLE_ORDER } from '../config/wearables.config';
 const THEME_LABELS: Record<ThemePreference, string> = {
     light: 'Claro',
     dark: 'Escuro',
+    nebula: 'Nebulosa',
     system: 'Sistema',
 };
 

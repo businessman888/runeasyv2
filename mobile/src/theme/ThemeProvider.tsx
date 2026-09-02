@@ -39,10 +39,6 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   const hasHydrated = useThemeStore((state) => state.hasHydrated);
   const setPreference = useThemeStore((state) => state.setPreference);
 
-  useEffect(() => {
-    Appearance.setColorScheme(preference === 'system' ? null : preference);
-  }, [preference]);
-
   const value = useMemo<AppThemeContextValue>(() => {
     const requestedThemeName = resolveRequestedThemeName(preference, systemScheme);
     const theme = themeRegistry[requestedThemeName] ?? darkTheme;
@@ -59,9 +55,55 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     };
   }, [preference, setPreference, systemScheme]);
 
+  // The OS only knows two appearances, so tell it the resolved theme's polarity
+  // rather than the preference name — `setColorScheme` accepts 'light' | 'dark'
+  // | null, and an app-only appearance like `nebula` is not a value it can take.
+  useEffect(() => {
+    Appearance.setColorScheme(
+      preference === 'system' ? null : value.theme.isDark ? 'dark' : 'light',
+    );
+  }, [preference, value.theme.isDark]);
+
   if (!hasHydrated) {
     return null;
   }
+
+  return <AppThemeContext.Provider value={value}>{children}</AppThemeContext.Provider>;
+}
+
+interface ThemeScopeProps {
+  theme: AppTheme;
+  children: ReactNode;
+}
+
+/**
+ * Pins a subtree to one specific theme, whatever the user has selected.
+ *
+ * Used by the floating tab bar, which keeps the dark palette across every
+ * appearance so the app's primary navigation reads as one fixed surface.
+ * Because it re-provides the context, everything inside follows — including
+ * `AppIcon`, which resolves its color from the theme context and has no color
+ * prop to override.
+ *
+ * Note what it does NOT override: `preference` and `setPreference` pass through
+ * untouched. A scoped visual override must not lie about what the user picked.
+ *
+ * Caveat: module-scope token proxies (`semanticColors`, `createThemeStyles`,
+ * the `elevation` and `colors` adapters) read the global runtime, not this
+ * context — a subtree that must honor the scope has to consume the theme
+ * through `useAppTheme` / `useThemedStyles`.
+ */
+export function ThemeScope({ theme, children }: ThemeScopeProps) {
+  const parent = useAppTheme();
+
+  const value = useMemo<AppThemeContextValue>(
+    () => ({
+      ...parent,
+      theme,
+      navigationTheme: createNavigationTheme(theme),
+    }),
+    [parent, theme],
+  );
 
   return <AppThemeContext.Provider value={value}>{children}</AppThemeContext.Provider>;
 }

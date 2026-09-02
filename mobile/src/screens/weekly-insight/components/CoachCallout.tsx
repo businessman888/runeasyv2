@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn, useAnimatedStyle } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../../theme';
+import { colors, typography, spacing, borderRadius, fonts, withAlpha, createThemeStyles, useThemeSubscription } from '../../../theme';
 import { useEnterAnimation } from '../hooks/useEnterAnimation';
 
 /**
@@ -65,7 +65,7 @@ export const CoachCallout = memo(function CoachCallout({
     return (
         <Animated.View style={animatedStyle}>
             <LinearGradient
-                colors={['rgba(0,212,255,0.13)', 'rgba(0,212,255,0.03)']}
+                colors={[withAlpha(colors.primary, 0.13), withAlpha(colors.primary, 0.03)]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.card}

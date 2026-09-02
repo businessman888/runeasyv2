@@ -53,7 +53,10 @@ export function LevelProgressBar({ percentage, height = 8 }: LevelProgressBarPro
         <View style={[styles.track, { height, borderRadius: height / 2 }]}>
             <Animated.View style={[styles.fillContainer, fillStyle, { borderRadius: height / 2 }]}>
                 <LinearGradient
-                    colors={[colors.primary, '#3B82F6', '#9747FF']}
+                    // Brand ramp: accent → info → recovery. Two of these stops
+                    // used to be literal hex, so the bar kept the dark theme's
+                    // blue and purple no matter which palette was active.
+                    colors={[semanticColors.accent, semanticColors.info, semanticColors.recovery]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={[StyleSheet.absoluteFill, { borderRadius: height / 2 }]}

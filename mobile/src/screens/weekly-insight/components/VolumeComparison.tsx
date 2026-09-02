@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, typography, spacing, borderRadius, fonts, createThemeStyles, useThemeSubscription } from '../../../theme';
+import { colors, typography, spacing, borderRadius, fonts, withAlpha, createThemeStyles, useThemeSubscription } from '../../../theme';
 import { SectionHeader } from './SectionHeader';
 import { useEnterAnimation } from '../hooks/useEnterAnimation';
 import { formatKm } from '../format';
@@ -78,7 +78,7 @@ export const VolumeComparison = memo(function VolumeComparison({
                 <View style={styles.track}>
                     <Animated.View style={[styles.fillWrap, fillStyle]}>
                         <LinearGradient
-                            colors={['rgba(0,212,255,0.75)', colors.primary]}
+                            colors={[withAlpha(colors.primary, 0.75), colors.primary]}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                             style={styles.fill}

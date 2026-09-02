@@ -13,6 +13,10 @@ const basemapImportId =
 /**
  * Applies the active app theme to a Mapbox Standard basemap without replacing
  * the MapView or its route/location layers.
+ *
+ * The preset comes from the theme rather than from `isDark`, because the app
+ * ships two dark appearances that want different basemaps: `dark` uses `night`,
+ * while `nebula` uses the blue `dusk` preset to match its navy palette.
  */
 export const ThemedMapStyle = memo(function ThemedMapStyle() {
   const { theme } = useAppTheme();
@@ -21,7 +25,7 @@ export const ThemedMapStyle = memo(function ThemedMapStyle() {
     <Mapbox.StyleImport
       id={basemapImportId}
       existing
-      config={{ lightPreset: theme.isDark ? 'night' : 'day' }}
+      config={{ lightPreset: theme.mapLightPreset }}
     />
   );
 });
