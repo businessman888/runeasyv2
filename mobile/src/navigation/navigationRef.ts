@@ -15,6 +15,13 @@ export type RootStackParamList = {
     Onboarding: undefined;
     Main: { initialTab?: string } | undefined;
     PrePaywall: undefined;
+    /**
+     * "Minhas Conquistas" — badges + patente + nível. Registrada no
+     * AppNavigator desde sempre, mas faltava aqui: por isso `navigate('Badges')`
+     * não compilava, e o deep-link de badge apontava para 'Evolution' (uma aba
+     * que não existe) sem o type-check reclamar.
+     */
+    Badges: undefined;
     Retrospective: undefined;
     WeeklyInsight: undefined;
     MesoInsight: undefined;

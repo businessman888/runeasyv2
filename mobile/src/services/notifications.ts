@@ -254,6 +254,8 @@ export const NotificationTypes = {
     LEVEL_UP: 'level_up',
     RETROSPECTIVE_READY: 'retrospective_ready',
     RECOVERY_ANALYSIS: 'recovery_analysis',
+    /** Convite diário para o check-in de prontidão (cron das 03:00 SP). */
+    DAILY_READINESS: 'daily_readiness',
 } as const;
 
 export type NotificationType = typeof NotificationTypes[keyof typeof NotificationTypes];

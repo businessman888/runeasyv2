@@ -4,21 +4,20 @@ import {
   ReadinessAIService,
   ReadinessVerdict,
   ReadinessInput,
+  ReadinessAnswers,
 } from './readiness-ai.service';
+import {
+  PlannedWorkoutRow,
+  isRaceDay,
+  pickPrimaryWorkout,
+} from './helpers/planned-workout.helper';
 import { SupabaseService } from '../../database/supabase.service';
 import { NotificationService } from '../notifications/notification.service';
-
-export interface ReadinessCheckInDto {
-  userId: string;
-  answers: {
-    sleep: number; // 1-5
-    legs: number; // 1-5
-    mood: number; // 1-5
-    stress: number; // 1-5
-    motivation: number; // 1-5
-  };
-  setNumber?: number; // Question set number for exclusion tracking
-}
+// Funções PURAS de data em São Paulo. Importadas direto, sem DI e sem importar
+// `TrainingModule` — mesmo padrão de `stats.service.ts:10-13`, que consome este
+// mesmo helper. O grafo é `plan-window` → `streak` → ∅: não há ciclo possível.
+import { saoPauloTodayStr } from '../training/wellness/helpers/streak.helper';
+import { addDaysStr } from '../training/helpers/plan-window.helper';
 
 @Injectable()
 export class ReadinessService {
@@ -30,50 +29,67 @@ export class ReadinessService {
     private readonly notificationService: NotificationService,
   ) {}
 
-  async analyzeReadiness(dto: ReadinessCheckInDto): Promise<ReadinessVerdict> {
-    this.logger.log(`Analyzing readiness for user: ${dto.userId}`);
+  /**
+   * ⚠️ `userId` é PARÂMETRO POSICIONAL, e isso é uma decisão de segurança.
+   *
+   * Este método recebia um DTO com `userId` dentro — e o controller preenchia
+   * esse campo a partir do BODY da requisição. Resultado: qualquer usuário
+   * autenticado gravava check-in, e queimava orçamento de IA, no id de outro.
+   *
+   * Com a identidade como 1º argumento e `ReadinessAnswers` (que NÃO tem campo
+   * de id) como 2º, reintroduzir a leitura do body vira erro de compilação em
+   * vez de bug silencioso. Um "DTO interno já resolvido" não daria isso: o
+   * atalho `analyzeReadiness({ ...dto, userId })` continuaria compilando, e a
+   * ordem do spread decidiria quem ganha.
+   *
+   * O único chamador é `ReadinessController`, que obtém `userId` de
+   * `@User('id')` — derivado do Bearer token validado pelo SupabaseAuthGuard.
+   */
+  async analyzeReadiness(
+    userId: string,
+    answers: ReadinessAnswers,
+    setNumber?: number,
+  ): Promise<ReadinessVerdict> {
+    this.logger.log(`Analyzing readiness for user: ${userId}`);
     this.logger.log(
-      `[QuizSelection] Received setNumber in DTO: ${dto.setNumber ?? 'NOT PROVIDED'}`,
+      `[QuizSelection] Received setNumber: ${setNumber ?? 'NOT PROVIDED'}`,
     );
 
     // Check if already checked in today (after 3 AM)
-    const existingCheckIn = await this.hasCheckedInToday(dto.userId);
+    const existingCheckIn = await this.hasCheckedInToday(userId);
     if (existingCheckIn) {
       this.logger.log(
-        `User ${dto.userId} already checked in today, returning existing verdict`,
+        `User ${userId} already checked in today, returning existing verdict`,
       );
       return existingCheckIn;
     }
 
     // 1. Get recent activity load data from activities table
-    const loadData = await this.getActivityLoadData(dto.userId);
+    const loadData = await this.getActivityLoadData(userId);
     const loadDescription = this.getLoadDescription(loadData);
 
-    // 2. Get today's planned workout from database (if exists)
-    const todayWorkout = await this.getTodayWorkout(dto.userId);
-    const tomorrowWorkout = await this.getTomorrowWorkout(dto.userId);
+    // 2. Get today's and tomorrow's planned workout (dia de São Paulo)
+    const planned = await this.fetchPlannedWorkouts(userId, saoPauloTodayStr());
 
     // 3. Prepare input for AI analysis
     const input: ReadinessInput = {
-      checkIn: dto.answers,
+      checkIn: answers,
       trainingLoadData: loadDescription,
-      todayWorkout,
-      tomorrowWorkout,
+      todayWorkout: planned.today,
+      tomorrowWorkout: planned.tomorrow,
+      workoutLookupFailed: planned.lookupFailed,
     };
 
     // 4. Get AI verdict
-    let verdict = await this.readinessAIService.analyzeReadiness(
-      input,
-      dto.userId,
-    );
+    let verdict = await this.readinessAIService.analyzeReadiness(input, userId);
 
     // 5. ACWR Balancing Logic: Override red to yellow for borderline cases with positive check-in
     const checkInAvg =
-      (dto.answers.sleep +
-        dto.answers.legs +
-        dto.answers.mood +
-        dto.answers.stress +
-        dto.answers.motivation) /
+      (answers.sleep +
+        answers.legs +
+        answers.mood +
+        answers.stress +
+        answers.motivation) /
       5;
     const acwr = loadData.acwr || 1.0;
 
@@ -95,12 +111,7 @@ export class ReadinessService {
     }
 
     // 6. Save to database for history (including set_number for exclusion tracking)
-    await this.saveReadinessResult(
-      dto.userId,
-      dto.answers,
-      verdict,
-      dto.setNumber,
-    );
+    await this.saveReadinessResult(userId, answers, verdict, setNumber);
 
     return verdict;
   }
@@ -205,225 +216,147 @@ export class ReadinessService {
   }
 
   /**
-   * Get question set based on case index (0-17)
-   * Each case has 5 questions with varied wording
+   * O treino de HOJE e o de AMANHÃ, para o prompt de prontidão.
+   *
+   * ── O QUE ISTO SUBSTITUI ──────────────────────────────────────────────────
+   *
+   * Havia aqui `getTodayWorkout`/`getTomorrowWorkout`, que liam
+   * `training_plans.current_week` com filtro `.eq('is_active', true)` — DUAS
+   * colunas que não existem na tabela. O PostgREST devolvia 42703, o código
+   * desestruturava só `data` e ignorava `error`, e as duas funções retornavam
+   * `undefined` em silêncio. Efeito medido em produção: os 7 check-ins já
+   * gravados dizem todos "Sem treino planejado hoje" — inclusive o de um
+   * usuário com 170 linhas em `workouts`. A regra de PRIORIDADE MÁXIMA do
+   * prompt (downgrade quando o treino é intenso e as pernas/sono estão ruins)
+   * nunca pôde ser avaliada uma única vez.
+   *
+   * ── POR QUE FILTRA POR PLANO, MAS NÃO EXIGE PLANO ─────────────────────────
+   *
+   * Cancelar um plano NÃO apaga seus treinos: `training.controller.ts` só faz
+   * `UPDATE training_plans SET status='cancelled'`, e o único DELETE em
+   * `workouts` no repo é a exclusão de conta. Logo há linhas `pending` órfãs de
+   * planos mortos — buscar só por data traria treinos fantasmas para o prompt.
+   * Mas exigir `plan_id = <plano ativo>` mataria treino manual e free-run, que
+   * nascem com `plan_id: null`. A regra que cobre os dois lados:
+   *
+   *     plan_id === null  → criado pelo corredor, vale sempre
+   *     plan_id !== null  → só vale se for o plano ATIVO
+   *
+   * ── NUNCA LANÇA ───────────────────────────────────────────────────────────
+   *
+   * O check-in tem de funcionar mesmo sem o treino. Falha vira
+   * `lookupFailed: true`, que o prompt traduz como "não consegui olhar" — e
+   * NÃO como "você não tem treino hoje". Era essa indistinção que mantinha o
+   * 42703 invisível.
    */
-  getQuestionSet(caseIndex: number): Array<{
-    id: string;
-    question: string;
-    options: Array<{ value: number; label: string; description?: string }>;
-  }> {
-    // Base questions that rotate with different framings
-    const baseQuestions = this.getBaseQuestions();
-
-    // Apply case-specific variations
-    const caseVariations = this.getCaseVariations(caseIndex);
-
-    return baseQuestions.map((q, idx) => ({
-      ...q,
-      question: caseVariations[idx]?.question || q.question,
-    }));
-  }
-
-  private getBaseQuestions(): Array<{
-    id: string;
-    question: string;
-    options: Array<{ value: number; label: string; description?: string }>;
-  }> {
-    return [
-      {
-        id: 'sleep',
-        question: 'Sua bateria carregou bem durante a noite?',
-        options: [
-          { value: 5, label: '100% Full' },
-          { value: 4, label: '75%' },
-          { value: 3, label: '50%' },
-          { value: 2, label: '25%' },
-          { value: 1, label: 'Modo economia' },
-        ],
-      },
-      {
-        id: 'legs',
-        question: 'Como estão suas pernas hoje?',
-        options: [
-          { value: 5, label: 'Com molas', description: 'Prontas para voar' },
-          { value: 4, label: 'Leves', description: 'Sem peso' },
-          { value: 3, label: 'Normais', description: 'Estão aí' },
-          { value: 2, label: 'Pesadas', description: 'Cansadas' },
-          { value: 1, label: 'Como chumbo', description: 'Travadas' },
-        ],
-      },
-      {
-        id: 'mood',
-        question: 'Qual o clima da sua mente?',
-        options: [
-          { value: 5, label: 'Céu limpo', description: 'Energia máxima' },
-          { value: 4, label: 'Ensolarado', description: 'Boa energia' },
-          { value: 3, label: 'Instável', description: 'Oscilando' },
-          { value: 2, label: 'Nublado', description: 'Desmotivado' },
-          { value: 1, label: 'Tempestade', description: 'Energia baixa' },
-        ],
-      },
-      {
-        id: 'stress',
-        question: 'Como está o peso das preocupações?',
-        options: [
-          { value: 5, label: 'Inexistente', description: 'Mente livre' },
-          { value: 4, label: 'Leve', description: 'Quase não noto' },
-          { value: 3, label: 'Presente', description: 'Estou ciente' },
-          { value: 2, label: 'Pesado', description: 'Difícil carregar' },
-          { value: 1, label: 'Insuportável', description: 'Me esmaga' },
-        ],
-      },
-      {
-        id: 'motivation',
-        question: 'Onde está sua motivação?',
-        options: [
-          { value: 5, label: 'Já estou de tênis', description: 'Pronto!' },
-          { value: 4, label: 'Vamos nessa!' },
-          { value: 3, label: 'Talvez' },
-          { value: 2, label: 'Preciso de café' },
-          { value: 1, label: 'Ainda na cama' },
-        ],
-      },
-    ];
-  }
-
-  private getCaseVariations(caseIndex: number): Array<{ question: string }> {
-    const variations: Array<Array<{ question: string }>> = [
-      // Case 0 - Default
-      [
-        { question: 'Sua bateria carregou bem durante a noite?' },
-        { question: 'Como estão suas pernas hoje?' },
-        { question: 'Qual o clima da sua mente?' },
-        { question: 'Como está o peso das preocupações?' },
-        { question: 'Onde está sua motivação?' },
-      ],
-      // Case 1
-      [
-        { question: 'Quantas horas de sono reparador você teve?' },
-        { question: 'Suas pernas estão prontas para o treino?' },
-        { question: 'Como você está se sentindo mentalmente?' },
-        { question: 'O estresse está afetando você hoje?' },
-        { question: 'Você está animado para treinar?' },
-      ],
-      // Case 2
-      [
-        { question: 'Você acordou revigorado(a) hoje?' },
-        { question: 'Há alguma fadiga muscular nas pernas?' },
-        { question: 'Seu humor está positivo?' },
-        { question: 'Está conseguindo lidar bem com o estresse?' },
-        { question: 'Sente vontade de se exercitar?' },
-      ],
-      // Case 3
-      [
-        { question: 'A qualidade do seu sono foi boa?' },
-        { question: 'Suas pernas se recuperaram do último treino?' },
-        { question: 'Está com a mente clara e focada?' },
-        { question: 'O trabalho/vida pessoal está te estressando?' },
-        { question: 'Está motivado(a) a dar seu melhor?' },
-      ],
-      // Case 4-17: Create variations programmatically
-      ...Array.from({ length: 14 }, (_, i) => [
-        { question: `Como está sua energia após dormir? (${i + 4})` },
-        { question: `Sente suas pernas recuperadas? (${i + 4})` },
-        { question: `Seu estado mental está equilibrado? (${i + 4})` },
-        { question: `O estresse está controlado? (${i + 4})` },
-        { question: `Está pronto(a) para o treino? (${i + 4})` },
-      ]),
-    ];
-
-    return variations[caseIndex] || variations[0];
-  }
-
-  private async getTodayWorkout(
+  private async fetchPlannedWorkouts(
     userId: string,
-  ): Promise<ReadinessInput['todayWorkout'] | undefined> {
+    todayStr: string,
+  ): Promise<{
+    today?: ReadinessInput['todayWorkout'];
+    tomorrow?: ReadinessInput['tomorrowWorkout'];
+    lookupFailed: boolean;
+  }> {
+    const tomorrowStr = addDaysStr(todayStr, 1);
+
     try {
       const supabase = this.supabaseService.getClient();
-      const today = new Date().getDay(); // 0-6, Sunday = 0
-      const dayOfWeek = today === 0 ? 7 : today; // Convert to 1-7 (Monday = 1)
 
-      // Get user's active training plan
-      const { data: plan } = await supabase
-        .from('training_plans')
-        .select('plan_json, current_week')
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .single();
+      const [planRes, workoutRes] = await Promise.all([
+        // `limit(1)` em vez de `.maybeSingle()`: dois planos ativos simultâneos
+        // são um estado possível (falha de geração + cancelamento no
+        // onboarding rodam em momentos diferentes), e `maybeSingle()` erraria.
+        supabase
+          .from('training_plans')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(1),
+        // Uma query para os dois dias. `scheduled_date` é `date` puro e volta
+        // como 'YYYY-MM-DD' — comparação de string, sem Date e sem fuso.
+        supabase
+          .from('workouts')
+          .select(
+            'id, plan_id, type, title, objective, distance_km, scheduled_date, scheduled_time, is_race_day',
+          )
+          .eq('user_id', userId)
+          .in('scheduled_date', [todayStr, tomorrowStr])
+          .eq('status', 'pending'),
+      ]);
 
-      if (!plan?.plan_json) return undefined;
+      const failure = workoutRes.error ?? planRes.error;
+      if (failure) {
+        // `error`, não `warn`: foi exatamente um erro engolido que manteve o
+        // treino fora do prompt por semanas sem ninguém perceber.
+        this.logger.error(
+          `[Readiness][workout-lookup] falhou para user=${userId} today=${todayStr}: ` +
+            `code=${failure.code} message=${failure.message} details=${failure.details ?? '-'}`,
+        );
+        return { lookupFailed: true };
+      }
 
-      const planJson =
-        typeof plan.plan_json === 'string'
-          ? JSON.parse(plan.plan_json)
-          : plan.plan_json;
+      const activePlan = planRes.data?.[0] as { id: string } | undefined;
+      const activePlanId = activePlan?.id ?? null;
 
-      const currentWeek = plan.current_week || 1;
-      const weekData = planJson.weeks?.find(
-        (w: any) => w.week_number === currentWeek,
+      const rows = ((workoutRes.data ?? []) as PlannedWorkoutRow[]).filter(
+        (w) => w.plan_id === null || w.plan_id === activePlanId,
       );
-      if (!weekData) return undefined;
 
-      const workout = weekData.workouts?.find(
-        (w: any) => w.day_of_week === dayOfWeek,
-      );
-      if (!workout) return undefined;
+      const todayRows = rows.filter((w) => w.scheduled_date === todayStr);
+      const tomorrowRows = rows.filter((w) => w.scheduled_date === tomorrowStr);
+
+      // Duplicata na mesma data é um estado possível (não há UNIQUE em
+      // produção) e já houve incidente. Logar torna o caso observável em vez
+      // de silencioso; a escolha em si é determinística no helper puro.
+      if (todayRows.length > 1) {
+        this.logger.warn(
+          `[Readiness][workout-lookup] ${todayRows.length} treinos pendentes em ${todayStr} ` +
+            `para user=${userId} (ids=${todayRows.map((w) => w.id).join(',')})`,
+        );
+      }
+
+      const today = pickPrimaryWorkout(todayRows);
+      const tomorrow = pickPrimaryWorkout(tomorrowRows);
 
       return {
-        type: workout.type,
-        title: workout.objective || this.getWorkoutTitle(workout.type),
-        distance_km: workout.distance_km,
-        intensity: this.getIntensity(workout.type),
+        today: today && {
+          type: today.type ?? 'easy_run',
+          title: this.workoutTitle(today),
+          // `?? undefined` e não `||`: `distance_km` volta `null` do banco, e
+          // `null` violaria o tipo e imprimiria "null" no prompt.
+          distance_km: today.distance_km ?? undefined,
+          intensity: isRaceDay(today)
+            ? 'Máxima'
+            : this.getIntensity(today.type ?? ''),
+        },
+        tomorrow: tomorrow && {
+          type: tomorrow.type ?? 'easy_run',
+          title: this.workoutTitle(tomorrow),
+        },
+        lookupFailed: false,
       };
     } catch (error) {
-      this.logger.warn('Could not fetch today workout', error);
-      return undefined;
+      this.logger.error(
+        `[Readiness][workout-lookup] exceção para user=${userId}`,
+        error,
+      );
+      return { lookupFailed: true };
     }
   }
 
-  private async getTomorrowWorkout(
-    userId: string,
-  ): Promise<ReadinessInput['tomorrowWorkout'] | undefined> {
-    try {
-      const supabase = this.supabaseService.getClient();
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const dayOfWeek = tomorrow.getDay() === 0 ? 7 : tomorrow.getDay();
-
-      const { data: plan } = await supabase
-        .from('training_plans')
-        .select('plan_json, current_week')
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .single();
-
-      if (!plan?.plan_json) return undefined;
-
-      const planJson =
-        typeof plan.plan_json === 'string'
-          ? JSON.parse(plan.plan_json)
-          : plan.plan_json;
-
-      const currentWeek = plan.current_week || 1;
-      const weekData = planJson.weeks?.find(
-        (w: any) => w.week_number === currentWeek,
-      );
-      if (!weekData) return undefined;
-
-      const workout = weekData.workouts?.find(
-        (w: any) => w.day_of_week === dayOfWeek,
-      );
-      if (!workout) return undefined;
-
-      return {
-        type: workout.type,
-        title: workout.objective || this.getWorkoutTitle(workout.type),
-      };
-    } catch (error) {
-      this.logger.warn('Could not fetch tomorrow workout', error);
-      return undefined;
-    }
+  /**
+   * `title` é NULL na esmagadora maioria dos treinos: o insert em lote do
+   * gerador de plano grava `type`/`objective`/`distance_km` mas não `title`.
+   * Ele só existe em dia de prova ("DIA DA PROVA — X"), treino manual e
+   * free-run — e nesses casos é o texto mais informativo que temos.
+   * `objective` é o que sempre existe num treino de plano.
+   *
+   * `??` e não `||`: título vazio deve cair para o próximo, mas a distinção
+   * importa para manter a mesma semântica em toda a cadeia.
+   */
+  private workoutTitle(w: PlannedWorkoutRow): string {
+    return w.title ?? w.objective ?? this.getWorkoutTitle(w.type ?? '');
   }
 
   private getWorkoutTitle(type: string): string {
@@ -433,17 +366,33 @@ export class ReadinessService {
       intervals: 'Treino Intervalado',
       tempo: 'Tempo Run',
       recovery: 'Recuperação Ativa',
+      fartlek: 'Fartlek',
+      progressive: 'Progressivo',
+      walk_run: 'Caminhada e Corrida',
+      race_day: 'Dia da Prova',
+      free_run: 'Corrida Livre',
     };
     return titles[type] || type;
   }
 
+  /**
+   * ⚠️ LOAD-BEARING. O system prompt decide o downgrade a partir de "Alta
+   * Intensidade" — um tipo ausente deste mapa cai no default 'Moderada' e
+   * DESLIGA a regra de prevenção para aquele treino. Manter em dia com os
+   * tipos que o gerador de plano realmente emite.
+   */
   private getIntensity(type: string): string {
     const intensities: Record<string, string> = {
       easy_run: 'Baixa',
       long_run: 'Moderada',
       intervals: 'Alta',
       tempo: 'Alta',
+      fartlek: 'Alta',
+      progressive: 'Moderada-Alta',
       recovery: 'Muito Baixa',
+      walk_run: 'Muito Baixa',
+      free_run: 'Baixa',
+      race_day: 'Máxima',
     };
     return intensities[type] || 'Moderada';
   }
@@ -497,7 +446,7 @@ export class ReadinessService {
 
   private async saveReadinessResult(
     userId: string,
-    answers: ReadinessCheckInDto['answers'],
+    answers: ReadinessAnswers,
     verdict: ReadinessVerdict,
     setNumber?: number,
   ): Promise<void> {

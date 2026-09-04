@@ -1,14 +1,28 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AIRouterService, AI_FEATURES } from '../../common/ai';
 
+/**
+ * As respostas do check-in diário. Fonte ÚNICA do shape.
+ *
+ * Vive aqui (e não no service) porque quem consome de verdade é o prompt.
+ * `ReadinessAnswersDto` (dto/readiness.dto.ts) é estruturalmente atribuível a
+ * esta interface — o controller passa `dto.answers` direto, sem cast.
+ *
+ * ⚠️ Note que NÃO existe `userId` aqui, e isso é deliberado: a identidade do
+ * corredor entra em `ReadinessService.analyzeReadiness` como parâmetro
+ * posicional vindo de `@User('id')`. Se um dia alguém tentar reintroduzir o
+ * id dentro do payload de respostas, o tipo recusa.
+ */
+export interface ReadinessAnswers {
+  sleep: number; // 1-5
+  legs: number; // 1-5
+  mood: number; // 1-5
+  stress: number; // 1-5
+  motivation: number; // 1-5
+}
+
 export interface ReadinessInput {
-  checkIn: {
-    sleep: number; // 1-5
-    legs: number; // 1-5
-    mood: number; // 1-5
-    stress: number; // 1-5
-    motivation: number; // 1-5
-  };
+  checkIn: ReadinessAnswers;
   trainingLoadData: string; // Formatted text description
   todayWorkout?: {
     type: string;
@@ -20,6 +34,16 @@ export interface ReadinessInput {
     type: string;
     title: string;
   };
+  /**
+   * `true` quando a consulta ao plano FALHOU — diferente de "não há treino".
+   *
+   * Existe porque as duas coisas eram indistinguíveis: o bloco que buscava o
+   * treino quebrava com 42703 (colunas inexistentes) e o erro era engolido, de
+   * modo que a IA recebia "Nenhum treino planejado" e afirmava isso ao
+   * corredor. Sete de sete check-ins gravados em produção diziam "Sem treino
+   * planejado hoje" — inclusive para quem tinha 170 treinos no banco.
+   */
+  workoutLookupFailed?: boolean;
 }
 
 export interface ReadinessVerdict {
@@ -129,10 +153,22 @@ DADOS DE TREINO:
 ${input.trainingLoadData}
 
 TREINO DE HOJE:
-${input.todayWorkout ? `Tipo: ${input.todayWorkout.type}, Título: ${input.todayWorkout.title}, Distância: ${input.todayWorkout.distance_km || 'N/A'}km` : 'Nenhum treino planejado'}
+${
+  input.todayWorkout
+    ? `Tipo: ${input.todayWorkout.type}, Título: ${input.todayWorkout.title}, Distância: ${input.todayWorkout.distance_km ?? 'N/A'}km, Intensidade: ${input.todayWorkout.intensity ?? 'N/A'}`
+    : input.workoutLookupFailed
+      ? 'INDISPONÍVEL — falha ao consultar o plano. NÃO afirme que o atleta não tem treino hoje; fale apenas do check-in e da carga.'
+      : 'Nenhum treino planejado'
+}
 
 TREINO DE AMANHÃ:
-${input.tomorrowWorkout ? `Tipo: ${input.tomorrowWorkout.type}, Título: ${input.tomorrowWorkout.title}` : 'Nenhum treino planejado'}
+${
+  input.tomorrowWorkout
+    ? `Tipo: ${input.tomorrowWorkout.type}, Título: ${input.tomorrowWorkout.title}`
+    : input.workoutLookupFailed
+      ? 'INDISPONÍVEL — falha ao consultar o plano.'
+      : 'Nenhum treino planejado'
+}
 
 Hora atual: ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
 

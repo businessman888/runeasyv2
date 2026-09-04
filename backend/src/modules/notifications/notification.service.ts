@@ -425,6 +425,10 @@ export class NotificationService implements OnModuleInit {
       'Seu check-in diário está disponível. Como você está se sentindo hoje?',
       {
         type: 'daily_readiness',
+        // O handler do mobile resolve o destino por `data.screen || data.type`.
+        // Sem `screen`, este push caía no `default` do switch e abria a lista de
+        // notificações em vez do quiz.
+        screen: 'ReadinessQuiz',
         action: 'open_readiness_quiz',
       },
     );

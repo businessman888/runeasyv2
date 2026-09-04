@@ -21,41 +21,41 @@ export class ReadinessController {
     private readonly questionSetsParser: QuestionSetsParserService,
   ) {}
 
+  /**
+   * ⚠️ A identidade vem de `@User('id')` — NUNCA de `dto.userId`.
+   *
+   * Esta rota lia o `userId` do BODY, e era a única do backend inteiro a fazer
+   * isso. Como o corpo é controlado pelo cliente, qualquer usuário autenticado
+   * podia gravar um check-in — e disparar uma chamada de IA paga — no id de
+   * outro. `dto.userId` ainda é ACEITO (o app 1.0.9 o envia e o ValidationPipe
+   * roda com `forbidNonWhitelisted`), mas não é lido em lugar nenhum.
+   */
   @Post('analyze')
-  async analyzeReadiness(@Body() dto: ReadinessCheckInDto) {
-    this.logger.log(`POST /api/readiness/analyze - userId: ${dto.userId}`);
+  async analyzeReadiness(
+    @User('id') userId: string,
+    @Body() dto: ReadinessCheckInDto,
+  ) {
+    this.logger.log(`POST /api/readiness/analyze - userId: ${userId}`);
 
-    // Validate input
-    if (!dto.userId) {
-      throw new HttpException('userId is required', HttpStatus.BAD_REQUEST);
-    }
-
-    if (!dto.answers) {
+    // Fora do try: o catch abaixo converteria esta exceção em 500.
+    if (!userId) {
       throw new HttpException(
-        'answers object is required',
-        HttpStatus.BAD_REQUEST,
+        'Authentication required',
+        HttpStatus.UNAUTHORIZED,
       );
     }
 
-    const requiredFields = ['sleep', 'legs', 'mood', 'stress', 'motivation'];
-    for (const field of requiredFields) {
-      const value = dto.answers[field as keyof typeof dto.answers];
-      if (value === undefined || value < 1 || value > 5) {
-        throw new HttpException(
-          `${field} must be a number between 1 and 5`,
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-    }
+    // A forma de `answers` (presença, campos e faixa 1-5) é validada pelo
+    // ValidationPipe global via ReadinessCheckInDto. A checagem manual que
+    // existia aqui era uma segunda cópia das mesmas regras.
 
     try {
       // Check if user already completed check-in today (after 3 AM)
-      const existingVerdict = await this.readinessService.hasCheckedInToday(
-        dto.userId,
-      );
+      const existingVerdict =
+        await this.readinessService.hasCheckedInToday(userId);
       if (existingVerdict) {
         this.logger.log(
-          `User ${dto.userId} already checked in today, returning existing verdict`,
+          `User ${userId} already checked in today, returning existing verdict`,
         );
         return {
           ...existingVerdict,
@@ -65,9 +65,17 @@ export class ReadinessController {
         };
       }
 
-      const verdict = await this.readinessService.analyzeReadiness(dto);
+      const verdict = await this.readinessService.analyzeReadiness(
+        userId,
+        dto.answers,
+        dto.setNumber,
+      );
       return { ...verdict, alreadyCompleted: false };
     } catch (error) {
+      // Sem este rethrow, qualquer HttpException levantada aqui dentro (401,
+      // 404, 422) viraria um 500 genérico.
+      if (error instanceof HttpException) throw error;
+
       this.logger.error('Failed to analyze readiness', error);
       throw new HttpException(
         'Failed to analyze readiness. Please try again.',

@@ -103,10 +103,23 @@ export function useNotifications(): UseNotificationsReturn {
                     });
                     break;
 
+                case 'ReadinessQuiz':
+                case NotificationTypes.DAILY_READINESS:
+                    console.log('[Notifications] Navigating to ReadinessQuiz screen');
+                    navigate('ReadinessQuiz');
+                    break;
+
+                // `screen: 'Badges'` é o caminho VIVO — é o que o backend manda
+                // ao conceder uma badge (type 'achievement'), e como o destino
+                // é resolvido por `data.screen || data.type`, o `screen` vence.
+                // Sem este case a badge caía no default e abria a lista de
+                // notificações. Os dois `type` abaixo vêm de senders que hoje
+                // não são chamados por ninguém no backend; ficam por simetria.
+                case 'Badges':
                 case NotificationTypes.BADGE_EARNED:
                 case NotificationTypes.LEVEL_UP:
-                    console.log('[Notifications] Navigating to Evolution tab');
-                    navigate('Main', { initialTab: 'Evolution' });
+                    console.log('[Notifications] Navigating to Badges screen');
+                    navigate('Badges');
                     break;
 
                 case NotificationTypes.STREAK_WARNING:

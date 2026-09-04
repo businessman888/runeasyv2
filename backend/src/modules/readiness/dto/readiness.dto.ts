@@ -1,11 +1,11 @@
 import {
   IsString,
-  IsNotEmpty,
   IsNumber,
   Min,
   Max,
   ValidateNested,
   IsOptional,
+  IsDefined,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -37,10 +37,28 @@ export class ReadinessAnswersDto {
 }
 
 export class ReadinessCheckInDto {
+  /**
+   * ⚠️ COMPAT ≤1.0.9 — ACEITO E IGNORADO. Nunca leia este campo.
+   *
+   * A identidade do corredor vem de `@User('id')`, derivado do Bearer token
+   * validado pelo SupabaseAuthGuard. Ler daqui era um IDOR: qualquer usuário
+   * autenticado gravava check-in (e queimava orçamento de IA) no id de outro.
+   *
+   * O campo CONTINUA declarado só porque o app 1.0.9, que está em produção,
+   * envia `userId` no body — e o ValidationPipe global roda com
+   * `forbidNonWhitelisted: true` (main.ts:85-89), então removê-lo daria 400
+   * em todo install existente. Remover quando o mobile parar de enviar.
+   */
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'userId is required' })
-  userId: string;
+  userId?: string;
 
+  /**
+   * `@IsDefined` é obrigatório aqui: `@ValidateNested` PULA a validação quando
+   * o valor é `undefined`. Sem ele, um body `{ setNumber: 1 }` atravessa o
+   * pipe e estoura mais adiante em `answers.sleep` — 500 no lugar de 400.
+   */
+  @IsDefined({ message: 'answers object is required' })
   @ValidateNested()
   @Type(() => ReadinessAnswersDto)
   answers: ReadinessAnswersDto;
