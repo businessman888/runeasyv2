@@ -29,6 +29,51 @@
 
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- BLOCO 0 — escolha do usuário A. Leitura pura. Rode ANTES de tudo.
+--
+-- Nem todo usuário serve igual. O melhor A é o que também tem plano ativo E
+-- treino `pending` hoje: com ele, o MESMO check-in prova o IDOR e o 42703.
+-- Pegue o primeiro 🏆 da lista; se não houver nenhum, um ✅ fecha o IDOR e o
+-- 42703 fica para o BLOCO 5.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+WITH hoje AS (
+  SELECT (now() AT TIME ZONE 'America/Sao_Paulo')::date AS d
+),
+janela AS (
+  SELECT (date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo')
+           AT TIME ZONE 'America/Sao_Paulo') AS ini
+)
+SELECT u.id,
+       u.email,
+       (SELECT count(*) FROM training_plans p
+         WHERE p.user_id = u.id AND p.status = 'active')          AS plano_ativo,
+       (SELECT count(*) FROM workouts w, hoje
+         WHERE w.user_id = u.id AND w.status = 'pending'
+           AND w.scheduled_date = hoje.d)                         AS treino_hoje,
+       (SELECT count(*) FROM readiness_history h, janela
+         WHERE h.user_id = u.id AND h.created_at >= janela.ini)    AS ja_respondeu,
+       CASE
+         WHEN (SELECT count(*) FROM workouts w, hoje
+                WHERE w.user_id = u.id AND w.status = 'pending'
+                  AND w.scheduled_date = hoje.d) > 0
+          AND (SELECT count(*) FROM readiness_history h, janela
+                WHERE h.user_id = u.id AND h.created_at >= janela.ini) = 0
+           THEN '🏆 IDEAL (prova IDOR + 42703 no mesmo request)'
+         WHEN (SELECT count(*) FROM readiness_history h, janela
+                WHERE h.user_id = u.id AND h.created_at >= janela.ini) = 0
+           THEN '✅ serve (prova só o IDOR)'
+         ELSE '❌ já respondeu hoje — curto-circuita'
+       END                                                        AS aptidao
+  FROM auth.users u
+ ORDER BY (SELECT count(*) FROM workouts w, hoje
+            WHERE w.user_id = u.id AND w.status = 'pending'
+              AND w.scheduled_date = hoje.d) DESC,
+          u.created_at DESC
+ LIMIT 10;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- BLOCO 1 — preparação. Leitura pura. Todo `veredito` tem que ser ✅.
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -245,4 +290,68 @@ SELECT created_at,
 --     -d '{"userId":"ID_DE_B","answers":{"sleep":4,"legs":3,"mood":5,"stress":4,"motivation":5}}'
 --
 --   ESPERADO: 401. Nunca 200 — seria a versão mais grave do mesmo furo.
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- BLOCO 5 — o cron das 03:00. SÓ NO DIA SEGUINTE.
+--
+-- ⚠️ Não há como disparar manualmente: `ReadinessScheduler.triggerUnlock()`
+--    existe, mas o comentário "can be called via admin endpoint" é falso — esse
+--    endpoint NUNCA foi criado. Ou se espera o cron, ou não se testa.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- 5.1 — PRECONDIÇÃO, rodar HOJE. O cron só notifica quem correu ONTEM (SP). Se
+--       der 0, ele vai logar "No users trained yesterday" e não provará nada.
+--       Para forçar: registre uma corrida hoje pelo app de staging — amanhã ela
+--       será "ontem".
+SELECT count(*)                AS atividades_ontem,
+       count(DISTINCT user_id) AS usuarios_elegiveis,
+       CASE WHEN count(*) > 0 THEN '✅ o cron terá a quem notificar'
+            ELSE '⚠️ ninguém correu ontem — o cron vai no-op' END AS veredito
+  FROM activities
+ WHERE type = 'Run'
+   AND start_date >= (((now() AT TIME ZONE 'America/Sao_Paulo')::date - 1)::text
+                       ::timestamp AT TIME ZONE 'America/Sao_Paulo')
+   AND start_date <  (((now() AT TIME ZONE 'America/Sao_Paulo')::date)::text
+                       ::timestamp AT TIME ZONE 'America/Sao_Paulo');
+
+-- 5.1b — FIXTURE, se o 5.1 deu ⚠️. ESCRITA. Só staging.
+--        Cria uma corrida para o usuário QA datada de HOJE (São Paulo). Amanhã
+--        às 03:00 ela será "ontem" e o cron terá a quem notificar.
+--        ⚠️ Ajuste a data para o DIA EM QUE VOCÊ RODAR — o horário -03 garante
+--        que ela caia dentro do dia de São Paulo, não do dia UTC.
+--
+-- INSERT INTO activities (user_id, type, name, distance, moving_time, start_date)
+-- VALUES (
+--   'e25925f1-0593-4425-b6a4-1fe6ce600368',  -- QA (fbruizz4567@gmail.com)
+--   'Run',
+--   '[R0] fixture para validar o cron de readiness',
+--   5000,      -- metros
+--   1800,      -- segundos
+--   '2026-09-04 10:00:00-03'
+-- );
+--
+-- Confira que entrou na janela certa:
+-- SELECT id, name, start_date,
+--        (start_date AT TIME ZONE 'America/Sao_Paulo')::date AS dia_sp
+--   FROM activities WHERE name LIKE '[R0]%';
+--
+-- LIMPEZA, depois que o cron rodar:
+-- DELETE FROM activities WHERE name LIKE '[R0]%';
+
+
+-- 5.2 — DEPOIS das 03:00 SP. Antes desta correção o resultado aqui era ZERO —
+--       nenhuma notificação de readiness jamais foi criada, em nenhum ambiente.
+SELECT created_at,
+       user_id,
+       type,
+       metadata->>'screen' AS screen,
+       metadata->>'type'   AS metadata_type,
+       CASE WHEN metadata->>'screen' = 'ReadinessQuiz' THEN '✅'
+            WHEN metadata->>'screen' = 'Evolution'     THEN '❌ build antiga'
+            ELSE '❌' END AS veredito
+  FROM notifications
+ WHERE metadata->>'type' = 'daily_readiness'
+ ORDER BY created_at DESC
+ LIMIT 10;
 -- ═══════════════════════════════════════════════════════════════════════════
