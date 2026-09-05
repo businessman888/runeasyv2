@@ -99,8 +99,12 @@ export class ReadinessService {
       acwr <= 1.6 &&
       checkInAvg >= 4
     ) {
+      // `checkInAvg` fica de fora de propósito: é a média das 5 respostas do
+      // quiz, ou seja um valor de saúde derivado, e as linhas vizinhas deste
+      // mesmo log já carregam o `user_id`. O ACWR é carga de treino, não
+      // autorrelato — esse pode ficar, e sozinho já explica o override.
       this.logger.log(
-        `ACWR balancing: Overriding red to yellow (ACWR=${acwr}, check-in avg=${checkInAvg})`,
+        `ACWR balancing: Overriding red to yellow (ACWR=${acwr})`,
       );
       verdict = {
         ...verdict,
@@ -479,9 +483,19 @@ export class ReadinessService {
         );
       }
 
+      // ⚠️ NUNCA serialize `insertData` aqui.
+      //
+      // Ele carrega `check_in_answers` — sono, dor, humor, estresse e
+      // motivação autorrelatados — mais `ai_analysis` e `metrics_summary`, que
+      // repetem esses valores em texto corrido. Isso é dado de saúde, e este
+      // log roda a CADA check-in: ia inteiro para a retenção de log do Railway,
+      // colado a um `user_id`.
+      //
+      // O que fica é o suficiente para depurar a escrita (quem, qual set, que
+      // score saiu) sem emitir o conteúdo do quiz nem do veredito.
       this.logger.log(
-        `Inserting readiness history for user ${userId}:`,
-        JSON.stringify(insertData),
+        `Inserting readiness history for user ${userId} ` +
+          `(score=${verdict.readiness_score}, set=${setNumber ?? 'n/a'})`,
       );
 
       const { data, error } = await supabase

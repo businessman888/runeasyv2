@@ -417,4 +417,60 @@ describe('ReadinessService — treino planejado', () => {
     expect(calls.eq).toContainEqual(['status', 'pending']);
     expect(inputDaIA().todayWorkout).toBeUndefined();
   });
+
+  /**
+   * Privacidade — o log NÃO pode carregar dado de saúde.
+   *
+   * Havia um `logger.log(..., JSON.stringify(insertData))` no caminho de
+   * gravação, e `insertData` contém `check_in_answers` (sono, dor, humor,
+   * estresse, motivação autorrelatados), `ai_analysis` e `metrics_summary` —
+   * que repetem esses valores em texto corrido. Rodava a cada check-in, colado
+   * a um `user_id`, direto para a retenção de log do Railway.
+   *
+   * O teste captura TODOS os níveis de log de um check-in completo e procura
+   * as chaves que só aparecem quando alguém serializa o objeto inteiro. É essa
+   * a regressão que ele existe para pegar.
+   */
+  describe('privacidade do log', () => {
+    it('não emite o conteúdo do quiz nem do veredito em nenhum nível', async () => {
+      const capturado: string[] = [];
+      const captura = (...args: unknown[]) => {
+        // Serializa argumento não-string em vez de `String(a)`: assim o teste
+        // pega tanto `logger.log(msg, JSON.stringify(obj))` quanto
+        // `logger.log(msg, obj)` — a segunda forma viraria '[object Object]'
+        // e escaparia da asserção, embora o Nest imprima o objeto inteiro.
+        capturado.push(
+          args
+            .map((a) => (typeof a === 'string' ? a : JSON.stringify(a)))
+            .join(' '),
+        );
+      };
+      for (const nivel of [
+        'log',
+        'warn',
+        'error',
+        'debug',
+        'verbose',
+      ] as const) {
+        jest.spyOn(Logger.prototype, nivel).mockImplementation(captura);
+      }
+
+      const { service } = await build({ workouts: [workout()] });
+      await service.analyzeReadiness(USER, answers);
+
+      const tudo = capturado.join('\n');
+
+      // As chaves que só aparecem se o objeto inteiro for serializado.
+      expect(tudo).not.toContain('check_in_answers');
+      expect(tudo).not.toContain('metrics_summary');
+      expect(tudo).not.toContain('ai_analysis');
+      // E o conteúdo em si, pelas dimensões do quiz.
+      expect(tudo).not.toContain('motivation');
+      expect(tudo).not.toContain('"sleep"');
+
+      // O log continua servindo para depurar a escrita.
+      expect(tudo).toContain(USER);
+      expect(tudo).toContain('score=');
+    });
+  });
 });
