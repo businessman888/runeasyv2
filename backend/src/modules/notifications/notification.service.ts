@@ -53,6 +53,45 @@ export interface AppNotification {
   created_at: string;
 }
 
+/** Entrada de {@link NotificationService.notifyOnce}. */
+export interface NotifyOnceParams {
+  userId: string;
+  type: NotificationType;
+  /** Vale para a linha in-app E para o push — os dois textos são o mesmo. */
+  title: string;
+  description: string;
+  /**
+   * Chave DETERMINÍSTICA, montada pelo produtor a partir do que identifica o
+   * evento — nunca de um relógio, um contador ou um UUID novo. Duas execuções
+   * do mesmo job para o mesmo evento têm de produzir a MESMA string.
+   *
+   * Convenção em uso: `'<assunto>:<id>:<YYYY-MM-DD>'`
+   *   `reminder:<workout_id>:<scheduled_date>`
+   *   `daily_readiness:<user_id>:<dia SP>`
+   */
+  dedupeKey: string;
+  metadata?: Record<string, unknown>;
+  push?: {
+    data?: Record<string, unknown>;
+    channelId?: string;
+  };
+}
+
+export interface NotifyOnceResult {
+  /** `true` só quando ESTA chamada gravou a linha. */
+  created: boolean;
+  /** Só pode ser `true` quando `created` é `true`. */
+  pushSent: boolean;
+  notification: AppNotification | null;
+}
+
+/** Resultado interno do insert — separa "já existia" de "falhou". */
+interface InsertOutcome {
+  row: AppNotification | null;
+  created: boolean;
+  failed: boolean;
+}
+
 @Injectable()
 export class NotificationService implements OnModuleInit {
   private readonly logger = new Logger(NotificationService.name);
@@ -415,29 +454,24 @@ export class NotificationService implements OnModuleInit {
     );
   }
 
-  /**
-   * Send daily readiness check-in available notification
-   */
-  async sendDailyReadinessNotification(userId: string): Promise<boolean> {
-    return this.sendPushNotification(
-      userId,
-      '☀️ Bom dia!',
-      'Seu check-in diário está disponível. Como você está se sentindo hoje?',
-      {
-        type: 'daily_readiness',
-        // O handler do mobile resolve o destino por `data.screen || data.type`.
-        // Sem `screen`, este push caía no `default` do switch e abria a lista de
-        // notificações em vez do quiz.
-        screen: 'ReadinessQuiz',
-        action: 'open_readiness_quiz',
-      },
-    );
-  }
+  // `sendDailyReadinessNotification` vivia aqui e foi REMOVIDO.
+  //
+  // Ele enviava o push de prontidão sem passar por guarda nenhuma, ao lado de um
+  // `createNotification` separado — os dois independentes, que é a forma exata
+  // do bug de duplicação. O convite diário agora sai por
+  // `ReadinessScheduler` → `notifyOnce`, que liga o push ao INSERT.
+  //
+  // Deixá-lo aqui seria deixar um segundo caminho, não deduplicado, para enviar
+  // exatamente o mesmo push — pronto para alguém reencontrar e reusar.
 
   // ==================== IN-APP NOTIFICATIONS ====================
 
   /**
-   * Create a new in-app notification
+   * Create a new in-app notification.
+   *
+   * Sem guarda de duplicata — para o caminho REQUEST-DRIVEN, em que o usuário
+   * pediu a ação e uma segunda linha significa uma segunda ação de verdade.
+   * Job periódico deve usar {@link notifyOnce}.
    */
   async createNotification(
     userId: string,
@@ -446,30 +480,152 @@ export class NotificationService implements OnModuleInit {
     description: string,
     metadata?: Record<string, unknown>,
   ): Promise<AppNotification | null> {
+    const { row } = await this.insertNotification(
+      userId,
+      type,
+      title,
+      description,
+      metadata,
+    );
+    return row;
+  }
+
+  /**
+   * Grava a linha in-app E envia o push — no máximo UMA vez por `dedupeKey`.
+   *
+   * ── POR QUE OS DOIS JUNTOS, NUM MÉTODO SÓ ─────────────────────────────────
+   *
+   * Porque separados eles já falharam. `createNotification` e
+   * `sendPushNotification` eram chamadas independentes, e o produtor tinha de
+   * lembrar de condicionar a segunda ao resultado da primeira — o que ninguém
+   * fazia. Deduplicar só a LINHA não resolveria nada do sintoma: o corredor
+   * continuaria recebendo dois pushes, que é a parte que ele sente.
+   *
+   * Aqui a regra é estrutural: o push só existe dentro do ramo em que o INSERT
+   * de fato criou a linha. Não há como esquecer.
+   *
+   * ── A GUARDA ANTERIOR, E POR QUE ELA NÃO ERA UMA ──────────────────────────
+   *
+   * O lembrete de treino tinha um `Set<string>` em memória
+   * (`TrainingSchedulerService.sentReminders`). Ele não pegou NADA: as duas
+   * execuções do cron duplicado liam o Set vazio antes de qualquer escrita, e
+   * ainda por cima nem sobreviveria a um restart ou a uma segunda réplica. A
+   * guarda que funciona é o índice UNIQUE — foi por tê-la que
+   * `weekly_insight` e `retrospective` escaparam do bug (0 duplicatas medidas
+   * contra 4.038 do lembrete).
+   *
+   * ── O QUE ACONTECE SE O PUSH FALHAR ───────────────────────────────────────
+   *
+   * A chave já foi consumida e o push NÃO é retentado. É deliberado: a
+   * alternativa (apagar a linha quando o envio falha) reabre exatamente a
+   * corrida que este método fecha. Um push perdido é melhor que um push dobrado
+   * todo dia — e a linha in-app fica lá, então o aviso não some.
+   */
+  async notifyOnce(params: NotifyOnceParams): Promise<NotifyOnceResult> {
+    const { userId, type, title, description, dedupeKey, metadata, push } =
+      params;
+
+    const outcome = await this.insertNotification(
+      userId,
+      type,
+      title,
+      description,
+      metadata,
+      dedupeKey,
+    );
+
+    if (outcome.failed) {
+      // Falha de escrita NÃO é duplicata. Não enviar é o lado seguro: se o
+      // banco está fora, a próxima execução tenta de novo com a mesma chave.
+      return { created: false, pushSent: false, notification: null };
+    }
+
+    if (!outcome.created) {
+      this.logger.log(
+        `[notifyOnce] '${dedupeKey}' já existia — push suprimido`,
+      );
+      return { created: false, pushSent: false, notification: null };
+    }
+
+    const pushSent = await this.sendPushNotification(
+      userId,
+      title,
+      description,
+      push?.data,
+      push?.channelId ? { channelId: push.channelId } : undefined,
+    );
+
+    return { created: true, pushSent, notification: outcome.row };
+  }
+
+  /**
+   * O único ponto de escrita em `notifications`.
+   *
+   * Com `dedupeKey`, emite `INSERT … ON CONFLICT (dedupe_key) DO NOTHING`: o
+   * conflito devolve ZERO linhas, e é assim que `created: false` se distingue
+   * de `failed: true`. Sem `dedupeKey`, é um insert comum e a coluna fica
+   * `NULL` — o índice UNIQUE trata NULLs como distintos entre si, então
+   * quantas linhas request-driven quiser convivem.
+   *
+   * `maybeSingle()` e não `single()`: `single()` transforma "zero linhas" em
+   * erro (PGRST116), que é justamente o caso normal da deduplicação.
+   */
+  private async insertNotification(
+    userId: string,
+    type: NotificationType,
+    title: string,
+    description: string,
+    metadata?: Record<string, unknown>,
+    dedupeKey?: string,
+  ): Promise<InsertOutcome> {
+    const payload: Record<string, unknown> = {
+      user_id: userId,
+      type,
+      title,
+      description,
+      metadata: metadata || {},
+      is_read: false,
+    };
+    if (dedupeKey) payload.dedupe_key = dedupeKey;
+
     try {
-      const { data, error } = await this.supabaseService
-        .from('notifications')
-        .insert({
-          user_id: userId,
-          type,
-          title,
-          description,
-          metadata: metadata || {},
-          is_read: false,
-        })
-        .select()
-        .single();
+      const table = this.supabaseService.from('notifications');
+      const query = dedupeKey
+        ? table.upsert(payload, {
+            onConflict: 'dedupe_key',
+            ignoreDuplicates: true,
+          })
+        : table.insert(payload);
+
+      const { data, error } = await query.select().maybeSingle();
 
       if (error) {
-        this.logger.error('Failed to create notification', error);
-        return null;
+        // A dica do 42703 é deliberada e específica: o modo de falha mais
+        // provável desta função é o CÓDIGO subir antes da migration
+        // `20260905_add_notification_dedupe_key.sql`. Nesse cenário TODO envio
+        // de cron para de sair de uma vez — e sem esta linha o log diria apenas
+        // "failed to create notification", que não aponta para lugar nenhum.
+        const dica =
+          dedupeKey && (error as { code?: string }).code === '42703'
+            ? ' — a coluna `dedupe_key` não existe: aplique a migration 20260905_add_notification_dedupe_key.sql'
+            : '';
+        this.logger.error(
+          `Failed to create notification${dedupeKey ? ` (dedupeKey='${dedupeKey}')` : ''}${dica}`,
+          error,
+        );
+        return { row: null, created: false, failed: true };
+      }
+
+      if (!data) {
+        // Só alcançável no caminho deduplicado: a linha já existia.
+        return { row: null, created: false, failed: false };
       }
 
       this.logger.log(`Created ${type} notification for user ${userId}`);
-      return data as AppNotification;
+      return { row: data as AppNotification, created: true, failed: false };
     } catch (error) {
       this.logger.error('Error creating notification', error);
-      return null;
+      return { row: null, created: false, failed: true };
     }
   }
 

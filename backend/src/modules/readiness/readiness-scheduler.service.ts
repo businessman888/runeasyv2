@@ -26,10 +26,9 @@ export class ReadinessScheduler {
    * "0 unlocked, 0 notifications sent". Zero notificações de readiness foram
    * criadas em produção — nunca, nem uma vez.
    *
-   * Nada a jusante dependia daquele upsert: `createNotification` e
-   * `sendDailyReadinessNotification` recebem só `userId`, e o estado real do
-   * check-in vive em `readiness_history`. `readiness_checkins` não era lida em
-   * lugar nenhum do repositório. O bloco saiu inteiro.
+   * Nada a jusante dependia daquele upsert: o envio recebe só `userId`, e o
+   * estado real do check-in vive em `readiness_history`. `readiness_checkins`
+   * não era lida em lugar nenhum do repositório. O bloco saiu inteiro.
    *
    * ⚠️ Este job NOTIFICA; ele não desbloqueia nada. A elegibilidade continua
    * sendo `getReadinessStatus`, calculada on-read. Separar as duas coisas — e o
@@ -50,7 +49,8 @@ export class ReadinessScheduler {
       // Paulo vai de 03:00Z a 02:59Z do dia seguinte. Com a janela em UTC puro,
       // quem correu entre 21h e meia-noite ficava de fora, e quem correu nesse
       // horário anteontem entrava no lugar.
-      const yesterdayStr = addDaysStr(saoPauloTodayStr(), -1);
+      const todayStr = saoPauloTodayStr();
+      const yesterdayStr = addDaysStr(todayStr, -1);
       const windowStart = `${yesterdayStr}T03:00:00Z`; // 00:00 SP de ontem
       const windowEnd = `${addDaysStr(yesterdayStr, 1)}T02:59:59Z`; // 23:59 SP
 
@@ -86,33 +86,45 @@ export class ReadinessScheduler {
       let notifiedCount = 0;
       let notificationsSent = 0;
 
-      // 2. For each user, create the in-app row + send the push
+      // 2. For each user, create the in-app row + send the push — UMA VEZ.
+      //
+      // `notifyOnce` liga o push ao INSERT: se a linha já existe (outra
+      // execução do mesmo dia, outra réplica), nada é gravado e nada é
+      // enviado. A chave é o dia de São Paulo do CONVITE — o mesmo dia de
+      // readiness que o corredor vai responder.
+      //
+      // ⚠️ Isto é infraestrutura de notificação, não lógica de prontidão:
+      // nenhum cálculo, veredito ou janela de check-in muda aqui.
       for (const userId of uniqueUserIds) {
         try {
-          // 3. Create persistent notification in database
-          await this.notificationService.createNotification(
+          const result = await this.notificationService.notifyOnce({
             userId,
-            'system',
-            '☀️ Bom dia!',
-            'Seu check-in diário está disponível. Como você está se sentindo hoje?',
-            {
+            type: 'system',
+            title: '☀️ Bom dia!',
+            description:
+              'Seu check-in diário está disponível. Como você está se sentindo hoje?',
+            dedupeKey: `daily_readiness:${userId}:${todayStr}`,
+            metadata: {
               // `NotificationsScreen` navega direto para `metadata.screen`
               // quando o tipo é system/reminder/achievement. Era 'Evolution' —
               // uma aba que não existe (Home/Calendar/Ranking/Wellness/Settings).
               screen: 'ReadinessQuiz',
               type: 'daily_readiness',
             },
-          );
-          notifiedCount++;
+            push: {
+              data: {
+                type: 'daily_readiness',
+                // O handler do mobile resolve o destino por
+                // `data.screen || data.type`. Sem `screen`, este push caía no
+                // `default` do switch e abria a lista de notificações.
+                screen: 'ReadinessQuiz',
+                action: 'open_readiness_quiz',
+              },
+            },
+          });
 
-          // 4. Send push notification
-          const notificationSent =
-            await this.notificationService.sendDailyReadinessNotification(
-              userId,
-            );
-          if (notificationSent) {
-            notificationsSent++;
-          }
+          if (result.created) notifiedCount++;
+          if (result.pushSent) notificationsSent++;
         } catch (error) {
           this.logger.error(`Error processing user ${userId}`, error);
         }

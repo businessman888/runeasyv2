@@ -1,5 +1,4 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bullmq';
 import { TrainingService } from './training.service';
 import { TrainingAIService } from './training-ai.service';
@@ -28,10 +27,15 @@ import { FeedbackModule } from '../feedback/feedback.module';
  * already imports TrainingModule (it uses TrainingService inside the
  * RevenueCat webhook pipeline). The cycle is intentional and NestJS resolves
  * it cleanly when both ends use forwardRef.
+ *
+ * ⚠️ NÃO adicione `ScheduleModule.forRoot()` aqui. Ele estava nesta lista e era
+ * metade da causa de 97,5% dos lembretes duplicarem em produção — dois
+ * `forRoot()` = dois `ScheduleExplorer` = todo `@Cron` do app registrado duas
+ * vezes. Os três `@Cron` deste módulo continuam descobertos pelo explorador
+ * único de `app.module.ts`, que é `global: true`.
  */
 @Module({
   imports: [
-    ScheduleModule.forRoot(),
     NotificationModule,
     UsersModule,
     GamificationModule,

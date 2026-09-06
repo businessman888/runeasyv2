@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -93,6 +94,27 @@ import { RacesModule } from './modules/races';
       },
       inject: [ConfigService],
     }),
+
+    // ⚠️ ÚNICO `ScheduleModule.forRoot()` DO APP — não replicar em módulo de
+    // feature.
+    //
+    // Cada `forRoot()` instancia um `ScheduleExplorer` PRÓPRIO, e cada
+    // explorador varre a aplicação INTEIRA e registra TODOS os `@Cron`. Duas
+    // chamadas = um processo, dois agendadores, todo job disparando em dobro.
+    //
+    // Foi exatamente o que aconteceu: `readiness.module.ts` e
+    // `training.module.ts` chamavam `forRoot()` cada um, e o resultado medido em
+    // produção foi 4.038 de 4.140 lembretes duplicados (97,5%), todo dia, desde
+    // 20/06/2026. Não era réplica do Railway — o boot logava uma vez e o cron,
+    // duas.
+    //
+    // `forRoot()` devolve um módulo `global: true`: `SchedulerRegistry` segue
+    // injetável de qualquer lugar e os `@Cron` seguem descobertos, por UM
+    // explorador. Nenhum módulo de feature precisa importar `ScheduleModule`
+    // para os seus `@Cron` funcionarem.
+    //
+    // `app.module.spec.ts` trava a reintrodução.
+    ScheduleModule.forRoot(),
 
     // Global rate limiting: 100 requests / minute per IP (or per user where a
     // custom tracker overrides it). Auth and AI-generation endpoints apply

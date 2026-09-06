@@ -18,8 +18,29 @@ export class TokenRefreshService {
   ) {}
 
   /**
-   * Cron job: runs every 15 minutes to refresh expiring tokens.
+   * Cron job: runs every 10 minutes to refresh expiring tokens.
    * Only Fitbit requires refresh — Polar tokens don't expire (long-lived).
+   *
+   * ── IDEMPOTÊNCIA: SEM GUARDA, E ISTO É UM RISCO CONHECIDO ─────────────────
+   *
+   * Este é o único dos cinco `@Cron` do app que não tem guarda contra execução
+   * concorrente, e ele NÃO envia notificação — então a `dedupe_key` de
+   * `notifications` não se aplica aqui.
+   *
+   * O perigo é outro e é pior: o `refresh_token` do Fitbit ROTACIONA a cada
+   * uso. Duas execuções simultâneas trocam o mesmo token, a segunda recebe
+   * `invalid_grant`, e a última escrita pode gravar um token já superado —
+   * desconectando o usuário em silêncio.
+   *
+   * Hoje é inofensivo porque há ZERO dispositivos Fitbit conectados em
+   * produção, e por isso o conserto ficou fora do escopo da tarefa de
+   * notificações duplicadas (que removeu a causa comum: dois
+   * `ScheduleModule.forRoot()`).
+   *
+   * ⚠️ ANTES DO PRIMEIRO FITBIT REAL, este loop precisa de uma claim atômica —
+   * o molde é `workouts.completion_processing_id`
+   * (`20260829_add_free_run_completion_identity.sql`): um `UPDATE … WHERE
+   * processing_id IS NULL RETURNING` que só deixa um executor seguir.
    */
   @Cron(CronExpression.EVERY_10_MINUTES)
   async refreshExpiringTokens() {

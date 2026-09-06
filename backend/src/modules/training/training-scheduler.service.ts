@@ -5,10 +5,28 @@ import { NotificationService } from '../notifications/notification.service';
 import { RetrospectiveService } from './retrospective.service';
 import { WeeklyInsightService } from './weekly-insight.service';
 
+/**
+ * A linha de `workouts` que o lembrete precisa — só o que está no `select`.
+ *
+ * O PostgREST devolve `any`, e sem este tipo `workout.id` e `workout.user_id`
+ * entram na `dedupeKey` e no `userId` como `any`. Numa chave de idempotência
+ * isso importa mais do que de costume: um `undefined` silencioso viraria a
+ * string `'reminder:undefined:undefined'`, que é a MESMA para todo mundo — a
+ * primeira notificação do dia bloquearia todas as outras.
+ */
+interface ReminderWorkoutRow {
+  id: string;
+  user_id: string;
+  type: string;
+  distance_km: number | null;
+  objective: string | null;
+  /** `date` puro, já em 'YYYY-MM-DD'. */
+  scheduled_date: string;
+}
+
 @Injectable()
 export class TrainingSchedulerService {
   private readonly logger = new Logger(TrainingSchedulerService.name);
-  private sentReminders = new Set<string>(); // Track sent reminders to avoid duplicates
 
   constructor(
     private readonly supabaseService: SupabaseService,
@@ -18,8 +36,20 @@ export class TrainingSchedulerService {
   ) {}
 
   /**
-   * Check for upcoming workouts and send reminders 1 hour before
-   * Runs every hour
+   * Check for upcoming workouts and send reminders 1 hour before.
+   * Runs every hour.
+   *
+   * ── A GUARDA CONTRA DUPLICATA ─────────────────────────────────────────────
+   *
+   * É `notifyOnce` + índice UNIQUE, e não mais um `Set` em memória. O `Set`
+   * (`sentReminders`) foi removido: ele não pegou nenhuma das 4.038 duplicatas
+   * medidas em produção, porque as duas execuções do cron liam o Set vazio
+   * antes de qualquer escrita — e ainda tinha um bug próprio, `key.split('-')`
+   * sobre `<uuid>-<data>`, que devolvia um pedaço do UUID no lugar da data e
+   * deixava a limpeza sem efeito.
+   *
+   * A chave usa `workout.scheduled_date`, não um "hoje" calculado: é a data do
+   * próprio treino, imune a fuso e estável entre execuções.
    */
   @Cron('0 * * * *', {
     name: 'workout-reminders',
@@ -61,61 +91,48 @@ export class TrainingSchedulerService {
         return;
       }
 
-      if (!workouts || workouts.length === 0) {
+      const rows = (workouts ?? []) as ReminderWorkoutRow[];
+
+      if (rows.length === 0) {
         this.logger.log('No workouts scheduled for today');
         return;
       }
 
-      this.logger.log(`Found ${workouts.length} workouts scheduled for today`);
+      this.logger.log(`Found ${rows.length} workouts scheduled for today`);
 
       let remindersSent = 0;
 
-      for (const workout of workouts) {
+      for (const workout of rows) {
         try {
-          // Check if we already sent reminder for this workout
-          const reminderKey = `${workout.id}-${currentDate}`;
-          if (this.sentReminders.has(reminderKey)) {
-            this.logger.debug(
-              `Reminder already sent for workout ${workout.id}`,
-            );
-            continue;
-          }
-
-          // Create notification in database
           const workoutTypeName = this.getWorkoutTypeName(workout.type);
           const title = '🏃 Hora do Treino!';
           const description = `Você tem um ${workoutTypeName} agendado para hoje às ${WORKOUT_HOUR}:00. Vamos lá!`;
 
-          await this.notificationService.createNotification(
-            workout.user_id,
-            'reminder',
+          const result = await this.notificationService.notifyOnce({
+            userId: workout.user_id,
+            type: 'reminder',
             title,
             description,
-            {
+            dedupeKey: `reminder:${workout.id}:${workout.scheduled_date}`,
+            metadata: {
               workout_id: workout.id,
               workout_type: workout.type,
               distance_km: workout.distance_km,
               scheduled_time: `${WORKOUT_HOUR}:00`,
               screen: 'Home', // For navigation
             },
-          );
-
-          // Send push notification
-          const pushSent = await this.notificationService.sendPushNotification(
-            workout.user_id,
-            title,
-            description,
-            {
-              type: 'workout_reminder',
-              workout_id: workout.id,
-              screen: 'Home', // Deep link target
+            push: {
+              data: {
+                type: 'workout_reminder',
+                workout_id: workout.id,
+                screen: 'Home', // Deep link target
+              },
+              channelId: 'training',
             },
-            { channelId: 'training' },
-          );
+          });
 
-          if (pushSent) {
+          if (result.pushSent) {
             remindersSent++;
-            this.sentReminders.add(reminderKey);
             this.logger.log(
               `Sent reminder for workout ${workout.id} to user ${workout.user_id}`,
             );
@@ -131,9 +148,6 @@ export class TrainingSchedulerService {
       this.logger.log(
         `Workout reminder job completed: ${remindersSent} reminders sent`,
       );
-
-      // Clean up old reminder keys (older than 7 days)
-      this.cleanupOldReminders();
     } catch (error) {
       this.logger.error('Failed to send workout reminders', error);
     }
@@ -151,23 +165,6 @@ export class TrainingSchedulerService {
       recovery: 'Corrida de Recuperação',
     };
     return types[type] || type;
-  }
-
-  /**
-   * Clean up old reminder tracking to prevent memory leak
-   */
-  private cleanupOldReminders() {
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const cutoffDate = sevenDaysAgo.toISOString().split('T')[0];
-
-    // Remove all keys older than cutoff
-    this.sentReminders.forEach((key) => {
-      const [, date] = key.split('-');
-      if (date < cutoffDate) {
-        this.sentReminders.delete(key);
-      }
-    });
   }
 
   /**
