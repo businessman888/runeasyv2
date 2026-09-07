@@ -95,3 +95,108 @@ export const HEAVY_TYPES: ReadonlySet<string> = new Set([
   'long_run',
   'race_simulation',
 ]);
+
+/**
+ * TODOS os tipos que podem aparecer em `workouts.type`.
+ *
+ * União de `GeneratedWorkoutType` (training-ai.service.ts) com os dois que não
+ * saem do gerador: `free_run`, criado pela conclusão de corrida livre, e
+ * `race_day`, o dia da prova.
+ *
+ * Existe para uma coisa só: dar ao spec deste arquivo como afirmar que
+ * `LOAD_WEIGHT_BY_TYPE` cobre todo mundo. Sem isso, um tipo novo no gerador
+ * passa a pesar 1,0 no readiness em silêncio — que é exatamente como
+ * `race_simulation` e `repetition` acabaram caindo em 'Moderada' no mapa
+ * privado que este bloco substitui.
+ */
+export const ALL_WORKOUT_TYPES: ReadonlySet<string> = new Set([
+  'easy_run',
+  'long_run',
+  'intervals',
+  'tempo',
+  'recovery',
+  'fartlek',
+  'progressive',
+  'repetition',
+  'hill_repeats',
+  'race_simulation',
+  'walk_run',
+  'free_run',
+  'race_day',
+]);
+
+/**
+ * O CUSTO POR MINUTO de cada tipo — a quarta pergunta deste arquivo.
+ *
+ * ── POR QUE AQUI, E NÃO NO MÓDULO DE READINESS ────────────────────────────────
+ *
+ *   QUALITY_TYPES             "quem recebe a distância do slot de qualidade?"
+ *   PROTECTED_FROM_VOLUME_CUT "quem é intocável quando a semana é aliviada?"
+ *   HEAVY_TYPES               "o que NÃO deveria cair dois dias seguidos?"
+ *   LOAD_WEIGHT_BY_TYPE       "quanto este tipo custa à perna POR MINUTO?"
+ *
+ * É uma quarta pergunta, e mora junto pelo mesmo motivo das outras três. O
+ * argumento não é estético: havia um `getIntensity` privado dentro de
+ * `readiness.service.ts` fazendo trabalho parecido, e quando o gerador ganhou
+ * `race_simulation` e `repetition` ninguém abriu aquele arquivo — os dois caíram
+ * no default 'Moderada' e DESLIGARAM a regra de prevenção do readiness para
+ * quem tinha um tiro marcado. Este arquivo é o que se abre quando um tipo nasce.
+ *
+ * ── A ESCALA ──────────────────────────────────────────────────────────────────
+ *
+ * 1,0 = um minuto de rodagem leve. Os valores são a PRIMEIRA calibragem, feita
+ * sem histórico real suficiente para ajustá-los (produção tem 14 atividades), e
+ * são deliberadamente conservadores: a razão aguda/crônica que eles alimentam só
+ * modula ±10 pontos num score de 0-100, então um peso errado em 15% desloca o
+ * resultado em menos de 2 pontos. Revisar quando houver volume.
+ *
+ * ⚠️ Estes pesos multiplicam DURAÇÃO, não distância. Quando `workouts.rpe`
+ * amadurecer (hoje 2/172), a fonte de carga vira sRPE = rpe × minutos e este
+ * mapa deixa de ser consultado — o ponto de troca é `cargaDaSessao` em
+ * `readiness/helpers/load-series.helper.ts`, não aqui.
+ */
+export const LOAD_WEIGHT_BY_TYPE: Readonly<Record<string, number>> = {
+  // Base aeróbica — a régua.
+  easy_run: 1.0,
+  free_run: 1.0,
+  // Regenerativo: mexe as pernas sem cobrar.
+  recovery: 0.7,
+  walk_run: 0.7,
+  // Volume longo: o minuto custa mais que o de rodagem porque o dano acumula
+  // com a duração, mas continua sendo Z2.
+  long_run: 1.15,
+  // Moderado-alto: sobe de intensidade ao longo do treino.
+  progressive: 1.25,
+  // Limiar sustentado.
+  tempo: 1.4,
+  fartlek: 1.4,
+  // Ensaio de prova em pace-alvo: intenso e específico, mas não é Z5.
+  race_simulation: 1.5,
+  // VO2max e impacto.
+  intervals: 1.6,
+  hill_repeats: 1.6,
+  // Z5 puro — o minuto mais caro que se treina.
+  repetition: 1.7,
+  race_day: 1.7,
+};
+
+/**
+ * O peso de um tipo, com default explícito.
+ *
+ * Tipo desconhecido (ou `null`, quando a atividade não tem workout ligado) pesa
+ * como rodagem leve. É o default seguro: subestimar a carga de uma sessão faz o
+ * motor falar MENOS sobre carga, e a carga só modula nas margens. O oposto —
+ * inventar um peso alto — produziria o "risco de lesão" fabricado que este
+ * redesenho existe para matar.
+ *
+ * ⚠️ O teste de tipo NÃO é decorativo, e `?? 1.0` sozinho não bastava:
+ * `workouts.type` é texto livre vindo do banco, e `LOAD_WEIGHT_BY_TYPE['constructor']`
+ * devolve a função `Object` herdada do prototype — que não é `null` nem
+ * `undefined`, atravessaria o `??` e viraria `NaN` na multiplicação, envenenando
+ * a série inteira de carga a partir de UM dia. Exigir `number` fecha a família
+ * toda (`constructor`, `toString`, `valueOf`, …) de uma vez.
+ */
+export function loadWeightFor(type: string | null | undefined): number {
+  const peso = LOAD_WEIGHT_BY_TYPE[type ?? ''] as unknown;
+  return typeof peso === 'number' && Number.isFinite(peso) ? peso : 1.0;
+}

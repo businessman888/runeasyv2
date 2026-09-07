@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ReadinessController } from './readiness.controller';
 import { ReadinessService } from './readiness.service';
+import { ReadinessEngineService } from './readiness-engine.service';
 import { ReadinessAIService } from './readiness-ai.service';
 import { ReadinessScheduler } from './readiness-scheduler.service';
 import { QuestionSetsParserService } from './question-sets-parser.service';
@@ -23,6 +24,7 @@ import { NotificationModule } from '../notifications';
   controllers: [ReadinessController],
   providers: [
     ReadinessService,
+    ReadinessEngineService,
     ReadinessAIService,
     ReadinessScheduler,
     QuestionSetsParserService,

@@ -18,6 +18,82 @@ import { NotificationService } from '../notifications/notification.service';
 // mesmo helper. O grafo é `plan-window` → `streak` → ∅: não há ciclo possível.
 import { saoPauloTodayStr } from '../training/wellness/helpers/streak.helper';
 import { addDaysStr } from '../training/helpers/plan-window.helper';
+import {
+  readinessDayStr,
+  readinessWindowStartIso,
+  toReadinessDayStr,
+} from './helpers/readiness-day.helper';
+import {
+  Dimension,
+  READINESS_DIMENSIONS,
+  isValidAnswer,
+} from './helpers/subjective-baseline.helper';
+import type { FloorProgress } from './helpers/load-series.helper';
+import { ReadinessEngineService } from './readiness-engine.service';
+
+/** A linha de `readiness_history`, na forma mínima que este service lê. */
+interface ReadinessHistoryRow {
+  score: number;
+  status_color: ReadinessVerdict['status_color'];
+  status_label: string;
+  ai_analysis: ReadinessVerdict['ai_analysis'];
+  metrics_summary: ReadinessVerdict['metrics_summary'] | null;
+  created_at: string;
+  check_in_answers: unknown;
+}
+
+/**
+ * O check-in de hoje: o veredito E as respostas que o produziram.
+ *
+ * As duas coisas vêm da MESMA linha de propósito — ver `hasCheckedInToday`.
+ */
+export interface CheckInDeHoje {
+  verdict: ReadinessVerdict;
+  /** `null` quando o jsonb está malformado. */
+  answers: ReadinessAnswers | null;
+}
+
+/**
+ * Por que o corredor está (ou não está) elegível. Campo ADITIVO — a R.2 usa
+ * para escolher a copy do card bloqueado.
+ */
+export type EligibilityReason =
+  | 'ok'
+  | 'sem_historico'
+  | 'ja_respondeu'
+  | 'indisponivel';
+
+export interface ReadinessStatus {
+  isUnlocked: boolean;
+  hasCompletedFirstWorkout: boolean;
+  canCheckInToday: boolean;
+  hasCompletedToday: boolean;
+  lastCheckInDate: string | null;
+  todayVerdict: ReadinessVerdict | null;
+  /** ADITIVO — as respostas de hoje, da MESMA linha do veredito. */
+  todayAnswers: ReadinessAnswers | null;
+  /** ADITIVO — o que falta para o piso. `null` quando já passou. */
+  learning: FloorProgress | null;
+  /** ADITIVO. */
+  eligibilityReason: EligibilityReason;
+}
+
+/**
+ * `check_in_answers` é jsonb sem CHECK: pode vir com chave faltando, string no
+ * lugar de número, ou nulo. Só devolve um objeto quando as CINCO dimensões
+ * estão presentes e válidas — meia resposta renderizaria barras erradas.
+ */
+function normalizeAnswers(raw: unknown): ReadinessAnswers | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const src = raw as Record<string, unknown>;
+  const out = {} as Record<Dimension, number>;
+  for (const d of READINESS_DIMENSIONS) {
+    const v = src[d];
+    if (!isValidAnswer(v)) return null;
+    out[d] = v;
+  }
+  return out as ReadinessAnswers;
+}
 
 @Injectable()
 export class ReadinessService {
@@ -27,6 +103,7 @@ export class ReadinessService {
     private readonly readinessAIService: ReadinessAIService,
     private readonly supabaseService: SupabaseService,
     private readonly notificationService: NotificationService,
+    private readonly engine: ReadinessEngineService,
   ) {}
 
   /**
@@ -55,13 +132,14 @@ export class ReadinessService {
       `[QuizSelection] Received setNumber: ${setNumber ?? 'NOT PROVIDED'}`,
     );
 
-    // Check if already checked in today (after 3 AM)
+    // Já respondeu na janela de hoje? Devolve o mesmo veredito — nunca uma
+    // segunda chamada de IA paga pelo mesmo dia.
     const existingCheckIn = await this.hasCheckedInToday(userId);
     if (existingCheckIn) {
       this.logger.log(
         `User ${userId} already checked in today, returning existing verdict`,
       );
-      return existingCheckIn;
+      return existingCheckIn.verdict;
     }
 
     // 1. Get recent activity load data from activities table
@@ -121,31 +199,41 @@ export class ReadinessService {
   }
 
   /**
-   * Check if user has already completed check-in today (after 3 AM reset)
-   * Returns the existing verdict if found, null otherwise
+   * O check-in de hoje, se já existir — e as respostas dele.
    *
-   * TIMEZONE: Uses America/Sao_Paulo (BRT = UTC-3)
-   * RULE: New readiness day starts at 3:00 AM local time
+   * ── A JANELA ──────────────────────────────────────────────────────────────
    *
-   * Time windows:
-   * - 03:00 Day N to 02:59 Day N+1 = "Day N" for readiness purposes
+   * Dia de readiness = 03:00 SP até 02:59 SP do dia seguinte, resolvido por
+   * `readiness-day.helper`. Antes daqui havia um `getReadinessWindowStart()`
+   * privado que prometia 03:00 no JSDoc e cortava à MEIA-NOITE — e era esta a
+   * função que decidia se o corredor já respondeu. Quem terminasse a corrida às
+   * 00:30 abria um check-in novo tendo acabado de voltar da rua.
+   *
+   * ── POR QUE DEVOLVE AS RESPOSTAS JUNTO ────────────────────────────────────
+   *
+   * A linha já vem inteira do banco (`select('*')`) e `check_in_answers` estava
+   * sendo descartado aqui. `WellnessService` então fazia uma SEGUNDA consulta,
+   * com uma cópia independente da janela, só para recuperá-lo — e bastava as
+   * duas discordarem para o card mostrar "respondeu hoje" com as barras
+   * vazias. Devolvendo as respostas daqui, a discordância deixa de ser
+   * expressável: é a mesma linha.
    */
-  async hasCheckedInToday(userId: string): Promise<ReadinessVerdict | null> {
+  async hasCheckedInToday(userId: string): Promise<CheckInDeHoje | null> {
     try {
       const supabase = this.supabaseService.getClient();
 
-      // Get the start of today's readiness window (3 AM in São Paulo)
-      const windowStart = this.getReadinessWindowStart();
+      const dia = readinessDayStr();
+      const windowStart = readinessWindowStartIso(dia);
 
       this.logger.debug(
-        `Checking readiness for user ${userId} since ${windowStart.toISOString()}`,
+        `Checking readiness for user ${userId} in day ${dia} (since ${windowStart})`,
       );
 
       const { data, error } = await supabase
         .from('readiness_history')
         .select('*')
         .eq('user_id', userId)
-        .gte('created_at', windowStart.toISOString())
+        .gte('created_at', windowStart)
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
@@ -161,62 +249,23 @@ export class ReadinessService {
         `Found existing check-in for user ${userId} from ${data.created_at}`,
       );
 
-      // Reconstruct verdict from stored data
+      const row = data as ReadinessHistoryRow;
+
       return {
-        readiness_score: data.score,
-        status_color: data.status_color,
-        status_label: data.status_label,
-        ai_analysis: data.ai_analysis,
-        metrics_summary: data.metrics_summary || [],
-        generated_at: data.created_at,
+        verdict: {
+          readiness_score: row.score,
+          status_color: row.status_color,
+          status_label: row.status_label,
+          ai_analysis: row.ai_analysis,
+          metrics_summary: row.metrics_summary || [],
+          generated_at: row.created_at,
+        },
+        answers: normalizeAnswers(row.check_in_answers),
       };
     } catch (error) {
       this.logger.warn('Error checking today check-in status', error);
       return null;
     }
-  }
-
-  /**
-   * Calculate the start of the current readiness window
-   *
-   * The readiness day starts at MIDNIGHT (00:00) in São Paulo timezone (America/Sao_Paulo)
-   * BRT = UTC-3 (no daylight saving since 2019)
-   *
-   * Examples (times in São Paulo):
-   * - If now is 10:00 AM Jan 10 → window started at 00:00 Jan 10
-   * - If now is 11:30 PM Jan 10 → window started at 00:00 Jan 10
-   */
-  private getReadinessWindowStart(): Date {
-    const SAO_PAULO_OFFSET_HOURS = -3; // UTC-3 for BRT
-
-    // Get current UTC time
-    const nowUtc = new Date();
-
-    // Convert to São Paulo local time
-    const saoPauloNow = new Date(
-      nowUtc.getTime() + SAO_PAULO_OFFSET_HOURS * 60 * 60 * 1000,
-    );
-
-    // Calculate today's midnight in São Paulo (as UTC)
-    // Midnight São Paulo = 03:00 UTC (0 - (-3) = 3 UTC)
-    const todayMidnightSaoPaulo = new Date(
-      Date.UTC(
-        saoPauloNow.getUTCFullYear(),
-        saoPauloNow.getUTCMonth(),
-        saoPauloNow.getUTCDate(),
-        -SAO_PAULO_OFFSET_HOURS, // Convert 00:00 local to UTC (0 - (-3) = 3 UTC)
-        0,
-        0,
-        0,
-      ),
-    );
-
-    const dateStr = `${saoPauloNow.getUTCFullYear()}-${String(saoPauloNow.getUTCMonth() + 1).padStart(2, '0')}-${String(saoPauloNow.getUTCDate()).padStart(2, '0')}`;
-    this.logger.log(
-      `[ReadinessService] Window start: ${todayMidnightSaoPaulo.toISOString()} (Midnight São Paulo, date: ${dateStr})`,
-    );
-
-    return todayMidnightSaoPaulo;
   }
 
   /**
@@ -401,50 +450,66 @@ export class ReadinessService {
     return intensities[type] || 'Moderada';
   }
 
-  async getReadinessStatus(userId: string): Promise<{
-    isUnlocked: boolean;
-    hasCompletedFirstWorkout: boolean;
-    canCheckInToday: boolean;
-    hasCompletedToday: boolean;
-    lastCheckInDate: string | null;
-    todayVerdict: ReadinessVerdict | null;
-  }> {
-    const supabase = this.supabaseService.getClient();
+  /**
+   * A elegibilidade, calculada NA LEITURA — sem tabela e sem cron de desbloqueio.
+   *
+   * ── AS TRÊS CONDIÇÕES ─────────────────────────────────────────────────────
+   *
+   *   1. correu em ALGUM dia anterior a hoje (SP) — corrida de hoje não conta,
+   *      porque o check-in é sobre como o corpo respondeu ao que já passou;
+   *   2. passou o PISO de histórico (span ≥14 dias e ≥6 dias com corrida);
+   *   3. ainda não respondeu na janela de hoje.
+   *
+   * O piso é o que separa "sei pouco" de "sei nada". Abaixo dele o motor não
+   * emite veredito — devolve `learning` com o que falta, e as duas telas de
+   * bloqueio que já existem no app renderizam o estado.
+   *
+   * ── CAMPOS ADITIVOS ───────────────────────────────────────────────────────
+   *
+   * `learning`, `todayAnswers` e `eligibilityReason` são novos. O mobile faz
+   * `as` sem validação, então acrescentar é seguro; remover não seria.
+   */
+  async getReadinessStatus(userId: string): Promise<ReadinessStatus> {
+    const [carga, existente] = await Promise.all([
+      this.engine.loadSignalFor(userId),
+      this.hasCheckedInToday(userId),
+    ]);
 
-    // 1. Check if user has completed at least one workout
-    const { count: workoutCount } = await supabase
-      .from('activities')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('type', 'Run');
+    const hasCompletedToday = existente !== null;
+    const passouOPiso = carga.reason !== 'sem_historico';
 
-    const hasCompletedFirstWorkout = (workoutCount ?? 0) > 0;
+    // "Correu em algum dia anterior a hoje": o piso já exige 6 dias com corrida
+    // dentro da janela, e a série termina ONTEM — então passar no piso implica
+    // ter corrido antes de hoje. A condição fica explícita mesmo assim, porque
+    // `indisponivel` (consulta falhou) não pode desbloquear ninguém por engano.
+    const correuAntesDeHoje =
+      carga.diasDesdeUltimaCorrida !== null && carga.reason !== 'indisponivel';
 
-    // 2. Check readiness_history for today's check-in (after 3 AM)
-    const existingVerdict = await this.hasCheckedInToday(userId);
-    const hasCompletedToday = existingVerdict !== null;
-
-    // User can check in if:
-    // - They have completed first workout
-    // - AND have NOT already checked in today (after 3 AM)
-    const canCheckInToday = hasCompletedFirstWorkout && !hasCompletedToday;
-
-    // Get last completed check-in date from readiness_history
-    const { data: lastCheckIn } = await supabase
-      .from('readiness_history')
-      .select('created_at')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    const desbloqueado = passouOPiso && correuAntesDeHoje;
 
     return {
-      isUnlocked: hasCompletedFirstWorkout,
-      hasCompletedFirstWorkout,
-      canCheckInToday,
+      isUnlocked: desbloqueado,
+      // ⚠️ Mesmo valor que `isUnlocked` de propósito: é este campo que a tela do
+      // quiz consulta para travar (`ReadinessQuizScreen.tsx:146`). Mantê-lo como
+      // "correu alguma vez" deixaria o quiz alcançável pelo push abaixo do piso,
+      // e o corredor responderia para receber uma recusa. A copy da tela ainda
+      // diz "Complete seu primeiro treino"; a R.2 troca pelo progresso.
+      hasCompletedFirstWorkout: desbloqueado,
+      canCheckInToday: desbloqueado && !hasCompletedToday,
       hasCompletedToday,
-      lastCheckInDate: lastCheckIn?.created_at?.split('T')[0] || null,
-      todayVerdict: existingVerdict,
+      lastCheckInDate: existente
+        ? toReadinessDayStr(existente.verdict.generated_at)
+        : null,
+      todayVerdict: existente?.verdict ?? null,
+      todayAnswers: existente?.answers ?? null,
+      learning: carga.floorProgress,
+      eligibilityReason: hasCompletedToday
+        ? 'ja_respondeu'
+        : desbloqueado
+          ? 'ok'
+          : carga.reason === 'indisponivel'
+            ? 'indisponivel'
+            : 'sem_historico',
     };
   }
 

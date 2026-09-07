@@ -22,11 +22,7 @@ import {
   ageFromBirthDate,
   TrainingZone,
 } from './helpers/zones.helper';
-import {
-  computeStreak,
-  saoPauloTodayStr,
-  toSaoPauloDateStr,
-} from './helpers/streak.helper';
+import { computeStreak, toSaoPauloDateStr } from './helpers/streak.helper';
 import {
   buildMetric,
   sparkline7,
@@ -88,7 +84,6 @@ export class WellnessService {
 
     const [
       readinessStatus,
-      readinessAnswers,
       userProfile,
       currentWeekActivities,
       previousWeekActivities,
@@ -104,7 +99,6 @@ export class WellnessService {
         this.logger.warn(`Readiness fetch failed: ${err?.message}`);
         return null;
       }),
-      this.fetchTodayReadinessAnswers(userId),
       this.getUserProfileSafe(userId),
       this.fetchActivities(userId, currentWeek.start, currentWeek.end),
       this.fetchActivities(userId, previousWeek.start, previousWeek.end),
@@ -123,10 +117,7 @@ export class WellnessService {
     const age = ageFromBirthDate(userProfile?.birth_date);
     const maxHR = maxHRFromAge(age);
 
-    const readiness = this.buildReadinessBlock(
-      readinessStatus,
-      readinessAnswers,
-    );
+    const readiness = this.buildReadinessBlock(readinessStatus);
     const performance = this.buildPerformanceBlock(
       currentWeekActivities,
       previousWeekActivities,
@@ -289,40 +280,6 @@ export class WellnessService {
     return data || null;
   }
 
-  private async fetchTodayReadinessAnswers(userId: string): Promise<{
-    sleep: number;
-    legs: number;
-    mood: number;
-    stress: number;
-    motivation: number;
-  } | null> {
-    // Mirrors ReadinessService's window: midnight São Paulo (today 00:00 SP = 03:00 UTC).
-    const today = this.getSaoPauloToday();
-    const windowStart = new Date(
-      Date.UTC(
-        today.getUTCFullYear(),
-        today.getUTCMonth(),
-        today.getUTCDate(),
-        -SAO_PAULO_OFFSET_HOURS,
-        0,
-        0,
-        0,
-      ),
-    );
-
-    const { data, error } = await this.supabaseService
-      .from('readiness_history')
-      .select('check_in_answers')
-      .eq('user_id', userId)
-      .gte('created_at', windowStart.toISOString())
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error || !data?.check_in_answers) return null;
-    return data.check_in_answers;
-  }
-
   private async fetchLastRunActivity(
     userId: string,
   ): Promise<ActivityRow | null> {
@@ -359,14 +316,35 @@ export class WellnessService {
   // Block builders
   // ------------------------------------------------------------------
 
+  /**
+   * O bloco de prontidão do card — veredito e barras vindos da MESMA linha.
+   *
+   * ── O QUE FOI REMOVIDO DAQUI, E POR QUÊ ───────────────────────────────────
+   *
+   * Havia um `fetchTodayReadinessAnswers()` neste service: uma SEGUNDA consulta
+   * a `readiness_history`, com uma cópia independente da janela do dia, só para
+   * recuperar `check_in_answers`. Duas consultas cujos predicados precisavam
+   * concordar por disciplina, para sempre — a mesma forma da mina do
+   * `activities.workout_id`.
+   *
+   * E a falha era silenciosa na direção pior: bastava as janelas divergirem
+   * para o card dizer "check-in concluído" com as cinco barras VAZIAS. Elas de
+   * fato divergiriam no instante em que o readiness passou a cortar às 03:00 e
+   * esta cópia continuasse na meia-noite.
+   *
+   * Agora `getReadinessStatus` devolve `todayAnswers` da mesma linha de onde
+   * tirou o veredito, e a discordância deixa de ser expressável.
+   */
   private buildReadinessBlock(
-    status: any,
-    answers: {
-      sleep: number;
-      legs: number;
-      mood: number;
-      stress: number;
-      motivation: number;
+    status: {
+      hasCompletedToday?: boolean;
+      todayVerdict?: {
+        readiness_score?: number;
+        status_color?: ReadinessBlockDto['statusColor'];
+        status_label?: string;
+        generated_at?: string;
+      } | null;
+      todayAnswers?: ReadinessBlockDto['dimensions'];
     } | null,
   ): ReadinessBlockDto {
     if (!status?.hasCompletedToday || !status?.todayVerdict) {
@@ -379,6 +357,17 @@ export class WellnessService {
         answeredAt: null,
       };
     }
+
+    const answers = status.todayAnswers ?? null;
+    if (!answers) {
+      // Estado agora IMPOSSÍVEL de produzir por divergência de janela — só um
+      // `check_in_answers` malformado no jsonb chega aqui. Vale linha própria.
+      this.logger.error(
+        '[Wellness] hasCompletedToday=true sem check_in_answers válidos — ' +
+          'investigar o jsonb da linha de readiness_history',
+      );
+    }
+
     const v = status.todayVerdict;
     return {
       hasCompletedToday: true,

@@ -11,6 +11,7 @@ import { User } from '../../common/decorators';
 import { ReadinessService } from './readiness.service';
 import { ReadinessCheckInDto } from './dto/readiness.dto';
 import { QuestionSetsParserService } from './question-sets-parser.service';
+import { nextReadinessRotationIso } from './helpers/readiness-day.helper';
 
 @Controller('readiness')
 export class ReadinessController {
@@ -58,7 +59,7 @@ export class ReadinessController {
           `User ${userId} already checked in today, returning existing verdict`,
         );
         return {
-          ...existingVerdict,
+          ...existingVerdict.verdict,
           alreadyCompleted: true,
           message:
             'Check-in já realizado hoje. Próximo disponível amanhã às 03:00 AM.',
@@ -132,7 +133,7 @@ export class ReadinessController {
         setNumber: questionSet.setNumber,
         setName: questionSet.setName,
         questions: questionSet.questions,
-        nextRotation: this.getNextRotationTime(),
+        nextRotation: nextReadinessRotationIso(),
         totalSets: 40,
       };
     } catch (error) {
@@ -142,41 +143,5 @@ export class ReadinessController {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
-  }
-
-  /**
-   * Get the next rotation time (next day at 3 AM São Paulo time)
-   */
-  private getNextRotationTime(): string {
-    const SAO_PAULO_OFFSET_HOURS = -3; // UTC-3
-
-    // Get current UTC time
-    const nowUtc = new Date();
-
-    // Convert to São Paulo local time
-    const saoPauloNow = new Date(
-      nowUtc.getTime() + SAO_PAULO_OFFSET_HOURS * 60 * 60 * 1000,
-    );
-    const saoPauloHour = saoPauloNow.getUTCHours();
-
-    // Calculate next 3 AM in São Paulo (as UTC)
-    const next3amSaoPaulo = new Date(
-      Date.UTC(
-        saoPauloNow.getUTCFullYear(),
-        saoPauloNow.getUTCMonth(),
-        saoPauloNow.getUTCDate(),
-        3 - SAO_PAULO_OFFSET_HOURS, // Convert 3 AM local to UTC (3 - (-3) = 6 UTC)
-        0,
-        0,
-        0,
-      ),
-    );
-
-    // If current São Paulo time is >= 3 AM, next rotation is tomorrow
-    if (saoPauloHour >= 3) {
-      next3amSaoPaulo.setUTCDate(next3amSaoPaulo.getUTCDate() + 1);
-    }
-
-    return next3amSaoPaulo.toISOString();
   }
 }

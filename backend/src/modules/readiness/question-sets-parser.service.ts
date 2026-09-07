@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { readinessDayStr } from './helpers/readiness-day.helper';
 import * as fs from 'fs';
 import * as path from 'path';
 import { SupabaseService } from '../../database/supabase.service';
@@ -215,7 +216,7 @@ export class QuestionSetsParserService implements OnModuleInit {
   private getFallbackSet(): QuestionSet {
     // Use cached sets from memory if available
     if (this.questionSets.length > 0) {
-      const setNumber = this.getSetNumberForDay(new Date());
+      const setNumber = this.getSetNumberForDayStr(readinessDayStr());
       const set = this.questionSets.find((s) => s.setNumber === setNumber);
       return set || this.questionSets[0];
     }
@@ -483,27 +484,22 @@ export class QuestionSetsParserService implements OnModuleInit {
   }
 
   /**
-   * Get a random set number for today based on São Paulo date
-   * Uses a deterministic seed based on date so the same set is used all day
+   * O conjunto de perguntas do DIA DE READINESS, determinístico.
    *
-   * TIMEZONE: Uses America/Sao_Paulo (UTC-3)
-   * CUTOFF: Midnight (00:00) São Paulo time
+   * ── POR QUE RECEBE `dayStr` E NÃO `Date` ──────────────────────────────────
+   *
+   * Receber um `Date` deixava esta função re-derivar o próprio "hoje", com a
+   * sua própria cópia do offset de São Paulo e o seu próprio corte à
+   * meia-noite. Era a terceira das cinco definições de dia que discordavam
+   * dentro da mesma feature — e a consequência é sutil: entre 00:00 e 02:59 SP o
+   * corredor recebia o conjunto de HOJE enquanto o check-in dele seria gravado
+   * na janela de ONTEM.
+   *
+   * Exigindo a string já resolvida, o conjunto entregue e a janela do check-in
+   * passam a falar do mesmo dia por construção, não por disciplina.
    */
-  getSetNumberForDay(date: Date): number {
-    const SAO_PAULO_OFFSET_HOURS = -3; // UTC-3 (BRT)
-
-    // Convert input date to São Paulo time
-    const saoPauloTime = new Date(
-      date.getTime() + SAO_PAULO_OFFSET_HOURS * 60 * 60 * 1000,
-    );
-
-    // Extract date components in São Paulo time
-    const year = saoPauloTime.getUTCFullYear();
-    const month = saoPauloTime.getUTCMonth();
-    const day = saoPauloTime.getUTCDate();
-
-    // Create a deterministic seed from the São Paulo date
-    const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  getSetNumberForDayStr(dayStr: string): number {
+    const dateString = dayStr;
     const seed = this.hashString(dateString);
 
     // Use seed to pick a set number (1-40)
@@ -543,7 +539,7 @@ export class QuestionSetsParserService implements OnModuleInit {
    * Get today's question set
    */
   getTodaysQuestionSet(): QuestionSet {
-    const setNumber = this.getSetNumberForDay(new Date());
+    const setNumber = this.getSetNumberForDayStr(readinessDayStr());
     const set = this.getQuestionSet(setNumber);
 
     if (set) {

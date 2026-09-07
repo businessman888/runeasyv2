@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { SupabaseService } from '../../database/supabase.service';
 import { NotificationService } from '../notifications/notification.service';
 import { ReadinessService } from './readiness.service';
+import { ReadinessEngineService } from './readiness-engine.service';
 import {
   ReadinessAIService,
   ReadinessInput,
@@ -31,14 +32,50 @@ interface Row {
 }
 
 /**
- * Mock de Supabase com estado. Derivado do de `vdot.service.spec.ts`, com três
+ * Colunas cuja comparação é TEMPORAL — `gte`/`lte` sobre elas usam `Date.parse`.
+ *
+ * ⚠️ Declarado, não inferido, e a coerção não é opcional. Os seeds destes testes
+ * escrevem `'2026-03-09T04:00:00Z'` enquanto o código de produção compara com
+ * `'2026-03-09T06:00:00.000Z'`. A comparação de string crua até funciona quando
+ * os dois lados têm exatamente o mesmo formato — e quebra em silêncio no dia em
+ * que um seed omitir os milissegundos ou o `Z`. Pior: `scheduled_date`
+ * ('YYYY-MM-DD') contra um timestamp ISO compara errado de um jeito que PARECE
+ * certo, porque o prefixo bate.
+ */
+const DATE_COLUMNS = new Set([
+  'created_at',
+  'start_date',
+  'scheduled_date',
+  'updated_at',
+  'completed_at',
+]);
+
+/**
+ * Mock de Supabase com estado. Derivado do de `vdot.service.spec.ts`, com quatro
  * diferenças exigidas por este service:
  *
- *  - expõe `from` ALÉM de `getClient()`: `getActivityLoadData` usa
- *    `this.supabaseService.from(...)` direto, enquanto o resto usa `getClient()`;
- *  - grava `calls` (tabela, select, eq, in) para as asserções negativas — é
- *    assim que se prova que uma coluna NÃO é mais consultada;
- *  - aceita `failOn`, para simular o 42703 numa tabela específica.
+ *  - expõe `from` ALÉM de `getClient()`: parte do service usa
+ *    `this.supabaseService.from(...)` direto, o resto usa `getClient()`;
+ *  - grava `calls` (tabela, select, eq, in, gte, lte, order, limit) para as
+ *    asserções negativas — é assim que se prova que uma coluna NÃO é mais
+ *    consultada;
+ *  - aceita `failOn`, para simular o 42703 numa tabela específica;
+ *  - **`gte`/`lte`/`gt`/`lt`, `order` e `limit` FILTRAM DE VERDADE.**
+ *
+ * ── POR QUE O ÚLTIMO ITEM É UM PRÉ-REQUISITO, E NÃO UM CAPRICHO ───────────────
+ *
+ * Até aqui esses seis métodos eram passthrough no-op. Duas consequências, e as
+ * duas invalidavam testes que pareciam sólidos:
+ *
+ *  1. **A janela do check-in não tinha cobertura nenhuma.** `hasCheckedInToday`
+ *     filtra por `.gte('created_at', inicioDaJanela)`; com o `gte` inerte, uma
+ *     linha de ONTEM era devolvida como se fosse de hoje. A suíte só passava
+ *     porque `readiness_history` era sempre semeada vazia. Trocar o corte de
+ *     meia-noite para 03:00 não conseguiria quebrar teste nenhum.
+ *  2. **`.order(desc).limit(1).single()` devolvia a ordem de INSERÇÃO** — ou
+ *     seja, o check-in mais ANTIGO. Qualquer teste chamado "devolve o veredito
+ *     de hoje" era vazio: passaria contra uma implementação que devolvesse
+ *     sempre a primeira linha da tabela.
  */
 function buildMock(seed: Record<string, Row[]>, failOn?: Record<string, Row>) {
   const tables = JSON.parse(JSON.stringify(seed)) as Record<string, Row[]>;
@@ -47,8 +84,29 @@ function buildMock(seed: Record<string, Row[]>, failOn?: Record<string, Row>) {
     selects: [] as string[],
     eq: [] as Array<[string, unknown]>,
     in: [] as Array<[string, unknown[]]>,
+    gte: [] as Array<[string, unknown]>,
+    lte: [] as Array<[string, unknown]>,
+    order: [] as Array<[string, boolean]>,
+    limit: [] as number[],
   };
   let autoId = 0;
+
+  /** Compara uma célula com um valor, coagindo datas. `NULL` nunca satisfaz. */
+  const cmp = (
+    row: Row,
+    col: string,
+    v: unknown,
+    op: (a: number | string, b: number | string) => boolean,
+  ): boolean => {
+    const cell = row[col];
+    if (cell === null || cell === undefined) return false; // como no SQL
+    if (DATE_COLUMNS.has(col)) {
+      const a = Date.parse(String(cell));
+      const b = Date.parse(String(v));
+      if (!Number.isNaN(a) && !Number.isNaN(b)) return op(a, b);
+    }
+    return op(cell as string, v as string);
+  };
 
   const from = jest.fn((table: string) => {
     if (!tables[table]) tables[table] = [];
@@ -57,6 +115,8 @@ function buildMock(seed: Record<string, Row[]>, failOn?: Record<string, Row>) {
     const preds: Array<(row: Row) => boolean> = [];
     let pending: 'select' | 'insert' | 'upsert' = 'select';
     let payload: Row = {};
+    let sort: { col: string; asc: boolean } | null = null;
+    let lim: number | null = null;
 
     const matches = (row: Row) => preds.every((p) => p(row));
 
@@ -67,13 +127,61 @@ function buildMock(seed: Record<string, Row[]>, failOn?: Record<string, Row>) {
         tables[table].push(created);
         return { data: [created], error: null };
       }
-      return { data: tables[table].filter(matches), error: null };
+
+      let rows = tables[table].filter(matches);
+
+      if (sort) {
+        const { col, asc } = sort;
+        rows = [...rows].sort((x, y) => {
+          const a = DATE_COLUMNS.has(col)
+            ? Date.parse(String(x[col]))
+            : (x[col] as number);
+          const b = DATE_COLUMNS.has(col)
+            ? Date.parse(String(y[col]))
+            : (y[col] as number);
+          if (a === b) return 0;
+          return (a < b ? -1 : 1) * (asc ? 1 : -1);
+        });
+      }
+
+      if (lim !== null) rows = rows.slice(0, lim);
+
+      return { data: rows, error: null };
     };
 
     const chain: Record<string, unknown> = {};
-    for (const m of ['order', 'limit', 'not', 'or', 'gte', 'lte', 'gt']) {
+    for (const m of ['not', 'or']) {
       chain[m] = jest.fn(() => chain);
     }
+
+    const comparadores: Array<
+      [string, (a: number | string, b: number | string) => boolean]
+    > = [
+      ['gte', (a, b) => a >= b],
+      ['lte', (a, b) => a <= b],
+      ['gt', (a, b) => a > b],
+      ['lt', (a, b) => a < b],
+    ];
+    for (const [m, op] of comparadores) {
+      chain[m] = jest.fn((c: string, v: unknown) => {
+        if (m === 'gte') calls.gte.push([c, v]);
+        if (m === 'lte') calls.lte.push([c, v]);
+        preds.push((r) => cmp(r, c, v, op));
+        return chain;
+      });
+    }
+
+    chain.order = jest.fn((c: string, opts?: { ascending?: boolean }) => {
+      const asc = opts?.ascending !== false;
+      calls.order.push([c, asc]);
+      sort = { col: c, asc };
+      return chain;
+    });
+    chain.limit = jest.fn((n: number) => {
+      calls.limit.push(n);
+      lim = n;
+      return chain;
+    });
     chain.select = jest.fn((cols?: string) => {
       if (typeof cols === 'string') calls.selects.push(cols);
       return chain;
@@ -184,6 +292,10 @@ describe('ReadinessService — treino planejado', () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
         ReadinessService,
+        // O engine real, com o MESMO Supabase mockado: as consultas de carga e
+        // de baseline passam pelo mock de verdade em vez de um stub, então o
+        // caminho degradado (tabela vazia → sem histórico) é o que roda aqui.
+        ReadinessEngineService,
         { provide: SupabaseService, useValue: mock },
         { provide: ReadinessAIService, useValue: aiService },
         {
@@ -431,6 +543,98 @@ describe('ReadinessService — treino planejado', () => {
    * as chaves que só aparecem quando alguém serializa o objeto inteiro. É essa
    * a regressão que ele existe para pegar.
    */
+  /**
+   * A JANELA DO CHECK-IN — o corte das 03:00 de São Paulo.
+   *
+   * Estes testes não existiam, e não PODIAM existir: o mock tratava `.gte()`
+   * como no-op, então qualquer linha semeada em `readiness_history` era
+   * devolvida independentemente do timestamp. A suíte só passava porque a tabela
+   * era sempre semeada vazia.
+   *
+   * Com o mock filtrando de verdade, este bloco falha contra o corte à
+   * meia-noite e passa contra o corte às 03:00.
+   */
+  describe('a janela de 03:00 SP', () => {
+    const AS_15H_SP_DO_DIA_10 = new Date('2026-03-10T18:00:00.000Z');
+
+    const linhaDeCheckIn = (createdAt: string): Row => ({
+      id: 'rh-1',
+      user_id: USER,
+      created_at: createdAt,
+      score: 80,
+      status_color: 'green',
+      status_label: 'Pronto',
+      ai_analysis: { headline: 'h', reasoning: 'r', plan_adjustment: 'p' },
+      metrics_summary: [],
+      check_in_answers: answers,
+    });
+
+    beforeEach(() => {
+      jest.setSystemTime(AS_15H_SP_DO_DIA_10);
+    });
+
+    it('check-in de 01:00 SP pertence ao dia ANTERIOR — não bloqueia hoje', async () => {
+      // 04:00Z = 01:00 SP do dia 10. Com corte à meia-noite isto seria "hoje" e
+      // o corredor ficaria sem check-in; com corte às 03:00 é de ontem.
+      const { service } = await build({
+        readiness_history: [linhaDeCheckIn('2026-03-10T04:00:00.000Z')],
+      });
+
+      expect(await service.hasCheckedInToday(USER)).toBeNull();
+    });
+
+    it('check-in de 03:00 SP em ponto JÁ é de hoje', async () => {
+      const { service } = await build({
+        readiness_history: [linhaDeCheckIn('2026-03-10T06:00:00.000Z')],
+      });
+
+      expect(await service.hasCheckedInToday(USER)).not.toBeNull();
+    });
+
+    it('check-in do meio da tarde é de hoje', async () => {
+      const { service } = await build({
+        readiness_history: [linhaDeCheckIn('2026-03-10T17:00:00.000Z')],
+      });
+
+      expect(await service.hasCheckedInToday(USER)).not.toBeNull();
+    });
+
+    it('consulta a janela pela borda das 03:00, não pela meia-noite', async () => {
+      const { service, calls } = await build({ readiness_history: [] });
+      await service.hasCheckedInToday(USER);
+
+      const janela = calls.gte.find(([col]) => col === 'created_at');
+      expect(janela).toBeDefined();
+      expect(String(janela[1])).toBe('2026-03-10T06:00:00.000Z');
+      // 03:00Z seria meia-noite SP — o corte antigo.
+      expect(String(janela[1])).not.toBe('2026-03-10T03:00:00.000Z');
+    });
+
+    it('entre vários check-ins da janela, devolve o MAIS RECENTE', async () => {
+      // Sem `order`/`limit` reais no mock, este teste devolveria o mais antigo
+      // e passaria contra uma implementação que ignorasse a ordenação.
+      const { service } = await build({
+        readiness_history: [
+          { ...linhaDeCheckIn('2026-03-10T07:00:00.000Z'), score: 40 },
+          { ...linhaDeCheckIn('2026-03-10T16:00:00.000Z'), score: 90 },
+        ],
+      });
+
+      const v = await service.hasCheckedInToday(USER);
+      expect(v?.verdict.readiness_score).toBe(90);
+    });
+
+    it('não devolve o check-in de OUTRO corredor', async () => {
+      const { service } = await build({
+        readiness_history: [
+          { ...linhaDeCheckIn('2026-03-10T16:00:00.000Z'), user_id: OUTRO },
+        ],
+      });
+
+      expect(await service.hasCheckedInToday(USER)).toBeNull();
+    });
+  });
+
   describe('privacidade do log', () => {
     it('não emite o conteúdo do quiz nem do veredito em nenhum nível', async () => {
       const capturado: string[] = [];
