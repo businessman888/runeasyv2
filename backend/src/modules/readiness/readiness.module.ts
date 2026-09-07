@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ReadinessController } from './readiness.controller';
 import { ReadinessService } from './readiness.service';
@@ -8,6 +8,7 @@ import { ReadinessScheduler } from './readiness-scheduler.service';
 import { QuestionSetsParserService } from './question-sets-parser.service';
 import { DatabaseModule } from '../../database';
 import { NotificationModule } from '../notifications';
+import { SubscriptionModule } from '../subscription/subscription.module';
 
 /**
  * ⚠️ NÃO adicione `ScheduleModule.forRoot()` aqui.
@@ -20,7 +21,16 @@ import { NotificationModule } from '../notifications';
  * `global: true`.
  */
 @Module({
-  imports: [ConfigModule, DatabaseModule, NotificationModule],
+  imports: [
+    ConfigModule,
+    DatabaseModule,
+    NotificationModule,
+    // `forwardRef` é obrigatório: `SubscriptionModule` importa
+    // `forwardRef(() => TrainingModule)` e `TrainingModule` importa
+    // `ReadinessModule`. Sem ele, Readiness → Subscription fecha o ciclo
+    // Readiness → Subscription → Training → Readiness.
+    forwardRef(() => SubscriptionModule),
+  ],
   controllers: [ReadinessController],
   providers: [
     ReadinessService,

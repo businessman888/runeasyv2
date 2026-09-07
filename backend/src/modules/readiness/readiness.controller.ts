@@ -12,6 +12,7 @@ import { ReadinessService } from './readiness.service';
 import { ReadinessCheckInDto } from './dto/readiness.dto';
 import { QuestionSetsParserService } from './question-sets-parser.service';
 import { nextReadinessRotationIso } from './helpers/readiness-day.helper';
+import { SubscriptionService } from '../subscription/subscription.service';
 
 @Controller('readiness')
 export class ReadinessController {
@@ -20,6 +21,7 @@ export class ReadinessController {
   constructor(
     private readonly readinessService: ReadinessService,
     private readonly questionSetsParser: QuestionSetsParserService,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   /**
@@ -64,6 +66,53 @@ export class ReadinessController {
           message:
             'Check-in já realizado hoje. Próximo disponível amanhã às 03:00 AM.',
         };
+      }
+
+      // ── PRO-GATE ────────────────────────────────────────────────────────
+      //
+      // Até aqui o gate existia SÓ no mobile (`WellnessScreen.tsx:108`), então
+      // qualquer conta autenticada — Free inclusive — disparava uma chamada de
+      // IA paga batendo nesta rota direto.
+      //
+      // Usa `SubscriptionService.isProUser`, e NÃO o `ProGuard` do repo: aquele
+      // lê apenas `subscription_plan` e ignora `subscription_status`, então
+      // `plan='pro', status='expired'` passa por ele e falha aqui. O docblock do
+      // próprio guard recomenda o check in-handler para fluxos que devem
+      // degradar em vez de barrar seco.
+      const isPro = await this.subscriptionService
+        .isProUser(userId)
+        .catch((e: Error) => {
+          // Falha de consulta não pode virar bloqueio: o corredor Pro já
+          // respondeu o quiz. Deixa passar e registra.
+          this.logger.warn(
+            `[Readiness] isProUser falhou para ${userId}, liberando: ${e.message}`,
+          );
+          return true;
+        });
+
+      if (!isPro) {
+        throw new HttpException(
+          'A prontidão diária faz parte do RunEasy Pro.',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+
+      // ── PISO DE HISTÓRICO ───────────────────────────────────────────────
+      //
+      // Abaixo do piso o motor não emite veredito, e recusar AQUI significa
+      // zero chamada de IA. A tela do quiz já trava por `hasCompletedFirstWorkout`
+      // (que agora reflete o piso); esta é a rede para quem chegou pelo push.
+      const status = await this.readinessService.getReadinessStatus(userId);
+      if (!status.isUnlocked) {
+        throw new HttpException(
+          {
+            message:
+              'Sua prontidão ainda está aprendendo o seu normal. Continue treinando.',
+            learning: status.learning,
+            eligibilityReason: status.eligibilityReason,
+          },
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
       }
 
       const verdict = await this.readinessService.analyzeReadiness(

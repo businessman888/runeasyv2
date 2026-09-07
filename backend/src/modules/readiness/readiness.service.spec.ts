@@ -5,8 +5,8 @@ import { NotificationService } from '../notifications/notification.service';
 import { ReadinessService } from './readiness.service';
 import { ReadinessEngineService } from './readiness-engine.service';
 import {
+  PlannedContext,
   ReadinessAIService,
-  ReadinessInput,
   ReadinessVerdict,
 } from './readiness-ai.service';
 
@@ -267,7 +267,7 @@ function workout(over: Partial<Row> = {}): Row {
 const AGORA_UTC = new Date('2026-03-10T02:00:00.000Z');
 
 describe('ReadinessService — treino planejado', () => {
-  let aiService: { analyzeReadiness: jest.Mock };
+  let aiService: { narrate: jest.Mock; buildMetricsSummary: jest.Mock };
 
   async function build(
     seed: Record<string, Row[]>,
@@ -286,7 +286,8 @@ describe('ReadinessService — treino planejado', () => {
     );
 
     aiService = {
-      analyzeReadiness: jest.fn().mockResolvedValue({ ...verdict }),
+      narrate: jest.fn().mockResolvedValue({ ...verdict.ai_analysis }),
+      buildMetricsSummary: jest.fn().mockReturnValue([]),
     };
 
     const moduleRef: TestingModule = await Test.createTestingModule({
@@ -308,11 +309,16 @@ describe('ReadinessService — treino planejado', () => {
     return { service: moduleRef.get(ReadinessService), calls };
   }
 
-  /** O que efetivamente foi entregue ao prompt. */
-  const inputDaIA = (): ReadinessInput => {
-    const [primeiraChamada] = aiService.analyzeReadiness.mock
-      .calls as unknown[][];
-    return primeiraChamada[0] as ReadinessInput;
+  /**
+   * O CONTEXTO de treino entregue ao narrador.
+   *
+   * Depois da R.1 a IA recebe `(decision, contexto, userId)` — o veredito já
+   * decidido no 1º argumento, o treino no 2º. Estes testes seguem sendo sobre o
+   * treino, então olham o 2º.
+   */
+  const inputDaIA = (): PlannedContext => {
+    const [primeiraChamada] = aiService.narrate.mock.calls as unknown[][];
+    return primeiraChamada[1] as PlannedContext;
   };
 
   beforeEach(() => {

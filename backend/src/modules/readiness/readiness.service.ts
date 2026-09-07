@@ -3,8 +3,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   ReadinessAIService,
   ReadinessVerdict,
-  ReadinessInput,
   ReadinessAnswers,
+  PlannedContext,
 } from './readiness-ai.service';
 import {
   PlannedWorkoutRow,
@@ -142,57 +142,44 @@ export class ReadinessService {
       return existingCheckIn.verdict;
     }
 
-    // 1. Get recent activity load data from activities table
-    const loadData = await this.getActivityLoadData(userId);
-    const loadDescription = this.getLoadDescription(loadData);
-
-    // 2. Get today's and tomorrow's planned workout (dia de São Paulo)
+    // 1. O treino de hoje e de amanhã (dia de São Paulo).
     const planned = await this.fetchPlannedWorkouts(userId, saoPauloTodayStr());
 
-    // 3. Prepare input for AI analysis
-    const input: ReadinessInput = {
-      checkIn: answers,
-      trainingLoadData: loadDescription,
-      todayWorkout: planned.today,
-      tomorrowWorkout: planned.tomorrow,
-      workoutLookupFailed: planned.lookupFailed,
+    // 2. O VEREDITO, decidido em código. Score, cor e recomendação existem
+    //    antes de qualquer chamada de rede — é o que permite o fallback.
+    const { decision } = await this.engine.compute(userId, answers, {
+      todayWorkoutType: planned.today?.type ?? null,
+      todayIsRaceDay: planned.today?.intensity === 'Máxima',
+    });
+
+    // 3. A IA só NARRA. `narrate` nunca rejeita; se a IA cair, o texto sai
+    //    determinístico e o corredor recebe o mesmo número e a mesma cor.
+    const ai_analysis = await this.readinessAIService.narrate(
+      decision,
+      {
+        todayWorkout: planned.today,
+        tomorrowWorkout: planned.tomorrow,
+        workoutLookupFailed: planned.lookupFailed,
+      },
+      userId,
+    );
+
+    const verdict: ReadinessVerdict = {
+      readiness_score: decision.score,
+      status_color: decision.color,
+      status_label: decision.statusLabel,
+      ai_analysis,
+      metrics_summary: this.readinessAIService.buildMetricsSummary(decision),
+      generated_at: new Date().toISOString(),
     };
 
-    // 4. Get AI verdict
-    let verdict = await this.readinessAIService.analyzeReadiness(input, userId);
+    this.logger.log(
+      `[Readiness] user=${userId} score=${decision.score} (quiz=${decision.baseScore}` +
+        `, carga=${decision.loadDeltaApplied}${decision.clampedByBand ? ' aparado' : ''}) ` +
+        `cor=${decision.color} ajuste=${decision.planAdjustment} carga=${decision.load.reason}`,
+    );
 
-    // 5. ACWR Balancing Logic: Override red to yellow for borderline cases with positive check-in
-    const checkInAvg =
-      (answers.sleep +
-        answers.legs +
-        answers.mood +
-        answers.stress +
-        answers.motivation) /
-      5;
-    const acwr = loadData.acwr || 1.0;
-
-    if (
-      verdict.status_color === 'red' &&
-      acwr >= 1.4 &&
-      acwr <= 1.6 &&
-      checkInAvg >= 4
-    ) {
-      // `checkInAvg` fica de fora de propósito: é a média das 5 respostas do
-      // quiz, ou seja um valor de saúde derivado, e as linhas vizinhas deste
-      // mesmo log já carregam o `user_id`. O ACWR é carga de treino, não
-      // autorrelato — esse pode ficar, e sozinho já explica o override.
-      this.logger.log(
-        `ACWR balancing: Overriding red to yellow (ACWR=${acwr})`,
-      );
-      verdict = {
-        ...verdict,
-        status_color: 'yellow',
-        status_label: 'Sinal amarelo - Atenção',
-        readiness_score: Math.max(verdict.readiness_score, 45), // Ensure score is at least 45 for yellow
-      };
-    }
-
-    // 6. Save to database for history (including set_number for exclusion tracking)
+    // 4. Persistir (com o set_number para a lógica de exclusão de conjuntos).
     await this.saveReadinessResult(userId, answers, verdict, setNumber);
 
     return verdict;
@@ -306,8 +293,8 @@ export class ReadinessService {
     userId: string,
     todayStr: string,
   ): Promise<{
-    today?: ReadinessInput['todayWorkout'];
-    tomorrow?: ReadinessInput['tomorrowWorkout'];
+    today?: PlannedContext['todayWorkout'];
+    tomorrow?: PlannedContext['tomorrowWorkout'];
     lookupFailed: boolean;
   }> {
     const tomorrowStr = addDaysStr(todayStr, 1);
@@ -645,83 +632,5 @@ export class ReadinessService {
       this.logger.warn(`ensureUserProfile error: ${error?.message || error}`);
       // Don't throw - continue to try the insert
     }
-  }
-
-  /**
-   * Get activity load data from the activities table.
-   * Calculates ACWR (Acute:Chronic Workload Ratio) from recent activities.
-   */
-  private async getActivityLoadData(userId: string): Promise<{
-    acwr: number;
-    weeklyDistanceKm: number;
-    weeklyDurationMin: number;
-    totalActivities7d: number;
-  }> {
-    const supabase = this.supabaseService;
-    const now = new Date();
-
-    // Last 7 days (acute load)
-    const sevenDaysAgo = new Date(now);
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    // Last 28 days (chronic load)
-    const twentyEightDaysAgo = new Date(now);
-    twentyEightDaysAgo.setDate(twentyEightDaysAgo.getDate() - 28);
-
-    const { data: recentActivities } = await supabase
-      .from('activities')
-      .select('distance, moving_time, start_date')
-      .eq('user_id', userId)
-      .eq('type', 'Run')
-      .gte('start_date', twentyEightDaysAgo.toISOString())
-      .order('start_date', { ascending: false });
-
-    const activities = recentActivities || [];
-
-    // Calculate acute load (last 7 days)
-    const acuteActivities = activities.filter(
-      (a) => new Date(a.start_date) >= sevenDaysAgo,
-    );
-    const acuteDistance = acuteActivities.reduce(
-      (sum: number, a: any) => sum + (a.distance || 0),
-      0,
-    );
-    const acuteDuration = acuteActivities.reduce(
-      (sum: number, a: any) => sum + (a.moving_time || 0),
-      0,
-    );
-
-    // Calculate chronic load (weekly average over 28 days)
-    const chronicDistance =
-      activities.reduce((sum: number, a: any) => sum + (a.distance || 0), 0) /
-      4;
-
-    // ACWR = acute / chronic (avoid division by zero)
-    const acwr = chronicDistance > 0 ? acuteDistance / chronicDistance : 1.0;
-
-    return {
-      acwr: Math.round(acwr * 100) / 100,
-      weeklyDistanceKm: Math.round((acuteDistance / 1000) * 100) / 100,
-      weeklyDurationMin: Math.round(acuteDuration / 60),
-      totalActivities7d: acuteActivities.length,
-    };
-  }
-
-  /**
-   * Get human-readable description of workout load for AI analysis.
-   */
-  private getLoadDescription(data: {
-    acwr: number;
-    weeklyDistanceKm: number;
-    weeklyDurationMin: number;
-    totalActivities7d: number;
-  }): string {
-    let loadLevel: string;
-    if (data.acwr < 0.8) loadLevel = 'baixa (destreinamento)';
-    else if (data.acwr <= 1.3) loadLevel = 'adequada';
-    else if (data.acwr <= 1.5) loadLevel = 'moderada-alta';
-    else loadLevel = 'alta (risco de lesão)';
-
-    return `Carga semanal: ${data.weeklyDistanceKm}km em ${data.totalActivities7d} atividades (${data.weeklyDurationMin}min total). ACWR: ${data.acwr} - Carga ${loadLevel}.`;
   }
 }

@@ -3,6 +3,7 @@ import { HttpException, HttpStatus } from '@nestjs/common';
 import { ReadinessController } from './readiness.controller';
 import { ReadinessService } from './readiness.service';
 import { QuestionSetsParserService } from './question-sets-parser.service';
+import { SubscriptionService } from '../subscription/subscription.service';
 import { ReadinessCheckInDto } from './dto/readiness.dto';
 
 /**
@@ -40,13 +41,20 @@ describe('ReadinessController', () => {
     hasCheckedInToday: jest.Mock;
     getReadinessStatus: jest.Mock;
   };
+  let subscription: { isProUser: jest.Mock };
 
   beforeEach(async () => {
     service = {
       analyzeReadiness: jest.fn().mockResolvedValue(verdict),
       hasCheckedInToday: jest.fn().mockResolvedValue(null),
-      getReadinessStatus: jest.fn().mockResolvedValue({}),
+      // Por padrão: Pro, desbloqueado, sem check-in hoje.
+      getReadinessStatus: jest.fn().mockResolvedValue({
+        isUnlocked: true,
+        learning: null,
+        eligibilityReason: 'ok',
+      }),
     };
+    subscription = { isProUser: jest.fn().mockResolvedValue(true) };
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       controllers: [ReadinessController],
@@ -59,6 +67,7 @@ describe('ReadinessController', () => {
             getTodaysQuestionSet: jest.fn(),
           },
         },
+        { provide: SubscriptionService, useValue: subscription },
       ],
     }).compile();
 
@@ -108,7 +117,7 @@ describe('ReadinessController', () => {
   });
 
   it('a checagem de "já respondeu hoje" também usa o id do token', async () => {
-    service.hasCheckedInToday.mockResolvedValue(verdict);
+    service.hasCheckedInToday.mockResolvedValue({ verdict, answers: null });
 
     const res = await controller.analyzeReadiness(TOKEN_USER, bodyHostil);
 
@@ -149,5 +158,62 @@ describe('ReadinessController', () => {
     await expect(
       controller.analyzeReadiness(TOKEN_USER, bodyHostil),
     ).rejects.toMatchObject({ status: HttpStatus.INTERNAL_SERVER_ERROR });
+  });
+
+  /**
+   * O PRO-GATE e o PISO — os dois caminhos que recusam ANTES de gastar IA.
+   *
+   * Até a R.1 o gate existia só no mobile, então qualquer conta autenticada
+   * queimava orçamento de IA batendo nesta rota direto.
+   */
+  describe('recusas que não custam uma chamada de IA', () => {
+    it('conta Free recebe 403 e o motor NÃO roda', async () => {
+      subscription.isProUser.mockResolvedValue(false);
+
+      await expect(
+        controller.analyzeReadiness('u1', bodyHostil as never),
+      ).rejects.toMatchObject({ status: 403 });
+
+      expect(service.analyzeReadiness).not.toHaveBeenCalled();
+    });
+
+    it('abaixo do piso recebe 422 com o progresso, e o motor NÃO roda', async () => {
+      service.getReadinessStatus.mockResolvedValue({
+        isUnlocked: false,
+        learning: {
+          spanDays: 6,
+          runDays: 3,
+          missingSpanDays: 8,
+          missingRunDays: 3,
+        },
+        eligibilityReason: 'sem_historico',
+      });
+
+      await expect(
+        controller.analyzeReadiness('u1', bodyHostil as never),
+      ).rejects.toMatchObject({ status: 422 });
+
+      expect(service.analyzeReadiness).not.toHaveBeenCalled();
+    });
+
+    it('falha ao consultar a assinatura LIBERA em vez de barrar', async () => {
+      // O corredor já respondeu o quiz; transformar um erro de consulta em
+      // bloqueio puniria quem pagou.
+      subscription.isProUser.mockRejectedValue(new Error('db down'));
+
+      await expect(
+        controller.analyzeReadiness('u1', bodyHostil as never),
+      ).resolves.toMatchObject({ alreadyCompleted: false });
+
+      expect(service.analyzeReadiness).toHaveBeenCalled();
+    });
+
+    it('quem já respondeu hoje nem chega no Pro-gate', async () => {
+      service.hasCheckedInToday.mockResolvedValue({ verdict, answers: null });
+
+      const r = await controller.analyzeReadiness('u1', bodyHostil as never);
+      expect(r).toMatchObject({ alreadyCompleted: true });
+      expect(subscription.isProUser).not.toHaveBeenCalled();
+    });
   });
 });

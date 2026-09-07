@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { SupabaseService } from '../../database/supabase.service';
 import { NotificationService } from '../notifications/notification.service';
+import { ReadinessService } from './readiness.service';
 import { saoPauloTodayStr } from '../training/wellness/helpers/streak.helper';
 import { addDaysStr } from '../training/helpers/plan-window.helper';
 
@@ -12,6 +13,7 @@ export class ReadinessScheduler {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly notificationService: NotificationService,
+    private readonly readinessService: ReadinessService,
   ) {}
 
   /**
@@ -30,16 +32,28 @@ export class ReadinessScheduler {
    * estado real do check-in vive em `readiness_history`. `readiness_checkins`
    * não era lida em lugar nenhum do repositório. O bloco saiu inteiro.
    *
-   * ⚠️ Este job NOTIFICA; ele não desbloqueia nada. A elegibilidade continua
-   * sendo `getReadinessStatus`, calculada on-read. Separar as duas coisas — e o
-   * horário civil da notificação — é R.1.
+   * ⚠️ Este job NOTIFICA; ele não desbloqueia nada. A elegibilidade é
+   * `getReadinessStatus`, calculada on-read.
+   *
+   * ── POR QUE 07:00, E NÃO 03:00 ────────────────────────────────────────────
+   *
+   * Às 03:00 o corredor está dormindo. O horário existia porque o job também
+   * tentava "desbloquear" o check-in, e o desbloqueio precisava acontecer na
+   * virada do dia; desde que a elegibilidade passou a ser calculada na leitura,
+   * o convite pode acontecer em horário civil. As duas coisas eram uma só e
+   * agora são duas.
+   *
+   * ── QUEM NÃO É CONVIDADO ──────────────────────────────────────────────────
+   *
+   * Quem correu ontem mas ainda está ABAIXO DO PISO de histórico. Convidar
+   * alguém para uma tela que vai recusá-lo é pior do que não convidar.
    */
-  @Cron('0 3 * * *', {
-    name: 'unlock-daily-readiness',
+  @Cron('0 7 * * *', {
+    name: 'notify-daily-readiness',
     timeZone: 'America/Sao_Paulo', // UTC-3 (Brasília time)
   })
   async unlockDailyReadiness() {
-    this.logger.log('Starting daily readiness unlock job...');
+    this.logger.log('Starting daily readiness invite job...');
 
     try {
       const supabase = this.supabaseService.getClient();
@@ -85,6 +99,7 @@ export class ReadinessScheduler {
 
       let notifiedCount = 0;
       let notificationsSent = 0;
+      let semPiso = 0;
 
       // 2. For each user, create the in-app row + send the push — UMA VEZ.
       //
@@ -97,6 +112,14 @@ export class ReadinessScheduler {
       // nenhum cálculo, veredito ou janela de check-in muda aqui.
       for (const userId of uniqueUserIds) {
         try {
+          // Não convidar quem a tela vai recusar.
+          const status = await this.readinessService.getReadinessStatus(userId);
+          if (!status.isUnlocked) {
+            semPiso++;
+            continue;
+          }
+          if (status.hasCompletedToday) continue;
+
           const result = await this.notificationService.notifyOnce({
             userId,
             type: 'system',
@@ -131,10 +154,11 @@ export class ReadinessScheduler {
       }
 
       this.logger.log(
-        `Daily readiness unlock completed: ${notifiedCount} notified, ${notificationsSent} pushes sent`,
+        `Daily readiness invite completed: ${notifiedCount} notified, ` +
+          `${notificationsSent} pushes sent, ${semPiso} ainda abaixo do piso`,
       );
     } catch (error) {
-      this.logger.error('Failed to unlock daily readiness', error);
+      this.logger.error('Failed to send daily readiness invite', error);
     }
   }
 
