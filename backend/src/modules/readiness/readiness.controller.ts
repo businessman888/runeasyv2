@@ -53,21 +53,6 @@ export class ReadinessController {
     // existia aqui era uma segunda cópia das mesmas regras.
 
     try {
-      // Check if user already completed check-in today (after 3 AM)
-      const existingVerdict =
-        await this.readinessService.hasCheckedInToday(userId);
-      if (existingVerdict) {
-        this.logger.log(
-          `User ${userId} already checked in today, returning existing verdict`,
-        );
-        return {
-          ...existingVerdict.verdict,
-          alreadyCompleted: true,
-          message:
-            'Check-in já realizado hoje. Próximo disponível amanhã às 03:00 AM.',
-        };
-      }
-
       // ── PRO-GATE ────────────────────────────────────────────────────────
       //
       // Até aqui o gate existia SÓ no mobile (`WellnessScreen.tsx:108`), então
@@ -97,30 +82,45 @@ export class ReadinessController {
         );
       }
 
-      // ── PISO DE HISTÓRICO ───────────────────────────────────────────────
+      // ── UMA CHAMADA DECIDE OS TRÊS DESFECHOS ────────────────────────────
       //
-      // Abaixo do piso o motor não emite veredito, e recusar AQUI significa
-      // zero chamada de IA. A tela do quiz já trava por `hasCompletedFirstWorkout`
-      // (que agora reflete o piso); esta é a rede para quem chegou pelo push.
-      const status = await this.readinessService.getReadinessStatus(userId);
-      if (!status.isUnlocked) {
+      // O controller chamava `hasCheckedInToday` e `getReadinessStatus` por
+      // conta própria antes daqui, e o service refazia as duas coisas: por
+      // check-in eram 11 idas ao banco, 4 delas repetindo consulta idêntica
+      // (`readiness_history` 3×, `activities` 2×, `workouts` 2×). Medido em
+      // staging: `SLOW: POST /api/readiness/analyze — 4121ms`, dos quais 2503ms
+      // eram a IA.
+      //
+      // O piso continua sendo checado ANTES da IA — só que lá dentro, onde o
+      // dado já está na mão.
+      const resultado = await this.readinessService.analyzeReadiness(
+        userId,
+        dto.answers,
+        dto.setNumber,
+      );
+
+      if (resultado.kind === 'ja_respondeu') {
+        return {
+          ...resultado.verdict,
+          alreadyCompleted: true,
+          message:
+            'Check-in já realizado hoje. Próximo disponível amanhã às 03:00 AM.',
+        };
+      }
+
+      if (resultado.kind === 'aprendendo') {
         throw new HttpException(
           {
             message:
               'Sua prontidão ainda está aprendendo o seu normal. Continue treinando.',
-            learning: status.learning,
-            eligibilityReason: status.eligibilityReason,
+            learning: resultado.learning,
+            eligibilityReason: 'sem_historico',
           },
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
 
-      const verdict = await this.readinessService.analyzeReadiness(
-        userId,
-        dto.answers,
-        dto.setNumber,
-      );
-      return { ...verdict, alreadyCompleted: false };
+      return { ...resultado.verdict, alreadyCompleted: false };
     } catch (error) {
       // Sem este rethrow, qualquer HttpException levantada aqui dentro (401,
       // 404, 422) viraria um 500 genérico.

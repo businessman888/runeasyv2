@@ -266,6 +266,36 @@ function workout(over: Partial<Row> = {}): Row {
  */
 const AGORA_UTC = new Date('2026-03-10T02:00:00.000Z');
 
+/**
+ * Histórico que PASSA o piso — 4x/semana por 8 semanas, 45 min cada.
+ *
+ * Precisa existir em todo teste que exercita o caminho completo do check-in:
+ * desde a R.1, `analyzeReadiness` recusa ANTES da IA quando o corredor está
+ * abaixo do piso (span <14 dias ou <6 dias com corrida). Sem este histórico,
+ * um teste sobre o treino planejado nunca chegaria ao prompt.
+ *
+ * O último dia é 2 dias antes de `AGORA` porque a série de carga termina no
+ * último dia FECHADO.
+ */
+function historicoQuePassaOPiso(): Row[] {
+  const out: Row[] = [];
+  // AGORA = 2026-03-10T02:00:00Z → dia de readiness 2026-03-09, série até 03-08.
+  const base = Date.UTC(2026, 2, 8);
+  for (let k = 0; k <= 55; k++) {
+    if (![0, 2, 4, 6].includes(k % 7)) continue;
+    const d = new Date(base - k * 86_400_000);
+    const iso = d.toISOString().slice(0, 10);
+    out.push({
+      id: `hist-${k}`,
+      user_id: USER,
+      start_date: `${iso}T13:00:00.000Z`,
+      moving_time: 45 * 60,
+      type: 'Run',
+    });
+  }
+  return out;
+}
+
 describe('ReadinessService — treino planejado', () => {
   let aiService: { narrate: jest.Mock; buildMetricsSummary: jest.Mock };
 
@@ -277,7 +307,9 @@ describe('ReadinessService — treino planejado', () => {
       {
         readiness_history: [],
         users: [{ id: USER }],
-        activities: [],
+        // Por padrão o corredor PASSA o piso; quem quiser testar o bloqueio
+        // sobrescreve com `{ activities: [] }`.
+        activities: historicoQuePassaOPiso(),
         training_plans: [{ id: 'plan-ativo', user_id: USER, status: 'active' }],
         workouts: [],
         ...seed,
@@ -371,11 +403,16 @@ describe('ReadinessService — treino planejado', () => {
 
     await service.analyzeReadiness(USER, answers);
 
-    expect(calls.tables.filter((t) => t === 'workouts')).toHaveLength(1);
-    expect(calls.in).toContainEqual([
-      'scheduled_date',
-      ['2026-03-09', '2026-03-10'],
-    ]);
+    // Uma consulta só POR DATA, com os dois dias juntos. Antes eram duas
+    // sequenciais e idênticas, cada uma carregando `plan_json` inteiro.
+    //
+    // Contar `calls.tables` não serve mais: desde a R.1 o motor também lê
+    // `workouts`, por `activity_id`, para descobrir o tipo de cada corrida. São
+    // consultas diferentes com propósitos diferentes; o que este teste protege
+    // é a busca por data.
+    const porData = calls.in.filter(([col]) => col === 'scheduled_date');
+    expect(porData).toHaveLength(1);
+    expect(porData[0][1]).toEqual(['2026-03-09', '2026-03-10']);
   });
 
   it('erro do PostgREST vira log de ERRO, não silêncio — e o check-in sobrevive', async () => {
@@ -392,10 +429,15 @@ describe('ReadinessService — treino planejado', () => {
       },
     );
 
-    // (i) o check-in NÃO cai
-    await expect(
-      service.analyzeReadiness(USER, answers),
-    ).resolves.toMatchObject({ status_color: 'green' });
+    // (i) o check-in NÃO cai — e sai com veredito, não com "aprendendo".
+    //
+    // `workouts` falhando derruba DUAS coisas ao mesmo tempo: a busca do treino
+    // planejado e a descoberta do tipo de cada corrida (a ponderação da carga).
+    // A segunda degrada para peso 1,0 e o piso continua sendo satisfeito pelas
+    // `activities`, que não falharam.
+    const r = await service.analyzeReadiness(USER, answers);
+    expect(r.kind).toBe('ok');
+    expect(r).toMatchObject({ verdict: { status_color: 'green' } });
 
     // (ii) o erro aparece, com o código
     expect(erro.mock.calls.flat().join(' ')).toContain('42703');

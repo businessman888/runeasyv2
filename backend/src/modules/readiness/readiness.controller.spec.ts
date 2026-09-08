@@ -45,7 +45,7 @@ describe('ReadinessController', () => {
 
   beforeEach(async () => {
     service = {
-      analyzeReadiness: jest.fn().mockResolvedValue(verdict),
+      analyzeReadiness: jest.fn().mockResolvedValue({ kind: 'ok', verdict }),
       hasCheckedInToday: jest.fn().mockResolvedValue(null),
       // Por padrão: Pro, desbloqueado, sem check-in hoje.
       getReadinessStatus: jest.fn().mockResolvedValue({
@@ -116,14 +116,25 @@ describe('ReadinessController', () => {
     expect(typeof primeiraChamada[0]).toBe('string');
   });
 
-  it('a checagem de "já respondeu hoje" também usa o id do token', async () => {
-    service.hasCheckedInToday.mockResolvedValue({ verdict, answers: null });
+  it('o caminho "já respondeu hoje" também roda sob o id do TOKEN', async () => {
+    // A checagem em si migrou para dentro do service (era feita aqui e refeita
+    // lá, custando uma consulta duplicada por check-in). A garantia de IDOR não
+    // mudou de natureza: ela agora vive no 1º argumento posicional, que é o id
+    // do token — e o id do body não alcança nenhuma chamada.
+    service.analyzeReadiness.mockResolvedValue({
+      kind: 'ja_respondeu',
+      verdict,
+    });
 
     const res = await controller.analyzeReadiness(TOKEN_USER, bodyHostil);
 
-    expect(service.hasCheckedInToday).toHaveBeenCalledWith(TOKEN_USER);
+    expect(service.analyzeReadiness).toHaveBeenCalledTimes(1);
+    const [idUsado] = service.analyzeReadiness.mock.calls[0] as [string];
+    expect(idUsado).toBe(TOKEN_USER);
+    expect(JSON.stringify(service.analyzeReadiness.mock.calls)).not.toContain(
+      bodyHostil.userId,
+    );
     expect(res).toMatchObject({ alreadyCompleted: true });
-    expect(service.analyzeReadiness).not.toHaveBeenCalled();
   });
 
   it('aceita body sem userId (mobile futuro)', async () => {
@@ -177,23 +188,36 @@ describe('ReadinessController', () => {
       expect(service.analyzeReadiness).not.toHaveBeenCalled();
     });
 
-    it('abaixo do piso recebe 422 com o progresso, e o motor NÃO roda', async () => {
-      service.getReadinessStatus.mockResolvedValue({
-        isUnlocked: false,
+    it('abaixo do piso recebe 422 com o progresso', async () => {
+      // O piso é checado DENTRO de analyzeReadiness, onde o dado da carga já
+      // está na mão — o controller não refaz a consulta para descobrir isso.
+      service.analyzeReadiness.mockResolvedValue({
+        kind: 'aprendendo',
         learning: {
           spanDays: 6,
           runDays: 3,
           missingSpanDays: 8,
           missingRunDays: 3,
         },
-        eligibilityReason: 'sem_historico',
       });
 
       await expect(
         controller.analyzeReadiness('u1', bodyHostil as never),
-      ).rejects.toMatchObject({ status: 422 });
+      ).rejects.toMatchObject({
+        status: 422,
+        response: { learning: { missingRunDays: 3 } },
+      });
+    });
 
-      expect(service.analyzeReadiness).not.toHaveBeenCalled();
+    it('o controller NÃO refaz consultas que o service já fez', async () => {
+      // A regressão de latência: o controller chamava `hasCheckedInToday` e
+      // `getReadinessStatus` antes de `analyzeReadiness`, e o service refazia as
+      // duas. Eram 11 idas ao banco por check-in, 4 repetindo consulta idêntica.
+      await controller.analyzeReadiness('u1', bodyHostil as never);
+
+      expect(service.hasCheckedInToday).not.toHaveBeenCalled();
+      expect(service.getReadinessStatus).not.toHaveBeenCalled();
+      expect(service.analyzeReadiness).toHaveBeenCalledTimes(1);
     });
 
     it('falha ao consultar a assinatura LIBERA em vez de barrar', async () => {
@@ -208,12 +232,17 @@ describe('ReadinessController', () => {
       expect(service.analyzeReadiness).toHaveBeenCalled();
     });
 
-    it('quem já respondeu hoje nem chega no Pro-gate', async () => {
-      service.hasCheckedInToday.mockResolvedValue({ verdict, answers: null });
+    it('quem já respondeu hoje recebe o veredito guardado, sem IA nova', async () => {
+      service.analyzeReadiness.mockResolvedValue({
+        kind: 'ja_respondeu',
+        verdict,
+      });
 
       const r = await controller.analyzeReadiness('u1', bodyHostil as never);
       expect(r).toMatchObject({ alreadyCompleted: true });
-      expect(subscription.isProUser).not.toHaveBeenCalled();
+      expect(r).toMatchObject({
+        message: expect.stringContaining('03:00') as unknown as string,
+      });
     });
   });
 });

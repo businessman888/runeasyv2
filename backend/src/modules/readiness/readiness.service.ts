@@ -30,6 +30,7 @@ import {
 } from './helpers/subjective-baseline.helper';
 import type { FloorProgress } from './helpers/load-series.helper';
 import { ReadinessEngineService } from './readiness-engine.service';
+import { decideReadiness } from './helpers/readiness-score.helper';
 
 /** A linha de `readiness_history`, na forma mínima que este service lê. */
 interface ReadinessHistoryRow {
@@ -62,6 +63,20 @@ export type EligibilityReason =
   | 'sem_historico'
   | 'ja_respondeu'
   | 'indisponivel';
+
+/**
+ * O resultado de um check-in — união DISCRIMINADA, não um veredito solto.
+ *
+ * Existe porque há três desfechos legítimos e o controller precisa distingui-los
+ * sem refazer as consultas: já respondeu hoje, está abaixo do piso, ou tem
+ * veredito novo. Antes o controller descobria isso chamando `hasCheckedInToday`
+ * e `getReadinessStatus` por conta própria, e as duas repetiam o trabalho que
+ * este método já faz.
+ */
+export type AnalyzeOutcome =
+  | { kind: 'ok'; verdict: ReadinessVerdict }
+  | { kind: 'ja_respondeu'; verdict: ReadinessVerdict }
+  | { kind: 'aprendendo'; learning: FloorProgress | null };
 
 export interface ReadinessStatus {
   isUnlocked: boolean;
@@ -126,7 +141,7 @@ export class ReadinessService {
     userId: string,
     answers: ReadinessAnswers,
     setNumber?: number,
-  ): Promise<ReadinessVerdict> {
+  ): Promise<AnalyzeOutcome> {
     this.logger.log(`Analyzing readiness for user: ${userId}`);
     this.logger.log(
       `[QuizSelection] Received setNumber: ${setNumber ?? 'NOT PROVIDED'}`,
@@ -139,20 +154,46 @@ export class ReadinessService {
       this.logger.log(
         `User ${userId} already checked in today, returning existing verdict`,
       );
-      return existingCheckIn.verdict;
+      return { kind: 'ja_respondeu', verdict: existingCheckIn.verdict };
     }
 
-    // 1. O treino de hoje e de amanhã (dia de São Paulo).
-    const planned = await this.fetchPlannedWorkouts(userId, saoPauloTodayStr());
+    // 1. Carga + baseline + treino de hoje, TUDO EM PARALELO.
+    //
+    // Antes o treino vinha primeiro porque a escada de `planAdjustment`
+    // precisa do tipo dele; com a coleta separada da decisão (`engine.gather`),
+    // as duas leituras acontecem juntas.
+    const [dados, planned] = await Promise.all([
+      this.engine.gather(userId),
+      this.fetchPlannedWorkouts(userId, saoPauloTodayStr()),
+    ]);
 
-    // 2. O VEREDITO, decidido em código. Score, cor e recomendação existem
+    // 2. O PISO, checado aqui e não no controller.
+    //
+    // Estava no controller via `getReadinessStatus`, que recalculava a série de
+    // carga inteira e refazia o `hasCheckedInToday` — 4 idas redundantes ao
+    // banco por check-in. Aqui o dado já está na mão: `gather` acabou de
+    // computá-lo. E continua acontecendo ANTES da IA, que é o que importa: um
+    // corredor abaixo do piso não custa uma chamada paga.
+    if (dados.load.reason === 'sem_historico') {
+      this.logger.log(
+        `[Readiness] user=${userId} abaixo do piso ` +
+          `(faltam ${dados.load.floorProgress?.missingSpanDays ?? '?'} dias, ` +
+          `${dados.load.floorProgress?.missingRunDays ?? '?'} corridas) — sem IA`,
+      );
+      return { kind: 'aprendendo', learning: dados.load.floorProgress };
+    }
+
+    // 3. O VEREDITO, decidido em código. Score, cor e recomendação existem
     //    antes de qualquer chamada de rede — é o que permite o fallback.
-    const { decision } = await this.engine.compute(userId, answers, {
+    const decision = decideReadiness({
+      answers,
+      baselines: dados.baselines,
+      load: dados.load,
       todayWorkoutType: planned.today?.type ?? null,
       todayIsRaceDay: planned.today?.intensity === 'Máxima',
     });
 
-    // 3. A IA só NARRA. `narrate` nunca rejeita; se a IA cair, o texto sai
+    // 4. A IA só NARRA. `narrate` nunca rejeita; se a IA cair, o texto sai
     //    determinístico e o corredor recebe o mesmo número e a mesma cor.
     const ai_analysis = await this.readinessAIService.narrate(
       decision,
@@ -179,10 +220,10 @@ export class ReadinessService {
         `cor=${decision.color} ajuste=${decision.planAdjustment} carga=${decision.load.reason}`,
     );
 
-    // 4. Persistir (com o set_number para a lógica de exclusão de conjuntos).
+    // 5. Persistir (com o set_number para a lógica de exclusão de conjuntos).
     await this.saveReadinessResult(userId, answers, verdict, setNumber);
 
-    return verdict;
+    return { kind: 'ok', verdict };
   }
 
   /**

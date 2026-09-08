@@ -27,6 +27,13 @@ import {
 /** O que degradou nesta computação. Vai para o log e para a narrativa. */
 export type Degradation = 'load' | 'weights' | 'baseline';
 
+/** O que o motor LÊ do banco, antes de decidir qualquer coisa. */
+export interface GatheredData {
+  load: LoadSignal;
+  baselines: Baselines;
+  degradations: Degradation[];
+}
+
 export interface ReadinessComputation {
   decision: ReadinessDecision;
   baselines: Baselines;
@@ -76,15 +83,21 @@ export class ReadinessEngineService {
     return signal;
   }
 
-  /** A computação completa: carga + baseline + score. */
-  async compute(
-    userId: string,
-    answers: Record<Dimension, number>,
-    contexto: {
-      todayWorkoutType?: string | null;
-      todayIsRaceDay?: boolean;
-    } = {},
-  ): Promise<ReadinessComputation> {
+  /**
+   * TODO o I/O do motor, sem decidir nada.
+   *
+   * ── POR QUE É SEPARADO DA DECISÃO ─────────────────────────────────────────
+   *
+   * `decideReadiness` precisa do tipo do treino de HOJE, que vem de outra
+   * consulta (`fetchPlannedWorkouts`, no service). Enquanto a coleta e a
+   * decisão eram uma coisa só, o service tinha de buscar o treino ANTES de
+   * chamar o motor, e as duas leituras ficavam em série.
+   *
+   * Separadas, o chamador roda as duas em `Promise.all` e a profundidade cai de
+   * duas idas ao banco para uma. Também é o que permite checar o PISO antes de
+   * montar o veredito — e portanto antes de gastar uma chamada de IA.
+   */
+  async gather(userId: string): Promise<GatheredData> {
     const [carga, historico] = await Promise.all([
       this.buildLoad(userId),
       this.fetchBaselineHistory(userId),
@@ -95,23 +108,41 @@ export class ReadinessEngineService {
       ...historico.degradations,
     ];
 
-    const baselines = buildBaselines(historico.rows);
-
-    const decision = decideReadiness({
-      answers,
-      baselines,
-      load: carga.signal,
-      todayWorkoutType: contexto.todayWorkoutType ?? null,
-      todayIsRaceDay: contexto.todayIsRaceDay ?? false,
-    });
-
     if (degradations.length > 0) {
       this.logger.warn(
         `[Readiness][engine] user=${userId} degradou: ${degradations.join(',')}`,
       );
     }
 
-    return { decision, baselines, degradations };
+    return {
+      load: carga.signal,
+      baselines: buildBaselines(historico.rows),
+      degradations,
+    };
+  }
+
+  /** Coleta + decisão, para quem não precisa das duas separadas. */
+  async compute(
+    userId: string,
+    answers: Record<Dimension, number>,
+    contexto: {
+      todayWorkoutType?: string | null;
+      todayIsRaceDay?: boolean;
+    } = {},
+  ): Promise<ReadinessComputation> {
+    const dados = await this.gather(userId);
+
+    return {
+      decision: decideReadiness({
+        answers,
+        baselines: dados.baselines,
+        load: dados.load,
+        todayWorkoutType: contexto.todayWorkoutType ?? null,
+        todayIsRaceDay: contexto.todayIsRaceDay ?? false,
+      }),
+      baselines: dados.baselines,
+      degradations: dados.degradations,
+    };
   }
 
   // ── Carga ──────────────────────────────────────────────────────────────────

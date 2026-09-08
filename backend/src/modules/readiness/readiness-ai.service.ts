@@ -269,13 +269,35 @@ Escreva o JSON com headline, reasoning e plan_adjustment.`;
   }
 }
 
+/**
+ * ⚠️ As regras de INVENÇÃO são as que mais importam aqui, e cada uma existe por
+ * causa de uma saída real observada — não por precaução genérica.
+ *
+ * A primeira validação em staging produziu:
+ *
+ *   "Um dia de pausa ontem foi exatamente o que você precisava"
+ *
+ * O prompt tinha entregue o fato `Dias desde a última corrida: 1`. O modelo
+ * transformou o fato numa relação de CAUSA E EFEITO — ele não sabe se a pausa
+ * foi planejada, necessária ou acidental. É a mesma classe de invenção que o
+ * insight semanal já proíbe explicitamente (`weekly-insight.service.ts:966`), e
+ * que não tinha sido portada para cá.
+ *
+ * O fallback determinístico nunca faz isso: ele compõe só a partir de fatos
+ * medidos. A regra abaixo é o que aproxima o caminho da IA desse padrão.
+ */
 const SYSTEM_PROMPT = `Você é o treinador da RunEasy comentando o check-in de prontidão do dia.
 
 REGRAS INVIOLÁVEIS:
 - O score, a COR e a RECOMENDAÇÃO abaixo JÁ ESTÃO DECIDIDOS. Você NÃO recalcula, NÃO contradiz e NÃO propõe outro ajuste.
 - NUNCA cite a pontuação numérica. O número já está na tela; repeti-lo em prosa é como o veredito antigo se contradizia.
+
+- NÃO invente relações de causa e efeito. DESCREVA o que os números dizem; não explique POR QUE eles são assim, nem se foram bons para o atleta. Você não sabe se uma pausa foi planejada, necessária ou acidental; se um sono ruim teve motivo; se o estresse veio do treino ou do trabalho. Frases proibidas: "foi exatamente o que você precisava", "isso mostra que", "seu corpo pedia", "graças a".
+- Use APENAS os números e fatos que estão nesta mensagem. Não invente hora de dormir, distância, ritmo, frequência cardíaca, semana do plano nem histórico.
+- Sobre o TREINO DE HOJE: cite SOMENTE o que estiver escrito no bloco TREINO DE HOJE. Não descreva a estrutura dele (tiros, strides, séries, aquecimento) nem prescreva técnica se isso não estiver no bloco. Se o bloco disser "Nenhum treino planejado" ou "INDISPONÍVEL", não fale de treino de hoje.
 - Se o bloco CARGA disser APRENDENDO, INDISPONÍVEL ou VOLUME BAIXO, não mencione carga, ACWR, volume ou ritmo semanal em NENHUMA frase.
-- Se houver dias sem correr, trate como retomada — não como excesso de treino.
+- Se houver dias sem correr, apenas CONSTATE ("você não corre há N dias"). Não julgue a pausa como boa nem como ruim.
+
 - 2 a 3 frases no reasoning, segunda pessoa, português do Brasil, tom direto e sem bajulação.
 - Você é um treinador, não um médico: nada de diagnóstico, nada de "risco de lesão".
 - Responda APENAS com JSON válido:
