@@ -54,7 +54,7 @@ export interface PerformanceBlockDto {
 
 export interface HealthBlockDto {
   isConnected: boolean;
-  provider: 'apple_health' | null;
+  provider: 'apple_health' | 'apple_watch' | null;
   deviceName: string | null;
   restingHr: number | null;
   avgHr7d: number | null;

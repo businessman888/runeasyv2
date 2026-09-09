@@ -73,7 +73,27 @@ for (const state of [
 expect(
   mapView.includes('latitudinalMeters: 300')
     && mapView.includes('longitudinalMeters: 300'),
-  'camera MVP acompanha o atleta em uma regiao de 300 metros',
+  'modo Follow acompanha o atleta em uma regiao de 300 metros',
+);
+expect(
+  mapView.includes('case follow')
+    && mapView.includes('case overview')
+    && mapView.includes('case explore')
+    && mapView.includes('interactionModes: cameraMode == .explore ? [.pan, .zoom] : []'),
+  'mapa possui modos Follow, Overview e Explore com pan/zoom explicitos',
+);
+expect(
+  mapView.includes('private func updateOverviewCamera()')
+    && mapView.includes('maximumLatitude - minimumLatitude')
+    && mapView.includes('maximumLongitude - minimumLongitude')
+    && mapView.includes('* 1.35'),
+  'modo Overview enquadra toda a rota com margem',
+);
+expect(
+  mapView.includes('case .explore:')
+    && mapView.includes('return')
+    && mapView.includes('cameraControlTouchSize: CGFloat = 44'),
+  'modo Explore evita snap-back e controles respeitam alvo minimo de 44 pontos',
 );
 expect(
   activeRun.includes('TabView(selection: $selectedTrackingPage)')

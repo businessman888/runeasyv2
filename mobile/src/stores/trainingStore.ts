@@ -841,7 +841,9 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
             // stale, so the Watch could still start a workout completed on
             // the phone.
             await get().invalidatePlanCaches();
-            useWellnessStore.getState().reset();
+            const wellnessStore = useWellnessStore.getState();
+            wellnessStore.reset();
+            void wellnessStore.fetchSummary(true);
             return { success: true, savedLocally: false, workout };
         } catch (error) {
             console.error('[completeWorkout] Erro de rede:', error);
@@ -931,7 +933,9 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
             // Refreshing the full completion surface prevents a completed run
             // from lingering as a pending card on iPhone/Watch.
             await get().invalidatePlanCaches();
-            useWellnessStore.getState().reset();
+            const wellnessStore = useWellnessStore.getState();
+            wellnessStore.reset();
+            void wellnessStore.fetchSummary(true);
             return { success: true, savedLocally: false, workout: data.workout };
         } catch (error) {
             console.error('[completeFreeRun] Erro de rede:', error);
@@ -982,6 +986,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         if (!userId) return;
 
         console.log(`[retryPendingFreeRuns] Tentando reenviar ${pending.length} free run(s)...`);
+        let didSyncRun = false;
 
         for (const payload of pending) {
             try {
@@ -1014,6 +1019,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
 
                 if (response.ok) {
                     removePendingFreeRun(payload.localId);
+                    didSyncRun = true;
                     console.log(`[retryPendingFreeRuns] Free run ${payload.localId} reenviado com sucesso!`);
                 } else {
                     const errorText = await response.text();
@@ -1022,6 +1028,12 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
             } catch (e) {
                 console.warn(`[retryPendingFreeRuns] Erro de rede para ${payload.localId}:`, e);
             }
+        }
+        if (didSyncRun) {
+            await get().invalidatePlanCaches();
+            const wellnessStore = useWellnessStore.getState();
+            wellnessStore.reset();
+            void wellnessStore.fetchSummary(true);
         }
     },
 
@@ -1039,6 +1051,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         }
 
         console.log(`[retryPendingWorkouts] Tentando reenviar ${pending.length} workout(s)...`);
+        let didSyncWorkout = false;
 
         for (const payload of pending) {
             // Guard: never POST to /workouts/local_.../complete — the backend
@@ -1085,6 +1098,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
 
                 if (response.ok) {
                     removePendingWorkout(payload.workoutId);
+                    didSyncWorkout = true;
                     console.log(`[retryPendingWorkouts] Workout ${payload.workoutId} enviado com sucesso!`);
                 } else {
                     const errorText = await response.text();
@@ -1093,6 +1107,12 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
             } catch (e) {
                 console.warn(`[retryPendingWorkouts] Erro de rede para ${payload.workoutId}:`, e);
             }
+        }
+        if (didSyncWorkout) {
+            await get().invalidatePlanCaches();
+            const wellnessStore = useWellnessStore.getState();
+            wellnessStore.reset();
+            void wellnessStore.fetchSummary(true);
         }
     },
 

@@ -6,6 +6,7 @@ import type {
 } from '../types/wellness.types';
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+let forcedRefreshQueued = false;
 
 interface WellnessState {
     summary: WellnessSummary | null;
@@ -28,7 +29,13 @@ export const useWellnessStore = create<WellnessState>((set, get) => ({
 
     fetchSummary: async (force = false) => {
         const { lastFetchedAt, loading } = get();
-        if (loading) return;
+        if (loading) {
+            // A conclusão do Watch pode chegar enquanto a Home ainda carrega um
+            // snapshot anterior. Não descarte o refresh forçado: execute-o logo
+            // depois da requisição em curso para não manter FC/calorias antigas.
+            if (force) forcedRefreshQueued = true;
+            return;
+        }
         if (
             !force &&
             lastFetchedAt &&
@@ -52,6 +59,11 @@ export const useWellnessStore = create<WellnessState>((set, get) => ({
                 loading: false,
                 error: err?.message || 'Falha ao carregar wellness',
             });
+        } finally {
+            if (forcedRefreshQueued) {
+                forcedRefreshQueued = false;
+                void get().fetchSummary(true);
+            }
         }
     },
 

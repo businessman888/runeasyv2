@@ -2,6 +2,36 @@ import SwiftUI
 import MapKit
 
 struct LiveRouteMapView: View {
+    private enum CameraMode: CaseIterable, Hashable {
+        case follow
+        case overview
+        case explore
+
+        var icon: String {
+            switch self {
+            case .follow: return "location.fill"
+            case .overview: return "arrow.up.left.and.arrow.down.right"
+            case .explore: return "hand.draw.fill"
+            }
+        }
+
+        var accessibilityLabel: String {
+            switch self {
+            case .follow: return "Acompanhar minha posição"
+            case .overview: return "Ver rota completa"
+            case .explore: return "Explorar mapa"
+            }
+        }
+
+        var accessibilityHint: String {
+            switch self {
+            case .follow: return "Centraliza o mapa na sua posição atual."
+            case .overview: return "Ajusta o mapa para mostrar todo o trajeto registrado."
+            case .explore: return "Libera arrastar e aproximar o mapa sem recentralização automática."
+            }
+        }
+    }
+
     let route: LiveRoutePresentation
     let locationState: LiveRouteLocationState
     let isActivePage: Bool
@@ -9,6 +39,9 @@ struct LiveRouteMapView: View {
     @Environment(\.isLuminanceReduced) private var isLuminanceReduced
     @Environment(\.redactionReasons) private var redactionReasons
     @State private var cameraPosition: MapCameraPosition = .automatic
+    @State private var cameraMode: CameraMode = .follow
+
+    private let cameraControlTouchSize: CGFloat = 44
 
     var body: some View {
         Group {
@@ -108,7 +141,10 @@ struct LiveRouteMapView: View {
         statusColor: Color
     ) -> some View {
         ZStack(alignment: .topLeading) {
-            Map(position: $cameraPosition, interactionModes: []) {
+            Map(
+                position: $cameraPosition,
+                interactionModes: cameraMode == .explore ? [.pan, .zoom] : []
+            ) {
                 ForEach(route.segments) { segment in
                     MapPolyline(coordinates: segment.coordinates)
                         .stroke(
@@ -130,11 +166,12 @@ struct LiveRouteMapView: View {
             }
             .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
             .onChange(of: route.revision) {
-                updateCamera()
+                updateCameraForSelectedMode()
             }
             .onAppear {
-                updateCamera()
+                updateCameraForSelectedMode()
             }
+            .accessibilityLabel("Mapa da rota. \(status). \(detail).")
 
             VStack(alignment: .leading, spacing: 1) {
                 Label(status, systemImage: RunEasySymbol.map)
@@ -148,9 +185,16 @@ struct LiveRouteMapView: View {
             .padding(.vertical, 6)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 9))
             .padding(8)
+            .accessibilityElement(children: .combine)
+
+            VStack {
+                Spacer(minLength: 0)
+                cameraControls
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.bottom, 4)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Mapa da rota. \(status). \(detail).")
+        .accessibilityElement(children: .contain)
     }
 
     private func stateContent(
@@ -198,14 +242,103 @@ struct LiveRouteMapView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func updateCamera() {
-        guard isActivePage, let latest = route.latestPoint else { return }
-        let region = MKCoordinateRegion(
-            center: latest.coordinate,
-            latitudinalMeters: 300,
-            longitudinalMeters: 300
+    private var cameraControls: some View {
+        HStack(spacing: 2) {
+            ForEach(CameraMode.allCases, id: \.self) { mode in
+                Button {
+                    selectCameraMode(mode)
+                } label: {
+                    Image(systemName: mode.icon)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(
+                            cameraMode == mode ? Color.runEasyNavy : Color.runEasyTextPrimary
+                        )
+                        .frame(
+                            width: cameraControlTouchSize,
+                            height: cameraControlTouchSize
+                        )
+                        .background(
+                            cameraMode == mode ? Color.runEasyCyan : Color.black.opacity(0.48),
+                            in: Circle()
+                        )
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(mode.accessibilityLabel)
+                .accessibilityHint(mode.accessibilityHint)
+                .accessibilityAddTraits(cameraMode == mode ? .isSelected : [])
+            }
+        }
+        .padding(.horizontal, 4)
+        .background(.ultraThinMaterial, in: Capsule())
+        .accessibilityElement(children: .contain)
+    }
+
+    private func selectCameraMode(_ mode: CameraMode) {
+        cameraMode = mode
+        updateCameraForSelectedMode()
+    }
+
+    /// Atualizações da rota só movem a câmera nos modos automáticos. Em
+    /// `explore`, preservar a câmera escolhida pelo corredor evita o snap-back
+    /// a cada publicação de GPS (a apresentação é atualizada a cada ~3 s).
+    private func updateCameraForSelectedMode() {
+        guard isActivePage else { return }
+        switch cameraMode {
+        case .follow:
+            updateFollowCamera()
+        case .overview:
+            updateOverviewCamera()
+        case .explore:
+            return
+        }
+    }
+
+    private func updateFollowCamera() {
+        guard let latest = route.latestPoint else { return }
+        cameraPosition = .region(
+            MKCoordinateRegion(
+                center: latest.coordinate,
+                latitudinalMeters: 300,
+                longitudinalMeters: 300
+            )
         )
-        cameraPosition = .region(region)
+    }
+
+    private func updateOverviewCamera() {
+        let coordinates = route.segments.flatMap(\.coordinates)
+        guard let first = coordinates.first else { return }
+        guard coordinates.count > 1 else {
+            updateFollowCamera()
+            return
+        }
+
+        var minimumLatitude = first.latitude
+        var maximumLatitude = first.latitude
+        var minimumLongitude = first.longitude
+        var maximumLongitude = first.longitude
+
+        for coordinate in coordinates.dropFirst() {
+            minimumLatitude = min(minimumLatitude, coordinate.latitude)
+            maximumLatitude = max(maximumLatitude, coordinate.latitude)
+            minimumLongitude = min(minimumLongitude, coordinate.longitude)
+            maximumLongitude = max(maximumLongitude, coordinate.longitude)
+        }
+
+        let center = CLLocationCoordinate2D(
+            latitude: (minimumLatitude + maximumLatitude) / 2,
+            longitude: (minimumLongitude + maximumLongitude) / 2
+        )
+        // Aproximadamente 300 m de abertura mínima. Isso mantém rotas curtas
+        // legíveis e acrescenta 35% de respiro às rotas maiores.
+        let minimumLatitudeDelta = 300 / 111_000.0
+        let latitudeCosine = max(abs(cos(center.latitude * .pi / 180)), 0.2)
+        let minimumLongitudeDelta = minimumLatitudeDelta / latitudeCosine
+        let span = MKCoordinateSpan(
+            latitudeDelta: max((maximumLatitude - minimumLatitude) * 1.35, minimumLatitudeDelta),
+            longitudeDelta: max((maximumLongitude - minimumLongitude) * 1.35, minimumLongitudeDelta)
+        )
+        cameraPosition = .region(MKCoordinateRegion(center: center, span: span))
     }
 
     private func relativeUpdateLabel(_ date: Date) -> String {

@@ -47,6 +47,7 @@ import { InsightEntry } from '../components/insight/InsightEntry';
 import { useWeeklyInsightStore } from '../stores/weeklyInsightStore';
 import { useMesoInsightStore } from '../stores/mesoInsightStore';
 import type { WorkoutData } from '../components/WorkoutCard';
+import { resolveExecutedActivityMetrics } from '../utils/watchActivityPresentation';
 
 import { BASE_API_URL } from '../config/api.config';
 import { authedFetch } from '../services/apiClient';
@@ -940,6 +941,7 @@ export function HomeScreen({ navigation }: any) {
                                     isToday={true}
                                     isCompleted={w.status === 'completed'}
                                     canStart={w.source === 'manual' && w.status === 'pending'}
+                                    executedOverride={resolveExecutedActivityMetrics(w) ?? undefined}
                                     onStartWorkout={() => handleActivityCardPress(w)}
                                     allBadges={badges}
                                 />

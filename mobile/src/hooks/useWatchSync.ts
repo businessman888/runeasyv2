@@ -26,7 +26,6 @@ import type {
     TodayWorkoutForWatch,
     WeekStatsForWatch,
     NextWorkoutForWatch,
-    ActivityForWatch,
     RunResultForWatch,
 } from '../services/appleWatch';
 import {
@@ -35,8 +34,17 @@ import {
     resolveWorkoutPaceSeconds,
 } from '../utils/workoutPreview';
 import { buildWatchCoachPolicy } from '../services/watchContextContract';
+import { buildTodayActivities } from '../utils/watchActivityPresentation';
 
 const SUBSCRIPTION_FRESHNESS_MS = 24 * 60 * 60 * 1000;
+
+/** Formata um pace de resultado para o payload compacto do Watch. */
+function formatPace(secondsPerKm: number | null | undefined): string {
+    if (!secondsPerKm || !Number.isFinite(secondsPerKm) || secondsPerKm <= 0) return '';
+    const minutes = Math.floor(secondsPerKm / 60);
+    const seconds = Math.round(secondsPerKm % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
 
 function mapWorkoutType(t: string | undefined | null): TodayWorkoutForWatch['type'] {
     switch (t) {
@@ -190,56 +198,6 @@ function buildTodayWorkout(
         status,
         earnableBadges,
     };
-}
-
-/** "5:42" a partir de segundos por km. Vazio quando não há pace válido. */
-function formatPace(secondsPerKm: number | null | undefined): string {
-    if (!secondsPerKm || !Number.isFinite(secondsPerKm) || secondsPerKm <= 0) return '';
-    const m = Math.floor(secondsPerKm / 60);
-    const s = Math.round(secondsPerKm % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-/**
- * Atividades avulsas de hoje — espelha o filtro da aba Atividades da Home
- * (HomeScreen: rawWorkouts filtrado por data + source, manual antes de free).
- * Deliberadamente NÃO gated por Pro: corrida livre é gratuita.
- */
-function buildTodayActivities(workouts: unknown[]): ActivityForWatch[] {
-    const now = new Date();
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
-        now.getDate(),
-    ).padStart(2, '0')}`;
-    const rank = (s?: string | null) => (s === 'manual' ? 0 : s === 'free' ? 1 : 2);
-
-    return (workouts as any[])
-        .filter(
-            (w) =>
-                w?.scheduled_date === todayStr &&
-                (w?.source === 'manual' ||
-                    (w?.source === 'free' && w?.status === 'completed')),
-        )
-        .sort((a, b) => rank(a?.source) - rank(b?.source))
-        .map((w) => {
-            const distanceKm = typeof w.distance_km === 'number' ? w.distance_km : 0;
-            const durationSeconds =
-                typeof w.duration_seconds === 'number' ? w.duration_seconds : null;
-            // Pace derivado quando o registro não traz o valor pronto.
-            const paceSeconds =
-                w.avg_pace_seconds_per_km ??
-                (durationSeconds && distanceKm > 0 ? durationSeconds / distanceKm : null);
-            return {
-                id: String(w.id),
-                source: w.source === 'manual' ? 'manual' : 'free',
-                title:
-                    w.title?.trim() ||
-                    (w.source === 'manual' ? 'Treino Manual' : 'Corrida Livre'),
-                status: w.status === 'completed' ? 'completed' : 'pending',
-                distanceKm,
-                durationSeconds,
-                pace: formatPace(paceSeconds),
-            } satisfies ActivityForWatch;
-        });
 }
 
 /**

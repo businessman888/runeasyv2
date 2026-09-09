@@ -264,12 +264,15 @@ export class WellnessService {
 
   private async fetchHealthDevice(
     userId: string,
-  ): Promise<{ provider: string; device_name: string | null } | null> {
+  ): Promise<{
+    provider: 'apple_health' | 'apple_watch';
+    device_name: string | null;
+  } | null> {
     const { data, error } = await this.supabaseService
       .from('connected_devices')
       .select('provider, device_name')
       .eq('user_id', userId)
-      .eq('provider', 'apple_health')
+      .in('provider', ['apple_health', 'apple_watch'])
       .limit(1)
       .maybeSingle();
 
@@ -277,7 +280,10 @@ export class WellnessService {
       this.logger.warn(`fetchHealthDevice failed: ${error.message}`);
       return null;
     }
-    return data || null;
+    return (data as {
+      provider: 'apple_health' | 'apple_watch';
+      device_name: string | null;
+    } | null) || null;
   }
 
   private async fetchLastRunActivity(
@@ -547,7 +553,10 @@ export class WellnessService {
   }
 
   private buildHealthBlock(
-    device: { provider: string; device_name: string | null } | null,
+    device: {
+      provider: 'apple_health' | 'apple_watch';
+      device_name: string | null;
+    } | null,
     currentWeekActivities: ActivityRow[],
     last8wActivities: ActivityRow[],
   ): HealthBlockDto {
@@ -589,7 +598,7 @@ export class WellnessService {
 
     return {
       isConnected: true,
-      provider: 'apple_health',
+      provider: device.provider,
       deviceName: device.device_name || null,
       restingHr: recoveryHrs.length ? Math.min(...recoveryHrs) : null,
       avgHr7d: hrValues.length

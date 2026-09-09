@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback } from 'react';
 import {
     View,
     Text,
@@ -7,7 +7,7 @@ import {
     TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -34,9 +34,11 @@ export function OverviewSection() {
     const loading = useWellnessStore((s) => s.loading);
     const fetchSummary = useWellnessStore((s) => s.fetchSummary);
 
-    useEffect(() => {
-        fetchSummary();
-    }, [fetchSummary]);
+    useFocusEffect(
+        useCallback(() => {
+            void fetchSummary();
+        }, [fetchSummary]),
+    );
 
     const goToWellness = useCallback(() => {
         navigation.navigate('Wellness');
@@ -121,7 +123,7 @@ export function OverviewSection() {
                             label="FC último"
                             value={overview.lastRunAvgHr !== null ? String(overview.lastRunAvgHr) : '--'}
                             unit={overview.lastRunAvgHr !== null ? 'bpm' : undefined}
-                            hint={overview.lastRunAvgHr === null ? 'Conecte um relógio' : undefined}
+                            hint={overview.lastRunAvgHr === null ? 'Sem dados de FC' : undefined}
                         />
                     </View>
                 </>

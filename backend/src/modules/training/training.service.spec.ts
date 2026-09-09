@@ -310,6 +310,9 @@ describe('TrainingService', () => {
         source: 'apple_watch',
         external_id: 'apple_watch_run-42',
         started_at: '2026-08-29T10:00:00.000Z',
+        average_heartrate: 145,
+        max_heartrate: 178,
+        calories: 382,
       });
 
       expect(completeSpy).toHaveBeenCalledWith(
@@ -318,6 +321,9 @@ describe('TrainingService', () => {
         expect.objectContaining({
           external_id: 'apple_watch_run-42',
           source: 'apple_watch',
+          average_heartrate: 145,
+          max_heartrate: 178,
+          calories: 382,
         }),
         true,
       );

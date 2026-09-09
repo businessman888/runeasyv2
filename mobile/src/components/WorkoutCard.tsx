@@ -39,6 +39,7 @@ export interface WorkoutData {
   instructions_json: WorkoutInstruction[];
   objective?: string | null;
   status?: 'pending' | 'completed' | 'skipped' | 'missed';
+  source?: 'plan' | 'manual' | 'free';
 }
 
 interface ExecutedOverride {
@@ -87,6 +88,7 @@ function getWorkoutTypeName(type: string): string {
     tempo: 'Tempo Run',
     recovery: 'Recuperação',
     walk_run: 'Caminhada e Corrida',
+    free_run: 'Corrida Livre',
   };
   return names[type] ?? type;
 }
@@ -178,39 +180,49 @@ export const WorkoutCard = memo(
     executedOverride,
   }: WorkoutCardProps) => {
     useThemeSubscription();
+    const useExecuted = !!executedOverride && isCompleted;
+    const isStandaloneCompletedActivity =
+      isCompleted && (workout.source === 'free' || workout.type === 'free_run');
     const pace = getPaceMinutes(workout);
     const dateLabel = formatCardDate(workout.scheduled_date);
-    const intensityLabel = getIntensityLabel(workout.type);
+    const intensityLabel = isStandaloneCompletedActivity
+      ? 'Corrida livre registrada'
+      : getIntensityLabel(workout.type);
     const workoutName = getWorkoutTypeName(workout.type);
-
-    const useExecuted = !!executedOverride && isCompleted;
     // Treino planejado por tempo (caminhada/corrida): sem distância nem pace —
     // exibir a duração dos segmentos, nunca "0.00 Km / 0:00 / pace falso".
     const timeBased =
       !useExecuted && isTimeBasedWorkout(workout.distance_km, workout.instructions_json);
     const distanceLabel = useExecuted
       ? `${executedOverride!.distanceKm.toFixed(2)} Km`
+      : isStandaloneCompletedActivity
+        ? '—'
       : timeBased
         ? '—'
         : `${workout.distance_km.toFixed(2)} Km`;
     const timeLabel = useExecuted
       ? formatDurationFromSeconds(executedOverride!.durationSeconds)
+      : isStandaloneCompletedActivity
+        ? '—'
       : timeBased
         ? formatDurationLabel(workoutDurationSeconds(workout.instructions_json))
         : formatEstimatedTime(workout);
     const paceLabel = useExecuted
       ? `${formatPaceFromSecondsPerKm(executedOverride!.paceSecondsPerKm)} /km`
+      : isStandaloneCompletedActivity
+        ? '—'
       : timeBased
         ? 'No seu ritmo'
         : `${formatPace(pace)} /km`;
 
     // Resolve earnable badges against the user's real badge list
     const earnableBadges = useMemo(() => {
+      if (isStandaloneCompletedActivity) return [];
       const slugs = getEarnableBadgeSlugs(workout);
       return slugs
         .map((slug) => allBadges.find((b) => b.slug === slug) ?? null)
         .filter((b): b is BadgeData => b !== null);
-    }, [workout, allBadges]);
+    }, [workout, allBadges, isStandaloneCompletedActivity]);
 
     const isButtonEnabled =
       canStart ?? (isToday && workout.status === 'pending' && !isCompleted);
@@ -258,7 +270,7 @@ export const WorkoutCard = memo(
           </View>
 
           {/* Badge shields */}
-          <View style={styles.badgesArea}>
+          {!isStandaloneCompletedActivity && <View style={styles.badgesArea}>
             {earnableBadges.length > 0 ? (
               earnableBadges.map((badge) => (
                 <BadgeShield
@@ -280,7 +292,7 @@ export const WorkoutCard = memo(
                 earned={false}
               />
             )}
-          </View>
+          </View>}
         </View>
 
         <View style={styles.separator} />
