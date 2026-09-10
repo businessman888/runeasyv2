@@ -3,14 +3,14 @@ import {
   Get,
   Post,
   Query,
-  Req,
   Res,
   HttpException,
   HttpStatus,
-  RawBodyRequest,
+  GoneException,
+  UnauthorizedException,
   Logger,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { Public, User } from '../../common/decorators';
 import { DevicesService } from './devices.service';
 import { ActivitySyncService, WearableActivity } from './activity-sync.service';
@@ -176,127 +176,76 @@ export class OAuthController {
   }
 
   // ============================================
-  // WEBHOOKS
+  // WEBHOOKS — FECHADOS
   // ============================================
+  //
+  // ── O QUE ESTAVA ABERTO ──────────────────────────────────────────────────
+  //
+  // Os dois receptores (Fitbit e Polar) verificavam a assinatura assim:
+  //
+  //     if (signature && !verifyWebhookSignature(rawBody, signature)) { … }
+  //
+  // Quando o header NÃO vinha, a condição inteira era falsa, a verificação era
+  // pulada e o handler seguia até `syncQueue.add(...)`. As rotas são
+  // `@Public()`. Ou seja: qualquer um, sem credencial alguma, enfileirava job
+  // na `activity-sync-queue` — bastava OMITIR o header em vez de forjá-lo.
+  //
+  // Ter o `client_secret` real fecha a FORJA; não fechava o BYPASS.
+  //
+  // ── POR QUE RECUSAR EM VEZ DE CONSERTAR ──────────────────────────────────
+  //
+  // Não há um único dispositivo Fitbit ou Polar conectado — zero linhas em
+  // `connected_devices`, PROD e staging, verificado por provider. Recusar não
+  // custa funcionalidade nenhuma hoje, toca menos código que consertar, e não
+  // deixa caminho aberto por descuido.
+  //
+  // As rotas e o `@Public()` continuam de propósito: a remoção é da Fase 2, e
+  // manter o decorator deixa a desativação legível aqui, em vez de escondida
+  // num decorator ausente. Com isto o `OAuthController` deixa de ser produtor
+  // da `activity-sync-queue` — que fica sem NENHUM produtor no app inteiro.
 
   /**
-   * Fitbit webhook verification (subscription setup).
+   * Fitbit webhook verification (subscription setup). Fechado.
    * GET /api/devices/webhooks/fitbit
-   * Fitbit sends a verification request with ?verify=<code>
+   *
+   * 410: o provedor está sendo descontinuado em favor da Google Health API —
+   * esta rota não volta.
    */
-  // Public: called by Fitbit servers; verified via verification code.
   @Public()
   @Get('webhooks/fitbit')
-  async fitbitWebhookVerify(
-    @Query('verify') verify: string,
-    @Res() res: Response,
-  ) {
-    const expectedCode = process.env.FITBIT_SUBSCRIBER_VERIFICATION_CODE;
-
-    if (verify === expectedCode) {
-      return res.status(204).send();
-    }
-
-    return res.status(404).send();
+  fitbitWebhookVerify(): never {
+    throw new GoneException('Fitbit webhook descontinuado');
   }
 
   /**
-   * Fitbit webhook receiver — receives activity notifications.
+   * Fitbit webhook receiver. Fechado — nunca enfileira job.
    * POST /api/devices/webhooks/fitbit
-   *
-   * Fitbit sends an array of notification objects.
-   * Each contains: collectionType, date, ownerId, ownerType, subscriptionId
    */
-  // Public: called by Fitbit servers; verified via x-fitbit-signature.
   @Public()
   @Post('webhooks/fitbit')
-  async fitbitWebhook(
-    @Req() req: RawBodyRequest<Request>,
-    @Res() res: Response,
-  ) {
-    // Respond immediately with 204 (Fitbit requires fast response)
-    res.status(204).send();
-
-    try {
-      // Verify signature
-      const signature = req.headers['x-fitbit-signature'] as string;
-      const rawBody = req.rawBody?.toString() || JSON.stringify(req.body);
-
-      if (
-        signature &&
-        !this.fitbitOAuth.verifyWebhookSignature(rawBody, signature)
-      ) {
-        this.logger.warn('Fitbit webhook signature verification failed');
-        return;
-      }
-
-      const notifications = req.body;
-
-      if (!Array.isArray(notifications)) {
-        this.logger.warn('Fitbit webhook: body is not an array');
-        return;
-      }
-
-      for (const notification of notifications) {
-        if (notification.collectionType === 'activities') {
-          // Enqueue a job to fetch the activity details from Fitbit API
-          await this.syncQueue.add('fitbit-fetch-activity', {
-            fitbitUserId: notification.ownerId,
-            date: notification.date,
-          });
-
-          this.logger.log(
-            `Fitbit webhook: queued activity fetch for user ${notification.ownerId} on ${notification.date}`,
-          );
-        }
-      }
-    } catch (error: any) {
-      this.logger.error(`Fitbit webhook processing error: ${error.message}`);
-    }
+  fitbitWebhook(): never {
+    throw new GoneException('Fitbit webhook descontinuado');
   }
 
   /**
-   * Polar webhook receiver — receives AccessLink notifications.
+   * Polar webhook receiver. Fechado — nunca enfileira job.
    * POST /api/devices/webhooks/polar
    *
-   * Polar sends notifications when new data is available.
+   * 401 e NÃO 410, e a diferença é deliberada: ao contrário do Fitbit, o Polar
+   * CONTINUA no produto. Dizer "Gone" seria mentira — esta rota volta a
+   * funcionar quando a verificação de assinatura for implementada. `401` diz o
+   * que é verdade hoje: a requisição não está autenticada.
+   *
+   * A recusa é INCONDICIONAL: não lê segredo, não computa HMAC, não compara
+   * nada. Fechar o bypass não exige verificar — exige recusar. Implementar a
+   * verificação de verdade é trabalho de outra fase, e depende de um segredo
+   * que a Polar só entrega no momento em que o webhook é registrado.
    */
-  // Public: called by Polar servers; verified via polar-webhook-signature.
   @Public()
   @Post('webhooks/polar')
-  async polarWebhook(
-    @Req() req: RawBodyRequest<Request>,
-    @Res() res: Response,
-  ) {
-    // Respond immediately with 200
-    res.status(200).send();
-
-    try {
-      const signature = req.headers['polar-webhook-signature'] as string;
-      const rawBody = req.rawBody?.toString() || JSON.stringify(req.body);
-
-      if (
-        signature &&
-        !this.polarOAuth.verifyWebhookSignature(rawBody, signature)
-      ) {
-        this.logger.warn('Polar webhook signature verification failed');
-        return;
-      }
-
-      const { event, user_id: polarUserId } = req.body;
-
-      if (event === 'EXERCISE') {
-        // Enqueue a job to pull exercises from AccessLink
-        await this.syncQueue.add('polar-fetch-exercises', {
-          polarUserId: String(polarUserId),
-        });
-
-        this.logger.log(
-          `Polar webhook: queued exercise fetch for Polar user ${polarUserId}`,
-        );
-      }
-    } catch (error: any) {
-      this.logger.error(`Polar webhook processing error: ${error.message}`);
-    }
+  polarWebhook(): never {
+    throw new UnauthorizedException(
+      'Polar webhook sem verificação de assinatura configurada',
+    );
   }
 }
