@@ -1,17 +1,13 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { SupabaseService } from '../../database/supabase.service';
 import { EncryptionService } from '../../common/encryption/encryption.service';
 import { ConnectDeviceDto } from './dto/connect-device.dto';
-
-const VALID_PROVIDERS = [
-  'garmin',
-  'fitbit',
-  'polar',
-  'apple_watch',
-  'apple_health',
-  'health_connect',
-] as const;
-type Provider = (typeof VALID_PROVIDERS)[number];
+import { VALID_PROVIDERS, DeviceProvider } from './device-providers';
 
 @Injectable()
 export class DevicesService {
@@ -203,9 +199,18 @@ export class DevicesService {
 
   // ---- Private helpers ----
 
+  /**
+   * Guarda de profundidade. A validação de borda vive no `@IsIn` do
+   * `ConnectDeviceDto`, mas nem todo caminho passa por um DTO: `provider` chega
+   * como parâmetro de rota em `disconnectDevice`/`isConnected`, e como string
+   * literal nos callbacks de OAuth.
+   *
+   * `BadRequestException` e não `Error` cru: provedor inválido é entrada
+   * inválida do cliente (400), não falha do servidor (500).
+   */
   private validateProvider(provider: string) {
-    if (!VALID_PROVIDERS.includes(provider as Provider)) {
-      throw new Error(
+    if (!VALID_PROVIDERS.includes(provider as DeviceProvider)) {
+      throw new BadRequestException(
         `Invalid provider: ${provider}. Valid: ${VALID_PROVIDERS.join(', ')}`,
       );
     }
