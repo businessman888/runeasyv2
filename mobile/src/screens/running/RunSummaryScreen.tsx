@@ -9,7 +9,6 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import Mapbox from '@rnmapbox/maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
@@ -31,14 +30,8 @@ import {
   type SplitData,
   type ElevationPoint,
 } from '../../utils/runMetrics';
-import { Terrain3DLayers } from '../../components/map/Terrain3DLayers';
-import { StatMapRoute } from '../../components/map/StatMapRoute';
 import { StatMapSelector, type StatMapMode } from '../../components/map/StatMapSelector';
-import { FinishFlagMarker } from '../../components/map/FinishFlagMarker';
-import {
-  mapboxStyleURL,
-  ThemedMapStyle,
-} from '../../components/map/ThemedMapStyle';
+import { PostWorkoutRouteMap } from '../../components/map/PostWorkoutRouteMap';
 import { RpeSelector } from '../../components/workout/RpeSelector';
 import { loadTreadmillCache } from '../../utils/treadmillCache';
 import {
@@ -47,7 +40,7 @@ import {
 } from '../../utils/treadmillChart';
 import type { RunMode } from './RunningScreen';
 import { semanticColors } from '../../theme/semanticColors';
-import { useMapThemePalette, createThemeStyles, useThemeSubscription } from '../../theme';
+import { createThemeStyles, useThemeSubscription } from '../../theme';
 
 const getLocalThemePalette1 = () => ({
   bgPrimary: semanticColors.canvas,
@@ -162,7 +155,6 @@ function statusLabel(actual: number, target: number, fmt: (n: number) => string)
 // ─── Component ────────────────────────────────────────────────────────────────
 export function RunSummaryScreen() {
   useThemeSubscription();
-  const mapPalette = useMapThemePalette();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RunSummaryRouteParams, 'RunSummary'>>();
   const insets = useSafeAreaInsets();
@@ -172,11 +164,10 @@ export function RunSummaryScreen() {
   const { isTablet, isLandscape } = useBreakpoint();
   const sideLayout = isTablet && isLandscape;
   const sheetRef = useRef<BottomSheet>(null);
+  const [sheetIndex, setSheetIndex] = useState(sideLayout ? 0 : 1);
   const [sharingVisible, setSharingVisible] = useState(false);
   // Stat Maps: coloração da rota. 'default' = polyline cyan original (estado inicial).
   const [statMapMode, setStatMapMode] = useState<StatMapMode>('default');
-  // Terreno 3D: desligado por padrão (preserva o comportamento atual do mapa).
-  const [is3D, setIs3D] = useState(false);
 
   const {
     workoutId,
@@ -530,47 +521,8 @@ export function RunSummaryScreen() {
   const autoTitle = useMemo(() => getAutoTitle(), []);
   const dateLine = city ? `${headerDate} — ${city}` : headerDate;
 
-  // ── Mapa: bounds da rota ───────────────────────────────────────────────
+  // ── Mapa ───────────────────────────────────────────────────────────────
   const hasRoute = routeCoordinates.length > 1;
-  let centerCoord = routeCoordinates[0] || [-46.6333, -23.5505];
-  let bounds: { ne: number[]; sw: number[] } | undefined;
-  // Zoom que enquadra a rota — usado no modo 3D, onde a câmera usa center+zoom+pitch
-  // em vez de bounds (bounds e pitch conflitam no rnmapbox). Mantém a rota visível
-  // mesmo num mapa travado.
-  let fit3DZoom = 14;
-  if (hasRoute) {
-    const lngs = routeCoordinates.map((c) => c[0]);
-    const lats = routeCoordinates.map((c) => c[1]);
-    const padding = 0.002;
-    bounds = {
-      ne: [Math.max(...lngs) + padding, Math.max(...lats) + padding],
-      sw: [Math.min(...lngs) - padding, Math.min(...lats) - padding],
-    };
-    centerCoord = [
-      (bounds.ne[0] + bounds.sw[0]) / 2,
-      (bounds.ne[1] + bounds.sw[1]) / 2,
-    ];
-    const maxSpan = Math.max(
-      Math.abs(bounds.ne[0] - bounds.sw[0]),
-      Math.abs(bounds.ne[1] - bounds.sw[1]),
-      0.0005,
-    );
-    // Aproximação log2(360 / span) com folga; clamp para um range usável.
-    fit3DZoom = Math.max(11, Math.min(16, Math.log2(360 / maxSpan) - 0.8));
-  }
-  const geoJsonSource = {
-    type: 'FeatureCollection' as const,
-    features: [
-      {
-        type: 'Feature' as const,
-        properties: {},
-        geometry: {
-          type: 'LineString' as const,
-          coordinates: hasRoute ? routeCoordinates : [[0, 0]],
-        },
-      },
-    ],
-  };
 
   const handleClose = () => {
     navigation.reset({
@@ -584,9 +536,12 @@ export function RunSummaryScreen() {
     setSharingVisible(true);
   };
 
-  // Snap points: phone 35% (vê mapa) / 92% (full). Em tablet landscape o sheet
-  // vive numa coluna à direita, então abre praticamente cheio.
-  const snapPoints = useMemo(() => (sideLayout ? ['100%'] : ['35%', '92%']), [sideLayout]);
+  // Phone abre em 35%; o ponto de 14% dá um modo mapa imersivo em um toque.
+  // Em tablet landscape o relatório permanece na coluna lateral.
+  const snapPoints = useMemo(
+    () => (sideLayout ? ['100%'] : ['14%', '35%', '92%']),
+    [sideLayout],
+  );
 
   // ── Planejado vs Executado (apenas modo manual) ────────────────────────
   const showPlannedVsExecuted = mode === 'manual' && targetPaceSeconds && targetDistanceKm;
@@ -713,110 +668,20 @@ export function RunSummaryScreen() {
           </View>
         </View>
       ) : (
-      <View style={sideLayout ? styles.mediaHalf : StyleSheet.absoluteFillObject}>
-        <Mapbox.MapView
-          style={StyleSheet.absoluteFillObject}
-          styleURL={mapboxStyleURL}
-          logoEnabled={false}
-          compassEnabled={false}
-          attributionEnabled={false}
-          scaleBarEnabled={false}
-          scrollEnabled={false}
-          pitchEnabled={false}
-          rotateEnabled={false}
-          zoomEnabled={false}
-        >
-          <ThemedMapStyle />
-          <Mapbox.Camera
-            centerCoordinate={centerCoord}
-            zoomLevel={is3D ? fit3DZoom : hasRoute ? undefined : 15}
-            pitch={is3D ? 55 : 0}
-            bounds={
-              !is3D && bounds
-                ? {
-                    ne: bounds.ne,
-                    sw: bounds.sw,
-                    paddingTop: 80,
-                    paddingBottom: 320,
-                    paddingLeft: 40,
-                    paddingRight: 40,
-                  }
-                : undefined
-            }
-            animationDuration={is3D ? 800 : 0}
-          />
-
-          {/* Terreno 3D (relevo + céu) — só montado quando o usuário ativa o 3D */}
-          {is3D && <Terrain3DLayers />}
-
-          {/* Rota padrão (cyan) — estado inicial, idêntico ao original */}
-          {hasRoute && statMapMode === 'default' && (
-            <Mapbox.ShapeSource id="summaryRoute" shape={geoJsonSource as any}>
-              <Mapbox.LineLayer
-                id="summaryRouteGlow"
-                style={{
-                  lineColor: mapPalette.routeGlow,
-                  lineWidth: 12,
-                  lineOpacity: 0.25,
-                  lineJoin: 'round',
-                  lineCap: 'round',
-                  lineEmissiveStrength: 1,
-                }}
-              />
-              <Mapbox.LineLayer
-                id="summaryRouteFill"
-                style={{
-                  lineColor: mapPalette.route,
-                  lineWidth: 5,
-                  lineJoin: 'round',
-                  lineCap: 'round',
-                  lineEmissiveStrength: 1,
-                }}
-              />
-            </Mapbox.ShapeSource>
-          )}
-
-          {/* Rota colorida por métrica (Stat Maps) — substitui a polyline padrão */}
-          {hasRoute && statMapRoute && <StatMapRoute shape={statMapRoute} />}
-
-          {/* Linha de chegada — bandeira no último ponto gravado */}
-          {hasRoute && (
-            <FinishFlagMarker coordinate={routeCoordinates[routeCoordinates.length - 1]} />
-          )}
-        </Mapbox.MapView>
-
-        {/* Toggle de Terreno 3D — chip flutuante no canto do mapa */}
-        {hasRoute && (
-          <Pressable
-            style={[styles.chip3d, { top: insets.top + 52 }, is3D && styles.chip3dActive]}
-            onPress={() => setIs3D((v) => !v)}
-            accessibilityRole="button"
-            accessibilityLabel={is3D ? 'Desativar terreno 3D' : 'Ativar terreno 3D'}
-            accessibilityState={{ selected: is3D }}
-          >
-            <Text style={[styles.chip3dText, is3D && { color: getLocalThemePalette1().cyan }]}>3D</Text>
-          </Pressable>
-        )}
-
-        {/* Overlay no mapa: rota indisponível ou hidratando */}
-        {!hasRoute && (
-          <View style={styles.mapOverlay} pointerEvents="none">
-            <View style={styles.mapOverlayPill}>
-              {enriching ? (
-                <>
-                  <ActivityIndicator size="small" color={getLocalThemePalette1().cyan} />
-                  <Text style={styles.mapOverlayText}>Carregando rota...</Text>
-                </>
-              ) : (
-                <>
-                  <Ionicons name="map-outline" size={16} color={getLocalThemePalette1().textSecondary} />
-                  <Text style={styles.mapOverlayText}>Rota não disponível</Text>
-                </>
-              )}
-            </View>
-          </View>
-        )}
-      </View>
+      <PostWorkoutRouteMap
+        style={sideLayout ? styles.mediaHalf : StyleSheet.absoluteFillObject}
+        routeCoordinates={routeCoordinates}
+        statMapRoute={statMapRoute}
+        enriching={enriching}
+        sourceId="summaryRoute"
+        topInset={insets.top}
+        bottomCameraPadding={sideLayout ? 80 : sheetIndex === 0 ? 120 : 320}
+        isSheetCollapsed={!sideLayout && sheetIndex === 0}
+        showSheetControl={!sideLayout}
+        onToggleSheet={() => {
+          sheetRef.current?.snapToIndex(sheetIndex === 0 ? 1 : 0);
+        }}
+      />
       )}
 
       {/* ── Header da screen (chevron + "Relatório" + share) ───────────── */}
@@ -853,8 +718,9 @@ export function RunSummaryScreen() {
       >
       <BottomSheet
         ref={sheetRef}
-        index={0}
+        index={sideLayout ? 0 : 1}
         snapPoints={snapPoints}
+        onChange={setSheetIndex}
         backgroundStyle={styles.sheetBackground}
         handleIndicatorStyle={styles.sheetHandle}
         enablePanDownToClose={false}
@@ -1554,30 +1420,6 @@ const styles = createThemeStyles(() => ({
     width: '40%',
   },
 
-  // Toggle de Terreno 3D — chip flutuante sobre o mapa
-  chip3d: {
-    position: 'absolute',
-    right: 16,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: semanticColors.surface2,
-    borderWidth: 1,
-    borderColor: semanticColors.borderSubtle,
-    zIndex: 20,
-  },
-  chip3dActive: {
-    borderColor: getLocalThemePalette1().cyan,
-    backgroundColor: semanticColors.accentSubtle,
-  },
-  chip3dText: {
-    color: getLocalThemePalette1().textSecondary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
   // Cold-start loading state — shown when opened via dumb-redirect entry
   // points (Calendar / Home / History) while hydration is in progress.
   coldStartLoading: {
@@ -1669,9 +1511,9 @@ const styles = createThemeStyles(() => ({
     zIndex: 10,
   },
   iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: semanticColors.surface1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1979,30 +1821,6 @@ const styles = createThemeStyles(() => ({
     color: getLocalThemePalette1().textPrimary,
     fontSize: 16,
     fontWeight: '600',
-  },
-
-  // Map overlay (rota indisponível / hidratando)
-  mapOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingTop: 110,
-  },
-  mapOverlayPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 18,
-    backgroundColor: semanticColors.surface1,
-    borderWidth: 1,
-    borderColor: semanticColors.borderSubtle,
-  },
-  mapOverlayText: {
-    color: getLocalThemePalette1().textSecondary,
-    fontSize: 12,
-    fontWeight: '500',
   },
 
   // Empty state (cards Splits / Pace sem dados)

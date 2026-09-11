@@ -11,7 +11,6 @@ import {
     useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import Mapbox from '@rnmapbox/maps';
 import { Ionicons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { LineChart } from 'react-native-gifted-charts';
@@ -37,20 +36,14 @@ import {
     downsampleSpeedSamples,
     computeSpeedChartSpacing,
 } from '../utils/treadmillChart';
-import { Terrain3DLayers } from '../components/map/Terrain3DLayers';
-import { StatMapRoute } from '../components/map/StatMapRoute';
 import { StatMapSelector, type StatMapMode } from '../components/map/StatMapSelector';
-import { FinishFlagMarker } from '../components/map/FinishFlagMarker';
-import {
-    mapboxStyleURL,
-    ThemedMapStyle,
-} from '../components/map/ThemedMapStyle';
+import { PostWorkoutRouteMap } from '../components/map/PostWorkoutRouteMap';
 import { CoachAnalysisSkeleton } from '../components/skeletons/ScreenSkeletons';
 import { RpeSelector } from '../components/workout/RpeSelector';
 import { paceValueToSecondsPerKm } from '../utils/pace';
 import { SharingModal } from './sharing/SharingModal';
 import { semanticColors } from '../theme/semanticColors';
-import { useMapThemePalette, createThemeStyles, useThemeSubscription } from '../theme';
+import { createThemeStyles, useThemeSubscription } from '../theme';
 
 const getLocalThemePalette1 = () => ({
     bgPrimary: semanticColors.canvas,
@@ -129,10 +122,10 @@ function statusLabel(actual: number, target: number, fmt: (n: number) => string)
 // ─── Component ────────────────────────────────────────────────────────────────
 export function CoachAnalysisScreen({ navigation, route }: any) {
     useThemeSubscription();
-    const mapPalette = useMapThemePalette();
     const { feedbackId } = route?.params || {};
     const insets = useSafeAreaInsets();
     const sheetRef = useRef<BottomSheet>(null);
+    const [sheetIndex, setSheetIndex] = useState(1);
 
     const {
         currentFeedback,
@@ -147,8 +140,6 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
     const [sharingVisible, setSharingVisible] = useState(false);
     // Stat Maps: coloração da rota. 'default' = polyline cyan original (estado inicial).
     const [statMapMode, setStatMapMode] = useState<StatMapMode>('default');
-    // Terreno 3D: desligado por padrão (preserva o mapa atual).
-    const [is3D, setIs3D] = useState(false);
 
     useEffect(() => {
         if (feedbackId) fetchFeedback(feedbackId);
@@ -468,43 +459,8 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
     );
     const dateLine = city ? `${headerDate} — ${city}` : headerDate;
 
-    // ── Mapa: bounds da rota ───────────────────────────────────────────────
+    // ── Mapa ───────────────────────────────────────────────────────────────
     const hasRoute = routeCoordinates.length > 1;
-    let centerCoord = routeCoordinates[0] || [-46.6333, -23.5505];
-    let bounds: { ne: number[]; sw: number[] } | undefined;
-    // Zoom que enquadra a rota — usado no modo 3D (câmera center+zoom+pitch em vez
-    // de bounds, que conflita com pitch no rnmapbox). Mantém a rota visível.
-    let fit3DZoom = 14;
-    if (hasRoute) {
-        const lngs = routeCoordinates.map((c) => c[0]);
-        const lats = routeCoordinates.map((c) => c[1]);
-        const padding = 0.002;
-        bounds = {
-            ne: [Math.max(...lngs) + padding, Math.max(...lats) + padding],
-            sw: [Math.min(...lngs) - padding, Math.min(...lats) - padding],
-        };
-        centerCoord = [
-            (bounds.ne[0] + bounds.sw[0]) / 2,
-            (bounds.ne[1] + bounds.sw[1]) / 2,
-        ];
-        const maxSpan = Math.max(
-            Math.abs(bounds.ne[0] - bounds.sw[0]),
-            Math.abs(bounds.ne[1] - bounds.sw[1]),
-            0.0005,
-        );
-        fit3DZoom = Math.max(11, Math.min(16, Math.log2(360 / maxSpan) - 0.8));
-    }
-    const geoJsonSource = {
-        type: 'FeatureCollection' as const,
-        features: [{
-            type: 'Feature' as const,
-            properties: {},
-            geometry: {
-                type: 'LineString' as const,
-                coordinates: hasRoute ? routeCoordinates : [[0, 0]],
-            },
-        }],
-    };
 
     // ── Hero / score ───────────────────────────────────────────────────────
     const feedback = currentFeedback || (latestActivity?.feedback ? {
@@ -568,7 +524,7 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
 
 
     // ── Bottom sheet snap ──────────────────────────────────────────────────
-    const snapPoints = useMemo(() => ['35%', '92%'], []);
+    const snapPoints = useMemo(() => ['14%', '35%', '92%'], []);
 
     // ── Actions ────────────────────────────────────────────────────────────
     const handleClose = () => navigation.goBack();
@@ -661,106 +617,18 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
                     </View>
                 </View>
             ) : (
-            <View style={StyleSheet.absoluteFillObject}>
-                <Mapbox.MapView
-                    style={StyleSheet.absoluteFillObject}
-                    styleURL={mapboxStyleURL}
-                    logoEnabled={false}
-                    compassEnabled={false}
-                    attributionEnabled={false}
-                    scaleBarEnabled={false}
-                    scrollEnabled={false}
-                    pitchEnabled={false}
-                    rotateEnabled={false}
-                    zoomEnabled={false}
-                >
-                    <ThemedMapStyle />
-                    <Mapbox.Camera
-                        centerCoordinate={centerCoord}
-                        zoomLevel={is3D ? fit3DZoom : hasRoute ? undefined : 15}
-                        pitch={is3D ? 55 : 0}
-                        bounds={!is3D && bounds ? {
-                            ne: bounds.ne,
-                            sw: bounds.sw,
-                            paddingTop: 80,
-                            paddingBottom: 320,
-                            paddingLeft: 40,
-                            paddingRight: 40,
-                        } : undefined}
-                        animationDuration={is3D ? 800 : 0}
-                    />
-
-                    {/* Terreno 3D (relevo + céu) — só quando o usuário ativa */}
-                    {is3D && <Terrain3DLayers />}
-
-                    {/* Rota padrão (cyan) — estado inicial, idêntico ao original */}
-                    {hasRoute && statMapMode === 'default' && (
-                        <Mapbox.ShapeSource id="coachRoute" shape={geoJsonSource as any}>
-                            <Mapbox.LineLayer
-                                id="coachRouteGlow"
-                                style={{
-                                    lineColor: mapPalette.routeGlow,
-                                    lineWidth: 12,
-                                    lineOpacity: 0.25,
-                                    lineJoin: 'round',
-                                    lineCap: 'round',
-                                    lineEmissiveStrength: 1,
-                                }}
-                            />
-                            <Mapbox.LineLayer
-                                id="coachRouteFill"
-                                style={{
-                                    lineColor: mapPalette.route,
-                                    lineWidth: 5,
-                                    lineJoin: 'round',
-                                    lineCap: 'round',
-                                    lineEmissiveStrength: 1,
-                                }}
-                            />
-                        </Mapbox.ShapeSource>
-                    )}
-
-                    {/* Rota colorida por métrica (Stat Maps) — substitui a polyline padrão */}
-                    {hasRoute && statMapRoute && <StatMapRoute shape={statMapRoute} />}
-
-                    {/* Linha de chegada — bandeira no último ponto gravado */}
-                    {hasRoute && (
-                        <FinishFlagMarker coordinate={routeCoordinates[routeCoordinates.length - 1]} />
-                    )}
-                </Mapbox.MapView>
-
-                {/* Toggle de Terreno 3D — chip flutuante no canto do mapa */}
-                {hasRoute && (
-                    <Pressable
-                        style={[styles.chip3d, { top: insets.top + 52 }, is3D && styles.chip3dActive]}
-                        onPress={() => setIs3D((v) => !v)}
-                        accessibilityRole="button"
-                        accessibilityLabel={is3D ? 'Desativar terreno 3D' : 'Ativar terreno 3D'}
-                        accessibilityState={{ selected: is3D }}
-                    >
-                        <Text style={[styles.chip3dText, is3D && { color: getLocalThemePalette1().cyan }]}>3D</Text>
-                    </Pressable>
-                )}
-
-                {/* Overlay: rota indisponível ou hidratando */}
-                {!hasRoute && (
-                    <View style={styles.mapOverlay} pointerEvents="none">
-                        <View style={styles.mapOverlayPill}>
-                            {enriching ? (
-                                <>
-                                    <ActivityIndicator size="small" color={getLocalThemePalette1().cyan} />
-                                    <Text style={styles.mapOverlayText}>Carregando rota...</Text>
-                                </>
-                            ) : (
-                                <>
-                                    <Ionicons name="map-outline" size={16} color={getLocalThemePalette1().textSecondary} />
-                                    <Text style={styles.mapOverlayText}>Rota não disponível</Text>
-                                </>
-                            )}
-                        </View>
-                    </View>
-                )}
-            </View>
+            <PostWorkoutRouteMap
+                routeCoordinates={routeCoordinates}
+                statMapRoute={statMapRoute}
+                enriching={enriching}
+                sourceId="coachRoute"
+                topInset={insets.top}
+                bottomCameraPadding={sheetIndex === 0 ? 120 : 320}
+                isSheetCollapsed={sheetIndex === 0}
+                onToggleSheet={() => {
+                    sheetRef.current?.snapToIndex(sheetIndex === 0 ? 1 : 0);
+                }}
+            />
             )}
 
             {/* ── Header overlay ────────────────────────────────────────── */}
@@ -793,8 +661,9 @@ export function CoachAnalysisScreen({ navigation, route }: any) {
             {/* ── Bottom Sheet ─────────────────────────────────────────── */}
             <BottomSheet
                 ref={sheetRef}
-                index={0}
+                index={1}
                 snapPoints={snapPoints}
+                onChange={setSheetIndex}
                 backgroundStyle={styles.sheetBackground}
                 handleIndicatorStyle={styles.sheetHandle}
                 enablePanDownToClose={false}
@@ -1700,30 +1569,6 @@ function formatTimeShort(iso: string): string {
 const styles = createThemeStyles(() => ({
     container: { flex: 1, backgroundColor: getLocalThemePalette1().bgPrimary },
 
-    // Toggle de Terreno 3D — chip flutuante sobre o mapa
-    chip3d: {
-        position: 'absolute',
-        right: 16,
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: semanticColors.surface2,
-        borderWidth: 1,
-        borderColor: semanticColors.borderSubtle,
-        zIndex: 20,
-    },
-    chip3dActive: {
-        borderColor: getLocalThemePalette1().cyan,
-        backgroundColor: semanticColors.accentSubtle,
-    },
-    chip3dText: {
-        color: getLocalThemePalette1().textSecondary,
-        fontSize: 14,
-        fontWeight: '700',
-    },
-
     // Cold-start loading state — shown when opened from history / home
     // before feedback + workout details finish hydrating.
     coldStartLoading: {
@@ -1815,7 +1660,7 @@ const styles = createThemeStyles(() => ({
         zIndex: 10,
     },
     iconBtn: {
-        width: 40, height: 40, borderRadius: 20,
+        width: 44, height: 44, borderRadius: 22,
         backgroundColor: semanticColors.surface1,
         alignItems: 'center', justifyContent: 'center',
     },
@@ -1992,19 +1837,6 @@ const styles = createThemeStyles(() => ({
     },
     paceStatLabel: { color: getLocalThemePalette1().textSecondary, fontSize: 15, fontWeight: '500' },
     paceStatValue: { color: getLocalThemePalette1().textPrimary, fontSize: 16, fontWeight: '600' },
-
-    // Map overlay
-    mapOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        alignItems: 'center', justifyContent: 'flex-start', paddingTop: 110,
-    },
-    mapOverlayPill: {
-        flexDirection: 'row', alignItems: 'center', gap: 8,
-        paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18,
-        backgroundColor: semanticColors.surface1,
-        borderWidth: 1, borderColor: semanticColors.borderSubtle,
-    },
-    mapOverlayText: { color: getLocalThemePalette1().textSecondary, fontSize: 12, fontWeight: '500' },
 
     // Empty states
     emptyState: { paddingVertical: 18, paddingHorizontal: 8, alignItems: 'center', gap: 8 },

@@ -25,7 +25,15 @@ export const ThemedMapStyle = memo(function ThemedMapStyle() {
     <Mapbox.StyleImport
       id={basemapImportId}
       existing
-      config={{ lightPreset: theme.mapLightPreset }}
+      config={{
+        lightPreset: theme.mapLightPreset,
+        showPedestrianRoads: 'true',
+        showPlaceLabels: 'true',
+        showPointOfInterestLabels: 'true',
+        showRoadLabels: 'true',
+        showTransitLabels: 'true',
+        show3dObjects: 'true',
+      }}
     />
   );
 });
