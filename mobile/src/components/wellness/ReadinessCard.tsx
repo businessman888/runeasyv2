@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { memo, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -9,21 +9,33 @@ import {
     Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, typography, spacing, borderRadius, shadows, createThemeStyles, useThemeSubscription } from '../../theme';
+import { colors, typography, spacing, borderRadius, shadows, fonts, createThemeStyles, useThemeSubscription } from '../../theme';
 import type { ReadinessBlock } from '../../types/wellness.types';
 import { semanticColors } from '../../theme/semanticColors';
-import type { AppIconName, IconTone } from '../../theme/iconography';
+import type { AppIconName } from '../../theme/iconography';
 import { AppIcon } from '../ui/AppIcon';
+import { ReadinessSignal, readinessSignalColors } from '../readiness/ReadinessSignal';
+import {
+    describeFloorProgress,
+    FLOOR_EXPLANATION,
+    signalLabel,
+    type ReadinessLock,
+} from '../../utils/readinessPresentation';
 
 interface ReadinessCardProps {
     readiness: ReadinessBlock;
     /**
-     * True when the user has completed at least one workout. The check-in
-     * remains gated behind a first run to avoid noisy data and reinforce
-     * the connection between training and recovery readings.
+     * Por que o check-in está (ou não) liberado — de `deriveReadinessLock`.
+     *
+     * Era um booleano `isUnlocked`, e o card bloqueado tinha uma copy só:
+     * "Complete seu primeiro treino". Desde a R.1 o bloqueio é o PISO de
+     * histórico (2 semanas e 6 corridas), e essa frase ficou falsa para quem já
+     * correu — e para quem só perdeu a conexão.
      */
-    isUnlocked: boolean;
+    lock: ReadinessLock;
     onPressQuiz: () => void;
+    /** Reabre a análise de hoje. A análise da IA era escrita uma vez e nunca mais lida. */
+    onPressDone: () => void;
 }
 
 const DIMENSION_LABELS = {
@@ -42,24 +54,23 @@ const DIMENSION_ICONS: Record<keyof typeof DIMENSION_LABELS, AppIconName> = {
     motivation: 'energy',
 };
 
-
-
-
-
-export function ReadinessCard({
+function ReadinessCardComponent({
     readiness,
-    isUnlocked,
+    lock,
     onPressQuiz,
+    onPressDone,
 }: ReadinessCardProps) {
     useThemeSubscription();
     if (readiness.hasCompletedToday) {
-        return <ReadinessCardDone readiness={readiness} />;
+        return <ReadinessCardDone readiness={readiness} onPress={onPressDone} />;
     }
-    if (!isUnlocked) {
-        return <ReadinessCardLocked />;
+    if (lock.kind !== 'open') {
+        return <ReadinessCardLocked lock={lock} />;
     }
     return <ReadinessCardPending onPress={onPressQuiz} />;
 }
+
+export const ReadinessCard = memo(ReadinessCardComponent);
 
 // =============================================================================
 // PENDING VARIANT — premium animated invite
@@ -203,9 +214,11 @@ function ReadinessCardPending({ onPress }: { onPress: () => void }) {
                         <Text style={styles.pendingTitle}>
                             Como você está se sentindo hoje?
                         </Text>
+                        {/* Dizia "…e ajustar o treino de hoje" — nada ajusta o
+                            plano por aqui, e a Fase 6 nem aceita mexer em hoje. */}
                         <Text style={styles.pendingSubtitle}>
-                            Responda em 30 segundos para liberar seu score de prontidão e
-                            ajustar o treino de hoje.
+                            Responda em 30 segundos e veja como seu corpo está
+                            para o treino de hoje.
                         </Text>
 
                         <Animated.View
@@ -232,132 +245,161 @@ function ReadinessCardPending({ onPress }: { onPress: () => void }) {
 }
 
 // =============================================================================
-// LOCKED VARIANT — gated behind first workout
+// LOCKED VARIANT — o piso de histórico, ou o status que não carregou
 // =============================================================================
 
-function ReadinessCardLocked() {
+type LockedLock = Exclude<ReadinessLock, { kind: 'open' }>;
+
+const LOCKED_COPY: Record<LockedLock['kind'], { chip: string; icon: AppIconName; title: string }> = {
+    aprendendo: {
+        chip: 'Aprendendo seu normal',
+        icon: 'running',
+        title: 'Calibrando sua prontidão',
+    },
+    indisponivel: {
+        chip: 'Indisponível agora',
+        icon: 'warning',
+        title: 'Não consegui verificar seu histórico',
+    },
+};
+
+function ReadinessCardLocked({ lock }: { lock: LockedLock }) {
     useThemeSubscription();
+    const copy = LOCKED_COPY[lock.kind];
+    const body =
+        lock.kind === 'aprendendo'
+            ? describeFloorProgress(lock.learning)
+            : 'Pode ser a conexão. Puxe a tela para baixo para tentar de novo.';
+    const footnote = lock.kind === 'aprendendo' ? FLOOR_EXPLANATION : null;
+
     return (
         <LinearGradient
             colors={[semanticColors.surface1, semanticColors.surface2, semanticColors.surface1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.lockedCard}
+            accessible
+            accessibilityRole="summary"
+            accessibilityLabel={`${copy.title}. ${body}${footnote ? ` ${footnote}` : ''}`}
         >
             <View style={styles.lockedHeader}>
                 <View style={styles.lockedChip}>
                     <AppIcon name="lock" size={16} tone="secondary" variant="filled" />
-                    <Text style={styles.lockedChipText}>Check-in bloqueado</Text>
+                    <Text style={styles.lockedChipText}>{copy.chip}</Text>
                 </View>
                 <View style={styles.lockedIconBubble}>
-                    <AppIcon name="running" size={20} tone="secondary" />
+                    <AppIcon name={copy.icon} size={20} tone="secondary" />
                 </View>
             </View>
 
-            <Text style={styles.lockedTitle}>
-                Complete seu primeiro treino
-            </Text>
-            <Text style={styles.lockedSubtitle}>
-                O check-in diário e o score de prontidão são liberados assim
-                que você concluir sua primeira corrida.
-            </Text>
+            <Text style={styles.lockedTitle}>{copy.title}</Text>
+            <Text style={styles.lockedSubtitle}>{body}</Text>
 
-            <View style={styles.lockedFootnote}>
-                <AppIcon name="info" size={16} tone="tertiary" />
-                <Text style={styles.lockedFootnoteText}>
-                    Precisamos de pelo menos 1 treino para calibrar suas análises.
-                </Text>
-            </View>
+            {footnote ? (
+                <View style={styles.lockedFootnote}>
+                    <AppIcon name="info" size={16} tone="tertiary" />
+                    <Text style={styles.lockedFootnoteText}>{footnote}</Text>
+                </View>
+            ) : null}
         </LinearGradient>
     );
 }
 
 // =============================================================================
-// COMPLETED VARIANT — calm summary
+// COMPLETED VARIANT — calm summary, tocável
 // =============================================================================
 
-function ReadinessCardDone({ readiness }: { readiness: ReadinessBlock }) {
+function ReadinessCardDone({
+    readiness,
+    onPress,
+}: {
+    readiness: ReadinessBlock;
+    onPress: () => void;
+}) {
     useThemeSubscription();
     const color = readiness.statusColor ?? 'green';
-    const gradient = ({
-    green: [semanticColors.surface1, semanticColors.surface2, semanticColors.successSubtle],
-    yellow: [semanticColors.surface1, semanticColors.surface2, semanticColors.warningSubtle],
-    red: [semanticColors.surface1, semanticColors.surface2, semanticColors.dangerSubtle],
-})[color] as [string, string, string];
-    const accent = ({
-    green: colors.success,
-    yellow: colors.warning,
-    red: colors.error,
-})[color];
+    const { accent, subtle } = readinessSignalColors(color);
+    const gradient: [string, string, string] = [
+        semanticColors.surface1,
+        semanticColors.surface2,
+        subtle,
+    ];
     const score = readiness.score ?? 0;
     const dims = readiness.dimensions;
-    const statusTone: IconTone = color === 'green' ? 'success' : color === 'yellow' ? 'warning' : 'danger';
 
     return (
-        <LinearGradient
-            colors={gradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.doneCard}
+        <Pressable
+            onPress={onPress}
+            style={({ pressed }) => (pressed ? styles.donePressed : undefined)}
+            accessibilityRole="button"
+            accessibilityLabel={`Prontidão de hoje: ${score}, ${signalLabel(color, readiness.statusLabel)}`}
+            accessibilityHint="Abre a análise completa de hoje"
         >
             <LinearGradient
-                colors={[`${accent}33`, 'transparent']}
-                start={{ x: 1, y: 0 }}
-                end={{ x: 0.1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-                pointerEvents="none"
-            />
+                colors={gradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.doneCard}
+            >
+                <LinearGradient
+                    colors={[`${accent}33`, semanticColors.transparent]}
+                    start={{ x: 1, y: 0 }}
+                    end={{ x: 0.1, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                    pointerEvents="none"
+                />
 
-            <View style={styles.doneHeader}>
-                <View style={[styles.doneChip, { backgroundColor: `${accent}22`, borderColor: `${accent}55` }]}>
-                    <AppIcon name="check" size={16} tone={statusTone} variant="filled" />
-                    <Text style={[styles.doneChipText, { color: accent }]}>
-                        Respondido hoje
-                    </Text>
-                </View>
-            </View>
-
-            <View style={styles.doneBody}>
-                <View style={styles.doneScoreSide}>
-                    <Text style={[styles.doneScore, { color: accent }]}>{score}</Text>
-                    <Text style={styles.doneStatusLabel}>
-                        {readiness.statusLabel ?? 'Prontidão de hoje'}
-                    </Text>
+                <View style={styles.doneHeader}>
+                    <View style={[styles.doneChip, { backgroundColor: `${accent}22`, borderColor: `${accent}55` }]}>
+                        <AppIcon name="check" size={16} tone="secondary" variant="filled" />
+                        <Text style={styles.doneChipText}>Respondido hoje</Text>
+                    </View>
+                    {/* A affordance de que o card abre alguma coisa. */}
+                    <AppIcon name="chevronForward" size={20} tone="tertiary" />
                 </View>
 
-                {dims && (
-                    <View style={styles.dimensionsRow}>
-                        {(Object.keys(DIMENSION_LABELS) as Array<keyof typeof DIMENSION_LABELS>).map(
-                            (key) => {
-                                const value = (dims[key] ?? 0) as number;
-                                const heightPct = Math.max(0.15, value / 5);
-                                return (
-                                    <View key={key} style={styles.dimensionCol}>
-                                        <View style={styles.dimensionBarTrack}>
-                                            <View
-                                                style={[
-                                                    styles.dimensionBarFill,
-                                                    {
-                                                        height: `${heightPct * 100}%`,
-                                                        backgroundColor: accent,
-                                                    },
-                                                ]}
+                <View style={styles.doneBody}>
+                    <View style={styles.doneScoreSide}>
+                        <Text style={[styles.doneScore, { color: accent }]}>{score}</Text>
+                        <View style={styles.doneSignal}>
+                            <ReadinessSignal color={color} label={readiness.statusLabel} size="sm" />
+                        </View>
+                    </View>
+
+                    {dims && (
+                        <View style={styles.dimensionsRow}>
+                            {(Object.keys(DIMENSION_LABELS) as Array<keyof typeof DIMENSION_LABELS>).map(
+                                (key) => {
+                                    const value = (dims[key] ?? 0) as number;
+                                    const heightPct = Math.max(0.15, value / 5);
+                                    return (
+                                        <View key={key} style={styles.dimensionCol}>
+                                            <View style={styles.dimensionBarTrack}>
+                                                <View
+                                                    style={[
+                                                        styles.dimensionBarFill,
+                                                        {
+                                                            height: `${heightPct * 100}%`,
+                                                            backgroundColor: accent,
+                                                        },
+                                                    ]}
+                                                />
+                                            </View>
+                                            <AppIcon
+                                                name={DIMENSION_ICONS[key]}
+                                                size={16}
+                                                tone="secondary"
+                                                style={{ marginTop: 4 }}
                                             />
                                         </View>
-                                        <AppIcon
-                                            name={DIMENSION_ICONS[key]}
-                                            size={16}
-                                            tone="secondary"
-                                            style={{ marginTop: 4 }}
-                                        />
-                                    </View>
-                                );
-                            },
-                        )}
-                    </View>
-                )}
-            </View>
-        </LinearGradient>
+                                    );
+                                },
+                            )}
+                        </View>
+                    )}
+                </View>
+            </LinearGradient>
+        </Pressable>
     );
 }
 
@@ -399,8 +441,8 @@ const styles = createThemeStyles(() => ({
         borderColor: semanticColors.borderSubtle,
     },
     pendingChipText: {
+        fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.xs,
-        fontWeight: typography.fontWeights.semibold,
         color: colors.primary,
         letterSpacing: 0.4,
     },
@@ -415,12 +457,13 @@ const styles = createThemeStyles(() => ({
         borderColor: semanticColors.borderSubtle,
     },
     pendingTitle: {
+        fontFamily: fonts.bold,
         fontSize: typography.fontSizes['2xl'],
-        fontWeight: typography.fontWeights.bold,
         color: colors.text,
         marginBottom: spacing.xs,
     },
     pendingSubtitle: {
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.sm,
         color: colors.textSecondary,
         lineHeight: typography.fontSizes.sm * typography.lineHeights.relaxed,
@@ -434,8 +477,8 @@ const styles = createThemeStyles(() => ({
         borderRadius: borderRadius.lg,
     },
     pendingCtaText: {
+        fontFamily: fonts.bold,
         fontSize: typography.fontSizes.base,
-        fontWeight: typography.fontWeights.bold,
         color: semanticColors.textOnAccent,
         letterSpacing: 0.3,
     },
@@ -468,8 +511,8 @@ const styles = createThemeStyles(() => ({
         borderColor: semanticColors.borderSubtle,
     },
     lockedChipText: {
+        fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.xs,
-        fontWeight: typography.fontWeights.semibold,
         color: colors.textSecondary,
         letterSpacing: 0.4,
     },
@@ -484,12 +527,13 @@ const styles = createThemeStyles(() => ({
         borderColor: semanticColors.borderSubtle,
     },
     lockedTitle: {
+        fontFamily: fonts.bold,
         fontSize: typography.fontSizes.xl,
-        fontWeight: typography.fontWeights.bold,
         color: colors.text,
         marginBottom: 2,
     },
     lockedSubtitle: {
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.sm,
         color: colors.textSecondary,
         lineHeight: typography.fontSizes.sm * typography.lineHeights.relaxed,
@@ -505,11 +549,15 @@ const styles = createThemeStyles(() => ({
     },
     lockedFootnoteText: {
         flex: 1,
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.xs,
         color: colors.textMuted,
     },
 
     // ============ DONE ============
+    donePressed: {
+        opacity: 0.85,
+    },
     doneCard: {
         borderRadius: borderRadius['2xl'],
         padding: spacing.lg,
@@ -521,6 +569,7 @@ const styles = createThemeStyles(() => ({
     doneHeader: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
         marginBottom: spacing.md,
     },
     doneChip: {
@@ -533,8 +582,9 @@ const styles = createThemeStyles(() => ({
         borderWidth: 1,
     },
     doneChipText: {
+        fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.xs,
-        fontWeight: typography.fontWeights.semibold,
+        color: colors.textSecondary,
         letterSpacing: 0.4,
     },
     doneBody: {
@@ -546,13 +596,11 @@ const styles = createThemeStyles(() => ({
         flex: 1,
     },
     doneScore: {
+        fontFamily: fonts.bold,
         fontSize: 56,
-        fontWeight: typography.fontWeights.bold,
         lineHeight: 60,
     },
-    doneStatusLabel: {
-        fontSize: typography.fontSizes.sm,
-        color: colors.textSecondary,
+    doneSignal: {
         marginTop: spacing.xs,
     },
     dimensionsRow: {

@@ -1,8 +1,7 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
     View,
     Text,
-    StyleSheet,
     StatusBar,
     TouchableOpacity,
     ScrollView,
@@ -10,13 +9,22 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../../theme';
+import { colors, typography, spacing, fonts, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
-import { BASE_API_URL, API_URL, API_ENDPOINTS } from '../../config/api.config';
+import { API_URL, API_ENDPOINTS } from '../../config/api.config';
 import { authedFetch } from '../../services/apiClient';
 import * as Storage from '../../utils/storage';
 import { useReadinessStore } from '../../stores/readinessStore';
+import { ReadinessStateView } from '../../components/readiness/ReadinessStateView';
+import {
+    deriveReadinessLock,
+    describeFloorProgress,
+    FLOOR_EXPLANATION,
+} from '../../utils/readinessPresentation';
+import type { RootStackParamList } from '../../navigation/navigationRef';
+import type { FloorProgress, ReadinessAnswers } from '../../types/readiness.types';
 
 // Question structure from backend
 interface QuestionOption {
@@ -38,158 +46,162 @@ interface QuestionSetResponse {
     totalSets: number;
 }
 
-interface ReadinessQuizScreenProps {
-    navigation: any;
+type ReadinessQuizScreenProps = NativeStackScreenProps<RootStackParamList, 'ReadinessQuiz'>;
+
+/**
+ * Por que o quiz NÃO mostra perguntas. `open` = mostra.
+ *
+ * Havia um único motivo (`'first_workout'`) e, para "já respondeu hoje", um
+ * `console.warn` seguido de "busca as perguntas assim mesmo": o corredor
+ * respondia de novo, o backend devolvia o veredito antigo e o app o exibia
+ * como novo. As respostas iam para o vazio.
+ */
+type QuizGate =
+    | { kind: 'open' }
+    | { kind: 'aprendendo'; learning: FloorProgress | null }
+    | { kind: 'indisponivel' }
+    /** Já respondeu, mas o veredito não veio junto. Com veredito, vai direto para a revisão. */
+    | { kind: 'ja_respondeu' };
+
+const NO_CACHE_HEADERS: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    Pragma: 'no-cache',
+    Expires: '0',
+};
+
+/** O conjunto de perguntas do dia, ou `null` em qualquer falha. */
+async function fetchQuestionSet(): Promise<QuestionSetResponse | null> {
+    const userId = await Storage.getItemAsync('user_id');
+    const headers = userId ? { ...NO_CACHE_HEADERS, 'x-user-id': userId } : NO_CACHE_HEADERS;
+
+    // Cache-bust além dos headers — o conjunto roda às 03:00 e um proxy que
+    // ignore `Cache-Control` entregaria o de ontem.
+    const base = `${API_URL}${API_ENDPOINTS.READINESS_QUESTIONS}`;
+    const url = `${base}${base.includes('?') ? '&' : '?'}_t=${Date.now()}`;
+
+    try {
+        const response = await authedFetch(url, { method: 'GET', headers });
+        if (!response.ok) {
+            console.error('[ReadinessQuiz] Falha ao buscar perguntas:', response.status);
+            return null;
+        }
+        const data = (await response.json()) as QuestionSetResponse;
+        return Array.isArray(data?.questions) ? data : null;
+    } catch (error) {
+        console.error('[ReadinessQuiz] Erro de rede ao buscar perguntas:', error);
+        return null;
+    }
 }
 
 export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
     useThemeSubscription();
     const [currentStep, setCurrentStep] = useState(0);
     const [answers, setAnswers] = useState<Record<string, number>>({});
-    // Initialize with empty array to verify fetch works.
     const [questions, setQuestions] = useState<Question[]>([]);
     const [questionSetNumber, setQuestionSetNumber] = useState<number | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(true);
-    // Defensive lock-out — the readiness check-in is only unlocked after the
-    // user completes their first workout. Used to be enforced exclusively by
-    // EvolutionScreen (now removed from the tab bar). Keeping it here ensures
-    // deep links and other entry points can't bypass the gate either.
-    const [lockReason, setLockReason] = useState<'first_workout' | null>(null);
+    const [gate, setGate] = useState<QuizGate>({ kind: 'open' });
     const insets = useSafeAreaInsets();
 
-    // Fetch questions from backend EVERY time screen is focused (not just on mount)
+    const setAnswer = useReadinessStore((s) => s.setAnswer);
+    const setSetNumber = useReadinessStore((s) => s.setSetNumber);
+    const resetQuiz = useReadinessStore((s) => s.resetQuiz);
+    const fetchReadinessStatus = useReadinessStore((s) => s.fetchReadinessStatus);
+
+    /**
+     * Descarte de resposta atrasada por SESSÃO — padrão herdado da cópia órfã
+     * (DESENHO-readiness-estado-ja-respondeu.md §4a).
+     *
+     * O `isMounted` que existia aqui não protege foco → desfoco → foco rápido:
+     * duas inicializações em voo, e a mais lenta aplicava por último. Cada foco
+     * ganha um id; o cleanup o invalida; só a sessão corrente escreve estado.
+     */
+    const sessionRef = useRef(0);
+
+    const leave = useCallback(() => {
+        if (navigation.canGoBack()) navigation.goBack();
+        else navigation.navigate('Main', { initialTab: 'Wellness' });
+    }, [navigation]);
+
     useFocusEffect(
         useCallback(() => {
-            let isMounted = true;
+            const session = ++sessionRef.current;
+            const isCurrent = () => sessionRef.current === session;
 
-            const fetchQuestionsData = async (headers: Record<string, string>) => {
-                console.log('[ReadinessQuiz] 📥 Step 2: Fetching questions...');
-                // Use API_URL + API_ENDPOINTS to ensure correct path without double /api
-                // endpoint already contains /api prefix
-                const url = `${API_URL}${API_ENDPOINTS.READINESS_QUESTIONS}`;
-                console.log('[ReadinessQuiz] 🌐 URL:', url);
+            const initialize = async () => {
+                setIsLoading(true);
+                setQuestions([]);
+                setQuestionSetNumber(undefined);
+                setAnswers({});
+                setCurrentStep(0);
+                setGate({ kind: 'open' });
 
-                try {
-                    const response = await authedFetch(url, {
-                        method: 'GET',
-                        headers,
-                    });
-
-                    console.log('[ReadinessQuiz] 📡 Questions Response status:', response.status);
-
-                    if (response.ok && isMounted) {
-                        const data: QuestionSetResponse = await response.json();
-                        console.log(`[ReadinessQuiz] ✅ Success! Received Set #${data.setNumber}: "${data.setName}"`);
-                        console.log(`[ReadinessQuiz] Questions count:`, data.questions?.length);
-                        setQuestions(data.questions);
-                        setQuestionSetNumber(data.setNumber);
-                    } else {
-                        const errorText = await response.text();
-                        console.error('[ReadinessQuiz] ❌ Failed to fetch questions. Body:', errorText);
-                    }
-                } catch (error) {
-                    console.error('[ReadinessQuiz] 💥 Network Error fetching questions:', error);
-                }
-            };
-
-            const initializeScreen = async () => {
-                console.log('[ReadinessQuiz] 🚀 Screen focused. Starting initialization sequence...');
+                // A sessão anterior do quiz não pode vazar para esta — ver
+                // `resetQuiz` no store.
+                resetQuiz();
 
                 try {
-                    if (isMounted) {
-                        setIsLoading(true);
-                        setQuestions([]); // Force empty state
-                        setQuestionSetNumber(undefined);
-                        setAnswers({});
-                        setLockReason(null);
-                    }
-
-                    // 1. Limpeza de Cache (Solicitada)
-                    console.log('[ReadinessQuiz] 🧹 Step 0: Clearing local cache...');
-                    try {
-                        await Storage.deleteItemAsync('readiness_questions');
-                        console.log('[ReadinessQuiz] Cache cleared.');
-                    } catch (e) {
-                        console.warn('[ReadinessQuiz] Failed to clear cache (non-fatal):', e);
-                    }
-
-                    // Prepare headers
-                    const userId = await Storage.getItemAsync('user_id');
-                    console.log('[ReadinessQuiz] 👤 User ID:', userId);
-
-                    const headers: Record<string, string> = {
-                        'Content-Type': 'application/json',
-                        'Cache-Control': 'no-cache, no-store, must-revalidate',
-                        'Pragma': 'no-cache',
-                        'Expires': '0',
-                    };
-                    if (userId) {
-                        headers['x-user-id'] = userId;
-                    }
-
-                    // 2. Verificar Status (Solicitado: Sequence Check)
-                    console.log('[ReadinessQuiz] 🔍 Step 1: Checking readiness status...');
-                    const statusUrl = `${API_URL}${API_ENDPOINTS.READINESS_STATUS}`;
-                    const statusRes = await authedFetch(statusUrl, { method: 'GET', headers });
-
-                    if (statusRes.ok) {
-                        const statusData = await statusRes.json();
-                        console.log(
-                            '[ReadinessQuiz] 📊 Status received. CompletedToday?',
-                            statusData.hasCompletedToday,
-                            'FirstWorkout?',
-                            statusData.hasCompletedFirstWorkout,
-                        );
-
-                        // GATE: must have completed first workout to access the quiz.
-                        // This protects deep links and any future entry point.
-                        if (!statusData.hasCompletedFirstWorkout) {
-                            console.warn('[ReadinessQuiz] 🔒 Locked — no completed workouts yet.');
-                            if (isMounted) setLockReason('first_workout');
-                            return; // do NOT fetch questions
-                        }
-
-                        // "Garanta que o fetchQuestions() seja chamado explicitamente dentro do bloco if (!hasCompleted)"
-                        if (!statusData.hasCompletedToday) {
-                            console.log('[ReadinessQuiz] ▶️ User has NOT completed today. Proceeding to fetch questions...');
-                            await fetchQuestionsData(headers);
-                        } else {
-                            console.warn('[ReadinessQuiz] ⚠️ User ALREADY completed check-in today.');
-                            // Still fetching to avoid broken screen if user navigates here, but logging warning
-                            console.log('[ReadinessQuiz] ▶️ Fetching questions anyway for review mode...');
-                            await fetchQuestionsData(headers);
-                        }
-                    } else {
-                        console.error('[ReadinessQuiz] ❌ Status check failed:', statusRes.status);
-                        // Fallback: try to fetch questions anyway
-                        await fetchQuestionsData(headers);
-                    }
-
-                } catch (error) {
-                    console.error('[ReadinessQuiz] 💥 Critical initialization error:', error);
-                } finally {
-                    if (isMounted) {
-                        setIsLoading(false);
-                    }
+                    await Storage.deleteItemAsync('readiness_questions');
+                } catch {
+                    // cache local; não-fatal
                 }
+
+                // O STATUS VEM ANTES DAS PERGUNTAS, e lido do store fresco — não
+                // do closure (§1.3-1.4 do desenho preservado).
+                await fetchReadinessStatus();
+                if (!isCurrent()) return;
+                const status = useReadinessStore.getState().readinessStatus;
+
+                // Precedência estrita: quem já respondeu hoje nem chega às
+                // perguntas (§1.5).
+                if (status?.hasCompletedToday) {
+                    if (status.todayVerdict) {
+                        // `replace`: o "voltar" da revisão cai na Wellness, não aqui.
+                        navigation.replace('ReadinessResult', { mode: 'review' });
+                        return;
+                    }
+                    setGate({ kind: 'ja_respondeu' });
+                    return;
+                }
+
+                const lock = deriveReadinessLock(status);
+                if (lock.kind === 'indisponivel') {
+                    // Antes: "busca as perguntas assim mesmo". Responder sem saber
+                    // a elegibilidade podia terminar numa recusa depois da última
+                    // pergunta.
+                    setGate({ kind: 'indisponivel' });
+                    return;
+                }
+                if (lock.kind === 'aprendendo') {
+                    setGate({ kind: 'aprendendo', learning: lock.learning });
+                    return;
+                }
+
+                const set = await fetchQuestionSet();
+                if (!isCurrent() || !set) return;
+                setQuestions(set.questions);
+                setQuestionSetNumber(set.setNumber);
             };
 
-            initializeScreen();
+            initialize()
+                .catch((error) => {
+                    console.error('[ReadinessQuiz] Erro na inicialização:', error);
+                })
+                .finally(() => {
+                    if (isCurrent()) setIsLoading(false);
+                });
 
             return () => {
-                console.log('[ReadinessQuiz] Screen blurred/unmounted. Cleanup.');
-                isMounted = false;
+                sessionRef.current += 1;
             };
-        }, [])
+        }, [navigation, resetQuiz, fetchReadinessStatus]),
     );
 
     const currentQuestion = questions[currentStep];
     const totalSteps = questions.length;
     const progress = totalSteps > 0 ? (currentStep + 1) / totalSteps : 0;
     const selectedValue = currentQuestion ? answers[currentQuestion.id] : undefined;
-
-    // Get store actions
-    const { setAnswer, setSetNumber } = useReadinessStore();
 
     const handleSelectOption = (value: number) => {
         if (!currentQuestion) return;
@@ -198,7 +210,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
             [currentQuestion.id]: value,
         }));
         // Also save to store for persistence
-        setAnswer(currentQuestion.id as any, value);
+        setAnswer(currentQuestion.id as keyof ReadinessAnswers, value);
     };
 
     const handleContinue = () => {
@@ -210,7 +222,7 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
                 setSetNumber(questionSetNumber);
             }
             // Navigate to result screen (the store already has the answers)
-            navigation.navigate('ReadinessResult');
+            navigation.navigate('ReadinessResult', { mode: 'submit' });
         }
     };
 
@@ -220,36 +232,46 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
             <View style={[styles.container, { paddingTop: insets.top + 20, justifyContent: 'center', alignItems: 'center' }]}>
                 <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={{ color: semanticColors.textSecondary, marginTop: 16 }}>Carregando perguntas...</Text>
+                <Text style={styles.loadingText}>Carregando perguntas...</Text>
             </View>
         );
     }
 
-    // Gate: user hasn't completed first workout yet
-    if (lockReason === 'first_workout') {
+    if (gate.kind === 'aprendendo') {
         return (
-            <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
-                <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
-                <View style={styles.lockedContainer}>
-                    <View style={styles.lockedIconWrap}>
-                        <Ionicons name="footsteps-outline" size={36} color={colors.primary} />
-                    </View>
-                    <Text style={styles.lockedHeading}>Complete seu primeiro treino</Text>
-                    <Text style={styles.lockedBody}>
-                        O check-in diário e o score de prontidão são liberados
-                        assim que você concluir sua primeira corrida. Vamos lá!
-                    </Text>
-                    <TouchableOpacity
-                        style={styles.lockedCta}
-                        onPress={() => navigation.navigate('Home')}
-                        accessibilityRole="button"
-                        accessibilityLabel="Voltar para a Home"
-                    >
-                        <Text style={styles.lockedCtaText}>Voltar para a Home</Text>
-                        <Ionicons name="arrow-forward" size={16} color={semanticColors.textOnAccent} />
-                    </TouchableOpacity>
-                </View>
-            </View>
+            <ReadinessStateView
+                visual="padlock"
+                title="Calibrando sua prontidão"
+                body={describeFloorProgress(gate.learning)}
+                note={FLOOR_EXPLANATION}
+                primaryAction={{ label: 'Voltar', onPress: leave }}
+            />
+        );
+    }
+
+    if (gate.kind === 'indisponivel') {
+        return (
+            <ReadinessStateView
+                visual="warning"
+                tone="warning"
+                title="Não consegui verificar seu histórico"
+                body="Pode ser a conexão. Tente de novo em instantes."
+                primaryAction={{ label: 'Tentar de novo', onPress: () => navigation.replace('ReadinessQuiz') }}
+                secondaryAction={{ label: 'Voltar', onPress: leave }}
+            />
+        );
+    }
+
+    if (gate.kind === 'ja_respondeu') {
+        // O desenho preservado §2, com a CTA voltando de onde o corredor veio.
+        return (
+            <ReadinessStateView
+                visual="check"
+                title="Prontidão Concluída!"
+                body="Você já realizou seu check-in de prontidão hoje."
+                note="Próximo check-in disponível amanhã após as 03:00 AM"
+                primaryAction={{ label: 'Voltar', onPress: leave }}
+            />
         );
     }
 
@@ -258,18 +280,18 @@ export function ReadinessQuizScreen({ navigation }: ReadinessQuizScreenProps) {
             <View style={[styles.container, { paddingTop: insets.top + 20, justifyContent: 'center', alignItems: 'center' }]}>
                 <StatusBar barStyle={getThemeStatusBarStyle()} backgroundColor={semanticColors.canvas} />
                 <Ionicons name="cloud-offline-outline" size={48} color={colors.error} />
-                <Text style={{ color: semanticColors.textPrimary, marginTop: 16, fontSize: 16, fontWeight: '600' }}>Erro ao carregar perguntas</Text>
-                <Text style={{ color: semanticColors.textSecondary, marginTop: 8, textAlign: 'center', maxWidth: 300 }}>
+                <Text style={styles.errorTitle}>Erro ao carregar perguntas</Text>
+                <Text style={styles.errorBody}>
                     Verifique sua conexão e tente novamente.
                 </Text>
                 <TouchableOpacity
                     style={styles.retryButton}
                     onPress={() => {
-                        // Forcing navigation listener to trigger via simple state update or re-nav
                         setIsLoading(true);
-                        // Re-trigger fetch logic (simplified for retry button, ideally calls fetchQuestions directly)
                         navigation.replace('ReadinessQuiz');
                     }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Tentar novamente"
                 >
                     <Text style={styles.retryButtonText}>Tentar Novamente</Text>
                 </TouchableOpacity>
@@ -403,6 +425,24 @@ const styles = createThemeStyles(() => ({
         flex: 1,
         backgroundColor: semanticColors.canvas,
     },
+    loadingText: {
+        fontFamily: fonts.regular,
+        color: semanticColors.textSecondary,
+        marginTop: 16,
+    },
+    errorTitle: {
+        fontFamily: fonts.semibold,
+        color: semanticColors.textPrimary,
+        marginTop: 16,
+        fontSize: 16,
+    },
+    errorBody: {
+        fontFamily: fonts.regular,
+        color: semanticColors.textSecondary,
+        marginTop: 8,
+        textAlign: 'center',
+        maxWidth: 300,
+    },
     // ---------- top bar
     topBar: {
         flexDirection: 'row',
@@ -422,17 +462,17 @@ const styles = createThemeStyles(() => ({
     topBarTitle: {
         flex: 1,
         textAlign: 'center',
+        fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.sm,
         color: colors.textSecondary,
-        fontWeight: '600',
         letterSpacing: 0.3,
     },
     topBarCounter: {
         width: 44,
         textAlign: 'right',
+        fontFamily: fonts.bold,
         fontSize: typography.fontSizes.sm,
         color: colors.primary,
-        fontWeight: '700',
     },
     // ---------- progress
     progressBar: {
@@ -457,8 +497,8 @@ const styles = createThemeStyles(() => ({
         paddingBottom: spacing['2xl'],
     },
     question: {
+        fontFamily: fonts.bold,
         fontSize: 28,
-        fontWeight: '700',
         color: semanticColors.textPrimary,
         letterSpacing: -0.5,
         lineHeight: 36,
@@ -489,8 +529,8 @@ const styles = createThemeStyles(() => ({
         gap: 2,
     },
     optionLabel: {
+        fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.lg,
-        fontWeight: '600',
         color: colors.text,
         letterSpacing: -0.2,
     },
@@ -498,6 +538,7 @@ const styles = createThemeStyles(() => ({
         color: colors.primary,
     },
     optionDescription: {
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.xs,
         color: colors.textSecondary,
     },
@@ -539,8 +580,8 @@ const styles = createThemeStyles(() => ({
         backgroundColor: semanticColors.glass,
     },
     continueBtnText: {
+        fontFamily: fonts.bold,
         fontSize: typography.fontSizes.md,
-        fontWeight: '700',
         color: semanticColors.textOnAccent,
         letterSpacing: 0.2,
     },
@@ -555,53 +596,8 @@ const styles = createThemeStyles(() => ({
         marginTop: 24,
     },
     retryButtonText: {
+        fontFamily: fonts.semibold,
         fontSize: 16,
-        fontWeight: '600',
-        color: semanticColors.textOnAccent,
-    },
-    lockedContainer: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: spacing['2xl'],
-        gap: spacing.lg,
-    },
-    lockedIconWrap: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: semanticColors.accentSubtle,
-        borderWidth: 1,
-        borderColor: semanticColors.borderSubtle,
-    },
-    lockedHeading: {
-        fontSize: typography.fontSizes['2xl'],
-        fontWeight: '700',
-        color: semanticColors.textPrimary,
-        textAlign: 'center',
-    },
-    lockedBody: {
-        fontSize: typography.fontSizes.md,
-        color: semanticColors.textSecondary,
-        textAlign: 'center',
-        lineHeight: 22,
-        maxWidth: 320,
-    },
-    lockedCta: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        backgroundColor: colors.primary,
-        paddingVertical: 14,
-        paddingHorizontal: 28,
-        borderRadius: 28,
-        marginTop: spacing.sm,
-    },
-    lockedCtaText: {
-        fontSize: typography.fontSizes.md,
-        fontWeight: '700',
         color: semanticColors.textOnAccent,
     },
 }));

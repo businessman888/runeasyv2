@@ -2,7 +2,6 @@ import React, { useEffect, useRef } from 'react';
 import {
     View,
     Text,
-    StyleSheet,
     StatusBar,
     TouchableOpacity,
     Animated,
@@ -10,14 +9,33 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, typography, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../../theme';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { colors, spacing, typography, fonts, createThemeStyles, useThemeSubscription, getThemeStatusBarStyle } from '../../theme';
 import { semanticColors } from '../../theme/semanticColors';
 import { useReadinessStore } from '../../stores/readinessStore';
+import type { RootStackParamList } from '../../navigation/navigationRef';
 
-export function ReadinessSuccessScreen({ navigation }: any) {
+type Props = NativeStackScreenProps<RootStackParamList, 'ReadinessSuccess'>;
+
+/**
+ * O que esta tela tem o direito de afirmar.
+ *
+ * Ela dizia "Seu plano de treino foi ajustado com base na sua análise de hoje"
+ * sem existir caminho de escrita nenhum no plano. "Ajustado" só pode aparecer
+ * quando um ajuste foi DE FATO aplicado — a R.2b liga `planAdjusted` ao
+ * `applied: true` da Fase 6. Até lá, ninguém passa esse parâmetro.
+ */
+const SUBTITLE = {
+    registrado:
+        'Registramos seu check-in de hoje. Sua análise fica no card de prontidão, na aba Wellness.',
+    ajustado: 'Registramos seu check-in e aliviamos o seu treino de amanhã.',
+} as const;
+
+export function ReadinessSuccessScreen({ navigation, route }: Props) {
     useThemeSubscription();
     const insets = useSafeAreaInsets();
-    const { resetQuiz } = useReadinessStore();
+    const resetQuiz = useReadinessStore((s) => s.resetQuiz);
+    const planAdjusted = route.params?.planAdjusted === true;
 
     // Animations
     const scaleAnim = useRef(new Animated.Value(0)).current;
@@ -64,10 +82,11 @@ export function ReadinessSuccessScreen({ navigation }: any) {
 
     const handleConfirm = () => {
         resetQuiz();
-        // Navigate to Main tabs (the authenticated route)
+        // Para a WELLNESS, não a Home: é lá que o card vira "Respondido hoje" —
+        // e é por ele que a análise pode ser relida depois.
         navigation.reset({
             index: 0,
-            routes: [{ name: 'Main', params: { initialTab: 'Home' } }],
+            routes: [{ name: 'Main', params: { initialTab: 'Wellness' } }],
         });
     };
 
@@ -95,9 +114,9 @@ export function ReadinessSuccessScreen({ navigation }: any) {
                     transform: [{ translateY: slideUpAnim }],
                 }
             ]}>
-                <Text style={styles.title}>Prontidão Registrada!</Text>
+                <Text style={styles.title} accessibilityRole="header">Prontidão Registrada!</Text>
                 <Text style={styles.subtitle}>
-                    Dados sincronizados com sucesso. Seu plano de treino foi ajustado com base na sua análise de hoje.
+                    {planAdjusted ? SUBTITLE.ajustado : SUBTITLE.registrado}
                 </Text>
                 <Text style={styles.info}>
                     Próximo check-in disponível amanhã após as 03:00 AM.
@@ -110,6 +129,8 @@ export function ReadinessSuccessScreen({ navigation }: any) {
                     style={styles.confirmButton}
                     onPress={handleConfirm}
                     activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Entendi"
                 >
                     <Text style={styles.confirmButtonText}>Entendi</Text>
                 </TouchableOpacity>
@@ -155,13 +176,14 @@ const styles = createThemeStyles(() => ({
         marginBottom: spacing.xl,
     },
     title: {
+        fontFamily: fonts.bold,
         fontSize: 28,
-        fontWeight: '700',
         color: semanticColors.textPrimary,
         textAlign: 'center',
         marginBottom: spacing.md,
     },
     subtitle: {
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.md,
         color: semanticColors.textSecondary,
         textAlign: 'center',
@@ -169,6 +191,7 @@ const styles = createThemeStyles(() => ({
         marginBottom: spacing.lg,
     },
     info: {
+        fontFamily: fonts.regular,
         fontSize: typography.fontSizes.sm,
         color: semanticColors.textTertiary,
         textAlign: 'center',
@@ -185,8 +208,8 @@ const styles = createThemeStyles(() => ({
         alignItems: 'center',
     },
     confirmButtonText: {
+        fontFamily: fonts.semibold,
         fontSize: typography.fontSizes.md,
-        fontWeight: '600',
         color: semanticColors.textOnAccent,
     },
 }));

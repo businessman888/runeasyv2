@@ -92,7 +92,6 @@ export function useNotifications(): UseNotificationsReturn {
                     break;
 
                 case 'CoachAnalysis':
-                case NotificationTypes.RECOVERY_ANALYSIS:
                     // Backend sends `feedbackId` (screen: 'CoachAnalysis'); the
                     // screen reads `feedbackId` (not the legacy `analysisId`),
                     // so pass it through — otherwise the analysis opens empty.
@@ -101,6 +100,17 @@ export function useNotifications(): UseNotificationsReturn {
                         feedbackId: data.feedbackId ?? data.analysisId,
                         activityId: data.activityId,
                     });
+                    break;
+
+                // O push de +10 min do READINESS. Ele dividia o `case` acima e
+                // abria `CoachAnalysis` com `feedbackId: undefined` — a tela
+                // vazia, o toque morto. É o único emissor deste `type`, e não
+                // manda `screen`; o feedback pós-treino manda
+                // `screen: 'CoachAnalysis'`, que vence em `data.screen || data.type`
+                // e portanto nunca chega aqui.
+                case NotificationTypes.RECOVERY_ANALYSIS:
+                    console.log('[Notifications] Navigating to ReadinessResult (review)');
+                    navigate('ReadinessResult', { mode: 'review' });
                     break;
 
                 case 'ReadinessQuiz':

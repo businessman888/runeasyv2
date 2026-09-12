@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
     ScrollView,
     StyleSheet,
@@ -17,6 +17,7 @@ import { useWellnessStore } from '../stores/wellnessStore';
 import { useHealthKitStore } from '../stores/healthKitStore';
 import { useReadinessStore } from '../stores/readinessStore';
 import { ReadinessCard } from '../components/wellness/ReadinessCard';
+import { deriveReadinessLock } from '../utils/readinessPresentation';
 import { PerformanceGrid } from '../components/wellness/PerformanceGrid';
 import { HealthSection } from '../components/wellness/HealthSection';
 import { ZonesChart } from '../components/wellness/ZonesChart';
@@ -58,11 +59,23 @@ export function WellnessScreen() {
 
     const onRefresh = useCallback(() => {
         fetchSummary(true);
-    }, [fetchSummary]);
+        // O card "indisponível" manda puxar para atualizar. Sem isto, puxar só
+        // rebuscava o resumo e o card continuava preso no mesmo status.
+        if (isProUser) fetchReadinessStatus();
+    }, [fetchSummary, fetchReadinessStatus, isProUser]);
 
     const handleOpenQuiz = useCallback(() => {
         navigation.navigate('ReadinessQuiz');
     }, [navigation]);
+
+    const handleOpenVerdict = useCallback(() => {
+        navigation.navigate('ReadinessResult', { mode: 'review' });
+    }, [navigation]);
+
+    const readinessLock = useMemo(
+        () => deriveReadinessLock(readinessStatus),
+        [readinessStatus],
+    );
 
     // Wait for BOTH summary and readiness status to land so the readiness
     // card doesn't flash the wrong variant (locked → pending or vice versa).
@@ -108,8 +121,9 @@ export function WellnessScreen() {
                         {isProUser ? (
                             <ReadinessCard
                                 readiness={summary.readiness}
-                                isUnlocked={readinessStatus?.isUnlocked ?? false}
+                                lock={readinessLock}
                                 onPressQuiz={handleOpenQuiz}
+                                onPressDone={handleOpenVerdict}
                             />
                         ) : (
                             <UpgradeProCard
