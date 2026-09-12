@@ -1,45 +1,21 @@
 import { create } from 'zustand';
-import { Platform } from 'react-native';
 import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
 import { authedFetch } from '../services/apiClient';
 import { useWellnessStore } from './wellnessStore';
+import {
+    interpretAnalyzeResponse,
+    toReadinessStatus,
+} from '../utils/readinessPresentation';
+import type {
+    AnalyzeOutcome,
+    ReadinessAnswers,
+    ReadinessStatus,
+    ReadinessVerdict,
+} from '../types/readiness.types';
 
-// Types matching backend response
-export interface ReadinessVerdict {
-    readiness_score: number;
-    status_color: 'green' | 'yellow' | 'red';
-    status_label: string;
-    ai_analysis: {
-        headline: string;
-        reasoning: string;
-        plan_adjustment: string;
-    };
-    metrics_summary: Array<{
-        label: string;
-        value: string;
-        sublabel?: string;
-        icon: string;
-    }>;
-    generated_at: string;
-}
-
-export interface ReadinessAnswers {
-    sleep: number;      // 1-5
-    legs: number;       // 1-5
-    mood: number;       // 1-5
-    stress: number;     // 1-5
-    motivation: number; // 1-5
-}
-
-export interface ReadinessStatus {
-    isUnlocked: boolean;
-    hasCompletedFirstWorkout: boolean;
-    canCheckInToday: boolean;
-    hasCompletedToday: boolean;
-    lastCheckInDate: string | null;
-    todayVerdict: ReadinessVerdict | null;
-}
+// Re-exportados: o barril `stores/index.ts` sempre expôs estes nomes daqui.
+export type { AnalyzeOutcome, ReadinessAnswers, ReadinessStatus, ReadinessVerdict };
 
 interface ReadinessState {
     // Quiz state
@@ -47,9 +23,16 @@ interface ReadinessState {
     currentStep: number;
     setNumber: number | undefined; // Question set number for exclusion tracking
 
-    // Verdict state
-    verdict: ReadinessVerdict | null;
+    /**
+     * O desfecho do check-in DESTA sessão do quiz — `null` enquanto não enviado.
+     *
+     * Um campo só, e não `verdict` + flags: `ja_respondeu`, `aprendendo` e o
+     * Pro-gate eram descartados ou viravam exceção, e a tela não tinha como
+     * distinguir "veredito novo" de "veredito antigo que o servidor devolveu".
+     */
+    outcome: AnalyzeOutcome | null;
     isLoading: boolean;
+    /** Só falha de TRANSPORTE. Uma recusa do servidor é `outcome`, não erro. */
     error: string | null;
 
     // Status state
@@ -63,25 +46,49 @@ interface ReadinessState {
     prevStep: () => void;
     resetQuiz: () => void;
     fetchVerdict: () => Promise<void>;
-    clearVerdict: () => void;
     fetchReadinessStatus: () => Promise<void>;
 }
 
 // API_URL imported from '../config/api.config' as BASE_API_URL
 const API_URL = BASE_API_URL;
 
-const getUserId = async () => {
-    return await Storage.getItemAsync('user_id');
+const REQUIRED_KEYS: (keyof ReadinessAnswers)[] = ['sleep', 'legs', 'mood', 'stress', 'motivation'];
+
+/**
+ * O status quando NÃO foi possível consultá-lo.
+ *
+ * Antes era tudo `false`, indistinguível de "ainda não treinou": uma queda de
+ * rede fazia o card afirmar "Complete seu primeiro treino" para quem tinha 40
+ * corridas. `indisponivel` dá à UI o direito de dizer a verdade.
+ */
+const STATUS_DESCONHECIDO: ReadinessStatus = {
+    isUnlocked: false,
+    hasCompletedFirstWorkout: false,
+    canCheckInToday: false,
+    hasCompletedToday: false,
+    lastCheckInDate: null,
+    todayVerdict: null,
+    todayAnswers: null,
+    learning: null,
+    eligibilityReason: 'indisponivel',
 };
 
-// Map step index to answer key
-const STEP_KEYS: (keyof ReadinessAnswers)[] = ['sleep', 'legs', 'mood', 'stress', 'motivation'];
+async function readinessHeaders(): Promise<{ headers: Record<string, string>; userId: string | null }> {
+    const userId = await Storage.getItemAsync('user_id');
+    return {
+        userId,
+        headers: {
+            'Content-Type': 'application/json',
+            ...(userId ? { 'x-user-id': userId } : {}),
+        },
+    };
+}
 
 export const useReadinessStore = create<ReadinessState>((set, get) => ({
     answers: {},
     currentStep: 0,
     setNumber: undefined,
-    verdict: null,
+    outcome: null,
     isLoading: false,
     error: null,
     readinessStatus: null,
@@ -98,11 +105,8 @@ export const useReadinessStore = create<ReadinessState>((set, get) => ({
     },
 
     nextStep: () => {
-        const { currentStep, answers } = get();
-        const currentKey = STEP_KEYS[currentStep];
-
-        // Store current answer and move to next
-        if (currentStep < 4) {
+        const { currentStep } = get();
+        if (currentStep < REQUIRED_KEYS.length - 1) {
             set({ currentStep: currentStep + 1 });
         }
     },
@@ -114,12 +118,21 @@ export const useReadinessStore = create<ReadinessState>((set, get) => ({
         }
     },
 
+    /**
+     * Zera a sessão do quiz. Chamado no INÍCIO de cada quiz, não só no fim.
+     *
+     * O store vive em memória e quem saía do resultado pelo "voltar" nunca
+     * passava pela tela de sucesso (a única que limpava). Com o app aberto de um
+     * dia para o outro, o resultado de amanhã via o desfecho de ontem e pulava a
+     * busca — `ReadinessResultScreen` só envia quando não há desfecho nem erro.
+     */
     resetQuiz: () => {
         set({
             answers: {},
             currentStep: 0,
             setNumber: undefined,
-            verdict: null,
+            outcome: null,
+            isLoading: false,
             error: null,
         });
     },
@@ -127,125 +140,74 @@ export const useReadinessStore = create<ReadinessState>((set, get) => ({
     fetchVerdict: async () => {
         const { answers, setNumber } = get();
 
-        // Validate all answers are present
-        const requiredKeys: (keyof ReadinessAnswers)[] = ['sleep', 'legs', 'mood', 'stress', 'motivation'];
-        for (const key of requiredKeys) {
-            if (!answers[key]) {
-                console.warn(`Missing answer for ${key}, answers:`, answers);
-                set({ error: `Resposta faltando: ${key}` });
-                return;
-            }
+        if (REQUIRED_KEYS.some((key) => !answers[key])) {
+            set({ error: 'Faltou responder uma pergunta. Volte e complete o check-in.' });
+            return;
         }
 
+        set({ isLoading: true, error: null, outcome: null });
+
         try {
-            set({ isLoading: true, error: null });
+            const { headers, userId } = await readinessHeaders();
 
-            // Get userId or use a fallback for testing
-            let userId = await getUserId();
-            if (!userId) {
-                console.warn('No userId found, using test fallback');
-                userId = 'test-user-fallback';
-            }
-
-            console.log('Fetching verdict with:', {
-                url: `${API_URL}/readiness/analyze`,
-                userId,
-                answers,
-                setNumber
-            });
-
+            // A identidade vem do token no backend; `userId` no corpo só existe
+            // porque um backend anterior à R.0 o lia de lá. Sem id, não se manda
+            // nenhum — nunca um id inventado.
+            //
+            // ⚠️ Não logar `answers`: é dado de saúde autorrelatado.
             const response = await authedFetch(`${API_URL}/readiness/analyze`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-user-id': userId,
-                },
+                headers,
                 body: JSON.stringify({
-                    userId,
+                    ...(userId ? { userId } : {}),
                     answers: answers as ReadinessAnswers,
-                    setNumber, // Include setNumber for exclusion tracking
+                    setNumber,
                 }),
             });
 
-            console.log('Response status:', response.status);
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('API Error:', errorText);
-                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            const body: unknown = await response.json().catch(() => null);
+            const outcome = interpretAnalyzeResponse(response.status, body);
+            if (!outcome) {
+                throw new Error(`HTTP ${response.status}`);
             }
 
-            const verdict: ReadinessVerdict = await response.json();
-            console.log('Verdict received:', verdict);
-            set({ verdict, isLoading: false });
-            useWellnessStore.getState().reset();
+            set({ outcome, isLoading: false });
+            // O card da Wellness só vira "Respondido hoje" se o resumo for rebuscado.
+            if (outcome.kind === 'ok') {
+                useWellnessStore.getState().reset();
+            }
         } catch (error) {
-            console.error('Fetch verdict error:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+            console.error('[Readiness] analyze falhou:', error);
             set({
-                error: `Falha ao analisar prontidão: ${errorMessage}`,
-                isLoading: false
+                error: 'Não consegui analisar sua prontidão agora. Verifique sua conexão e tente de novo.',
+                isLoading: false,
             });
         }
     },
 
-    clearVerdict: () => {
-        set({ verdict: null, error: null });
-    },
-
     fetchReadinessStatus: async () => {
+        set({ statusLoading: true });
         try {
-            set({ statusLoading: true });
-
-            let userId = await getUserId();
-            if (!userId) {
-                console.warn('No userId found for status check');
-                set({
-                    readinessStatus: {
-                        isUnlocked: false,
-                        hasCompletedFirstWorkout: false,
-                        canCheckInToday: false,
-                        hasCompletedToday: false,
-                        lastCheckInDate: null,
-                        todayVerdict: null,
-                    },
-                    statusLoading: false
-                });
-                return;
-            }
-
-            console.log('Fetching readiness status for user:', userId);
-
-            const response = await authedFetch(`${API_URL}/readiness/status`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-user-id': userId,
-                },
-            });
+            const { headers } = await readinessHeaders();
+            // Cache-bust além dos headers: a elegibilidade muda às 03:00 e a cada
+            // corrida, e um status velho reabre o quiz para quem já respondeu.
+            const response = await authedFetch(
+                `${API_URL}/readiness/status?_t=${Date.now()}`,
+                { method: 'GET', headers },
+            );
 
             if (!response.ok) {
-                const errorText = await response.text();
-                console.error('Status API Error:', errorText);
-                throw new Error(`HTTP ${response.status}: ${errorText}`);
+                throw new Error(`HTTP ${response.status}`);
             }
 
-            const status: ReadinessStatus = await response.json();
-            console.log('Readiness status received:', status);
+            const status = toReadinessStatus(await response.json());
+            if (!status) {
+                throw new Error('corpo de /readiness/status ilegível');
+            }
             set({ readinessStatus: status, statusLoading: false });
         } catch (error) {
-            console.error('Fetch readiness status error:', error);
-            set({
-                readinessStatus: {
-                    isUnlocked: false,
-                    hasCompletedFirstWorkout: false,
-                    canCheckInToday: false,
-                    hasCompletedToday: false,
-                    lastCheckInDate: null,
-                    todayVerdict: null,
-                },
-                statusLoading: false
-            });
+            console.error('[Readiness] /status falhou:', error);
+            set({ readinessStatus: STATUS_DESCONHECIDO, statusLoading: false });
         }
     },
 }));

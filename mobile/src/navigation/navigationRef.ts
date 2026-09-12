@@ -45,8 +45,14 @@ export type RootStackParamList = {
         summaryParams: Record<string, unknown>;
     };
     ReadinessQuiz: undefined;
-    ReadinessResult: undefined;
-    ReadinessSuccess: undefined;
+    /**
+     * `submit` (padrão): acabou de responder — envia e mostra o desfecho.
+     * `review`: reabre a análise de hoje (card Done, push de +10 min, quiz de
+     * quem já respondeu) sem enviar nada.
+     */
+    ReadinessResult: { mode?: 'submit' | 'review' } | undefined;
+    /** `planAdjusted` só vira `true` quando um alívio foi aplicado (R.2b). */
+    ReadinessSuccess: { planAdjusted?: boolean } | undefined;
     Notifications: undefined;
     PersonalInfo: undefined;
     TrainingHistory: undefined;
