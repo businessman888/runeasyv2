@@ -1,6 +1,8 @@
-import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
+  Platform,
   StyleSheet,
   Text,
   View,
@@ -8,6 +10,13 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import {
+  GlassContainer,
+  GlassView,
+  isGlassEffectAPIAvailable,
+  isLiquidGlassAvailable,
+} from 'expo-glass-effect';
 import Mapbox from '@rnmapbox/maps';
 import type { FeatureCollection, LineString } from 'geojson';
 
@@ -49,6 +58,8 @@ interface RouteViewport {
 }
 
 const FALLBACK_CENTER: Coordinate = [-46.6333, -23.5505];
+const CONTROL_SIZE = Platform.OS === 'android' ? 48 : 44;
+const CONTROL_RADIUS = CONTROL_SIZE / 2;
 
 function isCoordinate(value: number[]): value is Coordinate {
   return (
@@ -112,9 +123,11 @@ function PostWorkoutRouteMapComponent({
   enriching = false,
   style,
 }: PostWorkoutRouteMapProps) {
-  useThemeSubscription();
   const cameraRef = useRef<Mapbox.Camera>(null);
   const [is3D, setIs3D] = useState(true);
+  const [preferOpaqueControls, setPreferOpaqueControls] = useState(
+    Platform.OS === 'ios',
+  );
   const { theme } = useAppTheme();
   const { resolveDuration } = useMotionPreferences();
   const mapPalette = useMapThemePalette();
@@ -124,6 +137,15 @@ function PostWorkoutRouteMapComponent({
   );
   const hasRoute = coordinates.length > 1;
   const viewport = useMemo(() => buildViewport(coordinates), [coordinates]);
+  const nativeLiquidGlass = useMemo(
+    () => (
+      Platform.OS === 'ios'
+      && isLiquidGlassAvailable()
+      && isGlassEffectAPIAvailable()
+      && !preferOpaqueControls
+    ),
+    [preferOpaqueControls],
+  );
   const routeShape = useMemo<FeatureCollection<LineString>>(
     () => ({
       type: 'FeatureCollection',
@@ -140,6 +162,38 @@ function PostWorkoutRouteMapComponent({
     }),
     [coordinates, hasRoute],
   );
+
+  useEffect(() => {
+    let mounted = true;
+    const eventName = Platform.OS === 'ios'
+      ? 'reduceTransparencyChanged'
+      : 'highTextContrastChanged';
+    const readPreference = Platform.OS === 'ios'
+      ? AccessibilityInfo.isReduceTransparencyEnabled()
+      : AccessibilityInfo.isHighTextContrastEnabled();
+
+    void readPreference
+      .then((enabled) => {
+        if (mounted) {
+          setPreferOpaqueControls(enabled);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setPreferOpaqueControls(false);
+        }
+      });
+
+    const subscription = AccessibilityInfo.addEventListener(
+      eventName,
+      setPreferOpaqueControls,
+    );
+
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
 
   const frameRoute = useCallback(
     (use3D: boolean) => {
@@ -275,21 +329,28 @@ function PostWorkoutRouteMapComponent({
       </Mapbox.MapView>
 
       {hasRoute && (
-        <View style={[styles.controls, { top: topInset + 52 }]} pointerEvents="box-none">
+        <MapControlsContainer
+          nativeLiquidGlass={nativeLiquidGlass}
+          style={[styles.controls, { top: topInset + 52 }]}
+        >
           <MapControl
-            label={is3D ? 'Usar mapa em 2D' : 'Usar mapa em 3D'}
-            hint={is3D ? 'Remove a inclinação e o relevo do mapa' : 'Mostra inclinação, relevo e objetos tridimensionais'}
-            selected={is3D}
+            label="Alternar visualização do mapa"
+            hint={is3D ? 'Modo 3D ativo. Toque para usar o mapa em 2D' : 'Modo 2D ativo. Toque para usar o mapa em 3D'}
+            value={is3D ? '3D' : '2D'}
+            nativeLiquidGlass={nativeLiquidGlass}
+            preferOpaque={preferOpaqueControls}
             onPress={toggle3D}
           >
-            <Text style={[styles.modeText, is3D && styles.modeTextActive]}>
-              {is3D ? '2D' : '3D'}
+            <Text style={[styles.modeText, styles.modeTextActive]}>
+              {is3D ? '3D' : '2D'}
             </Text>
           </MapControl>
 
           <MapControl
             label="Reenquadrar rota"
             hint="Centraliza a rota completa novamente no mapa"
+            nativeLiquidGlass={nativeLiquidGlass}
+            preferOpaque={preferOpaqueControls}
             onPress={() => frameRoute(is3D)}
           >
             <Ionicons name="scan-outline" size={21} color={theme.colors.textPrimary} />
@@ -300,6 +361,8 @@ function PostWorkoutRouteMapComponent({
               label={isSheetCollapsed ? 'Mostrar resumo do treino' : 'Ampliar mapa'}
               hint={isSheetCollapsed ? 'Restaura o painel de resumo' : 'Recolhe o painel para aumentar a área visível do mapa'}
               selected={isSheetCollapsed}
+              nativeLiquidGlass={nativeLiquidGlass}
+              preferOpaque={preferOpaqueControls}
               onPress={onToggleSheet}
             >
               <Ionicons
@@ -309,7 +372,7 @@ function PostWorkoutRouteMapComponent({
               />
             </MapControl>
           )}
-        </View>
+        </MapControlsContainer>
       )}
 
       {!hasRoute && (
@@ -336,27 +399,123 @@ function PostWorkoutRouteMapComponent({
 interface MapControlProps {
   label: string;
   hint: string;
+  value?: string;
   selected?: boolean;
+  nativeLiquidGlass: boolean;
+  preferOpaque: boolean;
   onPress: () => void;
   children: React.ReactNode;
 }
 
-function MapControl({ label, hint, selected = false, onPress, children }: MapControlProps) {
+interface MapControlsContainerProps {
+  children: React.ReactNode;
+  nativeLiquidGlass: boolean;
+  style: StyleProp<ViewStyle>;
+}
+
+function MapControlsContainer({
+  children,
+  nativeLiquidGlass,
+  style,
+}: MapControlsContainerProps) {
   useThemeSubscription();
 
+  if (nativeLiquidGlass) {
+    return (
+      <GlassContainer spacing={10} style={style} pointerEvents="box-none">
+        {children}
+      </GlassContainer>
+    );
+  }
+
   return (
+    <View style={style} pointerEvents="box-none">
+      {children}
+    </View>
+  );
+}
+
+function MapControl({
+  label,
+  hint,
+  value,
+  selected = false,
+  nativeLiquidGlass,
+  preferOpaque,
+  onPress,
+  children,
+}: MapControlProps) {
+  const { theme } = useAppTheme();
+
+  const pressable = (
     <AppPressable
-      style={[styles.control, selected && styles.controlSelected]}
+      style={styles.controlPressTarget}
       interactionScale="icon"
       hapticFeedback="selection"
+      android_ripple={{
+        color: selected ? theme.colors.accentSubtle : theme.colors.fillMuted,
+        borderless: true,
+        radius: CONTROL_RADIUS,
+      }}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={hint}
-      accessibilityState={{ selected }}
+      accessibilityValue={value ? { text: value } : undefined}
     >
       {children}
     </AppPressable>
+  );
+
+  if (nativeLiquidGlass) {
+    return (
+      <GlassView
+        glassEffectStyle="regular"
+        isInteractive
+        colorScheme="auto"
+        style={styles.nativeControlSurface}
+      >
+        {pressable}
+      </GlassView>
+    );
+  }
+
+  return (
+    <View style={[styles.controlShadow, theme.elevation.md]}>
+      <View
+        style={[
+          styles.controlSurface,
+          selected && styles.controlSelected,
+        ]}
+      >
+        {Platform.OS === 'ios' && !preferOpaque && (
+          <BlurView
+            intensity={36}
+            tint={theme.isDark ? 'dark' : 'light'}
+            pointerEvents="none"
+            style={StyleSheet.absoluteFill}
+          />
+        )}
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: theme.colors.surface1 },
+            !preferOpaque && styles.translucentMaterial,
+          ]}
+        />
+        {!preferOpaque && (
+          <View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: theme.colors.glass },
+            ]}
+          />
+        )}
+        {pressable}
+      </View>
+    </View>
   );
 }
 
@@ -369,19 +528,41 @@ const styles = createThemeStyles(() => ({
     gap: 8,
     zIndex: 20,
   },
-  control: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  controlShadow: {
+    width: CONTROL_SIZE,
+    height: CONTROL_SIZE,
+    borderRadius: CONTROL_RADIUS,
+  },
+  controlSurface: {
+    width: CONTROL_SIZE,
+    height: CONTROL_SIZE,
+    borderRadius: CONTROL_RADIUS,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: semanticColors.surface2,
+    overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: semanticColors.borderStrong,
   },
+  nativeControlSurface: {
+    width: CONTROL_SIZE,
+    height: CONTROL_SIZE,
+    borderRadius: CONTROL_RADIUS,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  controlPressTarget: {
+    width: CONTROL_SIZE,
+    height: CONTROL_SIZE,
+    borderRadius: CONTROL_RADIUS,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  translucentMaterial: {
+    opacity: 0.84,
+  },
   controlSelected: {
     borderColor: semanticColors.accent,
-    backgroundColor: semanticColors.accentSubtle,
   },
   modeText: {
     color: semanticColors.textSecondary,

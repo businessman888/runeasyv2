@@ -1,23 +1,57 @@
-import React, { useMemo } from 'react';
-import { View, StyleSheet, Image, Text, Platform } from 'react-native';
+import React, {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
+import {
+    AccessibilityInfo,
+    View,
+    StyleSheet,
+    Image,
+    Text,
+    Platform,
+    I18nManager,
+    type LayoutChangeEvent,
+    type LayoutRectangle,
+    type ViewStyle,
+} from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
+import {
+    GlassContainer,
+    GlassView,
+    isGlassEffectAPIAvailable,
+    isLiquidGlassAvailable,
+} from 'expo-glass-effect';
+import Animated, {
+    useAnimatedStyle,
+    useSharedValue,
+    withSequence,
+    withSpring,
+} from 'react-native-reanimated';
 import { TabBarIcon } from './TabBarIcon';
 import { AppPressable } from './ui/AppPressable';
-import { fonts, darkTheme, ThemeScope, useAppTheme, type AppTheme } from '../theme';
+import { fonts, useAppTheme, type AppTheme } from '../theme';
 import { useBreakpoint } from '../hooks/useBreakpoint';
+import { useMotionPreferences } from '../hooks/useMotionPreferences';
 import { useAuthStore, getAvatarUrl, getDisplayName } from '../stores';
+import { motionSpring } from '../theme/motion';
 
-// Real frosted blur on Android needs expo-blur's experimental RenderEffect method
-// (API 31+); the default Android path barely blurs. Safe here because the blur
-// layer sits under the interactive items and is pointerEvents="none" — taps land
-// on the controls and never fall through the blur surface.
-const ANDROID_BLUR_METHOD: 'dimezisBlurView' | undefined =
-    Platform.OS === 'android' ? 'dimezisBlurView' : undefined;
+const androidApiLevel = Platform.OS === 'android'
+    ? Number.parseInt(String(Platform.Version), 10)
+    : 0;
+const SUPPORTS_ANDROID_BLUR = Platform.OS === 'android' && androidApiLevel >= 31;
 
 const PILL_RADIUS = 40;
 const RAIL_WIDTH = 84;
+const TOUCH_TARGET_SIZE = Platform.OS === 'android' ? 48 : 44;
+const FOCUS_INDICATOR_WIDTH = Platform.OS === 'android' ? 64 : TOUCH_TARGET_SIZE + 8;
+const FOCUS_INDICATOR_HEIGHT = Platform.OS === 'android' ? 36 : TOUCH_TARGET_SIZE + 8;
+const FOCUS_INDICATOR_TOP = Platform.OS === 'android' ? 16 : 6;
+const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
 
 type IconName = 'home' | 'calendar' | 'trophy' | 'wellness' | 'profile';
 
@@ -40,6 +74,174 @@ function getIconName(routeName: string): IconName {
 function useTabBarStyles() {
     const { theme } = useAppTheme();
     return useMemo(() => createStyles(theme), [theme]);
+}
+
+/**
+ * Accessibility display preferences that materially change a translucent
+ * navigation surface. Start opaque on iOS so Reduce Transparency never flashes
+ * an inaccessible glass frame while the async system preference is loading.
+ */
+function useTabBarVisualPreferences() {
+    const [preferOpaque, setPreferOpaque] = useState(true);
+    const [increaseContrast, setIncreaseContrast] = useState(false);
+
+    useEffect(() => {
+        let mounted = true;
+
+        if (Platform.OS === 'ios') {
+            void Promise.all([
+                AccessibilityInfo.isReduceTransparencyEnabled(),
+                AccessibilityInfo.isDarkerSystemColorsEnabled(),
+            ])
+                .then(([reduceTransparency, darkerSystemColors]) => {
+                    if (mounted) {
+                        setPreferOpaque(reduceTransparency);
+                        setIncreaseContrast(darkerSystemColors);
+                    }
+                })
+                .catch(() => {
+                    if (mounted) {
+                        setPreferOpaque(false);
+                    }
+                });
+
+            const transparencySubscription = AccessibilityInfo.addEventListener(
+                'reduceTransparencyChanged',
+                setPreferOpaque,
+            );
+            const contrastSubscription = AccessibilityInfo.addEventListener(
+                'darkerSystemColorsChanged',
+                setIncreaseContrast,
+            );
+
+            return () => {
+                mounted = false;
+                transparencySubscription.remove();
+                contrastSubscription.remove();
+            };
+        }
+
+        const handleHighContrast = (enabled: boolean) => {
+            setPreferOpaque(enabled);
+            setIncreaseContrast(enabled);
+        };
+        void AccessibilityInfo.isHighTextContrastEnabled()
+            .then((enabled) => {
+                if (mounted) {
+                    handleHighContrast(enabled);
+                }
+            })
+            .catch(() => {
+                if (mounted) {
+                    setPreferOpaque(false);
+                }
+            });
+        const contrastSubscription = AccessibilityInfo.addEventListener(
+            'highTextContrastChanged',
+            handleHighContrast,
+        );
+
+        return () => {
+            mounted = false;
+            contrastSubscription.remove();
+        };
+    }, []);
+
+    return { preferOpaque, increaseContrast };
+}
+
+interface TabBarMaterialProps {
+    children: React.ReactNode;
+    nativeLiquidGlass: boolean;
+    preferOpaque: boolean;
+    increaseContrast: boolean;
+    blurTint: 'dark' | 'light';
+    focusIndicator: React.ReactNode;
+    onLayout: (event: LayoutChangeEvent) => void;
+    styles: ReturnType<typeof createStyles>;
+}
+
+/** One functional material layer; the focus film is a child, never another blur. */
+function TabBarMaterial({
+    children,
+    nativeLiquidGlass,
+    preferOpaque,
+    increaseContrast,
+    blurTint,
+    focusIndicator,
+    onLayout,
+    styles,
+}: TabBarMaterialProps) {
+    if (nativeLiquidGlass) {
+        return (
+            <GlassContainer
+                spacing={12}
+                onLayout={onLayout}
+                style={[styles.glassPill, increaseContrast && styles.highContrastFrame]}
+            >
+                <GlassView
+                    glassEffectStyle="regular"
+                    colorScheme="auto"
+                    pointerEvents="none"
+                    style={[StyleSheet.absoluteFill, styles.nativeBaseMaterial]}
+                />
+                {focusIndicator}
+                {children}
+            </GlassContainer>
+        );
+    }
+
+    return (
+        <View
+            onLayout={onLayout}
+            style={[styles.glassPill, increaseContrast && styles.highContrastFrame]}
+        >
+            {preferOpaque ? (
+                <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.opaqueMaterial]} />
+            ) : (
+                <>
+                    {Platform.OS === 'android' ? (
+                        <>
+                            {SUPPORTS_ANDROID_BLUR ? (
+                                <>
+                                    <BlurView
+                                        intensity={24}
+                                        tint={blurTint}
+                                        experimentalBlurMethod="dimezisBlurView"
+                                        blurReductionFactor={4}
+                                        pointerEvents="none"
+                                        style={StyleSheet.absoluteFill}
+                                    />
+                                    <View
+                                        pointerEvents="none"
+                                        style={[StyleSheet.absoluteFill, styles.androidTonalVeil]}
+                                    />
+                                </>
+                            ) : (
+                                <View
+                                    pointerEvents="none"
+                                    style={[StyleSheet.absoluteFill, styles.opaqueMaterial]}
+                                />
+                            )}
+                        </>
+                    ) : (
+                        <BlurView
+                            intensity={40}
+                            tint={blurTint}
+                            pointerEvents="none"
+                            style={StyleSheet.absoluteFill}
+                        />
+                    )}
+                    <View
+                        pointerEvents="none"
+                        style={[StyleSheet.absoluteFill, styles.materialVeil]}
+                    />
+                </>
+            )}
+            {focusIndicator}
+            {children}
+        </View>
+    );
 }
 
 /** Profile avatar with a neutral ring that strengthens when selected. */
@@ -76,6 +278,109 @@ function CustomTabBarInner({ state, descriptors, navigation }: BottomTabBarProps
     const blurTint = theme.isDark ? 'dark' : 'light';
     const insets = useSafeAreaInsets();
     const { isTablet, isLandscape } = useBreakpoint();
+    const { reduceMotion } = useMotionPreferences();
+    const { preferOpaque, increaseContrast } = useTabBarVisualPreferences();
+    const itemLayouts = useRef<Record<string, LayoutRectangle>>({});
+    const trackWidth = useRef(0);
+    const didPositionIndicator = useRef(false);
+    const indicatorX = useSharedValue(0);
+    const indicatorOpacity = useSharedValue(0);
+    const indicatorScaleX = useSharedValue(1);
+    const indicatorScaleY = useSharedValue(1);
+
+    const nativeLiquidGlass = useMemo(
+        () => (
+            Platform.OS === 'ios'
+            && isLiquidGlassAvailable()
+            && isGlassEffectAPIAvailable()
+            && !preferOpaque
+        ),
+        [preferOpaque],
+    );
+
+    const focusedRouteKey = state.routes[state.index]?.key;
+
+    const moveIndicator = useCallback((routeKey: string, animate: boolean) => {
+        const layout = itemLayouts.current[routeKey];
+        if (!layout) {
+            return;
+        }
+
+        // Layout x is a physical coordinate. Measuring instead of calculating by
+        // index keeps the focus correct in RTL and at both phone/tablet widths.
+        if (I18nManager.isRTL && trackWidth.current <= 0) {
+            return;
+        }
+
+        const physicalX = layout.x + (layout.width - FOCUS_INDICATOR_WIDTH) / 2;
+        const logicalOriginX = I18nManager.isRTL
+            ? trackWidth.current - FOCUS_INDICATOR_WIDTH
+            : 0;
+        const nextX = physicalX - logicalOriginX;
+        const shouldAnimate = animate && didPositionIndicator.current && !reduceMotion;
+        indicatorX.value = shouldAnimate
+            ? withSpring(nextX, motionSpring.layout)
+            : nextX;
+        if (shouldAnimate) {
+            // A brief horizontal stretch communicates direction while the spring
+            // remains fully on the UI thread and interruptible by another tap.
+            indicatorScaleX.value = withSequence(
+                withSpring(1.12, motionSpring.press),
+                withSpring(1, motionSpring.layout),
+            );
+            indicatorScaleY.value = withSequence(
+                withSpring(0.94, motionSpring.press),
+                withSpring(1, motionSpring.layout),
+            );
+        } else {
+            indicatorScaleX.value = 1;
+            indicatorScaleY.value = 1;
+        }
+        indicatorOpacity.value = 1;
+        didPositionIndicator.current = true;
+    }, [
+        indicatorOpacity,
+        indicatorScaleX,
+        indicatorScaleY,
+        indicatorX,
+        reduceMotion,
+    ]);
+
+    useEffect(() => {
+        if (focusedRouteKey) {
+            moveIndicator(focusedRouteKey, true);
+        }
+    }, [focusedRouteKey, moveIndicator]);
+
+    const focusIndicatorStyle = useAnimatedStyle<ViewStyle>(() => {
+        const transform: ViewStyle['transform'] = [
+            { translateX: indicatorX.value },
+            { scaleX: indicatorScaleX.value },
+            { scaleY: indicatorScaleY.value },
+        ];
+        return {
+            opacity: indicatorOpacity.value,
+            transform,
+        };
+    });
+
+    const handleTabLayout = useCallback((
+        routeKey: string,
+        isFocused: boolean,
+        event: LayoutChangeEvent,
+    ) => {
+        itemLayouts.current[routeKey] = event.nativeEvent.layout;
+        if (isFocused) {
+            moveIndicator(routeKey, didPositionIndicator.current);
+        }
+    }, [moveIndicator]);
+
+    const handleTrackLayout = useCallback((event: LayoutChangeEvent) => {
+        trackWidth.current = event.nativeEvent.layout.width;
+        if (focusedRouteKey) {
+            moveIndicator(focusedRouteKey, didPositionIndicator.current);
+        }
+    }, [focusedRouteKey, moveIndicator]);
 
     // Bottom position respects safe area (gesture bar on Android, home indicator on iOS)
     // Adding extra spacing for "respiro" as requested
@@ -95,37 +400,37 @@ function CustomTabBarInner({ state, descriptors, navigation }: BottomTabBarProps
     });
 
     // ── Tablet landscape: side rail vertical à esquerda ────────────────────────
-    // Ocupa largura real no layout (tabBarPosition='left' no Navigator posiciona a
-    // cena ao lado, sem sobreposição). Mantém a identidade de vidro fosco da pill.
+    // The rail occupies layout space, so there is no content behind it to justify
+    // live glass. A restrained tonal selection keeps the platform hierarchy clear.
     if (isTablet && isLandscape) {
         return (
             <View style={[styles.railContainer, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
-                <BlurView
-                    intensity={40}
-                    tint={blurTint}
-                    experimentalBlurMethod={ANDROID_BLUR_METHOD}
-                    pointerEvents="none"
-                    style={StyleSheet.absoluteFill}
-                />
-                <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.glassVeil]} />
-
                 {state.routes.map((route, index) => {
                     const { options } = descriptors[route.key];
                     const isFocused = state.index === index;
                     const isProfileTab = route.name === 'Settings';
                     const { onPress, onLongPress } = makeHandlers(route, isFocused);
+                    const accessibilityLabel = options.tabBarAccessibilityLabel
+                        ?? options.title
+                        ?? route.name;
 
                     return (
                         <AppPressable
                             key={route.key}
-                            accessibilityRole="button"
+                            accessibilityRole="tab"
                             accessibilityState={{ selected: isFocused }}
-                            accessibilityLabel={options.tabBarAccessibilityLabel ?? route.name}
+                            accessibilityLabel={accessibilityLabel}
                             onPress={onPress}
                             onLongPress={onLongPress}
                             hapticFeedback={isFocused ? 'none' : 'selection'}
+                            android_ripple={{
+                                color: theme.colors.fillMuted,
+                                borderless: false,
+                            }}
                             style={({ pressed }) => [
                                 styles.railItem,
+                                isFocused && styles.railItemActive,
+                                isFocused && increaseContrast && styles.railItemHighContrast,
                                 pressed && styles.itemPressed,
                             ]}
                         >
@@ -148,8 +453,33 @@ function CustomTabBarInner({ state, descriptors, navigation }: BottomTabBarProps
     }
 
     // ── Phone / tablet portrait: pill flutuante inferior ───────────────────────
-    // Phone idêntico ao original; tablet portrait apenas alarga o teto da pill
-    // (de 360 → 520) para os ícones respirarem numa tela maior.
+    // Tablet portrait only widens the same measured focus system (360 → 520).
+    const focusIndicator = nativeLiquidGlass ? (
+        <AnimatedGlassView
+            glassEffectStyle="regular"
+            colorScheme="auto"
+            tintColor={increaseContrast ? theme.colors.fillStrong : theme.colors.fillMuted}
+            pointerEvents="none"
+            style={[
+                styles.focusIndicator,
+                styles.nativeFocusIndicator,
+                increaseContrast && styles.focusIndicatorHighContrast,
+                focusIndicatorStyle,
+            ]}
+        />
+    ) : (
+        <Animated.View
+            pointerEvents="none"
+            style={[
+                styles.focusIndicator,
+                increaseContrast && styles.focusIndicatorHighContrast,
+                focusIndicatorStyle,
+            ]}
+        >
+            {Platform.OS === 'ios' ? <View style={styles.focusIndicatorHighlight} /> : null}
+        </Animated.View>
+    );
+
     return (
         // Outer wrapper carries positioning and the subtle neutral shadow while
         // the inner container clips the frosted material.
@@ -157,51 +487,38 @@ function CustomTabBarInner({ state, descriptors, navigation }: BottomTabBarProps
             style={[styles.shadowWrap, { bottom: bottomPosition }, isTablet && styles.shadowWrapTablet]}
             pointerEvents="box-none"
         >
-            <View style={styles.glassPill}>
-                {/* Frosted blur of the scroll content behind the floating pill. */}
-                <BlurView
-                    intensity={40}
-                    tint={blurTint}
-                    experimentalBlurMethod={ANDROID_BLUR_METHOD}
-                    pointerEvents="none"
-                    style={StyleSheet.absoluteFill}
-                />
-                <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.glassVeil]} />
-
+            <TabBarMaterial
+                nativeLiquidGlass={nativeLiquidGlass}
+                preferOpaque={preferOpaque}
+                increaseContrast={increaseContrast}
+                blurTint={blurTint}
+                focusIndicator={focusIndicator}
+                onLayout={handleTrackLayout}
+                styles={styles}
+            >
                 {state.routes.map((route, index) => {
                     const { options } = descriptors[route.key];
                     const isFocused = state.index === index;
                     const isProfileTab = route.name === 'Settings';
-
-                    const onPress = () => {
-                        const event = navigation.emit({
-                            type: 'tabPress',
-                            target: route.key,
-                            canPreventDefault: true,
-                        });
-
-                        if (!isFocused && !event.defaultPrevented) {
-                            navigation.navigate(route.name);
-                        }
-                    };
-
-                    const onLongPress = () => {
-                        navigation.emit({
-                            type: 'tabLongPress',
-                            target: route.key,
-                        });
-                    };
-
+                    const { onPress, onLongPress } = makeHandlers(route, isFocused);
+                    const accessibilityLabel = options.tabBarAccessibilityLabel
+                        ?? options.title
+                        ?? route.name;
 
                     return (
                         <AppPressable
                             key={route.key}
-                            accessibilityRole="button"
+                            onLayout={(event) => handleTabLayout(route.key, isFocused, event)}
+                            accessibilityRole="tab"
                             accessibilityState={{ selected: isFocused }}
-                            accessibilityLabel={options.tabBarAccessibilityLabel ?? route.name}
+                            accessibilityLabel={accessibilityLabel}
                             onPress={onPress}
                             onLongPress={onLongPress}
                             hapticFeedback={isFocused ? 'none' : 'selection'}
+                            android_ripple={{
+                                color: theme.colors.fillMuted,
+                                borderless: false,
+                            }}
                             style={({ pressed }) => [
                                 styles.tabItem,
                                 pressed && styles.itemPressed,
@@ -221,26 +538,14 @@ function CustomTabBarInner({ state, descriptors, navigation }: BottomTabBarProps
                         </AppPressable>
                     );
                 })}
-            </View>
+            </TabBarMaterial>
         </View>
     );
 }
 
-/**
- * The floating tab bar keeps the DARK palette in every appearance.
- *
- * It is the app's one persistent surface — it never scrolls away and sits on
- * top of every screen — so pinning it gives the product a fixed anchor while
- * the content behind it changes appearance. `ThemeScope` re-provides the theme
- * context, so the tab icons follow along without `AppIcon` needing a color
- * override it does not have.
- */
+/** The persistent navigation layer follows the active app appearance. */
 export function CustomTabBar(props: BottomTabBarProps) {
-    return (
-        <ThemeScope theme={darkTheme}>
-            <CustomTabBarInner {...props} />
-        </ThemeScope>
-    );
+    return <CustomTabBarInner {...props} />;
 }
 
 function createStyles({ colors, elevation }: AppTheme) {
@@ -249,8 +554,8 @@ function createStyles({ colors, elevation }: AppTheme) {
         // real scroll content behind the pill (a solid bg here would kill the blur).
         shadowWrap: {
             position: 'absolute',
-            left: 20,
-            right: 20,
+            start: 20,
+            end: 20,
             maxWidth: 360,
             alignSelf: 'center',
             borderRadius: PILL_RADIUS,
@@ -274,38 +579,97 @@ function createStyles({ colors, elevation }: AppTheme) {
             borderRightColor: colors.borderSubtle,
         },
         railItem: {
-            width: '100%',
+            width: 64,
             alignItems: 'center',
             justifyContent: 'center',
             position: 'relative',
             height: 64,
-            minWidth: 44,
-            minHeight: 44,
+            minWidth: TOUCH_TARGET_SIZE,
+            minHeight: TOUCH_TARGET_SIZE,
+            borderRadius: 32,
             marginVertical: 6,
         },
+        railItemActive: {
+            backgroundColor: colors.fillMuted,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: colors.borderStrong,
+        },
+        railItemHighContrast: {
+            backgroundColor: colors.fillStrong,
+            borderWidth: 2,
+            borderColor: colors.textPrimary,
+        },
         glassPill: {
+            width: '100%',
             flexDirection: 'row',
             borderRadius: PILL_RADIUS,
             overflow: 'hidden',
-            paddingVertical: 12,
+            paddingVertical: 10,
             paddingHorizontal: 20,
             justifyContent: 'space-around',
             alignItems: 'center',
-            backgroundColor: colors.glass,
+            backgroundColor: 'transparent',
             borderWidth: StyleSheet.hairlineWidth,
             borderColor: colors.borderSubtle,
         },
-        glassVeil: {
+        nativeBaseMaterial: {
+            borderRadius: PILL_RADIUS,
+        },
+        highContrastFrame: {
+            borderWidth: 2,
+            borderColor: colors.textPrimary,
+        },
+        opaqueMaterial: {
+            backgroundColor: colors.surface1,
+        },
+        androidTonalVeil: {
+            backgroundColor: colors.surface1,
+            opacity: 0.46,
+        },
+        materialVeil: {
             backgroundColor: colors.glass,
+        },
+        focusIndicator: {
+            position: 'absolute',
+            top: FOCUS_INDICATOR_TOP,
+            // Logical origin is paired with a measured physical→logical conversion.
+            start: 0,
+            width: FOCUS_INDICATOR_WIDTH,
+            height: FOCUS_INDICATOR_HEIGHT,
+            borderRadius: FOCUS_INDICATOR_HEIGHT / 2,
+            backgroundColor: colors.fillMuted,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: colors.borderStrong,
+            overflow: 'hidden',
+        },
+        nativeFocusIndicator: {
+            backgroundColor: 'transparent',
+        },
+        focusIndicatorHighContrast: {
+            backgroundColor: colors.fillStrong,
+            borderWidth: 2,
+            borderColor: colors.textPrimary,
+        },
+        focusIndicatorHighlight: {
+            position: 'absolute',
+            top: 1,
+            start: 10,
+            end: 10,
+            height: StyleSheet.hairlineWidth,
+            borderRadius: StyleSheet.hairlineWidth,
+            backgroundColor: colors.textPrimary,
+            opacity: 0.44,
         },
         tabItem: {
             flex: 1,
             alignItems: 'center',
             justifyContent: 'center',
             position: 'relative',
-            height: 50,
-            minWidth: 44,
-            minHeight: 44,
+            minWidth: TOUCH_TARGET_SIZE,
+            minHeight: TOUCH_TARGET_SIZE,
+            borderRadius: PILL_RADIUS,
+            overflow: 'hidden',
+            zIndex: 1,
         },
         itemPressed: {
             opacity: 0.72,
