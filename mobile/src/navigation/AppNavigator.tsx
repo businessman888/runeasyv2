@@ -96,10 +96,36 @@ const linking: LinkingOptions<any> = {
     },
 };
 
+const MAIN_TABS = ['Home', 'Calendar', 'Ranking', 'Wellness', 'Settings'] as const;
+type MainTabName = (typeof MAIN_TABS)[number];
+
+function isMainTab(name: unknown): name is MainTabName {
+    return typeof name === 'string' && (MAIN_TABS as readonly string[]).includes(name);
+}
+
 // Tab Navigator
-function MainTabs({ route, navigation }: any) {
+function MainTabs({ route }: any) {
     const { theme } = useAppTheme();
     const { initialTab } = route.params || {};
+
+    /**
+     * A aba inicial vem de `params.initialTab`, como `initialRouteName`.
+     *
+     * ⚠️ Havia aqui um `useEffect` que fazia `navigation.navigate(initialTab)`
+     * 100 ms depois de montar. Esse `navigation` é o do STACK raiz — MainTabs é a
+     * tela 'Main' dele — e ações de navegação SOBEM para os navegadores pais,
+     * nunca descem para o Tab.Navigator filho. Resultado: "The action 'NAVIGATE'
+     * with payload {"name":"Wellness"} was not handled by any navigator", e o app
+     * ficava na Home. Nunca funcionou para aba nenhuma: todos os chamadores
+     * passavam 'Home' (que o efeito pulava) até a tela de sucesso do readiness
+     * mandar 'Wellness'. O deep-link antigo para 'Evolution' era o mesmo defeito.
+     *
+     * Os chamadores com aba diferente da Home montam `Main` do zero (`reset`, ou
+     * `navigate` quando não há para onde voltar), e aí `initialRouteName` basta.
+     * Para trocar de aba com `Main` JÁ montado, use a sintaxe de navegador
+     * aninhado: `navigate('Main', { screen: 'Wellness' })`.
+     */
+    const initialRouteName: MainTabName = isMainTab(initialTab) ? initialTab : 'Home';
 
     // Tablet landscape: a tab bar vira side rail à esquerda (tabBarPosition
     // 'left' faz o react-navigation posicionar a barra na lateral e a cena ao
@@ -112,22 +138,11 @@ function MainTabs({ route, navigation }: any) {
     const trialVisible = useTrialModalStore((s) => s.visible);
     const hideTrial = useTrialModalStore((s) => s.hide);
 
-    // Navigate to the correct tab after mount if initialTab is specified
-    React.useEffect(() => {
-        if (initialTab && initialTab !== 'Home') {
-            // Small delay to ensure tabs are mounted
-            const timer = setTimeout(() => {
-                navigation.navigate(initialTab);
-            }, 100);
-            return () => clearTimeout(timer);
-        }
-    }, [initialTab, navigation]);
-
     return (
         <View style={{ flex: 1 }}>
         <Tab.Navigator
             id="MainTabs"
-            initialRouteName="Home"
+            initialRouteName={initialRouteName}
             tabBar={(props) => <CustomTabBar {...props} />}
             screenOptions={{
                 tabBarPosition: useSideRail ? 'left' : 'bottom',
