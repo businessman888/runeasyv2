@@ -1,4 +1,11 @@
-import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  forwardRef,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../../database';
 import { NotificationService } from '../notifications/notification.service';
@@ -224,7 +231,7 @@ export class RetrospectiveService {
       // Also check that no retrospective already exists for this plan
       const { data: activePlans, error } = await supabase
         .from('training_plans')
-        .select('id, user_id, created_at, duration_weeks')
+        .select('id, user_id, created_at, duration_weeks, generation_status')
         .eq('status', 'active');
 
       if (error) {
@@ -254,8 +261,9 @@ export class RetrospectiveService {
 
       // Check each plan to see if it has ended and needs retrospective
       for (const plan of activePlans || []) {
-        if (!proUserIds.has(plan.user_id)) {
-          continue; // owner not Pro — freeze the plan instead of completing it
+        if (!proUserIds.has(plan.user_id) || plan.generation_status !== 'complete') {
+          // Failed generation remains available for retry, never a completed cycle.
+          continue;
         }
 
         // Check if retrospective already exists
@@ -274,13 +282,15 @@ export class RetrospectiveService {
         // `workouts.scheduled_date` sem tocar em `created_at`, então a fórmula
         // antiga marcava como "terminado" um plano cujos treinos ainda estavam
         // no futuro. Ver plan-window.helper.ts.
-        const { data: lastWorkout } = await supabase
+        const { data: lastWorkout, error: workoutError } = await supabase
           .from('workouts')
           .select('scheduled_date')
           .eq('plan_id', plan.id)
           .order('scheduled_date', { ascending: false })
           .limit(1)
           .maybeSingle();
+
+        if (workoutError || !lastWorkout?.scheduled_date) continue;
 
         // Só `endStr` é consumido aqui — passar apenas o último treino deixa
         // `startStr`/`weeks` sem significado, e é de propósito: o gatilho não
@@ -841,14 +851,15 @@ Responda APENAS com JSON.`;
   /**
    * Accept AI suggestion and create new plan
    * 1. Get retrospective with suggested goal
-   * 2. Archive retrospective
-   * 3. Get and archive old plan
+   * 2. Build the requested goal without consuming the retrospective
+   * 3. Reserve the next plan and consume the retrospective atomically
    * 4. Generate new plan based on suggestion
    * 5. Delete notification
    */
   async acceptSuggestion(
     userId: string,
     retrospectiveId: string,
+    requestId?: string,
   ): Promise<any> {
     const supabase = this.supabaseService.getClient();
 
@@ -865,18 +876,12 @@ Responda APENAS com JSON.`;
       .single();
 
     if (retroError || !retro) {
-      throw new Error('Retrospective not found');
+      throw new NotFoundException('Retrospectiva não encontrada.');
     }
 
     this.logger.log(
       `[AcceptSuggestion] Found retro with goal: ${retro.suggested_next_goal_type}`,
     );
-
-    // 2. Archive retrospective
-    await supabase
-      .from('plan_retrospectives')
-      .update({ status: 'archived' })
-      .eq('id', retrospectiveId);
 
     // 3. Parâmetros do plano antigo.
     //
@@ -900,10 +905,8 @@ Responda APENAS com JSON.`;
       );
     }
 
-    // NOTA: o plano antigo NÃO é arquivado aqui. `generateRetrospective` já o
-    // deixou em `status='completed'`, `createQuickPlan` cancela ativos por conta
-    // própria, e nada no repo lê `'archived'` — sobrescrever o 'completed'
-    // quebraria o endpoint de reset, que procura por ele.
+    // O plano encerrado mantém seu histórico. A reserva central valida a
+    // decisão, resolve replays e consome a retrospectiva junto da criação.
 
     // 4. Monta o request com os dados REAIS do usuário.
     const onboarding = await this.loadPlanInputsFromOnboarding(userId);
@@ -976,6 +979,7 @@ Responda APENAS com JSON.`;
     const newPlan = await this.trainingService.createQuickPlan(
       userId,
       planRequest,
+      { source: 'retrospective_accept', retrospectiveId, requestId },
     );
 
     this.logger.log(`[AcceptSuggestion] New plan created: ${newPlan.plan_id}`);
@@ -1000,6 +1004,7 @@ Responda APENAS com JSON.`;
     userId: string,
     retrospectiveId: string,
     params: CustomizePlanDto,
+    requestId?: string,
   ): Promise<any> {
     const supabase = this.supabaseService.getClient();
     this.logger.log(
@@ -1015,7 +1020,7 @@ Responda APENAS com JSON.`;
       .single();
 
     if (retroError || !retro) {
-      throw new Error('Retrospective not found');
+      throw new NotFoundException('Retrospectiva não encontrada.');
     }
 
     const { data: oldPlan } = await supabase
@@ -1054,7 +1059,7 @@ Responda APENAS com JSON.`;
       ? this.paceGoalService.parseTargetTime(params.time_goal)
       : 0;
     if (params.goal_kind === 'pace' && targetTimeSeconds <= 0) {
-      throw new Error('Tempo-alvo inválido');
+      throw new BadRequestException('Tempo-alvo inválido');
     }
     const paceGoal =
       params.goal_kind === 'pace'
@@ -1065,12 +1070,6 @@ Responda APENAS com JSON.`;
             targetWeeks: params.duration_weeks,
           })
         : null;
-
-    // Só arquiva depois de todos os parâmetros determinísticos estarem válidos.
-    await supabase
-      .from('plan_retrospectives')
-      .update({ status: 'archived' })
-      .eq('id', retrospectiveId);
 
     // `params` vence o onboarding em dias/semanas/frequência: são a escolha
     // EXPLÍCITA do usuário nesta tela. O onboarding entra só no que a tela não
@@ -1113,6 +1112,7 @@ Responda APENAS com JSON.`;
     const newPlan = await this.trainingService.createQuickPlan(
       userId,
       planRequest,
+      { source: 'retrospective_customize', retrospectiveId, requestId },
     );
 
     // 6. Remove a notificação desta retrospectiva.
@@ -1147,7 +1147,7 @@ Responda APENAS com JSON.`;
       .eq('id', retrospectiveId)
       .eq('user_id', userId)
       .single();
-    if (error || !retro) throw new Error('Retrospective not found');
+    if (error || !retro) throw new NotFoundException('Retrospectiva não encontrada.');
 
     const { data: plan } = await supabase
       .from('training_plans')
@@ -1162,7 +1162,7 @@ Responda APENAS com JSON.`;
     const targetTimeSeconds = this.paceGoalService.parseTargetTime(
       input.time_goal,
     );
-    if (targetTimeSeconds <= 0) throw new Error('Tempo-alvo inválido');
+    if (targetTimeSeconds <= 0) throw new BadRequestException('Tempo-alvo inválido');
 
     const result = this.paceGoalService.assess({
       distanceMeters: this.distanceMetersForGoal(goal),

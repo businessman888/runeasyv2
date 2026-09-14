@@ -1,4 +1,9 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  UnauthorizedException,
+  ConflictException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../../database';
 import { SubscriptionService } from './subscription.service';
@@ -173,7 +178,7 @@ export class RevenueCatWebhookService {
           activePlan.id,
         );
       } else {
-        await this.maybeGeneratePlan(userId);
+        await this.maybeGeneratePlan(userId, event.id);
       }
     }
   }
@@ -215,7 +220,10 @@ export class RevenueCatWebhookService {
     );
   }
 
-  private async maybeGeneratePlan(userId: string): Promise<void> {
+  private async maybeGeneratePlan(
+    userId: string,
+    eventId: string,
+  ): Promise<void> {
     const existingPlan = await this.trainingService.getActivePlan(userId);
     if (existingPlan) {
       this.logger.log(
@@ -246,31 +254,43 @@ export class RevenueCatWebhookService {
       [];
 
     try {
-      const result = await this.trainingService.createQuickPlan(userId, {
-        goal: dto.goal || onboarding.goal,
-        level: dto.level || onboarding.level,
-        daysPerWeek: dto.days_per_week || onboarding.days_per_week,
-        currentPace5k: dto.current_pace_5k || onboarding.current_pace_5k,
-        // Performance baseline measured in onboarding — drives VDOT estimation.
-        calculatedPace:
-          dto.calculated_pace ?? onboarding.calculated_pace ?? null,
-        recentDistanceKm:
-          dto.recent_distance ?? onboarding.recent_distance ?? null,
-        targetWeeks: dto.target_weeks || onboarding.target_weeks,
-        limitations: dto.limitations || onboarding.limitations,
-        preferredDays: selectedDays,
-        startDate: dto.start_date || onboarding.start_date,
-        // Capacidade atual (Fase A) — transporte para a Fase B
-        recentFrequency:
-          dto.recent_frequency ?? onboarding.recent_frequency ?? null,
-        currentWeeklyKm:
-          dto.current_weekly_km ?? onboarding.current_weekly_km ?? null,
-        walkCapacity: dto.walk_capacity ?? onboarding.walk_capacity ?? null,
-      });
+      const result = await this.trainingService.createQuickPlan(
+        userId,
+        {
+          goal: dto.goal || onboarding.goal,
+          level: dto.level || onboarding.level,
+          daysPerWeek: dto.days_per_week || onboarding.days_per_week,
+          currentPace5k: dto.current_pace_5k || onboarding.current_pace_5k,
+          // Performance baseline measured in onboarding — drives VDOT estimation.
+          calculatedPace:
+            dto.calculated_pace ?? onboarding.calculated_pace ?? null,
+          recentDistanceKm:
+            dto.recent_distance ?? onboarding.recent_distance ?? null,
+          targetWeeks: dto.target_weeks || onboarding.target_weeks,
+          limitations: dto.limitations || onboarding.limitations,
+          preferredDays: selectedDays,
+          startDate: dto.start_date || onboarding.start_date,
+          // Capacidade atual (Fase A) — transporte para a Fase B
+          recentFrequency:
+            dto.recent_frequency ?? onboarding.recent_frequency ?? null,
+          currentWeeklyKm:
+            dto.current_weekly_km ?? onboarding.current_weekly_km ?? null,
+          walkCapacity: dto.walk_capacity ?? onboarding.walk_capacity ?? null,
+        },
+        { source: 'subscription', eventId, requestId: eventId },
+      );
       this.logger.log(
         `[RC] Plan generated for ${userId} after upgrade — plan_id=${result.plan_id}`,
       );
     } catch (err) {
+      if (err instanceof ConflictException) {
+        this.logger.log({
+          event: 'subscription_generation_requires_decision',
+          userId,
+          eventId,
+        });
+        return;
+      }
       this.logger.error(
         `[RC] Plan generation failed for ${userId} after upgrade`,
         err,

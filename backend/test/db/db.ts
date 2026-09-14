@@ -166,6 +166,15 @@ export async function buildSchema(): Promise<void> {
 
     await client.query(dump);
 
+    // Supabase provisions schema/table grants outside this schema-only dump.
+    // Reproduce existing service-role access BEFORE migrations: new private
+    // tables/functions must still prove their own grants and revocations.
+    await client.query(`
+      GRANT USAGE ON SCHEMA public, extensions TO anon, authenticated, service_role;
+      GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+      GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO service_role;
+    `);
+
     // O dump termina com `search_path` VAZIO (ele qualifica tudo com `public.`).
     // As migrations usam nomes soltos (`ALTER TABLE workouts`), então o
     // search_path precisa voltar antes delas.

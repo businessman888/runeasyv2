@@ -132,6 +132,36 @@ describe('RetrospectiveService', () => {
   // ─────────────────────────────────────────────────────────────────────────
   // D1 — escopo por plano. A aderência não pode inflar com corrida livre.
   // ─────────────────────────────────────────────────────────────────────────
+  describe('checkForCompletedPlans — somente ciclos materializados', () => {
+    const tables = (generationStatus: string, scheduledDate?: string): TableData => ({
+      training_plans: [{ id: 'plan-1', user_id: 'user-1', created_at: '2020-01-01T12:00:00Z',
+        duration_weeks: 4, generation_status: generationStatus }],
+      users: [{ id: 'user-1', subscription_plan: 'pro' }],
+      workouts: scheduledDate ? [{ scheduled_date: scheduledDate }] : [],
+    });
+
+    it.each(['failed', 'generating', 'partial'])('não encerra uma geração %s antiga', async (status) => {
+      await build(tables(status, '2020-02-01'));
+      const generate = jest.spyOn(service, 'generateRetrospective').mockResolvedValue(null);
+      expect(await service.checkForCompletedPlans()).toEqual([]);
+      expect(generate).not.toHaveBeenCalled();
+    });
+
+    it('não assume fim de ciclo quando não há treino agendado', async () => {
+      await build(tables('complete'));
+      const generate = jest.spyOn(service, 'generateRetrospective').mockResolvedValue(null);
+      expect(await service.checkForCompletedPlans()).toEqual([]);
+      expect(generate).not.toHaveBeenCalled();
+    });
+
+    it('continua gerando retrospectiva de plano completo com calendário encerrado', async () => {
+      await build(tables('complete', '2020-02-01'));
+      const generate = jest.spyOn(service, 'generateRetrospective').mockResolvedValue(null);
+      await service.checkForCompletedPlans();
+      expect(generate).toHaveBeenCalledWith('user-1', 'plan-1');
+    });
+  });
+
   describe('calculateMetrics — escopo por plano', () => {
     /** 12 planejados (60 km), 6 concluídos (30 km reais). */
     const twelvePlannedSixDone = () => {
@@ -517,6 +547,27 @@ describe('RetrospectiveService', () => {
       expect(req.preferredDays).not.toEqual([]);
     });
 
+    it('envia a decisão identificada para a reserva central, sem arquivar antes', async () => {
+      const { from } = await build(onboardingTables());
+      await service.acceptSuggestion('user-1', 'retro-1', 'request-accept');
+      expect(trainingService.createQuickPlan.mock.calls[0][2]).toEqual({
+        source: 'retrospective_accept', retrospectiveId: 'retro-1', requestId: 'request-accept',
+      });
+      const retrospectiveQueries = from.mock.calls
+        .map(([table], index) => table === 'plan_retrospectives' ? from.mock.results[index].value : null)
+        .filter(Boolean);
+      for (const query of retrospectiveQueries) expect(query.update).not.toHaveBeenCalled();
+    });
+
+    it('falha na reserva preserva retrospectiva e notificações para continuar', async () => {
+      const { from } = await build(onboardingTables());
+      trainingService.createQuickPlan.mockRejectedValueOnce(new Error('reservation unavailable'));
+      await expect(service.acceptSuggestion('user-1', 'retro-1')).rejects.toThrow('reservation unavailable');
+      expect(from.mock.calls.some(([table]) => table === 'notifications')).toBe(false);
+      const retrospectiveQuery = from.mock.results[0].value;
+      expect(retrospectiveQuery.update).not.toHaveBeenCalled();
+    });
+
     it('repassa os sinais de capacidade da Fase A/B', async () => {
       await build(onboardingTables());
       await service.acceptSuggestion('user-1', 'retro-1');
@@ -643,6 +694,20 @@ describe('RetrospectiveService', () => {
       expect(req.targetTime).toBeUndefined();
       expect(req.targetVDOT).toBeUndefined();
       expect(result).toMatchObject({ success: true, newPlanId: 'plan-2' });
+    });
+
+    it('preserva a retrospectiva se a criação customizada falhar', async () => {
+      const { from } = await build(manualTables());
+      trainingService.createQuickPlan.mockRejectedValueOnce(new Error('reservation unavailable'));
+      await expect(service.customizePlan('user-1', 'retro-1', {
+        goal_kind: 'distance', distance_goal: '10k', duration_weeks: 8,
+        training_days: ['Seg', 'Qua', 'Sex'],
+      }, 'request-customize')).rejects.toThrow('reservation unavailable');
+      expect(trainingService.createQuickPlan.mock.calls[0][2]).toEqual({
+        source: 'retrospective_customize', retrospectiveId: 'retro-1', requestId: 'request-customize',
+      });
+      expect(from.mock.results[0].value.update).not.toHaveBeenCalled();
+      expect(from.mock.calls.some(([table]) => table === 'notifications')).toBe(false);
     });
 
     it('cria meta manual de tempo com destino VDOT sem trocar o VDOT atual', async () => {

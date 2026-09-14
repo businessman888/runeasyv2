@@ -11,10 +11,10 @@
  * Polling is gated by `useIsFocused` so the two always-mounted tabs don't poll
  * at the same time.
  */
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { useTrainingStore } from '../stores/trainingStore';
-import { useOnboardingStore } from '../stores/onboardingStore';
 
 const POLL_MS = 3000;
 
@@ -29,7 +29,9 @@ export function usePlanGenerationGate(options?: PlanGenerationGateOptions) {
   const planId = useTrainingStore((s) => s.plan?.id);
   const fetchPlan = useTrainingStore((s) => s.fetchPlan);
   const checkPlanStatus = useTrainingStore((s) => s.checkPlanStatus);
-  const triggerPlanGeneration = useOnboardingStore((s) => s.triggerPlanGeneration);
+  const retryPlanGeneration = useTrainingStore((s) => s.retryPlanGeneration);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const retryInFlight = useRef(false);
 
   const isGenerating = generationStatus === 'generating';
   const isFailed = generationStatus === 'failed';
@@ -57,12 +59,21 @@ export function usePlanGenerationGate(options?: PlanGenerationGateOptions) {
     return () => clearInterval(id);
   }, [isFocused, isGenerating, planId, checkPlanStatus]);
 
-  // Re-trigger generation after a failure, then refresh status so the overlay
-  // returns to the generating state.
+  // Retry only the failed plan and the goal already authorized for it.
   const retry = useCallback(async () => {
-    await triggerPlanGeneration();
-    await fetchPlan();
-  }, [triggerPlanGeneration, fetchPlan]);
+    if (!planId || !isFailed || retryInFlight.current) return;
+    retryInFlight.current = true;
+    setIsRetrying(true);
+    try {
+      await retryPlanGeneration(planId);
+    } catch (error) {
+      Alert.alert('Não foi possível retomar o plano', error instanceof Error
+        ? error.message : 'Tente novamente em instantes.');
+    } finally {
+      retryInFlight.current = false;
+      setIsRetrying(false);
+    }
+  }, [planId, isFailed, retryPlanGeneration]);
 
-  return { isGenerating, isFailed, retry };
+  return { isGenerating, isFailed, isRetrying, retry };
 }

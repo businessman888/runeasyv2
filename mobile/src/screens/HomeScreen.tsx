@@ -51,6 +51,7 @@ import { resolveExecutedActivityMetrics } from '../utils/watchActivityPresentati
 
 import { BASE_API_URL } from '../config/api.config';
 import { authedFetch } from '../services/apiClient';
+import { canStartInitialPlan } from '../services/planGenerationRequests';
 
 // Stable reference so the memoized SegmentedTabs doesn't re-render on every
 // parent re-render (e.g. while focus-effect fetches resolve).
@@ -188,7 +189,7 @@ export function HomeScreen({ navigation }: any) {
     const [planGenRetries, setPlanGenRetries] = useState(0);
     const generationTriggeredRef = useRef(false);
 
-    const { isGenerating, isFailed, retry } = usePlanGenerationGate({
+    const { isGenerating, isFailed, isRetrying, retry } = usePlanGenerationGate({
         onComplete: () => {
             const { startStr, endStr } = homeScheduleRange();
             void Promise.all([
@@ -200,14 +201,15 @@ export function HomeScreen({ navigation }: any) {
     });
 
     const handleRetry = useCallback(async () => {
-        if (planGenRetries >= 3) return;
+        if (planGenRetries >= 3 || isRetrying) return;
         setPlanGenRetries((prev) => prev + 1);
         generationTriggeredRef.current = true;
         await retry();
-    }, [planGenRetries, retry]);
+    }, [planGenRetries, isRetrying, retry]);
 
-    // Trigger plan generation if no workouts exist
-    const checkAndTriggerGeneration = useCallback(async () => {
+    // Only the backend can authorize automatic creation of the first plan.
+    const checkAndTriggerGeneration = useCallback(async (ready: boolean | null, isCurrent: () => boolean) => {
+        if (ready !== false || !isCurrent()) return;
         // Free users don't have a plan — backend gating refuses generation,
         // and HomeScreen shows UpgradeProCard in place of WorkoutCard.
         if (!isProUser) {
@@ -247,34 +249,17 @@ export function HomeScreen({ navigation }: any) {
             }
 
             const result = await response.json();
-            console.log('[HomeScreen] Plan check result — plan:', result.plan ? `id=${result.plan.id} status=${result.plan.generation_status}` : 'null');
-            if (result.plan) {
-                const status = result.plan.generation_status;
-
-                if (status === 'complete') {
-                    // Plan is ready, just no upcoming workouts — don't re-trigger
-                    return;
-                }
-
-                if (status === 'generating') {
-                    // Plan is generating — the gate hook shows the overlay + polls.
-                    generationTriggeredRef.current = true;
-                    return;
-                }
-
-                // status === 'failed' → fall through to trigger new generation
-                console.log('[HomeScreen] Plan generation previously failed, re-triggering...');
-            }
-            // result.plan is null → user genuinely has no plan, trigger generation
+            if (!canStartInitialPlan(result, ready) || !isCurrent()) return;
         } catch (err) {
             // Network error — do NOT trigger generation, just log
             console.warn('[HomeScreen] Plan check failed (network error), skipping generation:', err);
             return;
         }
 
-        // No plan OR plan failed — trigger generation (set guard BEFORE async call)
+        // First-plan authorization received. Existing/failed cycles require an explicit action.
+        if (generationTriggeredRef.current || !isCurrent() || useAuthStore.getState().user?.id !== userId) return;
         generationTriggeredRef.current = true;
-        console.log('[HomeScreen] No plan found, triggering AI generation for userId:', userId);
+        console.log('[HomeScreen] Initial plan authorized by backend');
 
         const planId = await triggerPlanGeneration();
         if (planId) {
@@ -296,6 +281,7 @@ export function HomeScreen({ navigation }: any) {
     // Use useFocusEffect to refetch data when screen gains focus (revalidate on every visit)
     useFocusEffect(
         useCallback(() => {
+            let active = true;
             const loadData = async () => {
                 // Clear stale data immediately to show skeleton
                 clearScheduleData();
@@ -321,27 +307,32 @@ export function HomeScreen({ navigation }: any) {
                     initializeHealthConnect().then(() => syncHealthConnectRecent(7)),
                 ]);
 
-                // Check if retrospective is ready
+                // Unknown/error is not permission to start another cycle.
+                let ready: boolean | null = null;
                 try {
                     const userId = await Storage.getItemAsync('user_id');
                     if (userId) {
                         const response = await authedFetch(`${BASE_API_URL}/training/retrospective/ready`, {
                             headers: { 'x-user-id': userId },
                         });
+                        if (!response.ok) throw new Error('Retrospective status unavailable');
                         const result = await response.json();
-                        setRetrospectiveReady(result.isReady || false);
+                        if (typeof result.isReady === 'boolean') {
+                            ready = result.isReady;
+                            if (active) setRetrospectiveReady(result.isReady);
+                        }
                     }
                 } catch (e) {
                     console.log('Retrospective check failed:', e);
                 }
 
+                if (!active) return;
                 setIsInitialLoading(false);
-
-                // After initial load, check if we need to trigger plan generation
-                checkAndTriggerGeneration();
+                await checkAndTriggerGeneration(ready, () => active);
             };
-            loadData();
-        }, [])
+            void loadData();
+            return () => { active = false; };
+        }, [checkAndTriggerGeneration])
     );
 
     // Auto-dismiss the Apple Health sync banner after a few seconds
@@ -1033,7 +1024,7 @@ export function HomeScreen({ navigation }: any) {
                 <PlanGeneratingOverlay
                     mode={isFailed ? 'error' : 'generating'}
                     onRetry={handleRetry}
-                    canRetry={planGenRetries < 3}
+                    canRetry={planGenRetries < 3 && !isRetrying}
                 />
             )}
 

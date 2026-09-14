@@ -6,6 +6,7 @@ import {
   NotFoundException,
   BadRequestException,
   ServiceUnavailableException,
+  ConflictException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -40,6 +41,35 @@ import { toSaoPauloDateStr } from './wellness/helpers/streak.helper';
 
 // Generation status types
 export type GenerationStatus = 'partial' | 'generating' | 'complete' | 'failed';
+
+export interface PlanGenerationContext {
+  source:
+    | 'onboarding'
+    | 'subscription'
+    | 'retrospective_accept'
+    | 'retrospective_customize';
+  retrospectiveId?: string;
+  requestId?: string;
+  eventId?: string;
+}
+
+type ReservationContext = Omit<PlanGenerationContext, 'source'> & {
+  source: PlanGenerationContext['source'] | 'retry';
+  retryPlanId?: string;
+};
+
+interface PlanReservation {
+  created: boolean;
+  plan_id: string;
+  generation_status: GenerationStatus;
+  plan: {
+    generation_attempt: number;
+    goal: string;
+    duration_weeks: number;
+    frequency_per_week: number;
+  };
+  request: TrainingPlanRequest | null;
+}
 
 // Plan creation response (returned immediately, before AI generation completes)
 export interface QuickPlanResponse {
@@ -126,240 +156,227 @@ export class TrainingService {
    */
   async createQuickPlan(
     userId: string,
-    onboardingData: TrainingPlanRequest,
+    request: TrainingPlanRequest,
+    context: PlanGenerationContext,
   ): Promise<QuickPlanResponse> {
-    // Daily AI cost ceiling (Pro is exempt). Throws 429 when exceeded.
-    await this.aiQuotaService.assertWithinLimit(userId, 'plan');
-
-    try {
-      this.logger.log(
-        `[Plan] Starting single-prompt plan generation for user ${userId}`,
-      );
-
-      // Deactivate any existing active plans to prevent duplicates
-      const { error: deactivateError } = await this.supabaseService
-        .from('training_plans')
-        .update({ status: 'cancelled' })
-        .eq('user_id', userId)
-        .eq('status', 'active');
-
-      if (deactivateError) {
-        this.logger.warn(
-          `[Plan] Failed to deactivate old plans: ${deactivateError.message}`,
-        );
-      }
-
-      // Create plan record with 'generating' status (no AI call yet)
-      const { data: plan, error: planError } = await this.supabaseService
-        .from('training_plans')
-        .insert({
-          user_id: userId,
-          goal: onboardingData.goal,
-          duration_weeks: onboardingData.targetWeeks,
-          frequency_per_week: onboardingData.daysPerWeek,
-          plan_json: {},
-          status: 'active',
-          generation_status: 'generating',
-          goal_type: onboardingData.goalType ?? 'distance',
-          race_id: onboardingData.raceId ?? null,
-          race_date: onboardingData.raceDate ?? null,
-          race_name: onboardingData.raceName ?? null,
-          race_distance: onboardingData.raceDistance ?? null,
-        })
-        .select()
-        .single();
-
-      if (planError) throw planError;
-
-      this.logger.log(
-        `[Plan] Created plan record ${plan.id}, triggering background generation`,
-      );
-
-      // Fire-and-forget: generate full plan in background (single prompt)
-      this.generateAndSaveFullPlan(plan.id, userId, onboardingData)
-        .then(() => {
-          this.logger.log(
-            `[Plan] Background generation completed for plan ${plan.id}`,
-          );
-        })
-        .catch((error) => {
-          this.logger.error(
-            `[Plan] Background generation failed for plan ${plan.id}`,
-            error,
-          );
-        });
-
-      // Return immediately — frontend polls for completion
-      return {
-        plan_id: plan.id,
-        generation_status: 'generating',
-        planHeader: {
-          objectiveShort: onboardingData.goalLabel ?? onboardingData.goal,
-          durationWeeks: `${onboardingData.targetWeeks} Sem`,
-          frequencyWeekly: `${onboardingData.daysPerWeek}x/Sem`,
-        },
-        planHeadline: '',
-        welcomeBadge: '',
-        nextWorkout: { title: '', duration: '', paceEstimate: '', type: 'run' },
-        workouts_count: 0,
-      };
-    } catch (error) {
-      this.logger.error('[Plan] Failed to create plan', error);
-      throw error;
-    }
+    return this.reserveAndStartGeneration(userId, request, context);
   }
 
-  /**
-   * Generate the FULL training plan in background (single AI prompt for ALL weeks).
-   * Updates the plan record and creates all workout rows when done.
-   */
+  /** Retry only the persisted decision; never reconstruct it from onboarding. */
+  async retryPlanGeneration(
+    userId: string,
+    planId: string,
+    requestId?: string,
+  ): Promise<QuickPlanResponse> {
+    return this.reserveAndStartGeneration(userId, null, {
+      source: 'retry',
+      retryPlanId: planId,
+      requestId,
+    });
+  }
+
+  private async reserveAndStartGeneration(
+    userId: string,
+    request: TrainingPlanRequest | null,
+    context: ReservationContext,
+  ): Promise<QuickPlanResponse> {
+    await this.aiQuotaService.assertWithinLimit(userId, 'plan');
+    const requestId = context.requestId || randomUUID();
+    const { data, error } = await this.supabaseService
+      .getClient()
+      .rpc('reserve_training_plan', {
+        p_user_id: userId,
+        p_source: context.source,
+        p_plan: request
+          ? {
+              goal: request.goal,
+              duration_weeks: request.targetWeeks,
+              frequency_per_week: request.daysPerWeek,
+              plan_json: {},
+              goal_type: request.goalType ?? 'distance',
+              race_id: request.raceId ?? null,
+              race_date: request.raceDate ?? null,
+              race_name: request.raceName ?? null,
+              race_distance: request.raceDistance ?? null,
+            }
+          : {},
+        p_request: request ?? {},
+        p_retrospective_id: context.retrospectiveId ?? null,
+        p_retry_plan_id: context.retryPlanId ?? null,
+        p_request_id: requestId,
+        p_event_id: context.eventId ?? null,
+      });
+    if (error) {
+      const code = /^GENERATION_[A-Z_]+$/.test(error.message)
+        ? error.message
+        : 'GENERATION_UNAVAILABLE';
+      this.logger.warn({
+        event: 'plan_generation_rejected',
+        userId,
+        source: context.source,
+        requestId,
+        code,
+        retrospectiveId: context.retrospectiveId,
+        eventId: context.eventId,
+      });
+      if (code.includes('NOT_FOUND'))
+        throw new NotFoundException({
+          code,
+          message: 'Plano ou retrospectiva não encontrado.',
+        });
+      if (code !== 'GENERATION_UNAVAILABLE')
+        throw new ConflictException({
+          code,
+          message: 'A geração precisa de uma decisão válida para este ciclo.',
+        });
+      throw new ServiceUnavailableException({
+        code,
+        message: 'Não foi possível iniciar a geração. Tente novamente.',
+      });
+    }
+    const reservation = data as PlanReservation;
+    if (
+      !reservation?.plan_id ||
+      !reservation.plan ||
+      (reservation.created && !reservation.request)
+    ) {
+      throw new ServiceUnavailableException(
+        'Resposta de reserva de plano inválida.',
+      );
+    }
+    this.logger.log({
+      event: reservation.created
+        ? 'plan_generation_reserved'
+        : 'plan_generation_replayed',
+      userId,
+      planId: reservation.plan_id,
+      source: context.source,
+      requestId,
+      retrospectiveId: context.retrospectiveId,
+      eventId: context.eventId,
+      attempt: reservation.plan.generation_attempt,
+    });
+    if (reservation.created && reservation.request) {
+      void this.generateAndSaveFullPlan(
+        reservation.plan_id,
+        userId,
+        reservation.request,
+        reservation.plan.generation_attempt,
+      ).catch(() => {
+        this.logger.error({
+          event: 'plan_generation_worker_failed',
+          userId,
+          planId: reservation.plan_id,
+          requestId,
+        });
+      });
+    }
+    const authorized = reservation.request;
+    return {
+      plan_id: reservation.plan_id,
+      generation_status: reservation.generation_status,
+      planHeader: {
+        objectiveShort:
+          authorized?.goalLabel ?? authorized?.goal ?? reservation.plan.goal,
+        durationWeeks: `${authorized?.targetWeeks ?? reservation.plan.duration_weeks} Sem`,
+        frequencyWeekly: `${authorized?.daysPerWeek ?? reservation.plan.frequency_per_week}x/Sem`,
+      },
+      planHeadline: '',
+      welcomeBadge: '',
+      nextWorkout: { title: '', duration: '', paceEstimate: '', type: 'run' },
+      workouts_count: 0,
+    };
+  }
+
+  /** A GET can report eligibility but never reserves or starts a generation. */
+  async canGenerateInitialPlan(userId: string): Promise<boolean> {
+    const results = await Promise.all([
+      this.supabaseService
+        .from('training_plans')
+        .select('id')
+        .eq('user_id', userId)
+        .limit(1),
+      this.supabaseService
+        .from('plan_retrospectives')
+        .select('id')
+        .eq('user_id', userId)
+        .limit(1),
+    ]);
+    for (const result of results) {
+      if (result.error)
+        throw new ServiceUnavailableException(
+          'Não foi possível verificar o ciclo.',
+        );
+    }
+    return results.every(
+      (result) => Array.isArray(result.data) && result.data.length === 0,
+    );
+  }
+
+  /** The database publishes plan + workouts in one transaction, only for this attempt. */
   private async generateAndSaveFullPlan(
     planId: string,
     userId: string,
-    onboardingData: TrainingPlanRequest,
+    request: TrainingPlanRequest,
+    attempt: number,
   ): Promise<void> {
+    let failureStage: 'claim' | 'ai' | 'workouts' | 'finalize' = 'claim';
     try {
-      this.logger.log(
-        `[FullGen] Starting full plan generation for plan ${planId} (${onboardingData.targetWeeks} weeks)`,
-      );
-      this.logger.log(
-        `[FullGen] Onboarding data: goal=${onboardingData.goal}, level=${onboardingData.level}, ` +
-          `daysPerWeek=${onboardingData.daysPerWeek}, pace=${onboardingData.currentPace5k}, ` +
-          `preferredDays=${JSON.stringify(onboardingData.preferredDays)}`,
-      );
       const startTime = Date.now();
-
-      // STEP 1: Call AI to generate the full plan.
-      // RESILIÊNCIA (Etapa 3): a falha de parse (JSON truncado/malformado) é
-      // NÃO-DETERMINÍSTICA — a IA às vezes devolve JSON válido, às vezes não para
-      // o MESMO input (a meia falhou, a maratona do mesmo tamanho passou). Um
-      // retry resolve a maioria dos casos. Tentamos até MAX_GEN_ATTEMPTS.
-      const MAX_GEN_ATTEMPTS = 2;
       let fullPlan: GeneratedPlan | undefined;
-      for (let attempt = 1; attempt <= MAX_GEN_ATTEMPTS; attempt++) {
-        this.logger.log(
-          `[FullGen] STEP 1: Calling AI (generateTrainingPlan) — tentativa ${attempt}/${MAX_GEN_ATTEMPTS}...`,
-        );
+      const maxAttempts = 2;
+      for (let aiAttempt = 1; aiAttempt <= maxAttempts; aiAttempt++) {
+        failureStage = 'claim';
+        const { data: current, error } = await this.supabaseService
+          .from('training_plans')
+          .select('id')
+          .eq('id', planId)
+          .eq('user_id', userId)
+          .eq('status', 'active')
+          .eq('generation_status', 'generating')
+          .eq('generation_attempt', attempt)
+          .maybeSingle();
+        if (error) throw error;
+        if (!current) return;
         try {
-          const candidate =
-            await this.trainingAIService.generateTrainingPlan(onboardingData);
-          if (!candidate.weeks || candidate.weeks.length === 0) {
-            throw new Error('AI returned empty weeks array');
-          }
-          fullPlan = candidate;
-          this.logger.log(
-            `[FullGen] STEP 1 DONE: AI returned ${fullPlan.weeks.length} weeks, duration_weeks=${fullPlan.duration_weeks}, frequency=${fullPlan.frequency_per_week} (tentativa ${attempt}, ${Date.now() - startTime}ms)`,
+          failureStage = 'ai';
+          const candidate = await this.trainingAIService.generateTrainingPlan(
+            request,
+            userId,
           );
+          if (!candidate.weeks?.length)
+            throw new Error('AI returned empty weeks array');
+          fullPlan = candidate;
           break;
-        } catch (genErr) {
-          const gm = genErr instanceof Error ? genErr.message : String(genErr);
-          if (attempt < MAX_GEN_ATTEMPTS) {
-            this.logger.warn(
-              `[FullGen] STEP 1 tentativa ${attempt}/${MAX_GEN_ATTEMPTS} falhou p/ plano ${planId} ` +
-                `(weeks=${onboardingData.targetWeeks}, days=${onboardingData.daysPerWeek}): ${gm} — retry`,
-            );
-            continue;
-          }
-          throw genErr; // esgotou as tentativas → catch externo marca como falha
+        } catch (error) {
+          this.logger.warn({
+            event: 'plan_generation_attempt_failed',
+            userId,
+            planId,
+            attempt,
+            aiAttempt,
+          });
+          if (aiAttempt === maxAttempts) throw error;
         }
       }
-      if (!fullPlan) {
-        throw new Error('AI generation produced no plan after retries');
-      }
-
-      // STEP 2: Update plan record with complete data
-      this.logger.log(`[FullGen] STEP 2: Updating plan record in DB...`);
-      const { error: updateError } = await this.supabaseService
-        .from('training_plans')
-        .update({
-          plan_json: fullPlan,
-          duration_weeks: fullPlan.duration_weeks || onboardingData.targetWeeks,
-          frequency_per_week:
-            fullPlan.frequency_per_week || onboardingData.daysPerWeek,
-          // `generation_status: 'complete'` NÃO entra aqui — ver STEP 5.
-        })
-        .eq('id', planId);
-
-      if (updateError) {
-        this.logger.error(
-          `[FullGen] STEP 2 FAILED: DB update error: ${updateError.message}`,
-          updateError,
-        );
-        throw updateError;
-      }
-      this.logger.log(
-        `[FullGen] STEP 2 DONE: Plan record updated successfully`,
+      if (!fullPlan) throw new Error('AI generation produced no plan');
+      failureStage = 'workouts';
+      const startDate = this.resolvePlanStartDate(request.startDate);
+      const days = this.normalizePreferredDays(
+        request.preferredDays,
+        request.daysPerWeek,
       );
-
-      // STEP 3: Create ALL workouts at once
-      this.logger.log(`[FullGen] STEP 3: Creating workout rows...`);
-      const planStartDate = this.resolvePlanStartDate(onboardingData.startDate);
-      this.logger.log(
-        `[FullGen] STEP 3: planStartDate=${planStartDate.toISOString()} (input startDate=${onboardingData.startDate ?? 'null'}, clamped to >= today)`,
+      const workouts: Record<string, unknown>[] = fullPlan.weeks.flatMap(
+        (week) =>
+          this.createWorkoutsForWeek(planId, userId, week, startDate, days),
       );
-      const allWorkoutsToInsert: any[] = [];
-
-      // Defense-in-depth: even when the prompt asks for specific days, the
-      // AI sometimes returns its own defaults (Mon/Tue/Thu/Sat). Force the
-      // workouts onto the user's actual selection so the calendar matches
-      // what they picked in onboarding.
-      const enforcedDays = this.normalizePreferredDays(
-        onboardingData.preferredDays,
-        onboardingData.daysPerWeek,
-      );
-      this.logger.log(
-        `[FullGen] STEP 3: enforcedDays=${JSON.stringify(enforcedDays)} (from preferredDays=${JSON.stringify(onboardingData.preferredDays)})`,
-      );
-
-      for (const week of fullPlan.weeks) {
-        const weekWorkouts = this.createWorkoutsForWeek(
-          planId,
-          userId,
-          week,
-          planStartDate,
-          enforcedDays,
-        );
-        allWorkoutsToInsert.push(...weekWorkouts);
-      }
-
-      this.logger.log(
-        `[FullGen] STEP 3: Inserting ${allWorkoutsToInsert.length} workouts in batches...`,
-      );
-      if (allWorkoutsToInsert.length > 0) {
-        // Insert in batches of 100 to avoid payload limits
-        const BATCH_SIZE = 100;
-        for (let i = 0; i < allWorkoutsToInsert.length; i += BATCH_SIZE) {
-          const batch = allWorkoutsToInsert.slice(i, i + BATCH_SIZE);
-          const { error: workoutsError } = await this.supabaseService
-            .from('workouts')
-            .insert(batch);
-
-          if (workoutsError) {
-            this.logger.error(
-              `[FullGen] STEP 3 FAILED: Workout batch insert error (batch ${i / BATCH_SIZE + 1}): ${workoutsError.message}`,
-              workoutsError,
-            );
-            throw workoutsError;
-          }
-        }
-      }
-
-      // STEP 3b: persiste o VDOT que prescreveu estes paces (Fase 3). Sem isto
-      // a reestimativa não tem de onde partir. Best-effort de propósito — o
-      // plano já está válido e não deve falhar por causa de um recurso novo.
-      await this.vdotService.seedForPlan(userId, planId, fullPlan.vdot);
-
-      // STEP 4 (race goal only): insert the special race-day workout on the
-      // race date. The AI is instructed NOT to create a workout that day.
-      if (onboardingData.goalType === 'race' && onboardingData.raceDate) {
-        const raceWorkout = {
-          plan_id: planId,
-          user_id: userId,
+      if (request.goalType === 'race' && request.raceDate) {
+        workouts.push({
           week_number: fullPlan.weeks.length,
-          scheduled_date: onboardingData.raceDate, // 'YYYY-MM-DD'
+          scheduled_date: request.raceDate,
           type: 'race_day',
-          title: `DIA DA PROVA — ${onboardingData.raceName ?? 'Sua prova'}`,
-          distance_km: onboardingData.raceDistance ?? null,
+          title: `DIA DA PROVA — ${request.raceName ?? 'Sua prova'}`,
+          distance_km: request.raceDistance ?? null,
           instructions_json: [],
           objective:
             'Dia da sua prova! Aquecimento leve, hidratação e foco. 🏁',
@@ -367,100 +384,88 @@ export class TrainingService {
           status: 'pending',
           is_race_day: true,
           metadata: { zone: 'Z3-Z5', week_phase: 'taper' },
-        };
-        const { error: raceError } = await this.supabaseService
-          .from('workouts')
-          .insert(raceWorkout);
-        if (raceError) {
-          // Non-fatal: the plan itself is valid without the placeholder.
-          this.logger.warn(
-            `[FullGen] STEP 4: failed to insert race-day workout: ${raceError.message}`,
-          );
-        } else {
-          this.logger.log(
-            `[FullGen] STEP 4: race-day workout inserted on ${onboardingData.raceDate}`,
-          );
-        }
+        });
       }
-
-      // STEP 5: SÓ AGORA o plano é declarado pronto.
-      //
-      // ── POR QUE ESTE UPDATE EXISTE SEPARADO (Fase 6.1) ────────────────────
-      //
-      // Até aqui `generation_status: 'complete'` era gravado no STEP 2, junto
-      // do `plan_json` — ou seja, ANTES de os workouts existirem. O estado
-      // "complete com zero treinos" era observável, e qualquer consumidor que
-      // tratasse `complete` como garantia de plano materializado lia um plano
-      // vazio. Para a Fase 6 isso é pior que um bug de UI: uma adaptação
-      // disparada nessa janela não saberia qual snapshot está editando.
-      //
-      // Vem depois do STEP 4 (prova) de propósito: os passos 3b e 4 são
-      // best-effort e não lançam, então chegar aqui significa que o plano está
-      // íntegro. Custo: o polling do app espera alguns segundos a mais — que é
-      // a verdade sobre quando o plano ficou pronto.
-      const { error: completeError } = await this.supabaseService
-        .from('training_plans')
-        .update({ generation_status: 'complete' })
-        .eq('id', planId);
-
-      if (completeError) {
-        this.logger.error(
-          `[FullGen] STEP 5 FAILED: não consegui marcar o plano ${planId} como complete: ${completeError.message}`,
-        );
-        throw completeError;
+      failureStage = 'finalize';
+      const { data: result, error } = await this.supabaseService
+        .getClient()
+        .rpc('finalize_training_plan', {
+          p_user_id: userId,
+          p_plan_id: planId,
+          p_attempt: attempt,
+          p_plan_json: fullPlan,
+          p_workouts: workouts,
+        });
+      if (error) throw error;
+      if (!result?.applied) {
+        this.logger.log({
+          event: 'plan_generation_stale_result',
+          userId,
+          planId,
+          attempt,
+        });
+        return;
       }
-
-      const elapsed = Date.now() - startTime;
-      this.logger.log(
-        `[FullGen] ✅ Plan ${planId}: generated ${fullPlan.weeks.length} weeks, ${allWorkoutsToInsert.length} workouts in ${elapsed}ms`,
-      );
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      // Log rico p/ diagnosticar sem reproduzir: duração, treinos/semana, meta.
-      this.logger.error(
-        `[FullGen] ❌ Failed for plan ${planId} após retries: ${errorMsg} ` +
-          `(goal=${onboardingData.goal}, level=${onboardingData.level}, ` +
-          `weeks=${onboardingData.targetWeeks}, days=${onboardingData.daysPerWeek})`,
-        error,
-      );
-
-      // ESTADO CONSISTENTE NA FALHA (Etapa 3): um plano que falhou NÃO pode ficar
-      // status:'active' — senão getActivePlan() devolve um plano quebrado e o app
-      // mostra um plano ativo sem treinos. Marcamos status:'cancelled' para o app
-      // distinguir "sem plano" de "plano quebrado" (generation_status:'failed'
-      // continua registrando o motivo; um cancel de usuário NÃO tem esse marcador).
-      await this.supabaseService
+      try {
+        await this.vdotService.seedForPlan(userId, planId, fullPlan.vdot);
+      } catch {
+        this.logger.warn({ event: 'plan_vdot_seed_failed', userId, planId });
+      }
+      this.logger.log({
+        event: 'plan_generation_completed',
+        userId,
+        planId,
+        attempt,
+        workoutsCount: workouts.length,
+        elapsedMs: Date.now() - startTime,
+      });
+    } catch {
+      // Preserve the active failed decision for explicit retry. A cancelled or newer
+      // attempt must never be overwritten by a late result from this worker.
+      const { data: failedPlan, error } = await this.supabaseService
         .from('training_plans')
         .update({
-          status: 'cancelled',
           generation_status: 'failed',
-          plan_json: { error: errorMsg, failed_at: new Date().toISOString() },
+          generation_finished_at: new Date().toISOString(),
         })
-        .eq('id', planId);
+        .eq('id', planId)
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .eq('generation_status', 'generating')
+        .eq('generation_attempt', attempt)
+        .select('id')
+        .maybeSingle();
+      this.logger.error({
+        event: 'plan_generation_failed',
+        userId,
+        planId,
+        attempt,
+        failureStage,
+        failurePersisted: !error && !!failedPlan,
+        persistenceError: error ? 'DATABASE_WRITE_FAILED' : undefined,
+      });
+      if (error) throw new Error('Failed to persist plan generation failure');
     }
   }
 
-  /**
-   * Get the generation status of a plan
-   */
   async getPlanGenerationStatus(
     planId: string,
+    userId: string,
   ): Promise<{ status: GenerationStatus; workouts_count: number }> {
-    const { data: plan, error: planError } = await this.supabaseService
+    const { data: plan, error } = await this.supabaseService
       .from('training_plans')
       .select('generation_status')
       .eq('id', planId)
-      .single();
-
-    if (planError) throw planError;
-
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!plan) throw new NotFoundException('Plano não encontrado.');
     const { count, error: countError } = await this.supabaseService
       .from('workouts')
       .select('*', { count: 'exact', head: true })
-      .eq('plan_id', planId);
-
+      .eq('plan_id', planId)
+      .eq('user_id', userId);
     if (countError) throw countError;
-
     return {
       status: plan.generation_status || 'partial',
       workouts_count: count || 0,
@@ -648,80 +653,6 @@ export class TrainingService {
     }
 
     return workoutsToInsert;
-  }
-
-  /**
-   * Create a new training plan for a user (LEGACY - full generation)
-   * @deprecated Use createQuickPlan for better UX
-   */
-  async createTrainingPlan(
-    userId: string,
-    onboardingData: TrainingPlanRequest,
-  ): Promise<any> {
-    try {
-      // Generate plan using AI
-      const generatedPlan =
-        await this.trainingAIService.generateTrainingPlan(onboardingData);
-
-      // Save training plan to database
-      const { data: plan, error: planError } = await this.supabaseService
-        .from('training_plans')
-        .insert({
-          user_id: userId,
-          goal: onboardingData.goal,
-          duration_weeks: generatedPlan.duration_weeks,
-          frequency_per_week: generatedPlan.frequency_per_week,
-          plan_json: generatedPlan,
-          status: 'active',
-          generation_status: 'complete',
-        })
-        .select()
-        .single();
-
-      if (planError) throw planError;
-
-      // Create individual workouts
-      const workoutsToInsert = [];
-      const today = this.resolvePlanStartDate(onboardingData.startDate);
-
-      for (const week of generatedPlan.weeks) {
-        const weekWorkouts = this.createWorkoutsForWeek(
-          plan.id,
-          userId,
-          week,
-          today,
-        );
-        workoutsToInsert.push(...weekWorkouts);
-      }
-
-      // Insert all workouts
-      const { error: workoutsError } = await this.supabaseService
-        .from('workouts')
-        .insert(workoutsToInsert);
-
-      if (workoutsError) throw workoutsError;
-
-      this.logger.log(
-        `Created training plan ${plan.id} with ${workoutsToInsert.length} workouts`,
-      );
-
-      // Return plan data including preview for frontend
-      return {
-        plan,
-        workoutsCount: workoutsToInsert.length,
-        // Include plan preview data from AI response
-        planPreview: {
-          planHeader: generatedPlan.planHeader,
-          planHeadline: generatedPlan.planHeadline,
-          welcomeBadge: generatedPlan.welcomeBadge,
-          nextWorkout: generatedPlan.nextWorkout,
-          fullSchedulePreview: generatedPlan.fullSchedulePreview,
-        },
-      };
-    } catch (error) {
-      this.logger.error('Failed to create training plan', error);
-      throw error;
-    }
   }
 
   /**

@@ -4,7 +4,6 @@ import {
   Post,
   Put,
   Patch,
-  Delete,
   Body,
   Param,
   Query,
@@ -13,6 +12,7 @@ import {
   Logger,
   UseGuards,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import {
   TrainingService,
   QuickPlanResponse,
@@ -39,6 +39,8 @@ import { ApplyWeekReliefDto } from './dto/apply-week-relief.dto';
 import { VolumeReliefService } from './volume-relief.service';
 import { DaySwapService } from './day-swap.service';
 import { ApplyDaySwapDto, DaySwapPreviewDto } from './dto/day-swap.dto';
+import { derivePlanWindow, isPlanFinished } from './helpers/plan-window.helper';
+import { toSaoPauloDateStr } from './wellness/helpers/streak.helper';
 
 interface CreatePlanDto {
   // Biometrics (New)
@@ -134,7 +136,7 @@ export class TrainingController {
       .select('subscription_plan')
       .eq('id', userId)
       .maybeSingle();
-    return (data?.subscription_plan ?? 'free') === 'free';
+    return data?.subscription_plan !== 'pro';
   }
 
   /**
@@ -215,7 +217,7 @@ export class TrainingController {
 
   /**
    * Save onboarding data and create training plan (FAST - uses Prompt Chaining)
-   * Note: Auth via x-user-id header
+   * Authenticated identity is supplied by the global auth guard
    * Response time: ~3-5 seconds (background process generates remaining weeks)
    */
   @Post('onboarding')
@@ -336,33 +338,37 @@ export class TrainingController {
           `(dto.available_days=${JSON.stringify(dto.available_days)}, dto.preferred_days=${JSON.stringify(dto.preferred_days)}, days_per_week=${dto.days_per_week})`,
       );
 
-      const result = await this.trainingService.createQuickPlan(userId, {
-        goal: dto.goal,
-        level: dto.level,
-        daysPerWeek: dto.days_per_week,
-        currentPace5k: dto.current_pace_5k,
-        // Performance baseline measured in onboarding — drives VDOT estimation.
-        calculatedPace: dto.calculated_pace ?? null,
-        recentDistanceKm: dto.recent_distance ?? null,
-        targetWeeks:
-          dto.goal_type === 'race' && weeksUntil(dto.race_date)
-            ? weeksUntil(dto.race_date)
-            : dto.target_weeks,
-        limitations: dto.limitations,
-        preferredDays: selectedDays,
-        startDate: dto.start_date,
-        // Race goal
-        goalType: dto.goal_type ?? 'distance',
-        raceId: dto.race_id ?? null,
-        raceDate: dto.race_date ?? null,
-        raceName: dto.race_name ?? null,
-        raceDistance: dto.race_distance ?? null,
-        raceWeeksUntil: weeksUntil(dto.race_date),
-        // Capacidade atual (Fase A) — transporte para a Fase B
-        recentFrequency: dto.recent_frequency ?? null,
-        currentWeeklyKm: dto.current_weekly_km ?? null,
-        walkCapacity: dto.walk_capacity ?? null,
-      });
+      const result = await this.trainingService.createQuickPlan(
+        userId,
+        {
+          goal: dto.goal,
+          level: dto.level,
+          daysPerWeek: dto.days_per_week,
+          currentPace5k: dto.current_pace_5k,
+          // Performance baseline measured in onboarding — drives VDOT estimation.
+          calculatedPace: dto.calculated_pace ?? null,
+          recentDistanceKm: dto.recent_distance ?? null,
+          targetWeeks:
+            dto.goal_type === 'race' && weeksUntil(dto.race_date)
+              ? weeksUntil(dto.race_date)
+              : dto.target_weeks,
+          limitations: dto.limitations,
+          preferredDays: selectedDays,
+          startDate: dto.start_date,
+          // Race goal
+          goalType: dto.goal_type ?? 'distance',
+          raceId: dto.race_id ?? null,
+          raceDate: dto.race_date ?? null,
+          raceName: dto.race_name ?? null,
+          raceDistance: dto.race_distance ?? null,
+          raceWeeksUntil: weeksUntil(dto.race_date),
+          // Capacidade atual (Fase A) — transporte para a Fase B
+          recentFrequency: dto.recent_frequency ?? null,
+          currentWeeklyKm: dto.current_weekly_km ?? null,
+          walkCapacity: dto.walk_capacity ?? null,
+        },
+        { source: 'onboarding', requestId: randomUUID() },
+      );
 
       // Return immediately with first workout data
       return {
@@ -456,26 +462,7 @@ export class TrainingController {
           `(days_per_week=${dto.days_per_week}, available_days=${JSON.stringify(dto.available_days)}, preferred_days=${JSON.stringify(dto.preferred_days)})`,
       );
 
-      // Re-onboarding implies "I want a new plan". Cancel any prior
-      // active plan so the subsequent /onboarding/generate call doesn't
-      // short-circuit on a stale plan generated before the user changed
-      // their answers (e.g. picking different available_days).
-      const { data: cancelled, error: cancelError } = await this.supabaseService
-        .from('training_plans')
-        .update({ status: 'cancelled' })
-        .eq('user_id', userId)
-        .eq('status', 'active')
-        .select('id');
-
-      if (cancelError) {
-        this.logger.warn(
-          `[save] Failed to cancel prior active plans: ${cancelError.message}`,
-        );
-      } else if (cancelled && cancelled.length > 0) {
-        this.logger.log(
-          `[save] Cancelled ${cancelled.length} prior active plan(s) so /generate will produce a fresh one`,
-        );
-      }
+      // Saving questionnaire answers must not cancel a reserved or active cycle.
 
       // Sync biometrics to users.profile
       await this.usersService.updateProfile(userId, {
@@ -528,31 +515,7 @@ export class TrainingController {
     }
 
     try {
-      // Check if user already has an active plan (idempotent)
-      const existingPlan = await this.trainingService.getActivePlan(userId);
-      if (existingPlan) {
-        // If the previous generation failed, cancel it and re-trigger
-        if (existingPlan.generation_status === 'failed') {
-          this.logger.log(
-            `[generate] Previous plan ${existingPlan.id} failed, cancelling and re-generating`,
-          );
-          await this.supabaseService
-            .from('training_plans')
-            .update({ status: 'cancelled' })
-            .eq('id', existingPlan.id);
-          // Fall through to create a new plan below
-        } else {
-          this.logger.log(
-            `[generate] User ${userId} already has active plan ${existingPlan.id} (status: ${existingPlan.generation_status})`,
-          );
-          return {
-            plan_id: existingPlan.id,
-            generation_status: existingPlan.generation_status || 'complete',
-            already_exists: true,
-          };
-        }
-      }
-
+      // createQuickPlan reserves generation atomically and enforces eligibility.
       // Read saved onboarding data
       const { data: onboardingData, error: readError } =
         await this.supabaseService
@@ -593,41 +556,47 @@ export class TrainingController {
           `dto.preferred_days=${JSON.stringify(dto.preferred_days)})`,
       );
 
-      const result = await this.trainingService.createQuickPlan(userId, {
-        goal: dto.goal || onboardingData.goal,
-        level: dto.level || onboardingData.level,
-        daysPerWeek: dto.days_per_week || onboardingData.days_per_week,
-        currentPace5k: dto.current_pace_5k || onboardingData.current_pace_5k,
-        // Performance baseline measured in onboarding — drives VDOT estimation.
-        calculatedPace:
-          dto.calculated_pace ?? onboardingData.calculated_pace ?? null,
-        recentDistanceKm:
-          dto.recent_distance ?? onboardingData.recent_distance ?? null,
-        targetWeeks: (() => {
-          const goalType = dto.goal_type ?? onboardingData.goal_type;
-          const raceDate = dto.race_date ?? onboardingData.race_date;
-          const w = weeksUntil(raceDate);
-          return goalType === 'race' && w
-            ? w
-            : dto.target_weeks || onboardingData.target_weeks;
-        })(),
-        limitations: dto.limitations || onboardingData.limitations,
-        preferredDays: selectedDays,
-        startDate: dto.start_date || onboardingData.start_date,
-        // Race goal
-        goalType: dto.goal_type ?? onboardingData.goal_type ?? 'distance',
-        raceId: dto.race_id ?? onboardingData.race_id ?? null,
-        raceDate: dto.race_date ?? onboardingData.race_date ?? null,
-        raceName: dto.race_name ?? onboardingData.race_name ?? null,
-        raceDistance: dto.race_distance ?? onboardingData.race_distance ?? null,
-        raceWeeksUntil: weeksUntil(dto.race_date ?? onboardingData.race_date),
-        // Capacidade atual (Fase A) — lê do responses_json ou da coluna dedicada
-        recentFrequency:
-          dto.recent_frequency ?? onboardingData.recent_frequency ?? null,
-        currentWeeklyKm:
-          dto.current_weekly_km ?? onboardingData.current_weekly_km ?? null,
-        walkCapacity: dto.walk_capacity ?? onboardingData.walk_capacity ?? null,
-      });
+      const result = await this.trainingService.createQuickPlan(
+        userId,
+        {
+          goal: dto.goal || onboardingData.goal,
+          level: dto.level || onboardingData.level,
+          daysPerWeek: dto.days_per_week || onboardingData.days_per_week,
+          currentPace5k: dto.current_pace_5k || onboardingData.current_pace_5k,
+          // Performance baseline measured in onboarding — drives VDOT estimation.
+          calculatedPace:
+            dto.calculated_pace ?? onboardingData.calculated_pace ?? null,
+          recentDistanceKm:
+            dto.recent_distance ?? onboardingData.recent_distance ?? null,
+          targetWeeks: (() => {
+            const goalType = dto.goal_type ?? onboardingData.goal_type;
+            const raceDate = dto.race_date ?? onboardingData.race_date;
+            const w = weeksUntil(raceDate);
+            return goalType === 'race' && w
+              ? w
+              : dto.target_weeks || onboardingData.target_weeks;
+          })(),
+          limitations: dto.limitations || onboardingData.limitations,
+          preferredDays: selectedDays,
+          startDate: dto.start_date || onboardingData.start_date,
+          // Race goal
+          goalType: dto.goal_type ?? onboardingData.goal_type ?? 'distance',
+          raceId: dto.race_id ?? onboardingData.race_id ?? null,
+          raceDate: dto.race_date ?? onboardingData.race_date ?? null,
+          raceName: dto.race_name ?? onboardingData.race_name ?? null,
+          raceDistance:
+            dto.race_distance ?? onboardingData.race_distance ?? null,
+          raceWeeksUntil: weeksUntil(dto.race_date ?? onboardingData.race_date),
+          // Capacidade atual (Fase A) — lê do responses_json ou da coluna dedicada
+          recentFrequency:
+            dto.recent_frequency ?? onboardingData.recent_frequency ?? null,
+          currentWeeklyKm:
+            dto.current_weekly_km ?? onboardingData.current_weekly_km ?? null,
+          walkCapacity:
+            dto.walk_capacity ?? onboardingData.walk_capacity ?? null,
+        },
+        { source: 'onboarding', requestId: randomUUID() },
+      );
 
       this.logger.log(
         `[generate] Plan generated for user ${userId}, plan_id: ${result.plan_id}`,
@@ -750,7 +719,10 @@ export class TrainingController {
     }
 
     try {
-      const status = await this.trainingService.getPlanGenerationStatus(planId);
+      const status = await this.trainingService.getPlanGenerationStatus(
+        planId,
+        userId,
+      );
       return {
         plan_id: planId,
         generation_status: status.status,
@@ -759,6 +731,7 @@ export class TrainingController {
       };
     } catch (error) {
       this.logger.error('Failed to get plan status', error);
+      if (error instanceof HttpException) throw error;
       throw new HttpException(
         error.message || 'Failed to get plan status',
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -775,8 +748,28 @@ export class TrainingController {
       throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
     }
 
-    const plan = await this.trainingService.getActivePlan(userId);
-    return { plan };
+    const [plan, canGenerateInitialPlan] = await Promise.all([
+      this.trainingService.getActivePlan(userId),
+      this.trainingService.canGenerateInitialPlan(userId),
+    ]);
+    return { plan, can_generate_initial_plan: !plan && canGenerateInitialPlan };
+  }
+
+  /** Retry only the saved request of a failed plan owned by this user. */
+  @Post('plan/:id/retry')
+  @UseGuards(ProGuard)
+  async retryPlanGeneration(
+    @User('id') userId: string,
+    @Param('id') planId: string,
+  ) {
+    if (!userId) {
+      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
+    }
+    return this.trainingService.retryPlanGeneration(
+      userId,
+      planId,
+      randomUUID(),
+    );
   }
 
   /**
@@ -1359,6 +1352,7 @@ export class TrainingController {
    * Accept AI suggestion from retrospective
    */
   @Post('retrospective/:id/accept')
+  @UseGuards(ProGuard)
   async acceptRetrospectiveSuggestion(
     @User('id') userId: string,
     @Param('id') retrospectiveId: string,
@@ -1371,10 +1365,12 @@ export class TrainingController {
       const result = await this.retrospectiveService.acceptSuggestion(
         userId,
         retrospectiveId,
+        randomUUID(),
       );
       return result;
     } catch (error) {
       this.logger.error('Failed to accept suggestion', error);
+      if (error instanceof HttpException) throw error;
       throw new HttpException(
         error.message || 'Failed to accept suggestion',
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -1386,6 +1382,7 @@ export class TrainingController {
    * Customize new plan with manual parameters
    */
   @Post('retrospective/:id/customize')
+  @UseGuards(ProGuard)
   async customizeRetrospectivePlan(
     @User('id') userId: string,
     @Param('id') retrospectiveId: string,
@@ -1400,9 +1397,11 @@ export class TrainingController {
         userId,
         retrospectiveId,
         params,
+        randomUUID(),
       );
     } catch (error) {
       this.logger.error('Failed to customize plan', error);
+      if (error instanceof HttpException) throw error;
       throw new HttpException(
         error.message || 'Failed to customize plan',
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -1428,6 +1427,7 @@ export class TrainingController {
       );
     } catch (error) {
       this.logger.error('Failed to assess pace goal', error);
+      if (error instanceof HttpException) throw error;
       throw new HttpException(
         error.message || 'Failed to assess pace goal',
         HttpStatus.BAD_REQUEST,
@@ -1588,14 +1588,15 @@ export class TrainingController {
 
     try {
       // Get active plan for this user
-      const { data: activePlan } = await this.supabaseService
+      const { data: activePlan, error: planError } = await this.supabaseService
         .from('training_plans')
-        .select('id, created_at, duration_weeks, status')
+        .select('id, created_at, duration_weeks, status, generation_status')
         .eq('user_id', userId)
         .eq('status', 'active')
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
+      if (planError) throw planError;
 
       if (!activePlan) {
         throw new HttpException(
@@ -1605,11 +1606,14 @@ export class TrainingController {
       }
 
       // Check if retrospective already exists
-      const { data: existingRetro } = await this.supabaseService
-        .from('plan_retrospectives')
-        .select('id')
-        .eq('plan_id', activePlan.id)
-        .maybeSingle();
+      const { data: existingRetro, error: retrospectiveError } =
+        await this.supabaseService
+          .from('plan_retrospectives')
+          .select('id')
+          .eq('plan_id', activePlan.id)
+          .eq('user_id', userId)
+          .maybeSingle();
+      if (retrospectiveError) throw retrospectiveError;
 
       if (existingRetro) {
         return {
@@ -1618,6 +1622,41 @@ export class TrainingController {
           retrospective_id: existingRetro.id,
           already_existed: true,
         };
+      }
+
+      // Use the scheduler's temporal boundary, including re-anchored workouts.
+      if (activePlan.generation_status !== 'complete') {
+        throw new HttpException(
+          {
+            code: 'PLAN_GENERATION_INCOMPLETE',
+            message: 'Plan generation is not complete',
+          },
+          HttpStatus.CONFLICT,
+        );
+      }
+      const { data: lastWorkout, error: workoutError } =
+        await this.supabaseService
+          .from('workouts')
+          .select('scheduled_date')
+          .eq('plan_id', activePlan.id)
+          .eq('user_id', userId)
+          .order('scheduled_date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+      if (workoutError) throw workoutError;
+      const window = derivePlanWindow(
+        activePlan,
+        lastWorkout?.scheduled_date ? [lastWorkout.scheduled_date] : [],
+      );
+      const today = toSaoPauloDateStr(new Date().toISOString());
+      if (window.source !== 'workouts' || !isPlanFinished(window, today)) {
+        throw new HttpException(
+          {
+            code: 'CYCLE_NOT_FINISHED',
+            message: 'The scheduled cycle has not finished',
+          },
+          HttpStatus.CONFLICT,
+        );
       }
 
       // Generate retrospective
@@ -1643,71 +1682,9 @@ export class TrainingController {
       };
     } catch (error) {
       this.logger.error('[Retrospective] Manual generation failed:', error);
+      if (error instanceof HttpException) throw error;
       throw new HttpException(
         error.message || 'Failed to generate retrospective',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  /**
-   * Admin endpoint to delete retrospective and related notifications for testing
-   * Also reactivates the plan so generateRetrospective can be called again
-   */
-  @Delete('retrospective/reset')
-  async resetRetrospective(@User('id') userId: string) {
-    if (!userId) {
-      throw new HttpException('User ID required', HttpStatus.UNAUTHORIZED);
-    }
-
-    try {
-      // Delete all retrospectives for this user
-      const { data: deletedRetros, error: retroError } =
-        await this.supabaseService
-          .from('plan_retrospectives')
-          .delete()
-          .eq('user_id', userId)
-          .select('id');
-
-      if (retroError) {
-        this.logger.error('Failed to delete retrospectives:', retroError);
-      }
-
-      // Delete all notifications for this user
-      const { data: deletedNotifs, error: notifError } =
-        await this.supabaseService
-          .from('notifications')
-          .delete()
-          .eq('user_id', userId)
-          .select('id');
-
-      if (notifError) {
-        this.logger.error('Failed to delete notifications:', notifError);
-      }
-
-      // Reactivate all completed plans for this user
-      const { data: updatedPlans, error: planError } =
-        await this.supabaseService
-          .from('training_plans')
-          .update({ status: 'active' })
-          .eq('user_id', userId)
-          .eq('status', 'completed')
-          .select('id');
-
-      if (planError) {
-        this.logger.error('Failed to reactivate plans:', planError);
-      }
-
-      return {
-        success: true,
-        deletedRetrospectives: deletedRetros?.length || 0,
-        deletedNotifications: deletedNotifs?.length || 0,
-        reactivatedPlans: updatedPlans?.length || 0,
-      };
-    } catch (error) {
-      this.logger.error('[Retrospective] Reset failed:', error);
-      throw new HttpException(
-        'Failed to reset retrospective',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

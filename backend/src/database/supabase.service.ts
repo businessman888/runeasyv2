@@ -23,7 +23,7 @@ export class SupabaseService implements OnModuleInit {
         `[SupabaseService] SUPABASE_URL: ${supabaseUrl ? 'SET' : 'MISSING'}`,
       );
       this.logger.log(
-        `[SupabaseService] SUPABASE_SERVICE_ROLE_KEY: ${supabaseKey ? 'SET (' + supabaseKey.substring(0, 10) + '...)' : 'MISSING'}`,
+        `[SupabaseService] SUPABASE_SERVICE_ROLE_KEY: ${supabaseKey ? 'SET' : 'MISSING'}`,
       );
 
       if (!supabaseUrl || !supabaseKey) {

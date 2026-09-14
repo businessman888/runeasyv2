@@ -675,6 +675,7 @@ REGRAS ADICIONAIS DE PROVA:
 
   async generateTrainingPlan(
     request: TrainingPlanRequest,
+    userId?: string,
   ): Promise<GeneratedPlan> {
     // GUARD: Clamp unrealistic pace values before sending to AI
     let safePace = request.currentPace5k;
@@ -925,6 +926,7 @@ Responda APENAS com o JSON contendo todas as ${request.targetWeeks} semanas.`;
 
       const result = await this.aiRouter.call<GeneratedPlan>({
         featureName: AI_FEATURES.PLAN_GENERATION_LEGACY,
+        userId,
         systemPrompt: [
           {
             type: 'text' as const,

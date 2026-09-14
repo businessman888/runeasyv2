@@ -69,6 +69,13 @@ describe('TrainingAIService — VDOT resolution', () => {
     return Number(match[1]);
   }
 
+  it('attributes generation usage to the authenticated user', async () => {
+    await service.generateTrainingPlan(baseRequest, 'generation-owner');
+    expect(callMock).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'generation-owner' }),
+    );
+  });
+
   it('uses race-based VDOT when recent distance + measured pace are provided', async () => {
     // 10 km @ 5:00/km → ~50 min 10k, clearly a fit runner (VDOT well above beginner)
     await service.generateTrainingPlan({

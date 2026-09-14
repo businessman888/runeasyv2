@@ -3,6 +3,7 @@ import { createMMKV } from 'react-native-mmkv';
 import * as Storage from '../utils/storage';
 import { BASE_API_URL } from '../config/api.config';
 import { authedFetch } from '../services/apiClient';
+import { requestPlanRetry } from '../services/planGenerationRequests';
 import type { PlanOverviewResponse } from '../types/plan-overview.types';
 import { useWellnessStore } from './wellnessStore';
 
@@ -444,6 +445,7 @@ interface TrainingState {
     retryPendingWorkouts: () => Promise<void>;
     retryPendingFreeRuns: () => Promise<void>;
     checkPlanStatus: (planId: string) => Promise<boolean>;
+    retryPlanGeneration: (planId: string) => Promise<void>;
     setGenerationStatus: (status: GenerationStatus) => void;
     setAnalyzingPerformance: (analyzing: boolean) => void;
     clearScheduleData: () => void;
@@ -702,6 +704,16 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
         }
     },
 
+    retryPlanGeneration: async (planId: string) => {
+        const userId = await getUserId();
+        if (!userId) throw new Error('Entre novamente para retomar seu plano.');
+        const result = await requestPlanRetry(authedFetch, API_URL, planId, userId);
+        // Ignore a response for a plan/account that changed while awaiting HTTP.
+        if (get().plan?.id !== planId || await getUserId() !== userId) return;
+        set({ generationStatus: result.generation_status, error: null });
+        await get().fetchPlan();
+    },
+
     checkPlanStatus: async (planId: string): Promise<boolean> => {
         try {
             const userId = await getUserId();
@@ -713,6 +725,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
 
             if (response.ok) {
                 const data = await response.json();
+                if (get().plan?.id !== planId || await getUserId() !== userId) return false;
                 set({ generationStatus: data.generation_status });
 
                 // Return true if complete
