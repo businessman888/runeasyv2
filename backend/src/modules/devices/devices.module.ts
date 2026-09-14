@@ -6,6 +6,7 @@ import { DevicesService } from './devices.service';
 import { ActivitySyncService } from './activity-sync.service';
 import { ActivitySyncProcessor } from './activity-sync.processor';
 import { TokenRefreshService } from './token-refresh.service';
+import { OAuthStateStore } from './oauth-state.store';
 import { FitbitOAuthService } from './providers/fitbit-oauth.service';
 import { PolarOAuthService } from './providers/polar-oauth.service';
 import { AppleHealthNormalizer } from './providers/apple-health.normalizer';
@@ -32,6 +33,7 @@ import { SubscriptionModule } from '../subscription/subscription.module';
     ActivitySyncService,
     ActivitySyncProcessor,
     TokenRefreshService,
+    OAuthStateStore,
     FitbitOAuthService,
     PolarOAuthService,
     AppleHealthNormalizer,
