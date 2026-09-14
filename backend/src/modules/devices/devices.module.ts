@@ -9,6 +9,7 @@ import { TokenRefreshService } from './token-refresh.service';
 import { OAuthStateStore } from './oauth-state.store';
 import { FitbitOAuthService } from './providers/fitbit-oauth.service';
 import { PolarOAuthService } from './providers/polar-oauth.service';
+import { GoogleHealthOAuthService } from './providers/google-health-oauth.service';
 import { AppleHealthNormalizer } from './providers/apple-health.normalizer';
 import { HealthConnectNormalizer } from './providers/health-connect.normalizer';
 import { TrainingModule } from '../training/training.module';
@@ -36,6 +37,7 @@ import { SubscriptionModule } from '../subscription/subscription.module';
     OAuthStateStore,
     FitbitOAuthService,
     PolarOAuthService,
+    GoogleHealthOAuthService,
     AppleHealthNormalizer,
     HealthConnectNormalizer,
   ],

@@ -47,6 +47,14 @@ export class DevicesService {
           device_name: dto.device_name || null,
           connected_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
+          // Coluna nova entra SÓ quando o DTO a traz — hoje, só o callback do
+          // Google Health. O payload de Apple Health, Apple Watch, Garmin,
+          // Fitbit e Polar fica byte a byte igual ao de antes, e continua
+          // funcionando mesmo num banco sem a migration. Travado em
+          // `devices.service.spec.ts`.
+          ...(dto.refresh_token_expires_at !== undefined
+            ? { refresh_token_expires_at: dto.refresh_token_expires_at }
+            : {}),
         },
         { onConflict: 'user_id,provider' },
       )

@@ -35,4 +35,12 @@ export class ConnectDeviceDto {
   @IsString()
   @IsOptional()
   device_name?: string;
+
+  // Validade do REFRESH token (ISO) — `expires_at` é a do access token. Hoje só
+  // o Google Health manda; em modo Teste, 7 dias. `null` = o provedor não
+  // informou prazo. Ausente = o chamador não sabe dessa coluna, e o upsert não
+  // a toca (ver `DevicesService.connectDevice`).
+  @IsString()
+  @IsOptional()
+  refresh_token_expires_at?: string | null;
 }

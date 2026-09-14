@@ -16,8 +16,22 @@ import { DevicesService } from './devices.service';
 import { ActivitySyncService, WearableActivity } from './activity-sync.service';
 import { FitbitOAuthService } from './providers/fitbit-oauth.service';
 import { PolarOAuthService } from './providers/polar-oauth.service';
+import {
+  GoogleHealthOAuthService,
+  GOOGLE_HEALTH_CALLBACK_PATH,
+} from './providers/google-health-oauth.service';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+
+/**
+ * Volta ao app pelo deep link que o `WebBrowser.openAuthSessionAsync` do mobile
+ * intercepta. Mesma codificação dos callbacks de Fitbit e Polar, para que a
+ * Fase 5 trate os três do mesmo jeito.
+ */
+function googleHealthReturnUrl(success: boolean, error?: string): string {
+  const base = `runeasy://wearable-connected?provider=google_health&success=${String(success)}`;
+  return error ? `${base}&error=${encodeURIComponent(error)}` : base;
+}
 
 @Controller('devices')
 export class OAuthController {
@@ -28,8 +42,88 @@ export class OAuthController {
     private readonly activitySyncService: ActivitySyncService,
     private readonly fitbitOAuth: FitbitOAuthService,
     private readonly polarOAuth: PolarOAuthService,
+    private readonly googleHealthOAuth: GoogleHealthOAuthService,
     @InjectQueue('activity-sync-queue') private readonly syncQueue: Queue,
   ) {}
+
+  // ============================================
+  // GOOGLE HEALTH OAuth
+  // ============================================
+  //
+  // Conexão SEM sincronização (Fase 3): o usuário autoriza, o token é guardado
+  // criptografado e se renova sozinho — nada é buscado nem gravado em
+  // `activities`. A ingestão depende do webhook, que é da Fase 4.
+
+  /**
+   * Inicia o fluxo — devolve a URL de autorização do Google.
+   * GET /api/devices/google-health/auth
+   */
+  @Get('google-health/auth')
+  async googleHealthAuth(@User('id') userId: string) {
+    if (!userId) {
+      throw new UnauthorizedException();
+    }
+
+    return { url: await this.googleHealthOAuth.generateAuthUrl(userId) };
+  }
+
+  /**
+   * Callback — o Google redireciona o navegador para cá.
+   * GET /api/devices/google-health/callback
+   *
+   * `@Public()`: chega sem sessão. O usuário é resolvido pelo `state`, que mora
+   * em `oauth_states` — sobrevive a restart e a réplicas, ao contrário do `Map`
+   * de Fitbit e Polar.
+   *
+   * Nunca lança para o navegador: sucesso e falha voltam ao app pelo mesmo deep
+   * link, com `success` explícito. Negar o consentimento (`?error=access_denied`)
+   * é um caminho normal, não exceção.
+   */
+  @Public()
+  @Get(GOOGLE_HEALTH_CALLBACK_PATH)
+  async googleHealthCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Query('error') oauthError: string,
+    @Res() res: Response,
+  ) {
+    if (oauthError) {
+      // Consumir o state impede que ele seja reaproveitado depois da recusa.
+      await this.googleHealthOAuth.discardState(state);
+      this.logger.log(`Google Health authorization not granted: ${oauthError}`);
+      return res.redirect(googleHealthReturnUrl(false, oauthError));
+    }
+
+    if (!code || !state) {
+      return res.redirect(
+        googleHealthReturnUrl(false, 'missing_code_or_state'),
+      );
+    }
+
+    try {
+      const { userId, tokens } = await this.googleHealthOAuth.exchangeCode(
+        code,
+        state,
+      );
+
+      await this.devicesService.connectDevice(userId, {
+        provider: 'google_health',
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+        expires_at: tokens.expiresAt,
+        refresh_token_expires_at: tokens.refreshTokenExpiresAt,
+        scope: tokens.scope,
+        device_name: 'Google Health',
+      });
+
+      this.logger.log(`Google Health connected for user ${userId}`);
+      return res.redirect(googleHealthReturnUrl(true));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Google Health callback error: ${message}`);
+      return res.redirect(googleHealthReturnUrl(false, message));
+    }
+  }
 
   // ============================================
   // FITBIT OAuth
