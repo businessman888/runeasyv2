@@ -107,4 +107,20 @@ describe('DevicesService.connectDevice', () => {
 
     expect(upsertedRow()).toHaveProperty('refresh_token_expires_at', null);
   });
+
+  it('google_health: reconectar zera o estado degradado', async () => {
+    await service.connectDevice('user-1', {
+      provider: 'google_health',
+      access_token: 'access',
+      refresh_token: 'refresh',
+      refresh_token_expires_at: null,
+    });
+
+    expect(upsertedRow()).toEqual(
+      expect.objectContaining({
+        refresh_failed_at: null,
+        last_refresh_error: null,
+      }),
+    );
+  });
 });

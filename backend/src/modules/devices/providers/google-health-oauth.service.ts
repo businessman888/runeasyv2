@@ -6,6 +6,11 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OAuthStateStore } from '../oauth-state.store';
+import {
+  RefreshTokenInvalidError,
+  RefreshedTokens,
+  TokenRefresher,
+} from '../token-refresher';
 import { generateCodeChallenge, generateCodeVerifier } from './pkce';
 
 /**
@@ -45,6 +50,12 @@ interface GoogleTokenResponse {
   token_type?: string;
 }
 
+/** Erro OAuth do endpoint de token: o código e a descrição curta. */
+interface OAuthErrorDetail {
+  code: string;
+  description?: string;
+}
+
 export interface GoogleHealthTokens {
   accessToken: string;
   refreshToken: string;
@@ -57,13 +68,13 @@ export interface GoogleHealthTokens {
 }
 
 /**
- * OAuth do Google Health API — autorizar e trocar o code por token.
+ * OAuth do Google Health API — autorizar, trocar o code por token e renovar.
  *
  * Fase 3 entrega conexão SEM sincronização: nada aqui busca dado de saúde. O
  * fetch e a ingestão dependem do webhook, que é da Fase 4.
  */
 @Injectable()
-export class GoogleHealthOAuthService {
+export class GoogleHealthOAuthService implements TokenRefresher {
   private readonly logger = new Logger(GoogleHealthOAuthService.name);
 
   private readonly clientId: string | undefined;
@@ -156,12 +167,12 @@ export class GoogleHealthOAuthService {
     if (!response.ok) {
       const oauthError = await this.readOAuthError(response);
       this.logger.error(
-        `Google Health token exchange failed: ${response.status} ${oauthError}`,
+        `Google Health token exchange failed: ${response.status} ${oauthError.code}`,
       );
       // Status e código OAuth vão na mensagem: `401 invalid_client` é a
       // credencial do app, `400 invalid_grant` é o code. Coisas diferentes.
       throw new Error(
-        `Google Health token exchange failed: ${response.status} ${oauthError}`,
+        `Google Health token exchange failed: ${response.status} ${oauthError.code}`,
       );
     }
 
@@ -184,6 +195,58 @@ export class GoogleHealthOAuthService {
     return {
       userId: consumed.userId,
       tokens: this.toTokens(raw, raw.refresh_token),
+    };
+  }
+
+  /**
+   * Renova o access token — é o `TokenRefresher` que o `TokenRefreshService`
+   * despacha para `google_health`.
+   *
+   * O Google NÃO devolve `refresh_token` na renovação (não rotaciona): o antigo
+   * segue valendo, e o service mantém o que está gravado.
+   *
+   * `invalid_grant` é recusa DEFINITIVA — refresh token revogado pelo usuário,
+   * vencido (7 dias em modo Teste) ou invalidado por troca de senha — e vira
+   * `RefreshTokenInvalidError`, que marca a conexão como degradada. Qualquer
+   * outra falha (rede, 5xx, `invalid_client` por credencial do app) é
+   * transitória: o cron tenta de novo no próximo ciclo, e consertar a
+   * configuração recupera a conexão sem o usuário precisar fazer nada.
+   */
+  async refreshAccessToken(refreshToken: string): Promise<RefreshedTokens> {
+    this.assertConfigured();
+
+    const response = await fetch(TOKEN_URI, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      }).toString(),
+    });
+
+    if (!response.ok) {
+      const oauthError = await this.readOAuthError(response);
+      if (oauthError.code === 'invalid_grant') {
+        throw new RefreshTokenInvalidError(
+          oauthError.description
+            ? `invalid_grant: ${oauthError.description}`
+            : 'invalid_grant',
+        );
+      }
+      throw new Error(
+        `Google Health token refresh failed: ${response.status} ${oauthError.code}`,
+      );
+    }
+
+    const raw = (await response.json()) as GoogleTokenResponse;
+
+    return {
+      access_token: raw.access_token,
+      expires_in: raw.expires_in,
+      refresh_token: raw.refresh_token,
+      refresh_token_expires_in: raw.refresh_token_expires_in,
     };
   }
 
@@ -267,15 +330,25 @@ export class GoogleHealthOAuthService {
   }
 
   /**
-   * Só o código OAuth do erro (`invalid_grant`, `invalid_client`…) — nunca o
-   * corpo inteiro, que pode ecoar parâmetros da requisição.
+   * Só o código OAuth do erro (`invalid_grant`, `invalid_client`…) e a
+   * descrição curta que o acompanha — nunca o corpo inteiro, que pode ecoar
+   * parâmetros da requisição.
    */
-  private async readOAuthError(response: Response): Promise<string> {
+  private async readOAuthError(response: Response): Promise<OAuthErrorDetail> {
     try {
-      const body = (await response.json()) as { error?: unknown };
-      return typeof body.error === 'string' ? body.error : 'unknown_error';
+      const body = (await response.json()) as {
+        error?: unknown;
+        error_description?: unknown;
+      };
+      return {
+        code: typeof body.error === 'string' ? body.error : 'unknown_error',
+        description:
+          typeof body.error_description === 'string'
+            ? body.error_description
+            : undefined,
+      };
     } catch {
-      return 'unknown_error';
+      return { code: 'unknown_error' };
     }
   }
 

@@ -47,13 +47,20 @@ export class DevicesService {
           device_name: dto.device_name || null,
           connected_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-          // Coluna nova entra SÓ quando o DTO a traz — hoje, só o callback do
-          // Google Health. O payload de Apple Health, Apple Watch, Garmin,
-          // Fitbit e Polar fica byte a byte igual ao de antes, e continua
-          // funcionando mesmo num banco sem a migration. Travado em
-          // `devices.service.spec.ts`.
+          // Colunas novas entram SÓ quando o DTO traz o ciclo de vida do
+          // refresh token — hoje, só o callback do Google Health. O payload de
+          // Apple Health, Apple Watch, Garmin, Fitbit e Polar fica byte a byte
+          // igual ao de antes, e continua funcionando mesmo num banco sem as
+          // migrations. Travado em `devices.service.spec.ts`.
+          //
+          // Na (re)conexão o estado degradado volta a NULL: o usuário acabou
+          // de autorizar de novo, então a conexão está viva.
           ...(dto.refresh_token_expires_at !== undefined
-            ? { refresh_token_expires_at: dto.refresh_token_expires_at }
+            ? {
+                refresh_token_expires_at: dto.refresh_token_expires_at,
+                refresh_failed_at: null,
+                last_refresh_error: null,
+              }
             : {}),
         },
         { onConflict: 'user_id,provider' },

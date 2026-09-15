@@ -267,6 +267,122 @@ describe('GoogleHealthOAuthService', () => {
     });
   });
 
+  // ─── refreshAccessToken ──────────────────────────────────────────────────
+  //
+  // A distinção entre recusa DEFINITIVA e falha TRANSITÓRIA é o que decide se
+  // a conexão é marcada como degradada. Errar para um lado desconecta usuário
+  // por um soluço de rede; errar para o outro retenta um token morto para
+  // sempre.
+
+  describe('refreshAccessToken', () => {
+    let fetchSpy: jest.SpyInstance<
+      ReturnType<typeof fetch>,
+      Parameters<typeof fetch>
+    >;
+
+    beforeEach(() => {
+      fetchSpy = jest.spyOn(global, 'fetch');
+    });
+
+    afterEach(() => {
+      fetchSpy.mockRestore();
+    });
+
+    it('troca o refresh token por um access token — e o Google não manda refresh token novo', async () => {
+      const { service } = await build();
+      fetchSpy.mockResolvedValue(
+        jsonResponse({
+          access_token: 'access-2',
+          expires_in: 3599,
+          scope: ALL_SCOPES,
+          token_type: 'Bearer',
+        }),
+      );
+
+      const tokens = await service.refreshAccessToken('refresh-1');
+
+      const [endpoint, init] = fetchSpy.mock.calls[0];
+      expect(endpoint).toBe('https://oauth2.googleapis.com/token');
+      const body = new URLSearchParams(init?.body as string);
+      expect(body.get('grant_type')).toBe('refresh_token');
+      expect(body.get('refresh_token')).toBe('refresh-1');
+      expect(body.get('client_id')).toBe(CLIENT_ID);
+      expect(body.get('client_secret')).toBe(CLIENT_SECRET);
+
+      expect(tokens.access_token).toBe('access-2');
+      expect(tokens.expires_in).toBe(3599);
+      // Ausente: o TokenRefreshService mantém o refresh token que está gravado.
+      expect(tokens.refresh_token).toBeUndefined();
+    });
+
+    it('repassa refresh_token_expires_in quando o Google informa', async () => {
+      const { service } = await build();
+      fetchSpy.mockResolvedValue(
+        jsonResponse({
+          access_token: 'access-2',
+          expires_in: 3599,
+          refresh_token_expires_in: 500000,
+        }),
+      );
+
+      const tokens = await service.refreshAccessToken('refresh-1');
+
+      expect(tokens.refresh_token_expires_in).toBe(500000);
+    });
+
+    it('invalid_grant é recusa definitiva: RefreshTokenInvalidError com o motivo do Google', async () => {
+      const { service } = await build();
+      fetchSpy.mockResolvedValue(
+        jsonResponse(
+          {
+            error: 'invalid_grant',
+            error_description: 'Token has been expired or revoked.',
+          },
+          400,
+        ),
+      );
+
+      await expect(
+        service.refreshAccessToken('refresh-1'),
+      ).rejects.toMatchObject({
+        name: 'RefreshTokenInvalidError',
+        reason: 'invalid_grant: Token has been expired or revoked.',
+      });
+    });
+
+    it('invalid_client (credencial do app) é transitória: Error genérico, não degrada', async () => {
+      const { service } = await build();
+      fetchSpy.mockResolvedValue(
+        jsonResponse({ error: 'invalid_client' }, 401),
+      );
+
+      const failure = service.refreshAccessToken('refresh-1');
+
+      await expect(failure).rejects.toThrow(
+        'Google Health token refresh failed: 401 invalid_client',
+      );
+      await expect(failure).rejects.not.toMatchObject({
+        name: 'RefreshTokenInvalidError',
+      });
+    });
+
+    it('falha de servidor do Google (5xx) também é transitória', async () => {
+      const { service } = await build();
+      fetchSpy.mockResolvedValue(
+        new Response('Service Unavailable', { status: 503 }),
+      );
+
+      const failure = service.refreshAccessToken('refresh-1');
+
+      await expect(failure).rejects.toThrow(
+        'Google Health token refresh failed: 503 unknown_error',
+      );
+      await expect(failure).rejects.not.toMatchObject({
+        name: 'RefreshTokenInvalidError',
+      });
+    });
+  });
+
   // ─── discardState ────────────────────────────────────────────────────────
 
   describe('discardState', () => {
