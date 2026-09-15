@@ -383,6 +383,64 @@ describe('GoogleHealthOAuthService', () => {
     });
   });
 
+  // ─── revokeToken ─────────────────────────────────────────────────────────
+
+  describe('revokeToken', () => {
+    let fetchSpy: jest.SpyInstance<
+      ReturnType<typeof fetch>,
+      Parameters<typeof fetch>
+    >;
+
+    beforeEach(() => {
+      fetchSpy = jest.spyOn(global, 'fetch');
+    });
+
+    afterEach(() => {
+      fetchSpy.mockRestore();
+    });
+
+    it('revoga o grant no endpoint do Google, mandando só o token', async () => {
+      const { service } = await build();
+      fetchSpy.mockResolvedValue(new Response('', { status: 200 }));
+
+      await service.revokeToken('refresh-1');
+
+      const [endpoint, init] = fetchSpy.mock.calls[0];
+      expect(endpoint).toBe('https://oauth2.googleapis.com/revoke');
+      expect(init?.method).toBe('POST');
+      const body = new URLSearchParams(init?.body as string);
+      expect(body.get('token')).toBe('refresh-1');
+      // O endpoint de revogação não pede credencial do app.
+      expect(body.get('client_secret')).toBeNull();
+    });
+
+    it('funciona mesmo com o app sem configuração — revogar só depende do token', async () => {
+      const { service } = await build({
+        GOOGLE_HEALTH_CLIENT_SECRET: undefined,
+      });
+      fetchSpy.mockResolvedValue(new Response('', { status: 200 }));
+
+      await expect(service.revokeToken('refresh-1')).resolves.toBeUndefined();
+    });
+
+    it('recusa do Google lança com status e código — quem chama decide', async () => {
+      const { service } = await build();
+      fetchSpy.mockResolvedValue(
+        jsonResponse(
+          {
+            error: 'invalid_token',
+            error_description: 'Token expired or revoked',
+          },
+          400,
+        ),
+      );
+
+      await expect(service.revokeToken('refresh-1')).rejects.toThrow(
+        'Google Health revoke failed: 400 invalid_token',
+      );
+    });
+  });
+
   // ─── discardState ────────────────────────────────────────────────────────
 
   describe('discardState', () => {

@@ -8,15 +8,30 @@ import { SupabaseService } from '../../database/supabase.service';
 import { EncryptionService } from '../../common/encryption/encryption.service';
 import { ConnectDeviceDto } from './dto/connect-device.dto';
 import { VALID_PROVIDERS, DeviceProvider } from './device-providers';
+import { GoogleHealthOAuthService } from './providers/google-health-oauth.service';
+import { TokenRevoker } from './token-revoker';
 
 @Injectable()
 export class DevicesService {
   private readonly logger = new Logger(DevicesService.name);
 
+  /**
+   * Quem sabe revogar o grant do lado do provedor. Mesmo desenho do mapa de
+   * `refreshers` do `TokenRefreshService`: o ÚNICO lugar que decide, sem
+   * `if (provider === …)`. Só o Google Health está aqui — Fitbit, Polar e os de
+   * registro local desconectam exatamente como sempre desconectaram.
+   */
+  private readonly revokers: ReadonlyMap<DeviceProvider, TokenRevoker>;
+
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly encryptionService: EncryptionService,
-  ) {}
+    googleHealthOAuth: GoogleHealthOAuthService,
+  ) {
+    this.revokers = new Map<DeviceProvider, TokenRevoker>([
+      ['google_health', googleHealthOAuth],
+    ]);
+  }
 
   /**
    * Connect a wearable device for a user.
@@ -100,9 +115,23 @@ export class DevicesService {
 
   /**
    * Disconnect (remove) a device for a user.
+   *
+   * Para provedor com revoker registrado (hoje só o Google Health), o grant é
+   * revogado do lado do provedor ANTES de apagar a linha (Mina 22) — senão o
+   * acesso aos dados de saúde continuaria vivo na conta do usuário depois de ele
+   * pedir para desconectar. Para escopos restritos de saúde, isso é
+   * conformidade, não higiene.
+   *
+   * Revogar falhando NÃO impede a desconexão local: o usuário pediu para
+   * desconectar. Loga e segue. Sem revoker, o caminho é o de antes.
    */
   async disconnectDevice(userId: string, provider: string) {
     this.validateProvider(provider);
+
+    const revoker = this.revokers.get(provider as DeviceProvider);
+    if (revoker) {
+      await this.revokeAtProvider(userId, provider, revoker);
+    }
 
     const { data, error } = await this.supabaseService
       .from('connected_devices')
@@ -120,6 +149,51 @@ export class DevicesService {
     this.logger.log(`Device disconnected: ${provider} for user ${userId}`);
 
     return { success: true, provider };
+  }
+
+  /**
+   * Revoga o grant no provedor com o refresh token — revogá-lo derruba o grant
+   * inteiro — ou, na falta dele (conexão degradada, refresh token já zerado),
+   * com o access token.
+   *
+   * Best-effort: qualquer falha — leitura, token ilegível, provedor recusando —
+   * só loga. A decisão sobre o 404 continua sendo do DELETE que vem depois,
+   * como sempre foi.
+   */
+  private async revokeAtProvider(
+    userId: string,
+    provider: string,
+    revoker: TokenRevoker,
+  ): Promise<void> {
+    try {
+      const { data, error } = await this.supabaseService
+        .from('connected_devices')
+        .select('access_token, refresh_token')
+        .eq('user_id', userId)
+        .eq('provider', provider)
+        .maybeSingle<{
+          access_token: string | null;
+          refresh_token: string | null;
+        }>();
+
+      if (error) {
+        this.logger.warn(
+          `Could not read ${provider} tokens to revoke for user ${userId}: ${error.message}`,
+        );
+        return;
+      }
+
+      const encryptedToken = data?.refresh_token ?? data?.access_token;
+      if (!encryptedToken) return;
+
+      await revoker.revokeToken(this.encryptionService.decrypt(encryptedToken));
+      this.logger.log(`Grant revoked at ${provider} for user ${userId}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Could not revoke ${provider} grant for user ${userId}: ${message} — disconnecting locally anyway`,
+      );
+    }
   }
 
   /**

@@ -11,6 +11,7 @@ import {
   RefreshedTokens,
   TokenRefresher,
 } from '../token-refresher';
+import { TokenRevoker } from '../token-revoker';
 import { generateCodeChallenge, generateCodeVerifier } from './pkce';
 
 /**
@@ -29,6 +30,7 @@ const EXPECTED_CALLBACK_PATHNAME = `/api/devices/${GOOGLE_HEALTH_CALLBACK_PATH}`
 
 const AUTH_URI = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_URI = 'https://oauth2.googleapis.com/token';
+const REVOKE_URI = 'https://oauth2.googleapis.com/revoke';
 
 /** Os três escopos concedidos no console — e os únicos pedidos. */
 export const GOOGLE_HEALTH_SCOPES = [
@@ -68,13 +70,14 @@ export interface GoogleHealthTokens {
 }
 
 /**
- * OAuth do Google Health API — autorizar, trocar o code por token e renovar.
+ * OAuth do Google Health API — autorizar, trocar o code por token, renovar e
+ * revogar.
  *
  * Fase 3 entrega conexão SEM sincronização: nada aqui busca dado de saúde. O
  * fetch e a ingestão dependem do webhook, que é da Fase 4.
  */
 @Injectable()
-export class GoogleHealthOAuthService implements TokenRefresher {
+export class GoogleHealthOAuthService implements TokenRefresher, TokenRevoker {
   private readonly logger = new Logger(GoogleHealthOAuthService.name);
 
   private readonly clientId: string | undefined;
@@ -248,6 +251,33 @@ export class GoogleHealthOAuthService implements TokenRefresher {
       refresh_token: raw.refresh_token,
       refresh_token_expires_in: raw.refresh_token_expires_in,
     };
+  }
+
+  /**
+   * Revoga o grant no Google — é o `TokenRevoker` que o `DevicesService` chama
+   * ao desconectar (Mina 22). Revogar o refresh token derruba o grant inteiro,
+   * access token incluído: *"Revocation removes all OAuth 2.0 scopes previously
+   * granted to a project"*.
+   *
+   * NÃO exige a configuração do app: o endpoint de revogação só pede o token.
+   * Um ambiente com as variáveis faltando ainda precisa conseguir revogar.
+   *
+   * Lança se o Google recusar. Em `disconnectDevice` isso vira log, não
+   * bloqueio — o usuário pediu para desconectar.
+   */
+  async revokeToken(token: string): Promise<void> {
+    const response = await fetch(REVOKE_URI, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token }).toString(),
+    });
+
+    if (!response.ok) {
+      const oauthError = await this.readOAuthError(response);
+      throw new Error(
+        `Google Health revoke failed: ${response.status} ${oauthError.code}`,
+      );
+    }
   }
 
   /**
