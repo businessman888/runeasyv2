@@ -101,6 +101,35 @@ pode quebrar um start que hoje funciona.
 
 ---
 
+## 2b. ⚠️ O `.env` local aponta para PRODUÇÃO, não para staging
+
+Medido em 2026-09-16, e contraria o que este projeto vinha afirmando:
+
+```
+SUPABASE_URL          -> ndlsxgsccyjspbhzccyp   (PRODUÇÃO)
+SUPABASE_URL_STAGING  -> gcaozgnevvmnlxnkfthh   (staging, só para scripts de QA)
+```
+
+A documentação e as regras de trabalho diziam "backend local aponta para o
+Supabase de staging", e daí saía o racional da trava de horário dos crons. A
+premissa está errada, e **o risco real é maior do que o documentado**: um
+backend local com crons ligados dispara retrospectiva com IA paga e push
+**para usuários reais em produção**, não para staging.
+
+Consequências práticas:
+
+- o kill-switch `CRONS_ENABLED` deixa de ser conveniência e vira proteção de
+  produção. O default fora de `NODE_ENV=production` é o que segura isso;
+- **todo script que sobe o contexto da aplicação precisa dizer o alvo**. Os
+  `gh:*` recusam rodar sem `--env`, e `--env production` ainda exige
+  `--yes-production`. Ver `backend/scripts/gh-env.ts`;
+- rodar qualquer coisa contra staging da máquina local exige
+  `SUPABASE_SERVICE_ROLE_KEY_STAGING` no `.env` — a anon key esbarra na RLS e
+  faria o script ler tabela vazia achando que não há nada a fazer, que é o
+  pior modo de falha possível.
+
+---
+
 ## 3. Crons
 
 `CRONS_ENABLED` é o kill-switch dos cinco `@Cron` do app. Definida, manda

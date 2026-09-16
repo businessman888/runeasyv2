@@ -1,7 +1,7 @@
 /**
  * Registra o subscriber do projeto na Google Health API. Uma vez por ambiente.
  *
- *   npm run gh:register-subscriber
+ *   npm run gh:register-subscriber -- --env staging
  *
  * ── O QUE ACONTECE QUANDO VOCÊ RODA ──────────────────────────────────────────
  *
@@ -34,6 +34,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
 import { GoogleHealthSubscriptionsService } from '../src/modules/devices/providers/google-health-subscriptions.service';
 import { cronsDecision } from '../src/common/config/crons-enabled';
+import { printGhEnv, resolveGhEnv } from './gh-env';
 
 /** Mensagem de erro a partir de `unknown`, sem cair na stringificação padrão de Object. */
 function describeError(error: unknown): string {
@@ -45,6 +46,11 @@ function describeError(error: unknown): string {
 async function main(): Promise<void> {
   // O `.env` local aponta para o Supabase de STAGING. Subir o contexto do Nest
   // com os `@Cron` ligados faria este script disparar IA paga e push real.
+  // O ALVO PRIMEIRO, antes de subir qualquer coisa: o SUPABASE_URL do .env
+  // local aponta para PRODUÇÃO (medido). Ver `gh-env.ts`.
+  const alvo = resolveGhEnv(process.argv);
+  printGhEnv(alvo);
+
   const crons = cronsDecision();
   if (crons.enabled) {
     console.error(
