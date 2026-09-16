@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { DevicesController } from './devices.controller';
 import { OAuthController } from './oauth.controller';
+import { GoogleHealthWebhookController } from './google-health-webhook.controller';
 import { DevicesService } from './devices.service';
 import { ActivitySyncService } from './activity-sync.service';
 import { ActivitySyncProcessor } from './activity-sync.processor';
@@ -12,6 +13,12 @@ import { PolarOAuthService } from './providers/polar-oauth.service';
 import { GoogleHealthOAuthService } from './providers/google-health-oauth.service';
 import { AppleHealthNormalizer } from './providers/apple-health.normalizer';
 import { HealthConnectNormalizer } from './providers/health-connect.normalizer';
+import {
+  GOOGLE_HEALTH_KEYSET_FETCHER,
+  GoogleHealthSignatureVerifier,
+  defaultGoogleHealthKeysetFetcher,
+} from './providers/google-health-signature.verifier';
+import { GOOGLE_HEALTH_SYNC_QUEUE } from './providers/google-health-webhook.types';
 import { TrainingModule } from '../training/training.module';
 import { SubscriptionModule } from '../subscription/subscription.module';
 
@@ -25,10 +32,23 @@ import { SubscriptionModule } from '../subscription/subscription.module';
 @Module({
   imports: [
     BullModule.registerQueue({ name: 'activity-sync-queue' }),
+    // Fila do Google Health, separada da `activity-sync-queue` de propósito: o
+    // `ActivitySyncProcessor` ainda despacha por job name de Fitbit/Polar, e
+    // uma fila própria é revertível sozinha.
+    //
+    // O PRODUTOR é o webhook (Commit B); o CONSUMIDOR chega no Commit D. Entre
+    // um deploy e outro os jobs ficam ESPERANDO na fila — é o comportamento
+    // desejado: descartar seria perder a notificação, e o Google só retém 7
+    // dias.
+    BullModule.registerQueue({ name: GOOGLE_HEALTH_SYNC_QUEUE }),
     forwardRef(() => TrainingModule),
     forwardRef(() => SubscriptionModule),
   ],
-  controllers: [DevicesController, OAuthController],
+  controllers: [
+    DevicesController,
+    OAuthController,
+    GoogleHealthWebhookController,
+  ],
   providers: [
     DevicesService,
     ActivitySyncService,
@@ -40,6 +60,13 @@ import { SubscriptionModule } from '../subscription/subscription.module';
     GoogleHealthOAuthService,
     AppleHealthNormalizer,
     HealthConnectNormalizer,
+    GoogleHealthSignatureVerifier,
+    // O fetcher do keyset entra por token para que o teste injete um par de
+    // chaves local e a suíte de assinatura rode sem rede.
+    {
+      provide: GOOGLE_HEALTH_KEYSET_FETCHER,
+      useValue: defaultGoogleHealthKeysetFetcher,
+    },
   ],
   exports: [DevicesService, ActivitySyncService, TokenRefreshService],
 })

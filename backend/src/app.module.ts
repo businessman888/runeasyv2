@@ -3,10 +3,11 @@ import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { SupabaseAuthGuard } from './common/guards/supabase-auth.guard';
+import { WebhookAwareThrottlerGuard } from './common/guards/webhook-aware-throttler.guard';
 import { cronsDecision } from './common/config/crons-enabled';
 
 // Database
@@ -167,9 +168,15 @@ import { RacesModule } from './modules/races';
   providers: [
     AppService,
     // Rate limiting runs first so abusive traffic is rejected before auth.
+    //
+    // A subclasse existe por causa de UMA rota: o webhook da Google Health é
+    // `@Public()` e precisa que o backlog de 7 dias do Google entre sem levar
+    // 429 — mas sem abrir mão do teto contra quem NÃO apresenta a credencial.
+    // Fora dessa rota o comportamento é o da classe base. O racional está em
+    // `common/guards/webhook-aware-throttler.guard.ts`.
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: WebhookAwareThrottlerGuard,
     },
     // Global authentication: every route requires a valid Supabase Bearer
     // token unless explicitly marked @Public(). Derives request.user from the
