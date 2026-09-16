@@ -13,6 +13,9 @@ import { PolarOAuthService } from './providers/polar-oauth.service';
 import { GoogleHealthOAuthService } from './providers/google-health-oauth.service';
 import { AppleHealthNormalizer } from './providers/apple-health.normalizer';
 import { HealthConnectNormalizer } from './providers/health-connect.normalizer';
+import { GoogleHealthApiClient } from './providers/google-health-api.client';
+import { GoogleHealthNormalizer } from './providers/google-health.normalizer';
+import { GoogleHealthSyncProcessor } from './google-health-sync.processor';
 import {
   GOOGLE_HEALTH_KEYSET_FETCHER,
   GoogleHealthSignatureVerifier,
@@ -36,10 +39,10 @@ import { SubscriptionModule } from '../subscription/subscription.module';
     // `ActivitySyncProcessor` ainda despacha por job name de Fitbit/Polar, e
     // uma fila própria é revertível sozinha.
     //
-    // O PRODUTOR é o webhook (Commit B); o CONSUMIDOR chega no Commit D. Entre
-    // um deploy e outro os jobs ficam ESPERANDO na fila — é o comportamento
-    // desejado: descartar seria perder a notificação, e o Google só retém 7
-    // dias.
+    // O PRODUTOR é o webhook (Commit B); o CONSUMIDOR é o
+    // `GoogleHealthSyncProcessor` (Commit D). O backlog que se acumulou entre
+    // os dois deploys é drenado assim que este processor sobe — nada foi
+    // descartado, que era o objetivo.
     BullModule.registerQueue({ name: GOOGLE_HEALTH_SYNC_QUEUE }),
     forwardRef(() => TrainingModule),
     forwardRef(() => SubscriptionModule),
@@ -60,6 +63,9 @@ import { SubscriptionModule } from '../subscription/subscription.module';
     GoogleHealthOAuthService,
     AppleHealthNormalizer,
     HealthConnectNormalizer,
+    GoogleHealthApiClient,
+    GoogleHealthNormalizer,
+    GoogleHealthSyncProcessor,
     GoogleHealthSignatureVerifier,
     // O fetcher do keyset entra por token para que o teste injete um par de
     // chaves local e a suíte de assinatura rode sem rede.

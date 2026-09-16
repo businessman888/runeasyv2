@@ -118,10 +118,70 @@ export function selectReconciliationCandidate(
   return scored[0].candidate;
 }
 
-// Two device-local sources today; the cross-provider dedup query skips both
-// of them so a user with iPhone + Android wearable in parallel doesn't dup.
-const DEVICE_LOCAL_SOURCES = ['apple_health', 'health_connect'] as const;
-type DeviceLocalSource = (typeof DEVICE_LOCAL_SOURCES)[number];
+/**
+ * As fontes cujo dado é extraído fora do nosso servidor e chega já pronto:
+ * HealthKit (iOS), Health Connect (Android) e, desde a Fase 4, a nuvem do
+ * Google Health.
+ *
+ * ── ISTO É SÓ O DOMÍNIO DO TIPO ──────────────────────────────────────────────
+ *
+ * Até a Fase 4 esta constante servia a DOIS propósitos ao mesmo tempo: o
+ * domínio de `DeviceLocalSource` **e** o conjunto excluído do dedup
+ * cross-provider. Os dois precisaram divergir — ver
+ * `CROSS_PROVIDER_EXCLUDED_SOURCES` logo abaixo.
+ */
+export const DEVICE_LOCAL_SOURCES = [
+  'apple_health',
+  'health_connect',
+  'google_health',
+] as const;
+export type DeviceLocalSource = (typeof DEVICE_LOCAL_SOURCES)[number];
+
+/**
+ * Quais fontes cada ingestão device-local IGNORA no dedup cross-provider.
+ *
+ * ── POR QUE UM MAPA, E NÃO UM CONJUNTO GLOBAL ────────────────────────────────
+ *
+ * Com um conjunto único, toda fonte device-local excluía todas as outras. Isso
+ * torna IMPOSSÍVEL o gate da Fase 4: "uma corrida do Google Health não duplica
+ * com a do Health Connect no mesmo Android". Os dois caminhos existem de
+ * verdade no mesmo aparelho — o app do Google Health publica na nuvem e o
+ * relógio publica no Health Connect — e, se cada um se exclui do candidato do
+ * outro, a mesma corrida entra duas vezes: duas activities, dois ganhos de XP,
+ * duas vezes na carga da R.1.
+ *
+ * Com o mapa, `google_health` e `health_connect` são candidatos UM DO OUTRO:
+ * quem chegar primeiro vence, e o segundo é recusado como
+ * `skipped_crossprovider` — **simetricamente, nos dois sentidos**. A simetria é
+ * travada por teste, porque uma entrada assimétrica não quebra nada
+ * visivelmente: ela só deixa a duplicata passar quando a ordem de chegada é
+ * uma, e não a outra.
+ *
+ * `apple_health` e `health_connect` mantêm o comportamento que já tinham entre
+ * si (mutuamente excluídos): iPhone e Android em paralelo é raro, o dedup
+ * temporal ali sempre foi conservador, e a Fase 4 não é hora de estrear
+ * comportamento numa dupla que ninguém pediu.
+ *
+ * Toda fonte exclui A SI MESMA: a re-sincronização do mesmo dataPoint já é
+ * resolvida pela idempotência por `external_id` (passo 1), que é exata.
+ */
+export const CROSS_PROVIDER_EXCLUDED_SOURCES: Readonly<
+  Record<DeviceLocalSource, readonly DeviceLocalSource[]>
+> = {
+  // iPhone: ignora as duas fontes Android — comportamento de antes da Fase 4.
+  apple_health: ['apple_health', 'health_connect', 'google_health'],
+  // Android local: o Google Health É candidato, de propósito.
+  health_connect: ['health_connect', 'apple_health'],
+  // Nuvem do Google: o Health Connect É candidato, de propósito.
+  google_health: ['google_health', 'apple_health'],
+};
+
+/** Acesso ao mapa acima — o ponto único que o teste de simetria exercita. */
+export function crossProviderExcludedSources(
+  source: DeviceLocalSource,
+): readonly DeviceLocalSource[] {
+  return CROSS_PROVIDER_EXCLUDED_SOURCES[source];
+}
 
 @Injectable()
 export class ActivitySyncService {
@@ -292,9 +352,9 @@ export class ActivitySyncService {
     }
 
     // 2. Cross-provider temporal/distance dedup (±5 min, ±10% distance).
-    //    Excludes other device-local sources too — Apple Health on iOS plus
-    //    Health Connect on a paired Android (rare but possible) would
-    //    otherwise duplicate.
+    //    Quais fontes device-local participam depende de QUEM está ingerindo:
+    //    a lista sai de `CROSS_PROVIDER_EXCLUDED_SOURCES`, não de um conjunto
+    //    global.
     const startTime = new Date(activity.start_date);
     const crossWindowStart = new Date(
       startTime.getTime() - CROSS_PROVIDER_WINDOW_MINUTES * 60 * 1000,
@@ -312,10 +372,11 @@ export class ActivitySyncService {
       .gte('start_date', crossWindowStart.toISOString())
       .lte('start_date', crossWindowEnd.toISOString());
 
-    // Exclude every device-local source from cross-provider matching — they
-    // can't be authoritative for each other; the dedup above (step 1) handles
-    // re-sync of the same physical run.
-    for (const localSource of DEVICE_LOCAL_SOURCES) {
+    // Exclusão POR FONTE, não global — ver `CROSS_PROVIDER_EXCLUDED_SOURCES`.
+    // O que sobra fora desta lista É candidato: é assim que uma corrida do
+    // Google Health encontra a mesma corrida vinda do Health Connect (e
+    // vice-versa) e recusa a segunda.
+    for (const localSource of crossProviderExcludedSources(source)) {
       crossProviderQuery = crossProviderQuery.neq('source', localSource);
     }
 
@@ -516,7 +577,7 @@ export class ActivitySyncService {
   /**
    * Convert a DeviceLocalActivity into the CreateWorkoutTrackingDto shape
    * that TrainingService.completeWorkout expects. The DTOs accept the source
-   * union (apple_health, health_connect) after the change in this PR.
+   * union (apple_health, health_connect, google_health).
    */
   private toTrackingPayload(
     activity: DeviceLocalActivity,

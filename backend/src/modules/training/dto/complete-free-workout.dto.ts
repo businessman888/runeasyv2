@@ -45,6 +45,10 @@ export class CompleteFreeWorkoutDto {
    *  'apple_health'   — corrida ingerida do HealthKit (iOS) via /devices/apple-health/sync.
    *  'health_connect' — corrida ingerida do Google Health Connect (Android) via
    *                     /devices/health-connect/sync (Galaxy Watch, Samsung Health, etc.).
+   *  'google_health'  — corrida ingerida da NUVEM do Google Health (Google Health
+   *                     API), pelo webhook + fetch do servidor. Caminho distinto
+   *                     do 'health_connect' local, e podem coexistir no mesmo
+   *                     Android (ver CROSS_PROVIDER_EXCLUDED_SOURCES).
    */
   @IsOptional()
   @IsIn([
@@ -53,13 +57,15 @@ export class CompleteFreeWorkoutDto {
     'garmin_watch',
     'apple_health',
     'health_connect',
+    'google_health',
   ])
   source?:
     | 'phone'
     | 'apple_watch'
     | 'garmin_watch'
     | 'apple_health'
-    | 'health_connect';
+    | 'health_connect'
+    | 'google_health';
 
   /** Identificador externo (ex.: HKWorkout UUID, Garmin activity id) para dedup cross-source. */
   @IsOptional()

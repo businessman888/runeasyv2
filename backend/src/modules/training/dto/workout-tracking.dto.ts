@@ -57,6 +57,11 @@ export class CreateWorkoutTrackingDto {
    *                    Pode ter vindo originalmente do Apple Watch, Nike Run Club, Strava, etc.
    * 'health_connect' — corrida ingerida do Google Health Connect (Android) via
    *                    /devices/health-connect/sync. Galaxy Watch publica aqui via Samsung Health.
+   * 'google_health'  — corrida ingerida da NUVEM do Google Health (Google Health
+   *                    API), pelo webhook + fetch do servidor. Não confundir com
+   *                    'health_connect', que é o armazenamento local do Android:
+   *                    são caminhos diferentes e podem coexistir no mesmo
+   *                    aparelho (ver CROSS_PROVIDER_EXCLUDED_SOURCES).
    */
   @IsOptional()
   @IsIn([
@@ -65,13 +70,15 @@ export class CreateWorkoutTrackingDto {
     'garmin_watch',
     'apple_health',
     'health_connect',
+    'google_health',
   ])
   source?:
     | 'phone'
     | 'apple_watch'
     | 'garmin_watch'
     | 'apple_health'
-    | 'health_connect';
+    | 'health_connect'
+    | 'google_health';
 
   /**
    * Identificador externo da corrida (ex.: HKWorkout UUID, Garmin activity id

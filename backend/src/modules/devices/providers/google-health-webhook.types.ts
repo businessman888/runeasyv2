@@ -132,3 +132,53 @@ export interface GoogleHealthSyncJobData {
   /** Quando NÓS recebemos (ISO). A janela do dado é `notification.intervals`. */
   receivedAt: string;
 }
+
+/**
+ * Retroativo — janela larga pedida por um humano ou por um script, NUNCA pelo
+ * webhook.
+ *
+ * ── POR QUE É UM JOB SEPARADO, E NÃO "a mesma coisa com janela maior" ────────
+ *
+ * O caminho incremental é uma notificação, uma janela de minutos, uma ou duas
+ * páginas. O retroativo é 90 dias × N usuários. Misturar os dois faz um
+ * retroativo em massa monopolizar o mesmo limiter que serve as corridas de
+ * hoje: quem acabou de correr esperaria a fila de retroativo esvaziar.
+ *
+ * O risco aqui NÃO é a quota do Google (90 dias ≈ 94 requisições ≈ 38 s a 2,5
+ * QPS por usuário). É **muitos usuários voltando ao mesmo tempo** contra o
+ * BullMQ e o banco — a forma exata do incidente que gerou 8,27 M de linhas e
+ * 2,23 GB neste projeto.
+ *
+ * Nenhum produtor chama isto ainda: o script do Commit C e a Fase 5 são os
+ * chamadores previstos. O consumidor existe antes do produtor de propósito —
+ * é o inverso do que aconteceu com esta fila no Commit B, e igualmente
+ * deliberado.
+ */
+export const GOOGLE_HEALTH_JOB_BACKFILL = 'backfill';
+
+export interface GoogleHealthBackfillJobData {
+  /** `user_id` do RunEasy. */
+  userId: string;
+  /** Início inclusivo da janela (RFC3339 com `Z`). */
+  startTime: string;
+  /** Fim exclusivo (RFC3339 com `Z`). */
+  endTime: string;
+}
+
+/**
+ * Override de `attempts`/`backoff` para o `.add()` do retroativo.
+ *
+ * O default GLOBAL (`app.module.ts:59-64`) é `attempts: 3` com backoff
+ * exponencial de 5 s: 5 s, 10 s, 20 s. **Isso não cobre rate limit.** Um `429`
+ * do Google não passa em 35 segundos; as três tentativas queimam contra a
+ * mesma parede e o job morre com a janela inteira por sincronizar — e o
+ * retroativo, ao contrário do incremental, não tem uma reentrega do Google
+ * para salvá-lo depois.
+ *
+ * 5 tentativas a partir de 60 s dão ~16 minutos de janela, que é a ordem de
+ * grandeza de um reset de quota por minuto com folga.
+ */
+export const GOOGLE_HEALTH_BACKFILL_JOB_OPTIONS = {
+  attempts: 5,
+  backoff: { type: 'exponential' as const, delay: 60_000 },
+} as const;
