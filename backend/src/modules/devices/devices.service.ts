@@ -10,6 +10,8 @@ import { ConnectDeviceDto } from './dto/connect-device.dto';
 import { VALID_PROVIDERS, DeviceProvider } from './device-providers';
 import { GoogleHealthOAuthService } from './providers/google-health-oauth.service';
 import { TokenRevoker } from './token-revoker';
+import { SubscriptionManager } from './subscription-manager';
+import { GoogleHealthSubscriptionsService } from './providers/google-health-subscriptions.service';
 
 @Injectable()
 export class DevicesService {
@@ -23,13 +25,29 @@ export class DevicesService {
    */
   private readonly revokers: ReadonlyMap<DeviceProvider, TokenRevoker>;
 
+  /**
+   * Quem sabe remover a subscription do provedor. Mesmo desenho do mapa acima.
+   *
+   * Roda ANTES da revogação: revogar primeiro derrubaria o grant, e a remoção
+   * da subscription pode precisar da credencial. Só o Google Health tem
+   * subscription — os demais provedores nem sabem o que é isso.
+   */
+  private readonly subscriptionManagers: ReadonlyMap<
+    DeviceProvider,
+    SubscriptionManager
+  >;
+
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly encryptionService: EncryptionService,
     googleHealthOAuth: GoogleHealthOAuthService,
+    googleHealthSubscriptions: GoogleHealthSubscriptionsService,
   ) {
     this.revokers = new Map<DeviceProvider, TokenRevoker>([
       ['google_health', googleHealthOAuth],
+    ]);
+    this.subscriptionManagers = new Map<DeviceProvider, SubscriptionManager>([
+      ['google_health', googleHealthSubscriptions],
     ]);
   }
 
@@ -128,6 +146,16 @@ export class DevicesService {
   async disconnectDevice(userId: string, provider: string) {
     this.validateProvider(provider);
 
+    // Ordem importa: a subscription sai ANTES do grant ser revogado. Invertido,
+    // a remoção perderia a credencial e deixaria subscription órfã mandando
+    // notificação que o webhook não consegue mapear.
+    const subscriptions = this.subscriptionManagers.get(
+      provider as DeviceProvider,
+    );
+    if (subscriptions) {
+      await this.removeSubscriptionAtProvider(userId, provider, subscriptions);
+    }
+
     const revoker = this.revokers.get(provider as DeviceProvider);
     if (revoker) {
       await this.revokeAtProvider(userId, provider, revoker);
@@ -160,6 +188,28 @@ export class DevicesService {
    * só loga. A decisão sobre o 404 continua sendo do DELETE que vem depois,
    * como sempre foi.
    */
+  /**
+   * Best-effort, pela mesma razão que a revogação é: o usuário pediu para
+   * desconectar, e nenhuma falha de limpeza no provedor justifica recusar isso.
+   * A subscription órfã que sobrar é reconciliada por
+   * `npm run gh:backfill-subscriptions`.
+   */
+  private async removeSubscriptionAtProvider(
+    userId: string,
+    provider: string,
+    manager: SubscriptionManager,
+  ): Promise<void> {
+    try {
+      await manager.removeSubscriptionForUser(userId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Subscription de ${provider} não removida para ${userId} — ` +
+          `o disconnect segue: ${message}`,
+      );
+    }
+  }
+
   private async revokeAtProvider(
     userId: string,
     provider: string,

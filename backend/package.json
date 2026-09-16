@@ -26,6 +26,8 @@
     "qa:sim-revenuecat": "ts-node scripts/sim-revenuecat.ts",
     "qa:sim-revenuecat:staging": "ts-node scripts/sim-revenuecat.ts --env staging",
     "qa:sim-revenuecat:prod": "ts-node scripts/sim-revenuecat.ts --env production",
+    "gh:register-subscriber": "ts-node scripts/gh-register-subscriber.ts",
+    "gh:backfill-subscriptions": "ts-node scripts/gh-backfill-subscriptions.ts",
     "qa:sim-workouts": "ts-node scripts/sim-workouts.ts",
     "qa:sim-workouts:retro-1a": "ts-node scripts/sim-workouts.ts --env staging --completions 5 --free-runs 1 --free-run-km 8 --rpe --generate-retrospective",
     "qa:sim-workouts:week-2a": "ts-node scripts/sim-workouts.ts --env staging --week 2 --completions 3 --completion-ratio 1.0 --free-runs 1 --free-run-km 6 --rpe --generate-weekly-insight"
@@ -48,6 +50,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "compression": "^1.8.1",
+    "google-auth-library": "^9.15.1",
     "firebase-admin": "^13.6.0",
     "helmet": "^8.2.0",
     "ioredis": "^5.8.2",

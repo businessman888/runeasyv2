@@ -4,6 +4,7 @@ import { DevicesService } from './devices.service';
 import { SupabaseService } from '../../database';
 import { EncryptionService } from '../../common/encryption/encryption.service';
 import { GoogleHealthOAuthService } from './providers/google-health-oauth.service';
+import { GoogleHealthSubscriptionsService } from './providers/google-health-subscriptions.service';
 import { ConnectDeviceDto } from './dto/connect-device.dto';
 
 type Provider = ConnectDeviceDto['provider'];
@@ -91,14 +92,29 @@ const DELETED = { data: { id: 'device-1' }, error: null };
 describe('DevicesService', () => {
   let service: DevicesService;
   let from: jest.Mock<unknown, [string]>;
+  let subscriptions: {
+    removeSubscriptionForUser: jest.Mock<Promise<void>, [string]>;
+  };
+  /** Ordem real das chamadas — é o que o teste de sequência observa. */
+  let ordem: string[];
   let google: { revokeToken: jest.Mock<Promise<void>, [string]> };
 
   beforeEach(async () => {
+    ordem = [];
     from = jest.fn<unknown, [string]>();
     google = {
-      revokeToken: jest
+      revokeToken: jest.fn<Promise<void>, [string]>().mockImplementation(() => {
+        ordem.push('revoke');
+        return Promise.resolve();
+      }),
+    };
+    subscriptions = {
+      removeSubscriptionForUser: jest
         .fn<Promise<void>, [string]>()
-        .mockResolvedValue(undefined),
+        .mockImplementation(() => {
+          ordem.push('remove-subscription');
+          return Promise.resolve();
+        }),
     };
 
     const module = await Test.createTestingModule({
@@ -110,6 +126,10 @@ describe('DevicesService', () => {
           useValue: { encrypt: enc, decrypt: dec },
         },
         { provide: GoogleHealthOAuthService, useValue: google },
+        {
+          provide: GoogleHealthSubscriptionsService,
+          useValue: subscriptions,
+        },
       ],
     }).compile();
 
@@ -216,6 +236,51 @@ describe('DevicesService', () => {
       );
     });
 
+    it('google_health: remove a subscription ANTES de revogar o grant', async () => {
+      // A ordem não é estética. Revogar primeiro derrubaria a credencial que a
+      // remoção pode precisar, e deixaria subscription órfã mandando
+      // notificação que o webhook não consegue mapear de volta ao usuário.
+      from
+        .mockReturnValueOnce(
+          lookupChain({
+            access_token: enc('access'),
+            refresh_token: enc('refresh'),
+          }),
+        )
+        .mockReturnValueOnce(deleteChain(DELETED));
+
+      await service.disconnectDevice('user-1', 'google_health');
+
+      expect(subscriptions.removeSubscriptionForUser).toHaveBeenCalledWith(
+        'user-1',
+      );
+      expect(ordem).toEqual(['remove-subscription', 'revoke']);
+    });
+
+    it('falha ao remover a subscription NÃO impede a desconexão nem a revogação', async () => {
+      // Best-effort, pela mesma razão que a revogação é: o usuário pediu para
+      // desconectar. A órfã que sobrar é reconciliada pelo retroativo.
+      const del = deleteChain(DELETED);
+      from
+        .mockReturnValueOnce(
+          lookupChain({
+            access_token: enc('access'),
+            refresh_token: enc('refresh'),
+          }),
+        )
+        .mockReturnValueOnce(del);
+      subscriptions.removeSubscriptionForUser.mockRejectedValue(
+        new Error('Falha ao remover subscription (503): UNAVAILABLE'),
+      );
+
+      await expect(
+        service.disconnectDevice('user-1', 'google_health'),
+      ).resolves.toEqual({ success: true, provider: 'google_health' });
+
+      expect(google.revokeToken).toHaveBeenCalled();
+      expect(del.delete).toHaveBeenCalled();
+    });
+
     it('revogar falhando NÃO impede a desconexão local', async () => {
       const del = deleteChain(DELETED);
       from
@@ -261,6 +326,7 @@ describe('DevicesService', () => {
       await service.disconnectDevice('user-1', provider);
 
       expect(google.revokeToken).not.toHaveBeenCalled();
+      expect(subscriptions.removeSubscriptionForUser).not.toHaveBeenCalled();
       // Só o DELETE: nenhuma leitura extra para quem não tem revoker.
       expect(from).toHaveBeenCalledTimes(1);
     });

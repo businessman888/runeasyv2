@@ -20,6 +20,7 @@ import {
   GoogleHealthOAuthService,
   GOOGLE_HEALTH_CALLBACK_PATH,
 } from './providers/google-health-oauth.service';
+import { GoogleHealthSubscriptionsService } from './providers/google-health-subscriptions.service';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 
@@ -43,6 +44,7 @@ export class OAuthController {
     private readonly fitbitOAuth: FitbitOAuthService,
     private readonly polarOAuth: PolarOAuthService,
     private readonly googleHealthOAuth: GoogleHealthOAuthService,
+    private readonly googleHealthSubscriptions: GoogleHealthSubscriptionsService,
     @InjectQueue('activity-sync-queue') private readonly syncQueue: Queue,
   ) {}
 
@@ -117,6 +119,33 @@ export class OAuthController {
       });
 
       this.logger.log(`Google Health connected for user ${userId}`);
+
+      // A subscription é o que faz o Google nos avisar de treino novo. Ela é
+      // criada aqui, mas a sua falha NÃO derruba a conexão: o usuário já
+      // consentiu, e perder o consentimento por causa de uma chamada de
+      // subscription seria trocar um problema pequeno por um grande. O que
+      // sobra fica pendente (`subscription_id` NULL) e o retroativo
+      // `npm run gh:backfill-subscriptions` recupera.
+      try {
+        const outcome =
+          await this.googleHealthSubscriptions.createSubscriptionForUser(
+            userId,
+          );
+        if (!outcome.created) {
+          this.logger.warn(
+            `Google Health subscription pendente para ${userId}: ${outcome.reason ?? 'desconhecido'}`,
+          );
+        }
+      } catch (subscriptionError) {
+        const message =
+          subscriptionError instanceof Error
+            ? subscriptionError.message
+            : String(subscriptionError);
+        this.logger.error(
+          `Google Health subscription falhou para ${userId} — conexão mantida: ${message}`,
+        );
+      }
+
       return res.redirect(googleHealthReturnUrl(true));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
