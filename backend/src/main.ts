@@ -7,13 +7,26 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { BODY_SIZE_LIMIT } from './common/config/body-limit';
+import { cronsDecision } from './common/config/crons-enabled';
 
 async function bootstrap() {
+  const crons = cronsDecision();
+
   console.log('[Bootstrap] ========================================');
   console.log('[Bootstrap] Iniciando Bootstrap...');
   console.log('[Bootstrap] Timestamp:', new Date().toISOString());
   console.log('[Bootstrap] NODE_ENV:', process.env.NODE_ENV);
   console.log('[Bootstrap] PORT:', process.env.PORT);
+  // Estado dos @Cron neste processo, com a origem da decisão. É a única forma
+  // de saber, olhando o log, se este container agenda IA e push ou não.
+  console.log(
+    `[Bootstrap] CRONS: ${crons.enabled ? 'LIGADOS' : 'DESLIGADOS'} (${crons.reason})`,
+  );
+  // Medição deliberada: o serviço do Railway não tem start command no painel,
+  // então quem escolhe o entry point é o Railpack, a partir do
+  // `backend/package.json`. Qual script ele roda só se descobre aqui. Ver
+  // `DEPLOY.md`.
+  console.log('[Bootstrap] argv[1]:', process.argv[1]);
   console.log('[Bootstrap] ========================================');
 
   const logger = new Logger('Bootstrap');

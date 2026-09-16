@@ -7,6 +7,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { SupabaseAuthGuard } from './common/guards/supabase-auth.guard';
+import { cronsDecision } from './common/config/crons-enabled';
 
 // Database
 import { DatabaseModule } from './database';
@@ -114,7 +115,15 @@ import { RacesModule } from './modules/races';
     // para os seus `@Cron` funcionarem.
     //
     // `app.module.spec.ts` trava a reintrodução.
-    ScheduleModule.forRoot(),
+    //
+    // O spread condicional é o kill-switch: fora de produção (ou com
+    // `CRONS_ENABLED=false`) o módulo simplesmente não entra, e nenhum `@Cron`
+    // é registrado. Existe porque o `.env` local aponta para o Supabase de
+    // STAGING: um backend rodando na máquina de desenvolvimento disparava IA
+    // paga e push de verdade nos crons das 00:00, 04:00 e 07:00. O racional
+    // completo e o porquê de ler `process.env` em vez do `ConfigService` estão
+    // em `common/config/crons-enabled.ts`.
+    ...(cronsDecision().enabled ? [ScheduleModule.forRoot()] : []),
 
     // Global rate limiting: 100 requests / minute per IP (or per user where a
     // custom tracker overrides it). Auth and AI-generation endpoints apply
