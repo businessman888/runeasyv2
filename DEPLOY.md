@@ -69,24 +69,29 @@ mas nada no Railway os roda. Ficam no lugar porque `railway:start` encadeia em
 
 ### Entry point real
 
-Sem start command no painel, quem escolhe o comando de start é o **Railpack**, a
-partir de `backend/package.json`. Qual script ele escolhe (`start` ou
-`start:prod`) não estava provado.
-
-Por isso o boot imprime `process.argv[1]` (`backend/src/main.ts`). O valor
-medido no log de boot do staging responde a pergunta:
+**MEDIDO no log de boot do staging em 2026-09-16:**
 
 ```
-[Bootstrap] argv[1]: ___________________________  ← preencher com o log do staging
+[Bootstrap] argv[1]: /app/dist/src/main
 ```
 
-Leitura do resultado:
-- termina em `dist/src/main.js` → o Railpack roda `start:prod`;
-- aponta para `node_modules/@nestjs/cli` ou `nest` → roda `start` (`nest start`),
-  que recompila no boot.
+E a resposta não é nenhum dos dois candidatos. `start` é `nest start`, que daria
+o caminho do CLI do Nest; `start:prod` é `node dist/src/main.js`, que daria o
+caminho **com** a extensão. O que roda é `node dist/src/main`, sem `.js`.
 
-Enquanto essa linha estiver em branco, **não mude `"start"`** em
-`backend/package.json`: mudá-lo pode ser mudar o que a produção executa.
+**Conclusão: o Railpack não executa script nenhum do `package.json`.** Ele
+resolve o entry point sozinho, a partir do layout do `dist/`. Isso fecha o
+mistério de por que o antigo `start:prod` apontando para `node dist/main` — um
+arquivo que não existe desde março — nunca derrubou o deploy: ele nunca foi
+executado.
+
+Consequências práticas:
+
+- os scripts `start`, `start:prod`, `railway:build` e `railway:start` valem
+  **só para uso local**. Nenhum deles governa o que a produção roda;
+- o que governa é o **layout do `dist/`**. Por isso **não adicione `rootDir`**
+  ao `tsconfig`: a saída migraria de `dist/src/` para `dist/` e o Railpack
+  passaria a resolver outro caminho, sem aviso.
 
 O build gera `dist/src/main.js`, e não `dist/main.js`, porque o `tsconfig` não
 define `rootDir` e a pasta `scripts/` entra na compilação — o TypeScript então
@@ -102,16 +107,38 @@ pode quebrar um start que hoje funciona.
 (`true`/`1` liga, o resto desliga); ausente, liga apenas com
 `NODE_ENV=production`.
 
-O Railway seta `NODE_ENV=production` **nos dois ambientes**, então staging e
-produção continuam com cron sem precisar da variável. Desenvolvimento local fica
-sem, que é o ponto: o `.env` local aponta para o Supabase de staging, e antes
+⚠️ **O Railway NÃO seta `NODE_ENV=production` nos dois ambientes.** Medido em
+2026-09-16, depois de este documento ter afirmado o contrário a partir do *nome*
+da variável aparecer nas duas listas — e não do valor:
+
+| Ambiente | `NODE_ENV` | Como foi medido |
+|---|---|---|
+| staging | **`staging`** | `[Bootstrap] NODE_ENV:` no log de boot |
+| produção | `production` | sonda de CORS: o `main.ts` só recusa origem fora da lista quando é `production`, e a produção recusou |
+
+O primeiro deploy do kill-switch, por isso, **desligou os crons do staging** —
+inclusive o refresh de token a cada 10 min. O erro apareceu em 3 minutos porque
+o log de boot imprime o motivo da decisão; sem essa linha, teria aparecido como
+a ausência de uma notificação no dia seguinte.
+
+Daí a regra: **`CRONS_ENABLED` é setada explicitamente em todo ambiente que deve
+ter cron.** Staging já está. Produção ainda depende do default por `NODE_ENV`, e
+isso é frágil — quem mexer no `NODE_ENV` de lá desliga os crons sem perceber.
+
+🔴 **Passo obrigatório ao promover o Commit A para a `main`:** setar
+`CRONS_ENABLED=true` na produção **no mesmo movimento**. Não antes: a produção
+ainda não tem código que leia a variável, e setá-la agora custaria um restart de
+produção para um efeito nulo.
+
+Desenvolvimento local fica sem cron, que é o ponto: o `.env` local aponta para o Supabase de staging, e antes
 disso um backend rodando na máquina disparava IA paga e push real às 00:00
 (retrospectiva e insight semanal), 04:00 (lembrete) e 07:00 (readiness).
 
 O log de boot diz qual estado vigora e de onde veio a decisão:
 
 ```
-[Bootstrap] CRONS: LIGADOS (default por NODE_ENV="production")
+[Bootstrap] CRONS: LIGADOS (env explícita CRONS_ENABLED="true")
+[Bootstrap] CRONS: DESLIGADOS (default por NODE_ENV="staging")
 [Bootstrap] CRONS: DESLIGADOS (env explícita CRONS_ENABLED="false")
 ```
 
@@ -181,12 +208,16 @@ tem).
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ | ✅ | ✅ |
 | `SUPABASE_ANON_KEY` | ✅ | **?** | **?** |
 | `ANTHROPIC_API_KEY` | ✅ | ✅ | ✅ |
-| `NODE_ENV` | `development` | ✅ `production` | ✅ `production` |
+| `NODE_ENV` | `development` | ✅ **`staging`** (medido) | ✅ `production` (medido) |
 | `PORT` | 3000 | ✅ | ✅ |
 | `FRONTEND_URL` | ✅ | **?** | **?** |
 | `REDIS_URL` | fallback 127.0.0.1 | ✅ (serviço Redis) | ✅ (serviço Redis) |
 | `ENCRYPTION_KEY` | ✅ | ✅ **igual à local** (medido) | **?** |
-| `CRONS_ENABLED` | recomendado `false` | não setada (default liga) | não setada (default liga) |
+| `CRONS_ENABLED` | ausente ou `false` | ✅ **`true`** (obrigatória: `NODE_ENV` ali não é `production`) | ⬜ **setar `true` ao promover o Commit A** |
+| `GOOGLE_HEALTH_WEBHOOK_SECRET` | ✅ igual à do staging | ✅ setada 2026-09-16 | ⬜ Fase 5/6 |
+| `GOOGLE_HEALTH_SERVICE_ACCOUNT` | ⬜ Commit C | ⬜ **Commit C** | ⬜ Fase 5/6 |
+| `GOOGLE_HEALTH_PROJECT_ID` | ⬜ Commit C | ⬜ **Commit C** | ⬜ Fase 5/6 |
+| `GOOGLE_HEALTH_SUBSCRIBER_ID` | ⬜ Commit C | ⬜ **Commit C** | ⬜ Fase 5/6 |
 | `MAPBOX_ACCESS_TOKEN` | ✅ | **?** | **?** |
 | `REVENUECAT_WEBHOOK_SECRET` | ✅ | ✅ (próprio) | ✅ (próprio) |
 | `GOOGLE_HEALTH_CLIENT_ID` | ✅ | ✅ (medido) | ❌ (medido) |
