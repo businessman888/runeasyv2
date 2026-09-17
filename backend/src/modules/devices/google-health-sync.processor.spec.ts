@@ -572,8 +572,16 @@ describe('GoogleHealthSyncProcessor', () => {
       const [userId, window, maxPages] =
         apiClient.listAllExercise.mock.calls[0];
       expect(userId).toBe(USER_ID);
-      expect(window.startTime).toBe('2026-06-01T00:00:00.000Z');
       expect(maxPages).toBeGreaterThan(8);
+
+      // O retroativo recebe tempo FÍSICO e o filtro só aceita CIVIL. Passar o
+      // `Z` direto produziria `civil_start_time >= "…Z"` — tempo civil com
+      // fuso, contradição que o Google recusa com 400. Converte, e alarga um
+      // dia para cada lado porque o fuso de quem correu é desconhecido.
+      expect(window.startTime).toBe('2026-05-31T00:00:00');
+      expect(window.endTime).toBe('2026-09-02T00:00:00');
+      expect(window.startTime).not.toContain('Z');
+      expect(window.endTime).not.toContain('Z');
     });
   });
 

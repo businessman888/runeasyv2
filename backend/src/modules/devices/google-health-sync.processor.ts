@@ -225,10 +225,22 @@ export class GoogleHealthSyncProcessor extends WorkerHost {
 
   // ─── backfill ──────────────────────────────────────────────────────────────
 
+  /**
+   * O retroativo recebe a janela em tempo FÍSICO (RFC3339 com `Z`) e o filtro
+   * da API só aceita tempo CIVIL — a mesma armadilha que o caminho incremental
+   * já pagou. Passar o instante com `Z` direto produziria
+   * `civil_start_time >= "…Z"`, que é tempo civil com fuso: contradição que o
+   * Google recusa.
+   *
+   * Converte, e alarga um dia para cada lado: o fuso de quem correu é
+   * desconhecido e os offsets do mundo cabem em ±14 h. Buscar dataPoint a mais
+   * é barato — a idempotência por `external_id` é exata — enquanto uma janela
+   * curta perde a corrida em silêncio.
+   */
   private async handleBackfill(data: GoogleHealthBackfillJobData) {
     const window: GoogleHealthFetchWindow = {
-      startTime: data.startTime,
-      endTime: data.endTime,
+      startTime: this.shiftCivil(data.startTime, -CIVIL_SAFETY_PADDING_MS),
+      endTime: this.shiftCivil(data.endTime, CIVIL_SAFETY_PADDING_MS),
     };
     return this.ingestWindow(data.userId, window, BACKFILL_MAX_PAGES);
   }

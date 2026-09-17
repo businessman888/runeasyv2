@@ -27,6 +27,7 @@
     "qa:sim-revenuecat:staging": "ts-node scripts/sim-revenuecat.ts --env staging",
     "qa:sim-revenuecat:prod": "ts-node scripts/sim-revenuecat.ts --env production",
     "gh:register-subscriber": "ts-node scripts/gh-register-subscriber.ts",
+    "gh:sync-now": "ts-node scripts/gh-sync-now.ts",
     "gh:backfill-subscriptions": "ts-node scripts/gh-backfill-subscriptions.ts",
     "qa:sim-workouts": "ts-node scripts/sim-workouts.ts",
     "qa:sim-workouts:retro-1a": "ts-node scripts/sim-workouts.ts --env staging --completions 5 --free-runs 1 --free-run-km 8 --rpe --generate-retrospective",
