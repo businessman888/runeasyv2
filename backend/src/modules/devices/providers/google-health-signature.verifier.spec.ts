@@ -438,6 +438,55 @@ describe('GoogleHealthSignatureVerifier', () => {
     expect(result.ok).toBe(true);
   });
 
+  // ─── Enquadramento do header ──────────────────────────────────────────────
+
+  it('aceita header REPETIDO, que o Express junta com vírgula', async () => {
+    // A primeira notificação real do Google foi recusada com
+    // `bad_signature_length` sobre 1163 bytes de corpo. As cinco chaves do
+    // keyset dizem IEEE-P1363 (64 bytes), então o problema não era a chave: era
+    // o enquadramento. Header repetido decodifica como um fluxo só, de tamanho
+    // inesperado, e o primeiro byte continua sendo 0x01 — que é exatamente por
+    // que a checagem de versão passava antes de falhar no tamanho.
+    const assinatura = header(KEY_ID, sign(privateKey, BODY));
+
+    await expect(
+      verifier.verify(BODY, `${assinatura}, ${assinatura}`),
+    ).resolves.toEqual({ ok: true, keyId: KEY_ID });
+  });
+
+  it('aceita quando só o SEGUNDO valor do header repetido é o válido', async () => {
+    const outra = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    const forjada = header(KEY_ID, sign(outra.privateKey, BODY));
+    const boa = header(KEY_ID, sign(privateKey, BODY));
+
+    await expect(verifier.verify(BODY, `${forjada}, ${boa}`)).resolves.toEqual({
+      ok: true,
+      keyId: KEY_ID,
+    });
+  });
+
+  it('aceita assinatura em DER, e não só IEEE-P1363', async () => {
+    // O keyset diz IEEE-P1363, mas aceitar os dois enquadramentos não
+    // enfraquece nada: a chave certa sobre o corpo cru continua exigida. O que
+    // muda é só como r e s vêm embalados.
+    const der = cryptoSign('sha256', BODY, { key: privateKey });
+    expect(der.length).toBeGreaterThanOrEqual(68);
+
+    await expect(verifier.verify(BODY, header(KEY_ID, der))).resolves.toEqual({
+      ok: true,
+      keyId: KEY_ID,
+    });
+  });
+
+  it('corpo adulterado continua recusado, com header repetido', async () => {
+    const assinatura = header(KEY_ID, sign(privateKey, BODY));
+    const outro = Buffer.from('{"data":{"operation":"DELETE"}}');
+
+    await expect(
+      verifier.verify(outro, `${assinatura}, ${assinatura}`),
+    ).resolves.toMatchObject({ ok: false, reason: 'invalid_signature' });
+  });
+
   // ─── Cache, single-flight e teto de refresh ────────────────────────────────
 
   it('não refaz fetch do keyset dentro do TTL', async () => {

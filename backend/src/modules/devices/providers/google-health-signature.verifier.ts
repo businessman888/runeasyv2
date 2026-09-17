@@ -133,6 +133,29 @@ export const defaultGoogleHealthKeysetFetcher: GoogleHealthKeysetFetcher =
     return (await response.json()) as TinkKeysetJson;
   };
 
+/**
+ * Faixa plausível de uma assinatura ECDSA P-256 em DER.
+ *
+ * Um DER de P-256 é `SEQUENCE { INTEGER r, INTEGER s }`: 6 bytes de estrutura
+ * mais r e s de até 33 bytes cada (o byte de sinal entra quando o valor tem o
+ * bit alto ligado), o que dá de 68 a 72. A faixa existe para que 63 ou 65 bytes
+ * continuem sendo recusa BARATA, e não uma chamada de OpenSSL condenada.
+ */
+const DER_MIN_LENGTH = 68;
+const DER_MAX_LENGTH = 72;
+
+function encodingFor(length: number): 'ieee-p1363' | 'der' | null {
+  if (length === P256_SIGNATURE_LENGTH) return 'ieee-p1363';
+  if (length >= DER_MIN_LENGTH && length <= DER_MAX_LENGTH) return 'der';
+  return null;
+}
+
+interface SignatureCandidate {
+  keyId: number;
+  signature: Buffer;
+  encoding: 'ieee-p1363' | 'der';
+}
+
 // ─── Resultado ───────────────────────────────────────────────────────────────
 
 /**
@@ -164,9 +187,10 @@ export interface SignatureCheck {
 }
 
 interface ParsedSignatureHeader {
-  keyId?: number;
-  signature?: Buffer;
+  candidates?: SignatureCandidate[];
   reason?: SignatureRejection;
+  /** Comprimentos decodificados, para o log distinguir as causas de recusa. */
+  observados?: number[];
 }
 
 @Injectable()
@@ -201,10 +225,17 @@ export class GoogleHealthSignatureVerifier {
 
     const parsed = this.parseHeader(header);
     if (parsed.reason) {
+      if (parsed.observados?.length) {
+        this.logger.warn(
+          `Assinatura recusada no enquadramento: ${parsed.candidates?.length ?? 0} ` +
+            `candidato(s) utilizável(eis), bytes decodificados=[${parsed.observados.join(',')}] ` +
+            `(64 = IEEE-P1363, 70-72 = DER, muito maior = header repetido)`,
+        );
+      }
       return { ok: false, reason: parsed.reason };
     }
-    const keyId = parsed.keyId;
-    const signature = parsed.signature;
+    const candidates = parsed.candidates;
+    const keyId = candidates[0].keyId;
 
     let keys: Map<number, KeyObject>;
     try {
@@ -216,40 +247,56 @@ export class GoogleHealthSignatureVerifier {
       return { ok: false, reason: 'keyset_unavailable', keyId };
     }
 
-    let key = keys.get(keyId);
-    if (!key) {
-      // Pode ser rotação: tenta UMA vez por janela, e só então recusa.
-      const refreshed = await this.forceRefreshOnce();
-      key = refreshed?.get(keyId);
+    let conhecida = false;
+    for (const candidate of candidates) {
+      let key = keys.get(candidate.keyId);
+      if (!key) {
+        // Pode ser rotação: tenta UMA vez por janela, e só então recusa.
+        const refreshed = await this.forceRefreshOnce();
+        key = refreshed?.get(candidate.keyId);
+        if (refreshed) keys = refreshed;
+      }
+      if (!key) continue;
+      conhecida = true;
+
+      try {
+        // `dsaEncoding` vem do candidato: o keyset diz IEEE-P1363 (64 bytes),
+        // e o DER só é tentado quando o comprimento indica DER. Aceitar os dois
+        // enquadramentos não enfraquece nada — a chave certa sobre o corpo cru
+        // continua sendo exigida.
+        if (
+          cryptoVerify(
+            'sha256',
+            rawBody,
+            { key, dsaEncoding: candidate.encoding },
+            candidate.signature,
+          )
+        ) {
+          return { ok: true, keyId: candidate.keyId };
+        }
+      } catch (error) {
+        // Assinatura malformada a ponto de o OpenSSL reclamar é recusa, não 500.
+        this.logger.warn(
+          `Falha ao verificar candidato (keyId=${candidate.keyId}, ` +
+            `${candidate.signature.length} bytes, ${candidate.encoding}): ${describe(error)}`,
+        );
+      }
     }
-    if (!key) {
+
+    if (!conhecida) {
       this.logger.error(
-        `Keyset do Google Health não contém a chave keyId=${keyId} nem após ` +
-          `refresh forçado — rotação não acompanhada, não assinatura forjada`,
+        `Keyset do Google Health não contém nenhuma das chaves ` +
+          `[${candidates.map((c) => c.keyId).join(',')}] nem após refresh ` +
+          `forçado — rotação não acompanhada, não assinatura forjada`,
       );
       return { ok: false, reason: 'unknown_key_id', keyId };
     }
 
-    let valid = false;
-    try {
-      // `dsaEncoding: 'ieee-p1363'` é OBRIGATÓRIO — ver o cabeçalho do arquivo.
-      valid = cryptoVerify(
-        'sha256',
-        rawBody,
-        { key, dsaEncoding: 'ieee-p1363' },
-        signature,
-      );
-    } catch (error) {
-      // Assinatura malformada a ponto de o OpenSSL reclamar é recusa, não 500.
-      this.logger.warn(
-        `Falha ao verificar assinatura (keyId=${keyId}): ${describe(error)}`,
-      );
-      return { ok: false, reason: 'invalid_signature', keyId };
-    }
-
-    return valid
-      ? { ok: true, keyId }
-      : { ok: false, reason: 'invalid_signature', keyId };
+    this.logger.warn(
+      `Assinatura inválida: ${candidates.length} candidato(s) testado(s), ` +
+        `tamanhos=[${candidates.map((c) => `${c.signature.length}/${c.encoding}`).join(',')}]`,
+    );
+    return { ok: false, reason: 'invalid_signature', keyId };
   }
 
   /**
@@ -258,29 +305,88 @@ export class GoogleHealthSignatureVerifier {
    * Cada checagem é uma recusa explícita, nunca uma exceção: header truncado é
    * entrada hostil corriqueira, não bug.
    */
+  /**
+   * Candidatos de assinatura a partir do header.
+   *
+   * ── POR QUE MAIS DE UM CANDIDATO ────────────────────────────────────────
+   *
+   * A primeira notificação REAL do Google foi recusada com
+   * `bad_signature_length` sobre um corpo de 1163 bytes. As cinco chaves do
+   * keyset dizem `IEEE_P1363`, ou seja 64 bytes — então o problema não é a
+   * chave, é o enquadramento do header.
+   *
+   * Duas causas cabem no sintoma, e as duas são reais:
+   *
+   *  1. **Header repetido.** O Express junta valores repetidos do mesmo header
+   *     com `", "`. `Buffer.from(_, 'base64')` ignora vírgula e espaço em vez
+   *     de lançar, então duas assinaturas viram um fluxo só, de comprimento
+   *     inesperado — e o primeiro byte continua sendo `0x01`, que é justamente
+   *     por que a checagem de versão passou antes de falhar no tamanho.
+   *  2. **Assinatura DER.** 70 a 72 bytes em vez de 64.
+   *
+   * Em vez de adivinhar, cada valor vira um candidato e cada candidato é
+   * testado. Não enfraquece nada: a verificação continua exigindo a chave
+   * certa sobre o corpo cru, e o que muda é só o enquadramento aceito.
+   */
   private parseHeader(header: string | undefined): ParsedSignatureHeader {
     if (!header || header.trim().length === 0) {
       return { reason: 'missing_header' };
     }
 
-    // `Buffer.from(_, 'base64')` NÃO lança: ele ignora caractere inválido e
-    // devolve o que conseguiu decodificar. Quem recusa lixo, portanto, são as
-    // checagens de tamanho e de versão abaixo — não um try/catch decorativo.
-    const raw = Buffer.from(header.trim(), 'base64');
+    const partes = header
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
 
-    if (raw.length <= TINK_PREFIX_LENGTH) {
-      return { reason: 'malformed_header' };
-    }
-    if (raw[0] !== TINK_PREFIX_VERSION) {
-      return { reason: 'unsupported_prefix_version' };
+    const candidates: SignatureCandidate[] = [];
+    const observados: number[] = [];
+    // O motivo MAIS ESPECÍFICO encontrado. Recusar tudo com o mesmo rótulo
+    // esconderia a causa justamente quando ela importa.
+    let motivo: SignatureRejection = 'bad_signature_length';
+    let motivoFixado = false;
+
+    for (const parte of partes) {
+      // `Buffer.from(_, 'base64')` NÃO lança: ignora caractere inválido e
+      // devolve o que conseguiu decodificar. Quem recusa lixo são as checagens
+      // abaixo, não um try/catch decorativo.
+      const raw = Buffer.from(parte, 'base64');
+      observados.push(raw.length);
+
+      if (raw.length <= TINK_PREFIX_LENGTH) {
+        if (!motivoFixado) {
+          motivo = 'malformed_header';
+          motivoFixado = true;
+        }
+        continue;
+      }
+      if (raw[0] !== TINK_PREFIX_VERSION) {
+        if (!motivoFixado) {
+          motivo = 'unsupported_prefix_version';
+          motivoFixado = true;
+        }
+        continue;
+      }
+
+      const signature = raw.subarray(TINK_PREFIX_LENGTH);
+      const encoding = encodingFor(signature.length);
+      if (!encoding) {
+        // Nem 64 (IEEE-P1363) nem uma faixa plausível de DER: recusa barata,
+        // antes de gastar chave e OpenSSL.
+        motivo = 'bad_signature_length';
+        motivoFixado = true;
+        continue;
+      }
+
+      candidates.push({ keyId: raw.readUInt32BE(1), signature, encoding });
     }
 
-    const signature = raw.subarray(TINK_PREFIX_LENGTH);
-    if (signature.length !== P256_SIGNATURE_LENGTH) {
-      return { reason: 'bad_signature_length' };
+    if (candidates.length === 0) {
+      // Os comprimentos observados vão para o log: são o que distingue header
+      // repetido de DER de lixo, e um número não vaza a assinatura.
+      return { reason: motivo, observados };
     }
 
-    return { keyId: raw.readUInt32BE(1), signature };
+    return { candidates };
   }
 
   /**
