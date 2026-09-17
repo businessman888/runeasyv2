@@ -11,6 +11,7 @@ import {
   GoogleHealthRateLimitError,
 } from './providers/google-health-api.client';
 import { GoogleHealthNormalizer } from './providers/google-health.normalizer';
+import { GoogleHealthTcxParser } from './providers/google-health-tcx.parser';
 import {
   GOOGLE_HEALTH_JOB_BACKFILL,
   GOOGLE_HEALTH_JOB_DELETE,
@@ -124,13 +125,15 @@ describe('GoogleHealthSyncProcessor', () => {
     getConnectionState: jest.Mock<Promise<ConnectionState>, [string]>;
     listAllExercise: jest.Mock<
       Promise<ListResult>,
-      [string, { kind: string; startTime: string; endTime: string }, number]
+      [string, { startTime: string; endTime: string }, number]
     >;
     persistHealthUserId: jest.Mock<
       Promise<string | null>,
       [string, unknown[], string | null]
     >;
+    exportExerciseTcx: jest.Mock<Promise<string | null>, [string, string]>;
   };
+  let tcxParser: { parse: jest.Mock<Array<Record<string, number>>, [string]> };
   let activitySync: {
     processDeviceLocalActivity: jest.Mock<
       Promise<SyncOutcome>,
@@ -169,12 +172,22 @@ describe('GoogleHealthSyncProcessor', () => {
       ),
       listAllExercise: jest.fn<
         Promise<ListResult>,
-        [string, { kind: string; startTime: string; endTime: string }, number]
+        [string, { startTime: string; endTime: string }, number]
       >(() => Promise.resolve({ dataPoints: [], truncated: false })),
       persistHealthUserId: jest.fn<
         Promise<string | null>,
         [string, unknown[], string | null]
       >(() => Promise.resolve(null)),
+      exportExerciseTcx: jest.fn<Promise<string | null>, [string, string]>(() =>
+        Promise.resolve('<xml/>'),
+      ),
+    };
+
+    tcxParser = {
+      parse: jest.fn<Array<Record<string, number>>, [string]>(() => [
+        { lat: -10, lng: -20, timestamp: 1_700_000_000_000 },
+        { lat: -10.001, lng: -20.001, timestamp: 1_700_000_005_000 },
+      ]),
     };
 
     activitySync = {
@@ -197,6 +210,7 @@ describe('GoogleHealthSyncProcessor', () => {
         GoogleHealthNormalizer,
         { provide: getQueueToken(GOOGLE_HEALTH_SYNC_QUEUE), useValue: queue },
         { provide: GoogleHealthApiClient, useValue: apiClient },
+        { provide: GoogleHealthTcxParser, useValue: tcxParser },
         { provide: ActivitySyncService, useValue: activitySync },
         { provide: SupabaseService, useValue: { from } },
       ],
@@ -213,6 +227,89 @@ describe('GoogleHealthSyncProcessor', () => {
       chain({ data: { user_id: USER_ID }, error: null }),
     ];
   }
+
+  // ─── rota (TCX) ───────────────────────────────────────────────────────────
+
+  describe('rota TCX', () => {
+    /** Prepara uma sincronização com um dataPoint de corrida. */
+    async function sincroniza(
+      dp: ReturnType<typeof runningDataPoint> = runningDataPoint(),
+    ) {
+      connectionFound();
+      apiClient.listAllExercise.mockResolvedValue({
+        dataPoints: [dp],
+        truncated: false,
+      });
+      await processor.process(
+        job(GOOGLE_HEALTH_JOB_SYNC_WINDOW, {
+          notification: notification(),
+          receivedAt: '2026-09-15T11:05:00Z',
+        }),
+      );
+    }
+
+    it('busca o TCX e anexa a rota quando há hasGps e escopo', async () => {
+      await sincroniza();
+
+      expect(apiClient.exportExerciseTcx).toHaveBeenCalledWith(
+        USER_ID,
+        DATA_POINT_ID,
+      );
+      const [activity] = activitySync.processDeviceLocalActivity.mock.calls[0];
+      expect(activity.gps_route).toHaveLength(2);
+    });
+
+    it('NÃO gasta a segunda requisição quando hasGps é falso', async () => {
+      // É um pedido por corrida. Um backfill de 90 dias com uma corrida por dia
+      // são ~180 requisições só de rota — checar antes é o que segura a quota.
+      const dp = runningDataPoint();
+      dp.exercise.exerciseMetadata = {} as { hasGps: boolean };
+      await sincroniza(dp);
+
+      expect(apiClient.exportExerciseTcx).not.toHaveBeenCalled();
+      const [activity] = activitySync.processDeviceLocalActivity.mock.calls[0];
+      expect(activity.gps_route).toBeUndefined();
+    });
+
+    it('NÃO busca o TCX sem location.readonly — e a corrida entra assim mesmo', async () => {
+      // Consentimento granular: o usuário pode marcar atividade e desmarcar
+      // localização. Sem o escopo o Google recusaria; perder a corrida por isso
+      // seria trocar "sem mapa" por "sem corrida".
+      apiClient.getConnectionState.mockResolvedValue({
+        scope: '',
+        hasLocationScope: false,
+        hasActivityScope: true,
+        providerUserId: null,
+      });
+      await sincroniza();
+
+      expect(apiClient.exportExerciseTcx).not.toHaveBeenCalled();
+      expect(activitySync.processDeviceLocalActivity).toHaveBeenCalledTimes(1);
+    });
+
+    it('TCX com menos de 2 pontos não vira rota — mas a corrida entra', async () => {
+      // Abaixo de 2 pontos não há LINESTRING nem replay de esforço possível.
+      tcxParser.parse.mockReturnValue([
+        { lat: -10, lng: -20, timestamp: 1_700_000_000_000 },
+      ]);
+      await sincroniza();
+
+      const [activity] = activitySync.processDeviceLocalActivity.mock.calls[0];
+      expect(activity.gps_route).toBeUndefined();
+      expect(activitySync.processDeviceLocalActivity).toHaveBeenCalledTimes(1);
+    });
+
+    it('falha ao buscar o TCX não impede a corrida de entrar', async () => {
+      apiClient.exportExerciseTcx.mockRejectedValue(
+        new Error('502 bad gateway'),
+      );
+      await sincroniza();
+
+      expect(activitySync.processDeviceLocalActivity).toHaveBeenCalledTimes(1);
+      const [activity] = activitySync.processDeviceLocalActivity.mock.calls[0];
+      expect(activity.gps_route).toBeUndefined();
+    });
+  });
 
   // ─── token morto ⇒ UnrecoverableError ────────────────────────────────────
 

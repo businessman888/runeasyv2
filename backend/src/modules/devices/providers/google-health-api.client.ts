@@ -458,6 +458,60 @@ export class GoogleHealthApiClient {
    * singleton e serve todos os usuários — cachear token aqui seria servir o
    * token de um usuário para outro.
    */
+  /**
+   * O TCX da corrida — a rota, que não é campo nem `dataType`.
+   *
+   * É uma SEGUNDA requisição por atividade, e por isso o chamador tem que
+   * checar `exerciseMetadata.hasGps` e o escopo `location.readonly` ANTES de
+   * gastar quota. Um backfill de 90 dias com uma corrida por dia são ~180
+   * requisições só de rota.
+   *
+   * Devolve `null` quando a rota não existe ou não pôde ser lida: rota ausente
+   * é uma corrida sem mapa, não uma corrida perdida. Só o `429` sobe, porque
+   * rate limit é transitório e merece o retry da fila.
+   */
+  async exportExerciseTcx(
+    userId: string,
+    dataPointId: string,
+  ): Promise<string | null> {
+    const token = await this.tokenRefreshService.ensureValidToken(
+      userId,
+      GOOGLE_HEALTH_PROVIDER,
+    );
+
+    const url =
+      `${API_BASE}/users/me/dataTypes/exercise/dataPoints/` +
+      `${encodeURIComponent(dataPointId)}:exportExerciseTcx?alt=media`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        // Medido: o Google responde `application/vnd.garmin.tcx+xml`, e não
+        // `application/tcx+xml` como a Fase 0 registrou. Aceitar qualquer coisa
+        // evita que um `Accept` estreito vire um 406 por causa disso.
+        Accept: '*/*',
+      },
+    });
+
+    if (response.status === 429) {
+      throw new GoogleHealthRateLimitError(
+        this.readRetryAfter(response.headers.get('retry-after')),
+      );
+    }
+
+    if (!response.ok) {
+      const code = await this.readErrorStatus(response);
+      this.logger.warn(
+        `[google_health] TCX indisponível para ${dataPointId}: ` +
+          `${response.status} ${code} — a corrida entra sem rota`,
+      );
+      return null;
+    }
+
+    return await response.text();
+  }
+
   private async request<T>(
     userId: string,
     path: string,

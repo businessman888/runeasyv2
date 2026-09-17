@@ -12,7 +12,14 @@ import {
   GoogleHealthRateLimitError,
   GOOGLE_HEALTH_PROVIDER,
 } from './providers/google-health-api.client';
-import { GoogleHealthNormalizer } from './providers/google-health.normalizer';
+import {
+  GoogleHealthActivity,
+  GoogleHealthNormalizer,
+} from './providers/google-health.normalizer';
+import {
+  GoogleHealthTcxParser,
+  TcxTrackPoint,
+} from './providers/google-health-tcx.parser';
 import {
   GOOGLE_HEALTH_BACKFILL_JOB_OPTIONS,
   GOOGLE_HEALTH_JOB_BACKFILL,
@@ -113,6 +120,7 @@ export class GoogleHealthSyncProcessor extends WorkerHost {
     private readonly syncQueue: Queue,
     private readonly apiClient: GoogleHealthApiClient,
     private readonly normalizer: GoogleHealthNormalizer,
+    private readonly tcxParser: GoogleHealthTcxParser,
     private readonly activitySyncService: ActivitySyncService,
     private readonly supabaseService: SupabaseService,
   ) {
@@ -262,13 +270,74 @@ export class GoogleHealthSyncProcessor extends WorkerHost {
       state.providerUserId,
     );
 
-    return this.ingestDataPoints(userId, dataPoints, truncated);
+    return this.ingestDataPoints(
+      userId,
+      dataPoints,
+      truncated,
+      state.hasLocationScope,
+    );
+  }
+
+  /**
+   * A rota da corrida, quando existe e quando podemos buscá-la.
+   *
+   * Dois gates ANTES da segunda requisição, e os dois economizam quota: sem
+   * `hasGps` não há rota para pedir, e sem `location.readonly` o Google
+   * recusaria. Um backfill de 90 dias são ~180 requisições só de TCX.
+   *
+   * Falhar aqui nunca impede a corrida de entrar: rota ausente é corrida sem
+   * mapa. Só o `429` sobe, porque é transitório e a fila sabe retentar.
+   */
+  private async fetchRoute(
+    userId: string,
+    activity: GoogleHealthActivity,
+    hasLocationScope: boolean,
+  ): Promise<TcxTrackPoint[] | undefined> {
+    if (!activity.has_gps) return undefined;
+    if (!hasLocationScope) {
+      this.logger.log(
+        `[google_health] ${activity.external_id} tem GPS mas falta location.readonly — entra sem rota`,
+      );
+      return undefined;
+    }
+
+    let xml: string | null;
+    try {
+      xml = await this.apiClient.exportExerciseTcx(
+        userId,
+        activity.data_point_id,
+      );
+    } catch (error) {
+      if (error instanceof GoogleHealthRateLimitError) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `[google_health] TCX de ${activity.external_id} falhou (${message}) — entra sem rota`,
+      );
+      return undefined;
+    }
+
+    if (!xml) return undefined;
+
+    const points = this.tcxParser.parse(xml);
+    if (points.length < 2) {
+      // Menos de 2 pontos não vira LINESTRING nem passa no replay de esforço.
+      this.logger.warn(
+        `[google_health] TCX de ${activity.external_id} rendeu ${points.length} ponto(s) — sem rota utilizável`,
+      );
+      return undefined;
+    }
+
+    this.logger.log(
+      `[google_health] rota de ${activity.external_id}: ${points.length} pontos`,
+    );
+    return points;
   }
 
   private async ingestDataPoints(
     userId: string,
     dataPoints: GoogleHealthDataPoint[],
     truncated: boolean,
+    hasLocationScope: boolean,
   ) {
     let ingested = 0;
     let skipped = 0;
@@ -283,6 +352,16 @@ export class GoogleHealthSyncProcessor extends WorkerHost {
         rejected += 1;
         continue;
       }
+
+      // A rota entra ANTES da convergência: `completeWorkout` só grava
+      // `workout_routes` a partir do que recebe, e não há segunda chance —
+      // um reenvio posterior bate na idempotência por `external_id` e é
+      // descartado como já sincronizado.
+      activity.gps_route = await this.fetchRoute(
+        userId,
+        activity,
+        hasLocationScope,
+      );
 
       try {
         const outcome =

@@ -10,6 +10,7 @@ import { TokenRefreshService } from './token-refresh.service';
 import { OAuthStateStore } from './oauth-state.store';
 import { FitbitOAuthService } from './providers/fitbit-oauth.service';
 import { PolarOAuthService } from './providers/polar-oauth.service';
+import { GoogleHealthTcxParser } from './providers/google-health-tcx.parser';
 import { GoogleHealthSubscriptionsService } from './providers/google-health-subscriptions.service';
 import { GoogleHealthOAuthService } from './providers/google-health-oauth.service';
 import { AppleHealthNormalizer } from './providers/apple-health.normalizer';
@@ -63,6 +64,7 @@ import { SubscriptionModule } from '../subscription/subscription.module';
     PolarOAuthService,
     GoogleHealthOAuthService,
     GoogleHealthSubscriptionsService,
+    GoogleHealthTcxParser,
     AppleHealthNormalizer,
     HealthConnectNormalizer,
     GoogleHealthApiClient,
