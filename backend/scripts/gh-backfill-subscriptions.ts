@@ -98,12 +98,30 @@ async function main(): Promise<void> {
     }
 
     // Direção 2: existe no Google, não existe aqui.
+    //
+    // O `name` volta como resource name completo
+    // (`projects/…/subscribers/…/subscriptions/<id>`), e o
+    // `clientProvidedSubscriptionName` pode nem vir. Comparar o caminho inteiro
+    // com o nosso id acusava como órfã justamente a subscription recém-criada —
+    // e um alerta que grita sempre é pior que nenhum: ensina a ignorá-lo, e aí
+    // a órfã de verdade passa junto.
     const remotas = await service.listSubscriptions();
-    const conhecidas = new Set(pendentes);
+    const idDe = (nome: string): string => {
+      const partes = nome.split('/').filter((p) => p.length > 0);
+      return partes.length > 0 ? partes[partes.length - 1] : '';
+    };
+
+    // Quem o banco JÁ conhece — não os pendentes, que por definição não têm
+    // subscription nenhuma.
+    const conhecidas = new Set([
+      ...(await service.findKnownSubscriptionIds()),
+      ...criadas,
+      ...reconciliadas,
+    ]);
     const orfas = remotas
-      .map((s) => s.clientProvidedSubscriptionName ?? s.name ?? '')
+      .map((s) => idDe(s.clientProvidedSubscriptionName ?? s.name ?? ''))
       .filter((id) => id.length > 0)
-      .filter((id) => !conhecidas.has(id) && !criadas.includes(id));
+      .filter((id) => !conhecidas.has(id));
 
     console.log('');
     console.log('  criadas       : %d', criadas.length);

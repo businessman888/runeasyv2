@@ -457,6 +457,29 @@ export class GoogleHealthSubscriptionsService implements SubscriptionManager {
     return (data ?? []).map((row: { user_id: string }) => row.user_id);
   }
 
+  /**
+   * Os `subscription_id` que ESTE banco conhece.
+   *
+   * É o complemento de `findPendingUsers`, e a distinção decide a reconciliação:
+   * pendente é quem NÃO tem subscription, então comparar as subscriptions do
+   * Google contra a lista de pendentes acusa como órfã justamente a que está
+   * saudável. Órfã é o que existe lá e NÃO está aqui.
+   */
+  async findKnownSubscriptionIds(): Promise<string[]> {
+    const { data, error } = await this.supabaseService
+      .from('connected_devices')
+      .select('subscription_id')
+      .eq('provider', GOOGLE_HEALTH_PROVIDER)
+      .not('subscription_id', 'is', null);
+
+    if (error) {
+      throw new Error(`Falha ao listar subscriptions locais: ${error.message}`);
+    }
+    return (data ?? [])
+      .map((row: { subscription_id: string | null }) => row.subscription_id)
+      .filter((id: string | null): id is string => Boolean(id));
+  }
+
   // ─── Estado local ────────────────────────────────────────────────────────
 
   private async persistSubscription(userId: string): Promise<void> {

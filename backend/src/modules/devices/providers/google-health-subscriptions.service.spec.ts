@@ -80,6 +80,29 @@ function pendingChain(rows: Array<{ user_id: string }>): PendingChain {
   return chain;
 }
 
+/** `select().eq().not()` — `not` é terminal. */
+interface KnownChain {
+  select: jest.Mock<KnownChain, [string]>;
+  eq: jest.Mock<KnownChain, [string, unknown]>;
+  not: jest.Mock<
+    Promise<{ data: Array<{ subscription_id: string | null }>; error: null }>,
+    [string, string, null]
+  >;
+}
+
+function knownChain(
+  rows: Array<{ subscription_id: string | null }>,
+): KnownChain {
+  const chain = {} as KnownChain;
+  chain.select = jest.fn<KnownChain, [string]>(() => chain);
+  chain.eq = jest.fn<KnownChain, [string, unknown]>(() => chain);
+  chain.not = jest.fn<
+    Promise<{ data: Array<{ subscription_id: string | null }>; error: null }>,
+    [string, string, null]
+  >(() => Promise.resolve({ data: rows, error: null }));
+  return chain;
+}
+
 describe('GoogleHealthSubscriptionsService', () => {
   let service: GoogleHealthSubscriptionsService;
   let fetchMock: FetchMock;
@@ -341,6 +364,20 @@ describe('GoogleHealthSubscriptionsService', () => {
   });
 
   // ─── Pendentes ────────────────────────────────────────────────────────────
+
+  it('lista os subscription_id que o banco JÁ conhece — o oposto dos pendentes', async () => {
+    // A distinção decide a reconciliação de órfãs. Comparar as subscriptions do
+    // Google contra a lista de PENDENTES acusava como órfã justamente a que
+    // acabara de ser criada — e alerta que grita sempre ensina a ser ignorado,
+    // e aí a órfã de verdade passa junto.
+    const chain = knownChain([{ subscription_id: USER }]);
+    from.mockReturnValue(chain);
+
+    await expect(service.findKnownSubscriptionIds()).resolves.toEqual([USER]);
+
+    expect(chain.eq).toHaveBeenCalledWith('provider', 'google_health');
+    expect(chain.not).toHaveBeenCalledWith('subscription_id', 'is', null);
+  });
 
   it('lista pendentes com o filtro exato do retroativo', async () => {
     const chain = pendingChain([{ user_id: USER }]);
