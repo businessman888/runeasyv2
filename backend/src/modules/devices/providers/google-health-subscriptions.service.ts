@@ -55,9 +55,6 @@ const CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
  */
 const SUBSCRIPTION_ID_PATTERN = /^[a-z0-9][a-z0-9-]{2,34}[a-z0-9]$/;
 
-/** Janela usada só para arrancar um `name` de dataPoint e dali o `healthUserId`. */
-const HEALTH_USER_ID_LOOKUP_DAYS = 365;
-
 export interface GoogleHealthSubscription {
   name?: string;
   clientProvidedSubscriptionName?: string;
@@ -333,16 +330,11 @@ export class GoogleHealthSubscriptionsService implements SubscriptionManager {
     const state = await this.apiClient.getConnectionState(userId);
     if (state.providerUserId) return state.providerUserId;
 
-    const end = new Date();
-    const start = new Date(
-      end.getTime() - HEALTH_USER_ID_LOOKUP_DAYS * 24 * 60 * 60 * 1000,
-    );
-
-    const page = await this.apiClient.listExercise(userId, {
-      kind: 'physical',
-      startTime: start.toISOString(),
-      endTime: end.toISOString(),
-    });
+    // SEM filtro de propósito: aqui não interessa QUANDO a atividade foi, só
+    // que exista uma, para ler o `healthUserId` do `name`. Filtrar por janela
+    // seria escolher um período arbitrário e correr o risco de não achar nada
+    // numa conta com pouco histórico — e a primeira página basta.
+    const page = await this.apiClient.listExercise(userId);
 
     return this.apiClient.persistHealthUserId(
       userId,

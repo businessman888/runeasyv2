@@ -312,10 +312,42 @@ describe('GoogleHealthSyncProcessor', () => {
       );
 
       const [, window] = apiClient.listAllExercise.mock.calls[0];
-      expect(window.kind).toBe('physical');
-      // 10:30:00Z menos 1 min de folga, 11:00:00Z mais 1 min.
-      expect(window.startTime).toBe('2026-09-15T10:29:00.000Z');
-      expect(window.endTime).toBe('2026-09-15T11:01:00.000Z');
+      // Sem intervalo civil na notificação, a janela é derivada do físico e
+      // alargada em 1 dia para cada lado: o fuso de quem correu é desconhecido.
+      expect(window.startTime).toBe('2026-09-14T10:30:00');
+      expect(window.endTime).toBe('2026-09-16T11:00:00');
+    });
+
+    it('prefere o intervalo CIVIL da notificação — é o único que a API filtra', async () => {
+      // Medido em 2026-09-17: `exercise.interval.start_time` devolve 400
+      // INVALID_DATA_POINT_FILTER_DATA_TYPE_MEMBER; só o civil é filtrável. E a
+      // notificação já traz o civil pronto, então não há fuso a adivinhar.
+      connectionFound();
+
+      await processor.process(
+        job(GOOGLE_HEALTH_JOB_SYNC_WINDOW, {
+          notification: notification({
+            intervals: [
+              {
+                physicalTimeInterval: {
+                  startTime: '2026-09-15T10:30:00Z',
+                  endTime: '2026-09-15T11:00:00Z',
+                },
+                civilIso8601TimeInterval: {
+                  startTime: '2026-09-15T07:30:00',
+                  endTime: '2026-09-15T08:00:00',
+                },
+              },
+            ],
+          }),
+          receivedAt: '2026-09-15T11:05:00Z',
+        }),
+      );
+
+      const [, window] = apiClient.listAllExercise.mock.calls[0];
+      // Janela estreita (±1 min), porque o civil é exato — e sem sufixo de fuso.
+      expect(window.startTime).toBe('2026-09-15T07:29:00');
+      expect(window.endTime).toBe('2026-09-15T08:01:00');
     });
 
     it('descarta o que não é corrida sem chamar a convergência', async () => {

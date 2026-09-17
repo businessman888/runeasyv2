@@ -9,6 +9,7 @@ import {
   GoogleHealthApiError,
   GoogleHealthRateLimitError,
   buildExerciseFilter,
+  toCivilFilterTime,
   extractDataPointId,
   extractHealthUserId,
 } from './google-health-api.client';
@@ -355,32 +356,52 @@ describe('GoogleHealthApiClient', () => {
   // ─── filtro ──────────────────────────────────────────────────────────────
 
   describe('buildExerciseFilter', () => {
-    it('filtra por start_time físico por padrão', () => {
-      expect(buildExerciseFilter(WINDOW)).toBe(
-        'exercise.interval.start_time >= "2026-09-15T10:00:00.000Z" ' +
-          'AND exercise.interval.start_time < "2026-09-15T12:00:00.000Z"',
-      );
-    });
-
-    it('filtra por civil_start_time quando pedido', () => {
+    /**
+     * TRAVA. Medido contra a API real em 2026-09-17, mesma conta e mesmo token:
+     * `exercise.interval.start_time` devolve 400 INVALID_ARGUMENT
+     * (INVALID_DATA_POINT_FILTER_DATA_TYPE_MEMBER) e `civil_start_time` devolve
+     * 200. O instante físico NÃO é membro filtrável do `exercise`.
+     *
+     * Trocar este campo derruba a ingestão inteira do usuário com um 400 — e o
+     * erro aparece como "subscription falhou", longe da causa.
+     */
+    it('filtra SEMPRE por civil_start_time — o físico é recusado pela API', () => {
       expect(
         buildExerciseFilter({
-          kind: 'civil',
           startTime: '2026-09-01T00:00:00',
           endTime: '2026-09-30T00:00:00',
         }),
-      ).toContain('exercise.interval.civil_start_time >=');
+      ).toBe(
+        'exercise.interval.civil_start_time >= "2026-09-01T00:00:00" ' +
+          'AND exercise.interval.civil_start_time < "2026-09-30T00:00:00"',
+      );
+    });
+
+    it('nunca emite o campo de tempo físico', () => {
+      expect(buildExerciseFilter(WINDOW)).not.toContain(
+        'exercise.interval.start_time',
+      );
     });
 
     it('recusa valor que quebraria as aspas do filtro', () => {
       expect(() =>
         buildExerciseFilter({
-          kind: 'physical',
           startTime:
-            '2026-09-15T10:00:00Z" OR exercise.interval.start_time >= "1970-01-01T00:00:00Z',
-          endTime: '2026-09-15T12:00:00Z',
+            '2026-09-15T10:00:00" OR exercise.interval.civil_start_time >= "1970-01-01T00:00:00',
+          endTime: '2026-09-15T12:00:00',
         }),
       ).toThrow(/Invalid Google Health filter datetime/);
+    });
+
+    it('toCivilFilterTime tira fuso e milissegundo', () => {
+      // Tempo civil não tem fuso: é a hora do relógio de quem correu.
+      expect(toCivilFilterTime('2026-09-17T00:08:13.123Z')).toBe(
+        '2026-09-17T00:08:13',
+      );
+      expect(toCivilFilterTime('2026-09-16T21:08:13-03:00')).toBe(
+        '2026-09-16T21:08:13',
+      );
+      expect(() => toCivilFilterTime('ontem')).toThrow(/ISO/);
     });
   });
 });

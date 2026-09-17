@@ -182,8 +182,26 @@ export interface GoogleHealthConnectionState {
  * nem suporta). Tratamos como ilimitada. Se um backfill longo voltar vazio ou
  * com erro de argumento, é aqui que a premissa cai.
  */
+/**
+ * Janela de busca, SEMPRE em tempo civil.
+ *
+ * ── POR QUE NÃO EXISTE OPÇÃO DE TEMPO FÍSICO ────────────────────────────────
+ *
+ * Existia, e a API recusa. Medido contra a API real em 2026-09-17, com a mesma
+ * conta e o mesmo token nas quatro tentativas:
+ *
+ *   sem filtro                             -> 200
+ *   exercise.interval.start_time           -> 400 INVALID_ARGUMENT
+ *                                             INVALID_DATA_POINT_FILTER_DATA_TYPE_MEMBER
+ *   exercise.interval.start_time (sem ms)  -> 400, idem
+ *   exercise.interval.civil_start_time     -> 200
+ *
+ * O instante físico **não é membro filtrável** do `exercise`. Só o civil é — e
+ * é o que o exemplo publicado sempre mostrou. O tipo deixou de oferecer a
+ * escolha de propósito: uma união `'physical' | 'civil'` convida a reintrodução
+ * do erro, e o sintoma é um 400 que derruba a ingestão inteira do usuário.
+ */
 export interface GoogleHealthFetchWindow {
-  kind: 'physical' | 'civil';
   /** Início inclusivo. */
   startTime: string;
   /** Fim exclusivo. */
@@ -198,11 +216,10 @@ export interface GoogleHealthFetchWindow {
  */
 const SAFE_FILTER_DATETIME = /^[0-9T:.\-+Z]{4,40}$/;
 
+export const EXERCISE_CIVIL_TIME_FIELD = 'exercise.interval.civil_start_time';
+
 export function buildExerciseFilter(window: GoogleHealthFetchWindow): string {
-  const field =
-    window.kind === 'civil'
-      ? 'exercise.interval.civil_start_time'
-      : 'exercise.interval.start_time';
+  const field = EXERCISE_CIVIL_TIME_FIELD;
 
   for (const value of [window.startTime, window.endTime]) {
     if (!SAFE_FILTER_DATETIME.test(value)) {
@@ -225,6 +242,20 @@ export function buildExerciseFilter(window: GoogleHealthFetchWindow): string {
  * alias em vez do id, não há id nenhum a persistir — devolver `null` é o
  * honesto.
  */
+/**
+ * ISO com fuso (`2026-09-17T00:08:13.123Z`, `2026-09-16T21:08:13-03:00`) para o
+ * civil que o filtro aceita: `AAAA-MM-DDTHH:MM:SS`, sem sufixo e sem
+ * milissegundo.
+ *
+ * O `Z` e o offset são rejeitados justamente porque tempo civil não tem fuso —
+ * é a hora do relógio de parede de quem correu.
+ */
+export function toCivilFilterTime(iso: string): string {
+  const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/.exec(iso);
+  if (match) return match[1];
+  throw new Error(`Não é um instante ISO reconhecível: ${iso}`);
+}
+
 export function extractHealthUserId(name: string | undefined): string | null {
   if (!name) return null;
   const match = /^users\/([^/]+)\//.exec(name);
@@ -304,13 +335,16 @@ export class GoogleHealthApiClient {
    */
   async listExercise(
     userId: string,
-    window: GoogleHealthFetchWindow,
+    window?: GoogleHealthFetchWindow,
     pageToken?: string,
   ): Promise<GoogleHealthListResponse> {
+    // Sem janela, sem filtro — a API aceita (medido: 200) e devolve a primeira
+    // página. É o que basta para quem só precisa de um `name` qualquer, como a
+    // descoberta do `healthUserId`.
     const params = new URLSearchParams({
       pageSize: String(GOOGLE_HEALTH_EXERCISE_PAGE_SIZE),
-      filter: buildExerciseFilter(window),
     });
+    if (window) params.set('filter', buildExerciseFilter(window));
     if (pageToken) params.set('pageToken', pageToken);
 
     return this.request<GoogleHealthListResponse>(

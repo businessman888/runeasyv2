@@ -8,6 +8,7 @@ import {
   GoogleHealthApiClient,
   GoogleHealthDataPoint,
   GoogleHealthFetchWindow,
+  toCivilFilterTime,
   GoogleHealthRateLimitError,
   GOOGLE_HEALTH_PROVIDER,
 } from './providers/google-health-api.client';
@@ -77,6 +78,16 @@ const BACKFILL_MAX_PAGES = 40;
  * fecha a classe inteira de falha.
  */
 const WINDOW_PADDING_MS = 60 * 1000;
+
+/**
+ * Folga usada quando só há o instante FÍSICO e é preciso filtrá-lo como civil.
+ *
+ * O fuso de quem correu é desconhecido, e os offsets do mundo cabem em ±14 h —
+ * um dia para cada lado cobre com sobra. O excesso é barato: `external_id` dá
+ * idempotência exata e o dedup cross-provider descarta o resto. Janela estreita
+ * demais, não: perderia a corrida em silêncio.
+ */
+const CIVIL_SAFETY_PADDING_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Quando a notificação não traz intervalo utilizável, a janela é derivada do
@@ -208,7 +219,6 @@ export class GoogleHealthSyncProcessor extends WorkerHost {
 
   private async handleBackfill(data: GoogleHealthBackfillJobData) {
     const window: GoogleHealthFetchWindow = {
-      kind: 'physical',
       startTime: data.startTime,
       endTime: data.endTime,
     };
@@ -510,6 +520,34 @@ export class GoogleHealthSyncProcessor extends WorkerHost {
     const starts: number[] = [];
     const ends: number[] = [];
 
+    // O filtro da API só aceita tempo CIVIL (medido: o físico devolve 400
+    // INVALID_DATA_POINT_FILTER_DATA_TYPE_MEMBER). E a notificação já traz o
+    // civil pronto em `civilIso8601TimeInterval` — usá-lo é exato e dispensa
+    // qualquer conversão de fuso, que nós não teríamos como fazer: o fuso é o
+    // de quem correu, não o nosso.
+    const civis: string[] = [];
+    for (const interval of notification.intervals ?? []) {
+      const ci = interval.civilIso8601TimeInterval;
+      if (ci?.startTime) civis.push(ci.startTime);
+      if (ci?.endTime) civis.push(ci.endTime);
+    }
+
+    if (civis.length > 0) {
+      const ordenados = [...civis].sort();
+      return {
+        startTime: this.shiftCivil(ordenados[0], -WINDOW_PADDING_MS),
+        endTime: this.shiftCivil(
+          ordenados[ordenados.length - 1],
+          WINDOW_PADDING_MS,
+        ),
+      };
+    }
+
+    // Sem o civil, sobra o físico — que NÃO pode ir para o filtro. Converte-se
+    // o instante em civil e alarga-se a janela em um dia para cada lado: o fuso
+    // do usuário é desconhecido e o mundo cabe em ±14 h. Buscar dataPoint a
+    // mais é barato; a idempotência por `external_id` e o dedup a jusante são
+    // exatos e absorvem o excesso. Perder a corrida por janela estreita, não.
     for (const interval of notification.intervals ?? []) {
       const start = this.toEpoch(interval.physicalTimeInterval?.startTime);
       const end = this.toEpoch(interval.physicalTimeInterval?.endTime);
@@ -518,14 +556,16 @@ export class GoogleHealthSyncProcessor extends WorkerHost {
     }
 
     if (starts.length > 0) {
-      const from = Math.min(...starts) - WINDOW_PADDING_MS;
+      const from = Math.min(...starts) - CIVIL_SAFETY_PADDING_MS;
       const to =
         (ends.length > 0 ? Math.max(...ends) : Math.max(...starts)) +
-        WINDOW_PADDING_MS;
+        CIVIL_SAFETY_PADDING_MS;
+      this.logger.warn(
+        'Google Health sync: notificação sem intervalo civil — janela alargada a partir do físico',
+      );
       return {
-        kind: 'physical',
-        startTime: new Date(from).toISOString(),
-        endTime: new Date(to).toISOString(),
+        startTime: toCivilFilterTime(new Date(from).toISOString()),
+        endTime: toCivilFilterTime(new Date(to).toISOString()),
       };
     }
 
@@ -534,10 +574,30 @@ export class GoogleHealthSyncProcessor extends WorkerHost {
       'Google Health sync: notificação sem intervalo físico — janela derivada do recebimento',
     );
     return {
-      kind: 'physical',
-      startTime: new Date(anchor - FALLBACK_WINDOW_LOOKBACK_MS).toISOString(),
-      endTime: new Date(anchor + FALLBACK_WINDOW_LOOKAHEAD_MS).toISOString(),
+      startTime: toCivilFilterTime(
+        new Date(anchor - FALLBACK_WINDOW_LOOKBACK_MS).toISOString(),
+      ),
+      endTime: toCivilFilterTime(
+        new Date(anchor + FALLBACK_WINDOW_LOOKAHEAD_MS).toISOString(),
+      ),
     };
+  }
+
+  /**
+   * Soma (ou subtrai) tempo de um instante CIVIL, sem deslocá-lo de fuso.
+   *
+   * Hora civil não tem fuso, e é justamente por isso que ela não pode passar
+   * por `new Date(...)` cru: a especificação manda interpretar um ISO sem
+   * sufixo como hora LOCAL, e o `toISOString()` seguinte devolveria o valor
+   * deslocado pelo fuso de quem rodou o processo — o mesmo dado daria janelas
+   * diferentes no Railway (UTC) e na máquina de quem depura (UTC−3).
+   *
+   * Fixar o `Z` nas duas pontas faz a aritmética acontecer num fuso só e o
+   * relógio de parede voltar intacto.
+   */
+  private shiftCivil(civil: string, deltaMs: number): string {
+    const base = Date.parse(`${toCivilFilterTime(civil)}Z`);
+    return toCivilFilterTime(new Date(base + deltaMs).toISOString());
   }
 
   private toEpoch(value?: string): number | null {
