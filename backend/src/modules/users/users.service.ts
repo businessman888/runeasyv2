@@ -1,11 +1,23 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import {
+  ACCOUNT_DELETION_JOB,
+  ACCOUNT_DELETION_JOB_OPTIONS,
+  ACCOUNT_DELETION_QUEUE,
+  AccountDeletionJobData,
+} from '../account-deletion/account-deletion.types';
 import { SupabaseService } from '../../database';
 
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
-  constructor(private readonly supabaseService: SupabaseService) {}
+  constructor(
+    private readonly supabaseService: SupabaseService,
+    @InjectQueue(ACCOUNT_DELETION_QUEUE)
+    private readonly accountDeletionQueue: Queue,
+  ) {}
 
   /**
    * Get user by ID (includes onboarding_completed flag for navigation control)
@@ -319,45 +331,47 @@ export class UsersService {
   /**
    * Delete user (LGPD compliance)
    */
-  async deleteUser(userId: string) {
-    // Delete related data first
-    await this.supabaseService
-      .from('ai_feedbacks')
-      .delete()
-      .eq('user_id', userId);
-    await this.supabaseService
-      .from('activities')
-      .delete()
-      .eq('user_id', userId);
-    await this.supabaseService.from('workouts').delete().eq('user_id', userId);
-    await this.supabaseService
-      .from('training_plans')
-      .delete()
-      .eq('user_id', userId);
-    await this.supabaseService
-      .from('points_history')
-      .delete()
-      .eq('user_id', userId);
-    await this.supabaseService
-      .from('user_badges')
-      .delete()
-      .eq('user_id', userId);
-    await this.supabaseService
-      .from('user_levels')
-      .delete()
-      .eq('user_id', userId);
-    await this.supabaseService
-      .from('user_onboarding')
-      .delete()
-      .eq('user_id', userId);
+  /**
+   * Pede a exclusão da conta. **Marca e enfileira — não apaga aqui.**
+   *
+   * ── POR QUE DEIXOU DE SER SÍNCRONO ─────────────────────────────────────
+   *
+   * A versão anterior fazia nove `DELETE` em sequência, sem transação e sem
+   * checar erro em oito deles: uma falha no meio apagava o usuário mesmo assim
+   * e deixava dado órfão, em silêncio. Pior, ela apagava `public.users` e não
+   * `auth.users` — e `connected_devices`, `oauth_states` e `points_history`
+   * penduram em `auth.users`, então os tokens OAuth de saúde sobreviviam à
+   * exclusão da conta. A política publicada promete o contrário, por escrito.
+   *
+   * A exclusão de verdade precisa falar com o Google (revogar o grant e remover
+   * a subscription ANTES de o token sumir), com o Storage e com o Auth. Nada
+   * disso cabe numa requisição HTTP: uma indisponibilidade externa viraria erro
+   * na cara de quem já decidiu sair. A ordem completa vive no
+   * `AccountDeletionService`.
+   *
+   * O `jobId` fixo por usuário torna o pedido idempotente: tocar duas vezes no
+   * botão não cria duas exclusões.
+   */
+  async requestDeletion(userId: string) {
+    const requestedAt = new Date().toISOString();
 
-    // Finally delete the user
-    const { error } = await this.supabaseService
+    const { data, error } = await this.supabaseService
       .from('users')
-      .delete()
-      .eq('id', userId);
+      .update({ deletion_requested_at: requestedAt })
+      .eq('id', userId)
+      .select('id')
+      .maybeSingle<{ id: string }>();
 
     if (error) throw error;
-    return { success: true };
+    if (!data) throw new NotFoundException('User not found');
+
+    await this.accountDeletionQueue.add(
+      ACCOUNT_DELETION_JOB,
+      { userId, requestedAt } satisfies AccountDeletionJobData,
+      { jobId: `account-deletion-${userId}`, ...ACCOUNT_DELETION_JOB_OPTIONS },
+    );
+
+    this.logger.log(`[users] exclusão de conta pedida por ${userId}`);
+    return { success: true, requestedAt };
   }
 }

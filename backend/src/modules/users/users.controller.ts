@@ -8,6 +8,7 @@ import {
   Body,
   HttpException,
   HttpStatus,
+  HttpCode,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -104,10 +105,20 @@ export class UsersController {
   }
 
   /**
-   * Delete user account (LGPD compliance)
+   * Pede a exclusão da conta (LGPD, e diretriz 5.1.1(v) da App Store).
+   *
+   * Responde **202**: a exclusão foi aceita e vai acontecer, não terminou
+   * agora. Ela fala com o Google (revogar o grant e remover a subscription
+   * ANTES de o token sumir), com o Storage e com o Auth — três redes, nenhuma
+   * dentro de uma transação. Segurar a resposta até tudo terminar faria uma
+   * indisponibilidade externa virar erro na cara de quem já decidiu sair.
+   *
+   * A guarda de IDOR é a mesma de antes, e continua sendo a única que importa
+   * aqui: só o dono pede a própria exclusão.
    */
   @Delete(':userId')
-  async deleteUser(
+  @HttpCode(HttpStatus.ACCEPTED)
+  async requestDeletion(
     @Param('userId') userId: string,
     @User('id') requestingUserId: string,
   ) {
@@ -115,7 +126,12 @@ export class UsersController {
       throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
     }
 
-    await this.usersService.deleteUser(userId);
-    return { success: true, message: 'User deleted successfully' };
+    const { requestedAt } = await this.usersService.requestDeletion(userId);
+    return {
+      success: true,
+      requestedAt,
+      message:
+        'Exclusão solicitada. Seus dados serão removidos e as integrações revogadas.',
+    };
   }
 }

@@ -40,6 +40,7 @@ import { SubscriptionModule } from './modules/subscription';
 import { ReferralModule } from './modules/referral';
 import { ElevationModule } from './modules/elevation';
 import { RacesModule } from './modules/races';
+import { AccountDeletionModule } from './modules/account-deletion/account-deletion.module';
 
 @Module({
   imports: [
@@ -163,6 +164,7 @@ import { RacesModule } from './modules/races';
     ReferralModule,
     ElevationModule,
     RacesModule,
+    AccountDeletionModule,
   ],
   controllers: [AppController],
   providers: [

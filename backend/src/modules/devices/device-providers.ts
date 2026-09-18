@@ -30,9 +30,11 @@ export const VALID_PROVIDERS = [
   'apple_watch',
   'apple_health',
   'health_connect',
-  // Sucessor da Fitbit Web API. Presente no vocabulário para que a Fase 3
-  // possa persistir a conexão; NENHUMA lógica de OAuth, ingestão ou refresh
-  // existe ainda — hoje o valor só passa na validação e é ignorado pelo resto.
+  // Sucessor da Fitbit Web API, e hoje o provedor mais completo do módulo:
+  // OAuth com PKCE e state persistido (Fase 3), refresh, revogação no
+  // disconnect, subscriptions por usuário, webhook assinado e ingestão com rota
+  // GPS (Fase 4). É o único com revogação de grant implementada — Fitbit e
+  // Polar guardam token e não sabem revogá-lo.
   'google_health',
 ] as const;
 
