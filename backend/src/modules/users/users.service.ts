@@ -329,9 +329,6 @@ export class UsersService {
   }
 
   /**
-   * Delete user (LGPD compliance)
-   */
-  /**
    * Pede a exclusão da conta. **Marca e enfileira — não apaga aqui.**
    *
    * ── POR QUE DEIXOU DE SER SÍNCRONO ─────────────────────────────────────
